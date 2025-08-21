@@ -300,16 +300,27 @@ const ClientForm = ({ client, onSave, onCancel }) => {
             />
             
             {addressSuggestions.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-y-auto">
                 {addressSuggestions.map((suggestion, index) => (
                   <button
                     key={index}
                     type="button"
                     onClick={() => handleAddressSelect(suggestion)}
-                    className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                    className="w-full px-3 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
                   >
-                    <div className="font-medium">{suggestion.structured_formatting?.main_text}</div>
-                    <div className="text-sm text-gray-500">{suggestion.structured_formatting?.secondary_text}</div>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">
+                          {suggestion.structured_formatting?.main_text || suggestion.description}
+                        </div>
+                        <div className="text-sm text-gray-500 mt-1">
+                          {suggestion.structured_formatting?.secondary_text || ''}
+                        </div>
+                      </div>
+                      <div className="ml-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                        {suggestion.source === 'places' ? 'Local' : 'Endereço'}
+                      </div>
+                    </div>
                   </button>
                 ))}
               </div>
