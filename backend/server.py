@@ -219,10 +219,49 @@ class DashboardSummary(BaseModel):
 # Google Places API integration
 @api_router.get("/places/search")
 async def search_places(query: str):
-    """Search for places using Google Places API"""
+    """Hybrid search using Places API and Geocoding API"""
     try:
-        places = gmaps.places_autocomplete(query, language='pt-BR', components=[{'country': 'BR'}])
-        return {"results": places}
+        results = []
+        
+        # Search using Places API (for locations, businesses, landmarks)
+        places = gmaps.places_autocomplete(
+            query, 
+            language='pt-BR', 
+            components=[{'country': 'BR'}],
+            types=[]  # Allow all types
+        )
+        
+        # Add Places API results
+        for place in places:
+            results.append({
+                **place,
+                'source': 'places'
+            })
+        
+        # Search using Geocoding API (for addresses)
+        geocode_results = gmaps.geocode(
+            query, 
+            language='pt-BR', 
+            components=[('country', 'BR')]
+        )
+        
+        # Add unique Geocoding API results
+        existing_place_ids = {p.get('place_id') for p in results}
+        for geocode in geocode_results:
+            if geocode.get('place_id') not in existing_place_ids:
+                # Format to match Places API structure
+                formatted_result = {
+                    'place_id': geocode['place_id'],
+                    'description': geocode['formatted_address'],
+                    'structured_formatting': {
+                        'main_text': geocode['formatted_address'].split(',')[0],
+                        'secondary_text': ', '.join(geocode['formatted_address'].split(',')[1:])
+                    },
+                    'source': 'geocoding'
+                }
+                results.append(formatted_result)
+        
+        return {"results": results}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error searching places: {str(e)}")
 
