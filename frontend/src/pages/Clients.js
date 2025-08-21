@@ -143,8 +143,10 @@ const ClientForm = ({ client, onSave, onCancel }) => {
 
   const handleAddressSelect = async (suggestion) => {
     try {
+      console.log('Selecionando endereço:', suggestion);
       const response = await placesApi.getDetails(suggestion.place_id);
       const details = response.data.details.result;
+      console.log('Detalhes obtidos:', details);
       
       const addressComponents = details.address_components || [];
       
@@ -158,18 +160,20 @@ const ClientForm = ({ client, onSave, onCancel }) => {
 
       const neighborhood = getComponent(['sublocality', 'sublocality_level_1', 'neighborhood']) ||
                           getComponent(['administrative_area_level_3']) ||
-                          getComponent(['locality']);
+                          getComponent(['locality']) || '';
       
       const city = getComponent(['administrative_area_level_2', 'locality']) ||
-                   getComponent(['administrative_area_level_1']);
+                   getComponent(['administrative_area_level_1']) || '';
       
-      const state = getComponent(['administrative_area_level_1']);
+      const state = getComponent(['administrative_area_level_1']) || '';
+
+      console.log('Componentes extraídos:', { neighborhood, city, state });
 
       setFormData(prev => ({
         ...prev,
         address: {
           ...prev.address,
-          full_address: details.formatted_address,
+          full_address: details.formatted_address || suggestion.description,
           neighborhood: neighborhood,
           city: city,
           state: state,
@@ -177,9 +181,28 @@ const ClientForm = ({ client, onSave, onCancel }) => {
           longitude: details.geometry?.location?.lng || null
         }
       }));
+      
+      // Limpar sugestões
       setAddressSuggestions([]);
+      console.log('Endereço selecionado e campos preenchidos');
+      
     } catch (error) {
       console.error('Erro ao obter detalhes do endereço:', error);
+      
+      // Fallback - usar apenas os dados da sugestão
+      setFormData(prev => ({
+        ...prev,
+        address: {
+          ...prev.address,
+          full_address: suggestion.description || suggestion.structured_formatting?.main_text || '',
+          neighborhood: '',
+          city: '',
+          state: '',
+          latitude: null,
+          longitude: null
+        }
+      }));
+      setAddressSuggestions([]);
     }
   };
 
