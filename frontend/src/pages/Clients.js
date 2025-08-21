@@ -7,7 +7,8 @@ import {
   History, 
   MessageCircle,
   Phone,
-  MapPin
+  MapPin,
+  Users
 } from 'lucide-react';
 import { clientsApi, placesApi } from '../services/api';
 
