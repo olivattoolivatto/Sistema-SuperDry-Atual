@@ -126,12 +126,13 @@ const ClientForm = ({ client, onSave, onCancel }) => {
       address: { ...prev.address, full_address: value }
     }));
 
-    if (value.length > 3) {
+    if (value.length > 2) {
       try {
         const response = await placesApi.search(value);
         setAddressSuggestions(response.data.results || []);
       } catch (error) {
         console.error('Erro ao buscar endereços:', error);
+        setAddressSuggestions([]);
       }
     } else {
       setAddressSuggestions([]);
@@ -143,21 +144,35 @@ const ClientForm = ({ client, onSave, onCancel }) => {
       const response = await placesApi.getDetails(suggestion.place_id);
       const details = response.data.details.result;
       
-      const addressComponents = details.address_components;
-      const neighborhood = addressComponents.find(c => c.types.includes('sublocality'))?.long_name || '';
-      const city = addressComponents.find(c => c.types.includes('administrative_area_level_2'))?.long_name || '';
-      const state = addressComponents.find(c => c.types.includes('administrative_area_level_1'))?.short_name || '';
+      const addressComponents = details.address_components || [];
+      
+      // Extract address components with fallbacks
+      const getComponent = (types) => {
+        const component = addressComponents.find(c => 
+          types.some(type => c.types.includes(type))
+        );
+        return component ? component.long_name : '';
+      };
+
+      const neighborhood = getComponent(['sublocality', 'sublocality_level_1', 'neighborhood']) ||
+                          getComponent(['administrative_area_level_3']) ||
+                          getComponent(['locality']);
+      
+      const city = getComponent(['administrative_area_level_2', 'locality']) ||
+                   getComponent(['administrative_area_level_1']);
+      
+      const state = getComponent(['administrative_area_level_1']);
 
       setFormData(prev => ({
         ...prev,
         address: {
           ...prev.address,
           full_address: details.formatted_address,
-          neighborhood,
-          city,
-          state,
-          latitude: details.geometry.location.lat,
-          longitude: details.geometry.location.lng
+          neighborhood: neighborhood,
+          city: city,
+          state: state,
+          latitude: details.geometry?.location?.lat || null,
+          longitude: details.geometry?.location?.lng || null
         }
       }));
       setAddressSuggestions([]);
