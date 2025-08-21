@@ -128,7 +128,9 @@ const ClientForm = ({ client, onSave, onCancel }) => {
 
     if (value.length > 2) {
       try {
+        console.log('Buscando endereço:', value);
         const response = await placesApi.search(value);
+        console.log('Resultados encontrados:', response.data.results);
         setAddressSuggestions(response.data.results || []);
       } catch (error) {
         console.error('Erro ao buscar endereços:', error);
