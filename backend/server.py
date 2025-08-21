@@ -225,52 +225,57 @@ async def search_places(query: str):
         
         # Search using Places API (for locations, businesses, landmarks)
         try:
-            places = gmaps.places_autocomplete(
+            places_response = gmaps.places_autocomplete(
                 query, 
                 language='pt-BR', 
                 components=[{'country': 'BR'}]
             )
             
             # Add Places API results
-            for place in places:
-                results.append({
-                    **place,
-                    'source': 'places'
-                })
+            if isinstance(places_response, list):
+                for place in places_response:
+                    if isinstance(place, dict):
+                        results.append({
+                            **place,
+                            'source': 'places'
+                        })
         except Exception as places_error:
             print(f"Places API error: {places_error}")
         
         # Search using Geocoding API (for addresses)
         try:
-            geocode_results = gmaps.geocode(
+            geocode_response = gmaps.geocode(
                 query, 
                 language='pt-BR'
             )
             
             # Add unique Geocoding API results
             existing_place_ids = {p.get('place_id') for p in results if p.get('place_id')}
-            for geocode in geocode_results:
-                if geocode.get('place_id') not in existing_place_ids:
-                    # Format to match Places API structure
-                    address_parts = geocode['formatted_address'].split(',')
-                    main_text = address_parts[0] if address_parts else geocode['formatted_address']
-                    secondary_text = ', '.join(address_parts[1:]).strip() if len(address_parts) > 1 else ''
-                    
-                    formatted_result = {
-                        'place_id': geocode['place_id'],
-                        'description': geocode['formatted_address'],
-                        'structured_formatting': {
-                            'main_text': main_text,
-                            'secondary_text': secondary_text
-                        },
-                        'source': 'geocoding'
-                    }
-                    results.append(formatted_result)
+            
+            if isinstance(geocode_response, list):
+                for geocode in geocode_response:
+                    if isinstance(geocode, dict) and geocode.get('place_id') not in existing_place_ids:
+                        # Format to match Places API structure
+                        address_parts = geocode.get('formatted_address', '').split(',')
+                        main_text = address_parts[0].strip() if address_parts else geocode.get('formatted_address', '')
+                        secondary_text = ', '.join([part.strip() for part in address_parts[1:]]) if len(address_parts) > 1 else ''
+                        
+                        formatted_result = {
+                            'place_id': geocode.get('place_id'),
+                            'description': geocode.get('formatted_address', ''),
+                            'structured_formatting': {
+                                'main_text': main_text,
+                                'secondary_text': secondary_text
+                            },
+                            'source': 'geocoding'
+                        }
+                        results.append(formatted_result)
         except Exception as geocode_error:
             print(f"Geocoding API error: {geocode_error}")
         
         return {"results": results}
     except Exception as e:
+        print(f"General search error: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error searching places: {str(e)}")
 
 @api_router.get("/places/details")
