@@ -149,42 +149,59 @@ const ClientForm = ({ client, onSave, onCancel }) => {
       console.log('Detalhes obtidos:', details);
       
       const addressComponents = details.address_components || [];
+      console.log('Componentes do endereço:', addressComponents);
       
-      // Extract address components with fallbacks
-      const getComponent = (types) => {
+      // Extract address components with multiple fallbacks
+      const getComponent = (types, preferLongName = true) => {
         const component = addressComponents.find(c => 
           types.some(type => c.types.includes(type))
         );
-        return component ? component.long_name : '';
+        if (!component) return '';
+        return preferLongName ? component.long_name : component.short_name;
       };
 
-      const neighborhood = getComponent(['sublocality', 'sublocality_level_1', 'neighborhood']) ||
-                          getComponent(['administrative_area_level_3']) ||
-                          getComponent(['locality']) || '';
+      // Extract neighborhood with multiple fallbacks
+      let neighborhood = getComponent(['sublocality_level_1', 'sublocality']) ||
+                        getComponent(['neighborhood']) ||
+                        getComponent(['administrative_area_level_4']) ||
+                        getComponent(['administrative_area_level_3']);
       
-      const city = getComponent(['administrative_area_level_2', 'locality']) ||
-                   getComponent(['administrative_area_level_1']) || '';
+      // Extract city with multiple fallbacks  
+      let city = getComponent(['locality']) ||
+                getComponent(['administrative_area_level_2']) ||
+                getComponent(['sublocality']);
       
-      const state = getComponent(['administrative_area_level_1']) || '';
+      // Extract state (always short name for states)
+      let state = getComponent(['administrative_area_level_1'], false);
 
-      console.log('Componentes extraídos:', { neighborhood, city, state });
+      console.log('Componentes extraídos:', { 
+        neighborhood, 
+        city, 
+        state,
+        latitude: details.geometry?.location?.lat,
+        longitude: details.geometry?.location?.lng
+      });
 
-      setFormData(prev => ({
-        ...prev,
+      // Update form data
+      const newFormData = {
+        ...formData,
         address: {
-          ...prev.address,
+          ...formData.address,
           full_address: details.formatted_address || suggestion.description,
-          neighborhood: neighborhood,
-          city: city,
-          state: state,
+          neighborhood: neighborhood || '',
+          city: city || '',
+          state: state || '',
           latitude: details.geometry?.location?.lat || null,
           longitude: details.geometry?.location?.lng || null
         }
-      }));
+      };
+
+      console.log('Atualizando formData:', newFormData);
+      setFormData(newFormData);
       
       // Limpar sugestões
       setAddressSuggestions([]);
-      console.log('Endereço selecionado e campos preenchidos');
+      console.log('✅ Endereço selecionado e campos preenchidos automaticamente');
       
     } catch (error) {
       console.error('Erro ao obter detalhes do endereço:', error);
@@ -203,6 +220,7 @@ const ClientForm = ({ client, onSave, onCancel }) => {
         }
       }));
       setAddressSuggestions([]);
+      console.log('⚠️ Usando fallback - apenas endereço principal preenchido');
     }
   };
 
