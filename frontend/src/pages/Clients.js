@@ -144,42 +144,90 @@ const ClientForm = ({ client, onSave, onCancel }) => {
   const handleAddressSelect = async (suggestion) => {
     try {
       console.log('Selecionando endereço:', suggestion);
-      const response = await placesApi.getDetails(suggestion.place_id);
-      const details = response.data.details.result;
-      console.log('Detalhes obtidos:', details);
       
-      const addressComponents = details.address_components || [];
-      console.log('Componentes do endereço:', addressComponents);
+      // First try to get details from API if available
+      let neighborhood = '';
+      let city = '';
+      let state = '';
+      let latitude = null;
+      let longitude = null;
+      let fullAddress = suggestion.description || suggestion.structured_formatting?.main_text || '';
       
-      // Extract address components with multiple fallbacks
-      const getComponent = (types, preferLongName = true) => {
-        const component = addressComponents.find(c => 
-          types.some(type => c.types.includes(type))
-        );
-        if (!component) return '';
-        return preferLongName ? component.long_name : component.short_name;
-      };
+      try {
+        const response = await placesApi.getDetails(suggestion.place_id);
+        const details = response.data.details.result;
+        console.log('Detalhes obtidos da API:', details);
+        
+        if (details && details.address_components) {
+          const addressComponents = details.address_components;
+          console.log('Componentes do endereço:', addressComponents);
+          
+          // Extract address components with multiple fallbacks
+          const getComponent = (types, preferLongName = true) => {
+            const component = addressComponents.find(c => 
+              types.some(type => c.types.includes(type))
+            );
+            if (!component) return '';
+            return preferLongName ? component.long_name : component.short_name;
+          };
 
-      // Extract neighborhood with multiple fallbacks
-      let neighborhood = getComponent(['sublocality_level_1', 'sublocality']) ||
+          neighborhood = getComponent(['sublocality_level_1', 'sublocality']) ||
                         getComponent(['neighborhood']) ||
                         getComponent(['administrative_area_level_4']) ||
                         getComponent(['administrative_area_level_3']);
-      
-      // Extract city with multiple fallbacks  
-      let city = getComponent(['locality']) ||
+          
+          city = getComponent(['locality']) ||
                 getComponent(['administrative_area_level_2']) ||
                 getComponent(['sublocality']);
-      
-      // Extract state (always short name for states)
-      let state = getComponent(['administrative_area_level_1'], false);
+          
+          state = getComponent(['administrative_area_level_1'], false);
+          
+          latitude = details.geometry?.location?.lat || null;
+          longitude = details.geometry?.location?.lng || null;
+          fullAddress = details.formatted_address || fullAddress;
+        }
+      } catch (detailsError) {
+        console.log('Erro ao obter detalhes da API, usando extração local:', detailsError);
+        
+        // Fallback: Extract from description text
+        const description = suggestion.description || '';
+        const parts = description.split(',').map(part => part.trim());
+        
+        if (parts.length >= 3) {
+          // Try to extract from description format: "Street - Neighborhood, City - State, PostalCode, Country"
+          const lastPart = parts[parts.length - 1]; // "Brasil"
+          const secondLastPart = parts[parts.length - 2]; // "PostalCode" or "State"
+          const thirdLastPart = parts[parts.length - 3]; // "City - State" or "City"
+          
+          // Extract state (usually 2 letters after dash)
+          if (thirdLastPart && thirdLastPart.includes(' - ')) {
+            const stateParts = thirdLastPart.split(' - ');
+            if (stateParts.length >= 2) {
+              city = stateParts[0];
+              state = stateParts[1];
+            }
+          } else if (secondLastPart && secondLastPart.length <= 3) {
+            state = secondLastPart;
+            city = thirdLastPart;
+          }
+          
+          // Extract neighborhood (usually in second part after dash)
+          if (parts.length >= 2) {
+            const addressPart = parts[1];
+            if (addressPart && addressPart.includes(' - ')) {
+              neighborhood = addressPart.split(' - ')[0];
+            }
+          }
+        }
+      }
 
       console.log('Componentes extraídos:', { 
         neighborhood, 
         city, 
         state,
-        latitude: details.geometry?.location?.lat,
-        longitude: details.geometry?.location?.lng
+        latitude,
+        longitude,
+        fullAddress
       });
 
       // Update form data
@@ -187,12 +235,12 @@ const ClientForm = ({ client, onSave, onCancel }) => {
         ...formData,
         address: {
           ...formData.address,
-          full_address: details.formatted_address || suggestion.description,
+          full_address: fullAddress,
           neighborhood: neighborhood || '',
           city: city || '',
           state: state || '',
-          latitude: details.geometry?.location?.lat || null,
-          longitude: details.geometry?.location?.lng || null
+          latitude: latitude,
+          longitude: longitude
         }
       };
 
@@ -204,9 +252,9 @@ const ClientForm = ({ client, onSave, onCancel }) => {
       console.log('✅ Endereço selecionado e campos preenchidos automaticamente');
       
     } catch (error) {
-      console.error('Erro ao obter detalhes do endereço:', error);
+      console.error('Erro geral ao selecionar endereço:', error);
       
-      // Fallback - usar apenas os dados da sugestão
+      // Final fallback - usar apenas os dados da sugestão
       setFormData(prev => ({
         ...prev,
         address: {
@@ -220,7 +268,7 @@ const ClientForm = ({ client, onSave, onCancel }) => {
         }
       }));
       setAddressSuggestions([]);
-      console.log('⚠️ Usando fallback - apenas endereço principal preenchido');
+      console.log('⚠️ Usando fallback final - apenas endereço principal preenchido');
     }
   };
 
