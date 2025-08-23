@@ -657,6 +657,7 @@ export function Clients() {
             }}
             onDelete={handleDeleteClient}
             onHistory={handleHistory}
+            onNewBudget={handleNewBudget}
           />
         ))}
       </div>
