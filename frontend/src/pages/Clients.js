@@ -8,8 +8,10 @@ import {
   MessageCircle,
   Phone,
   MapPin,
-  Users
+  Users,
+  FileText
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { clientsApi, placesApi } from '../services/api';
 
 const ClientCard = ({ client, onEdit, onDelete, onHistory }) => (
