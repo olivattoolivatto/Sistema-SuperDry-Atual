@@ -134,9 +134,9 @@ const BudgetCard = ({ budget, onEdit, onDelete, onAddItem }) => (
   </div>
 );
 
-const BudgetForm = ({ budget, onSave, onCancel }) => {
+const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
-    client_id: '',
+    client_id: preSelectedClient?.id || '',
     payment_method: 'PIX_CNPJ_25995295000104',
     salesperson: 'Gabriela Alcântara',
     internal_observations: '',
