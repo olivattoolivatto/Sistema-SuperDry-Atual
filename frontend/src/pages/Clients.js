@@ -595,8 +595,12 @@ export function Clients() {
   };
 
   const handleHistory = (client) => {
-    // TODO: Implementar modal de histórico
-    alert(`Histórico do cliente ${client.name} será implementado em breve.`);
+    setSelectedClient(client);
+    setShowHistory(true);
+  };
+
+  const handleNewBudget = (client) => {
+    navigate('/budgets', { state: { selectedClient: client } });
   };
 
   if (loading) {
