@@ -194,10 +194,10 @@ const ClientForm = ({ client, onSave, onCancel }) => {
         const parts = description.split(',').map(part => part.trim());
         
         if (parts.length >= 3) {
-          // Try to extract from description format: "Street - Neighborhood, City - State, PostalCode, Country"
+          // Format: "Rua Nome da Rua, número - Bairro, Cidade - Estado, CEP, País"
           const lastPart = parts[parts.length - 1]; // "Brasil"
-          const secondLastPart = parts[parts.length - 2]; // "PostalCode" or "State"
-          const thirdLastPart = parts[parts.length - 3]; // "City - State" or "City"
+          const secondLastPart = parts[parts.length - 2]; // "CEP" or "Estado"
+          const thirdLastPart = parts[parts.length - 3]; // "Cidade - Estado"
           
           // Extract state (usually 2 letters after dash)
           if (thirdLastPart && thirdLastPart.includes(' - ')) {
@@ -211,11 +211,18 @@ const ClientForm = ({ client, onSave, onCancel }) => {
             city = thirdLastPart;
           }
           
-          // Extract neighborhood (usually in second part after dash)
+          // Extract neighborhood correctly from second part after dash
           if (parts.length >= 2) {
-            const addressPart = parts[1];
+            const addressPart = parts[1]; // "número - Bairro"
             if (addressPart && addressPart.includes(' - ')) {
-              neighborhood = addressPart.split(' - ')[0];
+              // Split by dash and take the part after it (Bairro)
+              const addressSplit = addressPart.split(' - ');
+              if (addressSplit.length >= 2) {
+                neighborhood = addressSplit[1]; // Take the neighborhood part after the dash
+              }
+            } else {
+              // If no dash, the whole second part might be the neighborhood
+              neighborhood = addressPart;
             }
           }
         }
