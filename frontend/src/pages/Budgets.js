@@ -592,10 +592,13 @@ const AddItemForm = ({ budget, onSave, onCancel }) => {
 };
 
 export function Budgets() {
+  const location = useLocation();
+  const preSelectedClient = location.state?.selectedClient;
+  
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(!!preSelectedClient);
   const [showAddItemForm, setShowAddItemForm] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
   const [selectedBudget, setSelectedBudget] = useState(null);
