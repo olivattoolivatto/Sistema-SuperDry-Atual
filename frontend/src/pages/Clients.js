@@ -14,7 +14,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { clientsApi, placesApi } from '../services/api';
 
-const ClientCard = ({ client, onEdit, onDelete, onHistory }) => (
+const ClientCard = ({ client, onEdit, onDelete, onHistory, onNewBudget }) => (
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
     <div className="flex items-start justify-between mb-4">
       <div>
@@ -82,6 +82,23 @@ const ClientCard = ({ client, onEdit, onDelete, onHistory }) => (
           </p>
         </div>
       </div>
+    </div>
+
+    <div className="flex space-x-2 mt-4 pt-4 border-t border-gray-100">
+      <button
+        onClick={() => onHistory(client)}
+        className="flex-1 flex items-center justify-center px-3 py-2 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors"
+      >
+        <History className="w-4 h-4 mr-1" />
+        Histórico
+      </button>
+      <button
+        onClick={() => onNewBudget(client)}
+        className="flex-1 flex items-center justify-center px-3 py-2 text-sm bg-green-50 text-green-700 hover:bg-green-100 rounded-lg transition-colors"
+      >
+        <FileText className="w-4 h-4 mr-1" />
+        Novo Orçamento
+      </button>
     </div>
   </div>
 );
