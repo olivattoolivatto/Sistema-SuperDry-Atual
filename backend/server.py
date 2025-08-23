@@ -255,18 +255,41 @@ async def search_places(query: str):
             if isinstance(geocode_response, list):
                 for geocode in geocode_response:
                     if isinstance(geocode, dict) and geocode.get('place_id') not in existing_place_ids:
-                        # Format to match Places API structure
-                        address_parts = geocode.get('formatted_address', '').split(',')
-                        main_text = address_parts[0].strip() if address_parts else geocode.get('formatted_address', '')
-                        secondary_text = ', '.join([part.strip() for part in address_parts[1:]]) if len(address_parts) > 1 else ''
+                        formatted_address = geocode.get('formatted_address', '')
+                        
+                        # Parsing baseado no padrão: rua, número - bairro, cidade - estado, CEP, país
+                        parts = [p.strip() for p in formatted_address.split(',')]
+                        
+                        # Bairro
+                        neighborhood = None
+                        if len(parts) >= 2:
+                            first_part = parts[1]
+                            if '-' in first_part:
+                                neighborhood = first_part.split('-')[1].strip()
+                            else:
+                                neighborhood = first_part
+                        
+                        # Cidade e estado
+                        city = None
+                        state = None
+                        if len(parts) >= 3 and '-' in parts[2]:
+                            city = parts[2].split('-')[0].strip()
+                            state = parts[2].split('-')[1].strip()
+                        
+                        # Rua (main_text) e complemento (secondary_text)
+                        main_text = parts[0] if len(parts) >= 1 else formatted_address
+                        secondary_text = ', '.join(parts[1:]) if len(parts) > 1 else ''
                         
                         formatted_result = {
                             'place_id': geocode.get('place_id'),
-                            'description': geocode.get('formatted_address', ''),
+                            'description': formatted_address,
                             'structured_formatting': {
                                 'main_text': main_text,
                                 'secondary_text': secondary_text
                             },
+                            'neighborhood': neighborhood,
+                            'city': city,
+                            'state': state,
                             'source': 'geocoding'
                         }
                         results.append(formatted_result)
