@@ -144,7 +144,7 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
   });
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [clientSearch, setClientSearch] = useState('');
+  const [clientSearch, setClientSearch] = useState(preSelectedClient?.name || '');
 
   useEffect(() => {
     loadClients();
