@@ -759,6 +759,7 @@ export function Budgets() {
       {showForm && (
         <BudgetForm
           budget={editingBudget}
+          preSelectedClient={preSelectedClient}
           onSave={handleSaveBudget}
           onCancel={() => {
             setShowForm(false);
