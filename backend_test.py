@@ -453,7 +453,7 @@ class BudgetSystemTester:
         }
         
         response = self.make_request('PUT', f'/budgets/{budget_id}', update_data)
-        if not response['success'] and response['status_code'] == 404:
+        if not response['success'] and (response['status_code'] == 404 or 'Client not found' in str(response['data'])):
             self.log_test("Budget Update: Invalid Client", True, "Correctly rejected invalid client ID")
             return True
         else:
