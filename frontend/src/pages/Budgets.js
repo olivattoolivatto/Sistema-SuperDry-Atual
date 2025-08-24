@@ -664,7 +664,11 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
         case 'METRAGEM_LINEAR_CORTINA_SIMPLES':
         case 'METRAGEM_LINEAR_PE_DIREITO_DUPLO':
         case 'METRAGEM_LINEAR_ESPECIAL':
-          if (formData.fabric_folds && formData.fabric_per_fold) {
+          // Priorizar valor manual ou calculado
+          if (formData.linear_meters) {
+            calculatedData.linear_meters = parseFloat(formData.linear_meters);
+            calculatedData.quantity = parseFloat(formData.linear_meters);
+          } else if (formData.fabric_folds && formData.fabric_per_fold) {
             calculatedData.linear_meters = (parseFloat(formData.fabric_folds) * parseFloat(formData.fabric_per_fold)) / 100;
             calculatedData.quantity = calculatedData.linear_meters;
           }
