@@ -145,6 +145,8 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
   const [selectedClient, setSelectedClient] = useState(preSelectedClient || null);
   const [showItemForm, setShowItemForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [showQuickAddClient, setShowQuickAddClient] = useState(false);
+  const [creatingClient, setCreatingClient] = useState(false);
 
   useEffect(() => {
     loadClients();
