@@ -1501,6 +1501,8 @@ export function Budgets() {
               setShowForm(true);
             }}
             onDelete={handleDeleteBudget}
+            onWhatsApp={handleWhatsAppBudget}
+            onPDF={handlePDFBudget}
           />
         ))}
       </div>
