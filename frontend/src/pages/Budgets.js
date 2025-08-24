@@ -401,7 +401,7 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
             
-            {clientSuggestions.length > 0 && (
+            {(clientSuggestions.length > 0 || showQuickAddClient) && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                 {clientSuggestions.map((client) => (
                   <button
@@ -425,6 +425,27 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
                     </div>
                   </button>
                 ))}
+                
+                {showQuickAddClient && (
+                  <button
+                    type="button"
+                    onClick={handleQuickAddClient}
+                    disabled={creatingClient}
+                    className="w-full px-3 py-3 text-left hover:bg-green-50 border-b border-gray-100 last:border-b-0 transition-colors bg-green-25 border-green-200"
+                  >
+                    <div className="flex items-center">
+                      <Plus className="w-4 h-4 text-green-600 mr-2" />
+                      <div>
+                        <div className="font-medium text-green-800">
+                          {creatingClient ? 'Criando cliente...' : `+ Criar cliente "${clientSearch}"`}
+                        </div>
+                        <div className="text-xs text-green-600">
+                          Criação rápida - Complete o cadastro depois
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                )}
               </div>
             )}
             
