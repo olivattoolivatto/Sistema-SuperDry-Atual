@@ -469,10 +469,10 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
                           <div className="text-xs text-gray-500 font-mono">{item.service_code}</div>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900">{item.area_m2 ? item.area_m2.toFixed(2) : '-'}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900">{item.linear_meters ? item.linear_meters.toFixed(2) : '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">{item.area_m2 ? parseFloat(item.area_m2).toFixed(2) : '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">{item.linear_meters ? parseFloat(item.linear_meters).toFixed(2) : '-'}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
-                        <td className="px-4 py-3 text-sm font-medium text-green-600">R$ {item.total_value.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-sm font-medium text-green-600">R$ {parseFloat(item.total_value).toFixed(2)}</td>
                         <td className="px-4 py-3">
                           <div className="text-xs text-gray-600">
                             <div>Local: {item.execution_location}</div>
