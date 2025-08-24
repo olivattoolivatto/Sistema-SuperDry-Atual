@@ -816,20 +816,52 @@ async def generate_pdf_budget(budget_id: str):
         story.append(Paragraph("SuperDry Lavanderia de Tapetes & Estofados", big_style))
         story.append(Spacer(1, 20))
         
-        # Client information
+        # Client information with logo - using table layout
         updated_date = budget.get("updated_at", datetime.utcnow())
         if isinstance(updated_date, str):
             updated_date = datetime.fromisoformat(updated_date.replace('Z', '+00:00'))
         formatted_date = updated_date.strftime("%d/%m/%Y")
         
-        client_info = f"""
-<b>Cliente:</b> {budget.get('client_name', 'N/A')}<br/>
-<b>Telefone:</b> {client.get('phone_primary', 'N/A')}<br/>
-<b>Vendedor:</b> {budget.get('salesperson', 'N/A')}<br/>
-<b>Forma de Pagamento:</b> {budget.get('payment_method', 'N/A')}<br/>
-<b>Data:</b> {formatted_date}
-"""
-        story.append(Paragraph(client_info, styles['Normal']))
+        # Create client info as HTML for proper formatting
+        client_info_html = f"""
+        <b>Cliente:</b> {budget.get('client_name', 'N/A')}<br/>
+        <b>Telefone:</b> {client.get('phone_primary', 'N/A')}<br/>
+        <b>Vendedor:</b> {budget.get('salesperson', 'N/A')}<br/>
+        <b>Forma de Pagamento:</b> {budget.get('payment_method', 'N/A')}<br/>
+        <b>Data:</b> {formatted_date}
+        """
+        
+        client_info_paragraph = Paragraph(client_info_html, styles['Normal'])
+        
+        # Add logo if exists
+        logo_path = "/app/backend/logo-superdry.png"
+        if os.path.exists(logo_path):
+            try:
+                # Create logo image with proper sizing
+                logo = Image(logo_path)
+                # Scale logo to appropriate size (max height 1.5 inches, maintain aspect ratio)
+                logo_width, logo_height = logo.wrap(0, 0)
+                max_height = 1.5 * inch
+                if logo_height > max_height:
+                    scale_factor = max_height / logo_height
+                    logo.drawHeight = max_height
+                    logo.drawWidth = logo_width * scale_factor
+                
+                # Create table with client info and logo
+                info_table_data = [[client_info_paragraph, logo]]
+                info_table = Table(info_table_data, colWidths=[4*inch, 2*inch])
+                info_table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ]))
+                story.append(info_table)
+            except Exception as e:
+                # Fallback if logo fails to load
+                print(f"Warning: Could not load logo: {e}")
+                story.append(client_info_paragraph)
+        else:
+            # No logo file, just add client info
+            story.append(client_info_paragraph)
         
         # Budget observations
         if budget.get('budget_observations'):
