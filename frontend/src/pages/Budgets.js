@@ -1386,8 +1386,9 @@ export function Budgets() {
 
       {/* Add Item Form Modal */}
       {showAddItemForm && selectedBudget && (
-        <AddItemForm
-          budget={selectedBudget}
+        <ItemFormModal
+          services={services}
+          editingItem={null}
           onSave={handleAddItem}
           onCancel={() => {
             setShowAddItemForm(false);
