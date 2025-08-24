@@ -140,13 +140,17 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
     payment_method: 'PIX_CNPJ_25995295000104',
     salesperson: 'Gabriela Alcântara',
     internal_observations: '',
-    budget_observations: ''
+    budget_observations: '',
+    items: []
   });
   const [clients, setClients] = useState([]);
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [clientSearch, setClientSearch] = useState(preSelectedClient?.name || '');
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [selectedClient, setSelectedClient] = useState(preSelectedClient || null);
+  const [showItemForm, setShowItemForm] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
 
   useEffect(() => {
     loadClients();
