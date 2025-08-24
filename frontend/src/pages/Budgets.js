@@ -1241,10 +1241,13 @@ export function Budgets() {
   const handleSaveBudget = async (budgetData) => {
     try {
       if (editingBudget) {
-        // Update logic would go here
-        alert('Funcionalidade de edição será implementada em breve');
+        // Update existing budget
+        await budgetsApi.update(editingBudget.id, budgetData);
+        alert('Orçamento atualizado com sucesso!');
       } else {
+        // Create new budget
         await budgetsApi.create(budgetData);
+        alert('Orçamento criado com sucesso!');
       }
       
       setShowForm(false);
