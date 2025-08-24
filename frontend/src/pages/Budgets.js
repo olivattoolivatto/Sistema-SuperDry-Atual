@@ -228,6 +228,60 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
       client_id: client.id
     }));
     setClientSuggestions([]);
+    setShowQuickAddClient(false);
+  };
+
+  const handleQuickAddClient = async () => {
+    if (!clientSearch.trim()) return;
+    
+    setCreatingClient(true);
+    try {
+      // Criar cliente com dados mínimos
+      const quickClientData = {
+        name: clientSearch.trim(),
+        phone_primary: "A COMPLETAR",
+        phone_alternative: "",
+        email: "a.completar@email.com",
+        cpf_cnpj: "",
+        address: {
+          full_address: "Endereço a completar",
+          complement: "",
+          neighborhood: "Bairro a completar", 
+          city: "Cidade a completar",
+          state: "SP",
+          latitude: 0,
+          longitude: 0
+        }
+      };
+      
+      const response = await clientsApi.create(quickClientData);
+      const newClient = response.data;
+      
+      // Selecionar o cliente recém-criado
+      setSelectedClient(newClient);
+      setFormData(prev => ({
+        ...prev,
+        client_id: newClient.id
+      }));
+      setClientSuggestions([]);
+      setShowQuickAddClient(false);
+      
+      // Mostrar mensagem de aviso
+      toast({
+        title: "Cliente criado rapidamente!",
+        description: `${newClient.name} foi adicionado. ⚠️ COMPLETE O CADASTRO (telefone, endereço) antes de enviar para rota.`,
+        variant: "default",
+      });
+      
+    } catch (error) {
+      console.error('Erro ao criar cliente:', error);
+      toast({
+        title: "Erro!",
+        description: "Não foi possível criar o cliente. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+    setCreatingClient(false);
   };
 
   const handleAddItem = (itemData) => {
