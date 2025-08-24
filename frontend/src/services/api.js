@@ -53,6 +53,7 @@ export const budgetsApi = {
   getAll: (params = {}) => api.get('/budgets', { params }),
   getById: (id) => api.get(`/budgets/${id}`),
   create: (data) => api.post('/budgets', data),
+  delete: (id) => api.delete(`/budgets/${id}`),
   addItem: (budgetId, itemData) => api.post(`/budgets/${budgetId}/items`, itemData),
 };
 
