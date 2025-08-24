@@ -889,8 +889,11 @@ async def generate_pdf_budget(budget_id: str):
             elif item.get('diameter'):
                 measures = f"Ø {item.get('diameter')}m"
             
-            area_m2 = f"{item.get('area_m2', 0):.1f}" if item.get('area_m2', 0) > 0 else "-"
-            linear_meters = f"{item.get('linear_meters', 0):.1f}" if item.get('linear_meters', 0) > 0 else "-"
+            area_m2 = item.get('area_m2')
+            linear_meters = item.get('linear_meters')
+            
+            area_m2_str = f"{area_m2:.1f}" if area_m2 and area_m2 > 0 else "-"
+            linear_meters_str = f"{linear_meters:.1f}" if linear_meters and linear_meters > 0 else "-"
             quantity = f"{item.get('quantity', 1):.0f}"
             value = f"R$ {item.get('total_value', 0):.2f}"
             
@@ -899,8 +902,8 @@ async def generate_pdf_budget(budget_id: str):
             table_data.append([
                 Paragraph(item.get('service_name', 'N/A'), centered_style),
                 Paragraph(measures, centered_style),
-                Paragraph(area_m2, centered_style),
-                Paragraph(linear_meters, centered_style),
+                Paragraph(area_m2_str, centered_style),
+                Paragraph(linear_meters_str, centered_style),
                 Paragraph(quantity, centered_style),
                 Paragraph(value, centered_style)
             ])
