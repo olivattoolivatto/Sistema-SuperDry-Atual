@@ -1337,10 +1337,6 @@ export function Budgets() {
               setShowForm(true);
             }}
             onDelete={handleDeleteBudget}
-            onAddItem={(budget) => {
-              setSelectedBudget(budget);
-              setShowAddItemForm(true);
-            }}
           />
         ))}
       </div>
