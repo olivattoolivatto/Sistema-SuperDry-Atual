@@ -1348,18 +1348,7 @@ export function Budgets() {
         />
       )}
 
-      {/* Add Item Form Modal */}
-      {showAddItemForm && selectedBudget && (
-        <ItemFormModal
-          services={services}
-          editingItem={null}
-          onSave={handleAddItem}
-          onCancel={() => {
-            setShowAddItemForm(false);
-            setSelectedBudget(null);
-          }}
-        />
-      )}
+
     </div>
   );
 }
