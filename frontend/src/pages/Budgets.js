@@ -1201,6 +1201,7 @@ export function Budgets() {
   const preSelectedClient = location.state?.selectedClient;
   
   const [budgets, setBudgets] = useState([]);
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(!!preSelectedClient);
