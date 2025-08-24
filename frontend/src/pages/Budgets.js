@@ -154,13 +154,15 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
 
   useEffect(() => {
     loadClients();
+    loadServices();
     if (budget) {
       setFormData({
         client_id: budget.client_id,
         payment_method: budget.payment_method,
         salesperson: budget.salesperson,
         internal_observations: budget.internal_observations || '',
-        budget_observations: budget.budget_observations || ''
+        budget_observations: budget.budget_observations || '',
+        items: budget.items || []
       });
     }
     if (preSelectedClient) {
@@ -175,6 +177,15 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
       setClients(response.data);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
+    }
+  };
+
+  const loadServices = async () => {
+    try {
+      const response = await servicesApi.getAll();
+      setServices(response.data.filter(s => s.is_active));
+    } catch (error) {
+      console.error('Erro ao carregar serviços:', error);
     }
   };
 
