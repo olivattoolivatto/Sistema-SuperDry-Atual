@@ -1244,11 +1244,19 @@ export function Budgets() {
       if (editingBudget) {
         // Update existing budget
         await budgetsApi.update(editingBudget.id, budgetData);
-        alert('Orçamento atualizado com sucesso!');
+        toast({
+          title: "Sucesso!",
+          description: "Orçamento atualizado com sucesso!",
+          variant: "default",
+        });
       } else {
         // Create new budget
         await budgetsApi.create(budgetData);
-        alert('Orçamento criado com sucesso!');
+        toast({
+          title: "Sucesso!",
+          description: "Orçamento criado com sucesso!",
+          variant: "default",
+        });
       }
       
       setShowForm(false);
@@ -1256,7 +1264,11 @@ export function Budgets() {
       loadBudgets();
     } catch (error) {
       console.error('Erro ao salvar orçamento:', error);
-      alert('Erro ao salvar orçamento. Tente novamente.');
+      toast({
+        title: "Erro!",
+        description: "Erro ao salvar orçamento. Tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 
