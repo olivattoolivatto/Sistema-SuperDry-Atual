@@ -549,24 +549,21 @@ export function Catalog() {
 
       {/* Services by Category */}
       {Object.entries(groupedServices).map(([category, categoryServices]) => (
-        <div key={category} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            {CATEGORIES[category]} ({categoryServices.length})
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {categoryServices.map((service) => (
-              <ServiceCard
-                key={service.id}
-                service={service}
-                onEdit={(service) => {
-                  setEditingService(service);
-                  setShowForm(true);
-                }}
-                onToggleStatus={handleToggleStatus}
-                onDelete={handleDeleteService}
-              />
-            ))}
+        <div key={category} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {CATEGORIES[category]} ({categoryServices.length})
+            </h2>
           </div>
+          <ServiceTable
+            services={categoryServices}
+            onEdit={(service) => {
+              setEditingService(service);
+              setShowForm(true);
+            }}
+            onToggleStatus={handleToggleStatus}
+            onDelete={handleDeleteService}
+          />
         </div>
       ))}
 
