@@ -216,9 +216,8 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Budget API Update Function"
-    - "Budget Edit Save Logic" 
-    - "Client Pre-selection on Edit"
+    - "WhatsApp Message Generation API"
+    - "PDF Generation API"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
