@@ -148,6 +148,7 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
   useEffect(() => {
     loadClients();
     loadServices();
+    
     if (budget) {
       setFormData({
         client_id: budget.client_id,
@@ -157,7 +158,15 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
         budget_observations: budget.budget_observations || '',
         items: budget.items || []
       });
+      
+      // Pre-select client when editing budget
+      setClientSearch(budget.client_name || '');
+      setSelectedClient({
+        id: budget.client_id,
+        name: budget.client_name
+      });
     }
+    
     if (preSelectedClient) {
       setSelectedClient(preSelectedClient);
       setClientSearch(preSelectedClient.name);
