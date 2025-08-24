@@ -274,9 +274,9 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
   const calculateTotals = () => {
     const items = formData.items;
     return {
-      totalValue: items.reduce((sum, item) => sum + item.total_value, 0),
-      totalArea: items.reduce((sum, item) => sum + (item.area_m2 || 0), 0),
-      totalLinear: items.reduce((sum, item) => sum + (item.linear_meters || 0), 0),
+      totalValue: items.reduce((sum, item) => sum + parseFloat(item.total_value || 0), 0),
+      totalArea: items.reduce((sum, item) => sum + parseFloat(item.area_m2 || 0), 0),
+      totalLinear: items.reduce((sum, item) => sum + parseFloat(item.linear_meters || 0), 0),
       totalUnits: items.length
     };
   };
