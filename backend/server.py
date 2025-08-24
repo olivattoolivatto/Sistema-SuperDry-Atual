@@ -669,7 +669,7 @@ async def generate_whatsapp_message(budget_id: str):
         
         # Build WhatsApp message
         message = f"""*#### ORÇAMENTO PERSONALIZADO ####*
-_SuperDry Lavanderia de Tapetes & Estofados_
+_SuperDry Lavanderia de Tapetes e Estofados_
 
 Código do Orçamento: {budget_id}
 Cliente: {budget.get('client_name', 'N/A')}
@@ -701,30 +701,53 @@ Quantidade de Itens: {len(budget.get('items', []))} unid."""
         # Add total
         message += f"\n\n*VALOR TOTAL: R$ {budget.get('total_value', 0):.2f}*"
         
-        # Add footer
+        # Add footer - shorter version for WhatsApp
         message += f"""
 
 *PDF com maiores detalhes em anexo!*
 
 _Caso tenha dúvidas, estou à disposição! Agradecemos a confiança._
 
-_"Todas as coisas cooperam para o bem daqueles que amam a Deus, daqueles que são chamados segundo o seu propósito." Romanos 8:28_
-
 -> Orçamento válido por até 30 dias.
 
--> Acompanhe nossos resultados e bastidores no Instagram:
-https://www.instagram.com/p/CFvgmz8F9Ht/"""
+SuperDry Lavanderia
+Instagram: @superdrylavanderia"""
 
         # Clean phone number for WhatsApp URL
-        phone_clean = client.get('phone_primary', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
-        message_encoded = message.replace(' ', '%20').replace('\n', '%0A')
-        whatsapp_url = f"https://wa.me/55{phone_clean}?text={message_encoded}"
-
-        return {
-            "message": message,
-            "phone": client.get("phone_primary", ""),
-            "whatsapp_url": whatsapp_url
-        }
+        phone_raw = client.get('phone_primary', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '')
+        
+        # Ensure phone starts with country code
+        if not phone_raw.startswith('55'):
+            phone_clean = f"55{phone_raw}"
+        else:
+            phone_clean = phone_raw
+        
+        # Create WhatsApp URL with proper encoding
+        import urllib.parse
+        message_encoded = urllib.parse.quote(message, safe='')
+        
+        # Create two versions - one with text parameter and one without for manual paste
+        whatsapp_url = f"https://wa.me/{phone_clean}"
+        whatsapp_url_with_text = f"https://wa.me/{phone_clean}?text={message_encoded}"
+        
+        # Check if URL is too long (WhatsApp limit ~2000 chars)
+        if len(whatsapp_url_with_text) > 2000:
+            # Provide URL without text parameter for manual copy/paste
+            return {
+                "message": message,
+                "phone": client.get("phone_primary", ""),
+                "whatsapp_url": whatsapp_url,
+                "whatsapp_url_with_text": None,
+                "note": "Mensagem muito longa para URL automática. Use o campo 'message' para copiar e colar manualmente."
+            }
+        else:
+            return {
+                "message": message,
+                "phone": client.get("phone_primary", ""),
+                "whatsapp_url": whatsapp_url_with_text,
+                "whatsapp_url_simple": whatsapp_url,
+                "note": "Mensagem incluída na URL automaticamente."
+            }
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error generating WhatsApp message: {str(e)}")
