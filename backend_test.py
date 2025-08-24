@@ -132,10 +132,17 @@ class BudgetSystemTester:
             "budget_observations": "Serviço agendado para próxima semana",
             "items": [
                 {
+                    "id": "ITM-0000001",
                     "service_id": self.created_resources['services'][0],
+                    "service_name": "Limpeza de Sofá 3 Lugares",
+                    "service_code": self.created_resources['services'][0],
                     "quantity": 1.0,
+                    "unit_price": 150.0,
                     "total_value": 150.0,
-                    "observations": "Sofá em bom estado"
+                    "observations": "Sofá em bom estado",
+                    "status": "RETIRAR",
+                    "execution_location": "RETIRADA",
+                    "is_retoque": False
                 }
             ]
         }
