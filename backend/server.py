@@ -497,6 +497,37 @@ async def create_budget(budget_data: BudgetCreate):
         budget_dict["created_at"] = datetime.utcnow()
         budget_dict["updated_at"] = datetime.utcnow()
         
+        # Process items if provided
+        processed_items = []
+        if budget_data.items:
+            for item_data in budget_data.items:
+                # Generate item ID if not provided
+                if 'id' not in item_data or not item_data['id']:
+                    item_data['id'] = f"ITM-{str(datetime.utcnow().timestamp()).replace('.', '')[:7]}"
+                
+                # Ensure required fields
+                if 'created_at' not in item_data:
+                    item_data['created_at'] = datetime.utcnow().isoformat()
+                if 'status' not in item_data:
+                    item_data['status'] = 'RETIRAR'
+                    
+                processed_items.append(item_data)
+        
+        budget_dict['items'] = processed_items
+        
+        # Calculate totals
+        total_value = sum(float(item.get('total_value', 0)) for item in processed_items)
+        total_area_m2 = sum(float(item.get('area_m2', 0)) for item in processed_items)
+        total_linear_meters = sum(float(item.get('linear_meters', 0)) for item in processed_items)
+        total_units = len(processed_items)
+        
+        budget_dict.update({
+            'total_value': total_value,
+            'total_area_m2': total_area_m2,
+            'total_linear_meters': total_linear_meters,
+            'total_units': total_units
+        })
+        
         budget = Budget(**budget_dict)
         
         await db.budgets.insert_one(budget.dict())
