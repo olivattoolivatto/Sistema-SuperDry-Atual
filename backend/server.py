@@ -35,6 +35,23 @@ db = client[os.environ['DB_NAME']]
 GOOGLE_MAPS_KEY = "AIzaSyCh2nGE77H8Iru2hMn5byQ4LJAdzKScKjY"
 gmaps = googlemaps.Client(key=GOOGLE_MAPS_KEY)
 
+# Utility functions for text formatting
+def format_whatsapp_text(text: str) -> str:
+    """Convert markdown-like formatting to WhatsApp format"""
+    # *text* -> Bold in WhatsApp
+    text = re.sub(r'\*(.*?)\*', r'*\1*', text)
+    # _text_ -> Italic in WhatsApp  
+    text = re.sub(r'_(.*?)_', r'_\1_', text)
+    return text
+
+def format_html_text(text: str) -> str:
+    """Convert markdown-like formatting to HTML"""
+    # *text* -> <b>text</b>
+    text = re.sub(r'\*(.*?)\*', r'<b>\1</b>', text)
+    # _text_ -> <i>text</i>
+    text = re.sub(r'_(.*?)_', r'<i>\1</i>', text)
+    return text
+
 # Create the main app without a prefix
 app = FastAPI(title="SuperDry Lavanderia Management System")
 
