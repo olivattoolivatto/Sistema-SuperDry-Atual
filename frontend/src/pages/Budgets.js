@@ -44,7 +44,7 @@ const SALESPERSONS = {
   'Marcos Anthonio': 'Marcos Anthonio'
 };
 
-const BudgetCard = ({ budget, onEdit, onDelete }) => (
+const BudgetCard = ({ budget, onEdit, onDelete, onWhatsApp, onPDF }) => (
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
     <div className="flex items-start justify-between mb-4">
       <div>
@@ -55,6 +55,20 @@ const BudgetCard = ({ budget, onEdit, onDelete }) => (
         </p>
       </div>
       <div className="flex space-x-2">
+        <button
+          onClick={() => onWhatsApp(budget)}
+          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+          title="Enviar WhatsApp"
+        >
+          <MessageCircle className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onPDF(budget)}
+          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          title="Gerar PDF"
+        >
+          <Download className="w-4 h-4" />
+        </button>
         <button
           onClick={() => onEdit(budget)}
           className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
