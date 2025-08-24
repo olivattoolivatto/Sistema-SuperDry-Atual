@@ -1378,11 +1378,73 @@ export function Budgets() {
     if (window.confirm(`Tem certeza que deseja excluir o orçamento ${budget.id}?`)) {
       try {
         await budgetsApi.delete(budget.id);
+        toast({
+          title: "Sucesso!",
+          description: "Orçamento excluído com sucesso!",
+          variant: "default",
+        });
         loadBudgets();
       } catch (error) {
         console.error('Erro ao excluir orçamento:', error);
-        alert('Erro ao excluir orçamento. Tente novamente.');
+        toast({
+          title: "Erro!",
+          description: "Erro ao excluir orçamento. Tente novamente.",
+          variant: "destructive",
+        });
       }
+    }
+  };
+
+  const handleWhatsAppBudget = async (budget) => {
+    try {
+      const response = await budgetsApi.generateWhatsApp(budget.id);
+      const { whatsapp_url } = response.data;
+      
+      // Open WhatsApp with the formatted message
+      window.open(whatsapp_url, '_blank');
+      
+      toast({
+        title: "WhatsApp aberto!",
+        description: "Mensagem do orçamento formatada e pronta para envio.",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('Erro ao gerar WhatsApp:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao gerar mensagem WhatsApp. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePDFBudget = async (budget) => {
+    try {
+      const response = await budgetsApi.generatePDF(budget.id);
+      
+      // Create blob and download PDF
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `orcamento_${budget.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast({
+        title: "PDF gerado!",
+        description: "Orçamento baixado com sucesso!",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao gerar PDF. Tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 
