@@ -101,3 +101,74 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Correção do bug de edição de orçamentos: 1) Cliente não é pré-selecionado ao editar orçamento, 2) Funcionalidade de salvar edição não está implementada (mostra placeholder 'Funcionalidade de edição será implementada em breve')"
+
+backend:
+  - task: "Budget Update API Endpoint"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Endpoint PUT /budgets/{budget_id} já existe e está implementado corretamente no backend"
+
+frontend:
+  - task: "Budget API Update Function"
+    implemented: false
+    working: false
+    file: "services/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "Função update ausente na budgetsApi, precisa ser implementada"
+
+  - task: "Budget Edit Save Logic"
+    implemented: false
+    working: false
+    file: "pages/Budgets.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "handleSaveBudget tem apenas placeholder para edição, precisa implementar lógica real"
+
+  - task: "Client Pre-selection on Edit"
+    implemented: false
+    working: false
+    file: "pages/Budgets.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "Cliente não é pré-selecionado no campo de busca quando editando orçamento"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Budget API Update Function"
+    - "Budget Edit Save Logic" 
+    - "Client Pre-selection on Edit"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Iniciando correção do bug de edição de orçamentos. Identificados 3 problemas principais: 1) API frontend sem função update, 2) lógica de salvamento com placeholder, 3) cliente não pré-selecionado. Backend já tem endpoint funcionando."
