@@ -1211,6 +1211,7 @@ export function Budgets() {
 
   useEffect(() => {
     loadBudgets();
+    loadServices();
   }, []);
 
   const loadBudgets = async () => {
@@ -1222,6 +1223,15 @@ export function Budgets() {
       console.error('Erro ao carregar orçamentos:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadServices = async () => {
+    try {
+      const response = await servicesApi.getAll();
+      setServices(response.data.filter(s => s.is_active));
+    } catch (error) {
+      console.error('Erro ao carregar serviços:', error);
     }
   };
 
