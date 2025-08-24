@@ -530,6 +530,14 @@ async def get_budget(budget_id: str):
         raise HTTPException(status_code=404, detail="Budget not found")
     return Budget(**budget)
 
+@api_router.delete("/budgets/{budget_id}")
+async def delete_budget(budget_id: str):
+    """Excluir orçamento"""
+    result = await db.budgets.delete_one({"id": budget_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    return {"message": "Budget deleted successfully"}
+
 @api_router.post("/budgets/{budget_id}/items")
 async def add_budget_item(budget_id: str, item_data: BudgetItemCreate):
     """Adicionar item ao orçamento"""
