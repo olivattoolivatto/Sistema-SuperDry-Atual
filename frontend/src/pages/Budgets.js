@@ -595,7 +595,8 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
         height: '',
         diameter: '',
         fabric_folds: '',
-        fabric_per_fold: 18
+        fabric_per_fold: 18,
+        linear_meters: editingItem.linear_meters || ''
       });
       const service = services.find(s => s.id === editingItem.service_id);
       setSelectedService(service);
