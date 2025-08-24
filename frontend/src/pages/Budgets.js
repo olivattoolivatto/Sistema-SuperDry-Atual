@@ -197,14 +197,23 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
   const handleClientSearch = async (e) => {
     const value = e.target.value;
     setClientSearch(value);
+    setShowQuickAddClient(false);
     
     if (value.length > 1) {
       try {
         const response = await clientsApi.getAll({ search: value });
         setClientSuggestions(response.data);
+        
+        // Se não encontrou resultados e o nome tem mais de 2 caracteres, mostrar opção de criar
+        if (response.data.length === 0 && value.length > 2) {
+          setShowQuickAddClient(true);
+        }
       } catch (error) {
         console.error('Erro ao buscar clientes:', error);
         setClientSuggestions([]);
+        if (value.length > 2) {
+          setShowQuickAddClient(true);
+        }
       }
     } else {
       setClientSuggestions([]);
