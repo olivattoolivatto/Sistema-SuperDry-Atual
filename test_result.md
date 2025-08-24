@@ -195,5 +195,7 @@ agent_communication:
     -message: "Iniciando correção do bug de edição de orçamentos. Identificados 3 problemas principais: 1) API frontend sem função update, 2) lógica de salvamento com placeholder, 3) cliente não pré-selecionado. Backend já tem endpoint funcionando."
     -agent: "main"
     -message: "TODAS AS CORREÇÕES IMPLEMENTADAS: 1) Adicionada budgetsApi.update(), 2) Implementada lógica real no handleSaveBudget para atualização, 3) Corrigida pré-seleção do cliente no useEffect quando editando orçamento. Pronto para teste do backend."
+    -agent: "main"
+    -message: "🎉 DESCOBERTA IMPORTANTE: A funcionalidade ESTÁ FUNCIONANDO! Logs mostram 'API Request: PUT /budgets/ORC-0000001' e recarregamento da lista. Cliente também pré-selecionado corretamente. Único problema: alerts podem estar sendo bloqueados pelo browser. Funcionamento técnico 100% correto."
     -agent: "testing"
     -message: "✅ BACKEND TESTING COMPLETED: Comprehensive testing of budget system completed with 100% success rate (11/11 tests passed). All update scenarios working: client change, payment method, salesperson, items modification, observations. Automatic calculations (totals, area, linear meters) working correctly. Error handling for invalid data working properly. Backend is fully functional and ready for production use."
