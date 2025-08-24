@@ -432,6 +432,109 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
             />
           </div>
 
+          {/* Seção de Itens */}
+          <div className="border-t border-gray-200 pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Itens do Orçamento</h3>
+              <button
+                type="button"
+                onClick={() => setShowItemForm(true)}
+                className="flex items-center px-3 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors text-sm"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Adicionar Item
+              </button>
+            </div>
+
+            {formData.items.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unidade</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Área M²</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Metragem Linear</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantidade</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Informações</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {formData.items.map((item, index) => (
+                      <tr key={item.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-4 py-3">
+                          <div className="text-sm font-medium text-gray-900">{item.service_name}</div>
+                          <div className="text-xs text-gray-500 font-mono">{item.service_code}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">{item.area_m2 ? item.area_m2.toFixed(2) : '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">{item.linear_meters ? item.linear_meters.toFixed(2) : '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
+                        <td className="px-4 py-3 text-sm font-medium text-green-600">R$ {item.total_value.toFixed(2)}</td>
+                        <td className="px-4 py-3">
+                          <div className="text-xs text-gray-600">
+                            <div>Local: {item.execution_location}</div>
+                            <div>Status: {item.status}</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditItem(item)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Editar"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteItem(item.id)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Totalizadores */}
+                <div className="mt-4 bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="text-center">
+                      <div className="font-medium text-gray-900">{calculateTotals().totalUnits}</div>
+                      <div className="text-gray-500">Itens</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium text-gray-900">{calculateTotals().totalArea.toFixed(2)} m²</div>
+                      <div className="text-gray-500">Área Total</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium text-gray-900">{calculateTotals().totalLinear.toFixed(2)} m</div>
+                      <div className="text-gray-500">Metragem Linear</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium text-green-600 text-lg">R$ {calculateTotals().totalValue.toFixed(2)}</div>
+                      <div className="text-gray-500">Valor Total</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500 border border-gray-200 rounded-lg">
+                <Package className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>Nenhum item adicionado</p>
+                <p className="text-sm">Clique em "Adicionar Item" para começar</p>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
             <button
               type="button"
