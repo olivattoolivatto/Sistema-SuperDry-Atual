@@ -837,19 +837,8 @@ async def generate_pdf_budget(budget_id: str):
         logo_path = "/app/backend/logo-superdry.png"
         if os.path.exists(logo_path):
             try:
-                # Create logo image with proper sizing
-                logo = Image(logo_path)
-                # Get original dimensions
-                original_width, original_height = logo.imageWidth, logo.imageHeight
-                # Scale logo to appropriate size (max height 1.5 inches, maintain aspect ratio)
-                max_height = 1.5 * inch
-                if original_height > max_height:
-                    scale_factor = max_height / original_height
-                    logo.drawHeight = max_height
-                    logo.drawWidth = original_width * scale_factor
-                else:
-                    logo.drawHeight = original_height
-                    logo.drawWidth = original_width
+                # Create logo image with fixed sizing
+                logo = Image(logo_path, width=2*inch, height=1.5*inch)
                 
                 # Create table with client info and logo
                 info_table_data = [[client_info_paragraph, logo]]
