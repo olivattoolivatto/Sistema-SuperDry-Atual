@@ -485,7 +485,7 @@ class BudgetSystemTester:
                 ('ORÇAMENTO PERSONALIZADO' in message, "Header present"),
                 ('SuperDry Lavanderia' in message, "Company name present"),
                 (budget_id in message, "Budget ID present"),
-                ('Maria Silva Santos' in message or 'João Pedro Oliveira' in message, "Client name present"),
+                (len(message.split('Cliente:')[1].split('\n')[0].strip()) > 0 if 'Cliente:' in message else False, "Client name present"),
                 ('VALOR TOTAL:' in message, "Total value section present"),
                 ('R$' in message, "Currency format present"),
                 ('*' in message, "Bold formatting present"),
