@@ -211,6 +211,12 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!selectedClient) {
+      alert('Por favor, selecione um cliente válido');
+      return;
+    }
+    
     setLoading(true);
     try {
       await onSave(formData);
