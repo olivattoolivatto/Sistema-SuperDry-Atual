@@ -552,6 +552,19 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
             </button>
           </div>
         </form>
+
+        {/* Item Form Modal */}
+        {showItemForm && (
+          <ItemFormModal
+            services={services}
+            editingItem={editingItem}
+            onSave={handleAddItem}
+            onCancel={() => {
+              setShowItemForm(false);
+              setEditingItem(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );
