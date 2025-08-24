@@ -839,13 +839,17 @@ async def generate_pdf_budget(budget_id: str):
             try:
                 # Create logo image with proper sizing
                 logo = Image(logo_path)
+                # Get original dimensions
+                original_width, original_height = logo.imageWidth, logo.imageHeight
                 # Scale logo to appropriate size (max height 1.5 inches, maintain aspect ratio)
-                logo_width, logo_height = logo.wrap(0, 0)
                 max_height = 1.5 * inch
-                if logo_height > max_height:
-                    scale_factor = max_height / logo_height
+                if original_height > max_height:
+                    scale_factor = max_height / original_height
                     logo.drawHeight = max_height
-                    logo.drawWidth = logo_width * scale_factor
+                    logo.drawWidth = original_width * scale_factor
+                else:
+                    logo.drawHeight = original_height
+                    logo.drawWidth = original_width
                 
                 # Create table with client info and logo
                 info_table_data = [[client_info_paragraph, logo]]
