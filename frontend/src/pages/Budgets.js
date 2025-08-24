@@ -159,7 +159,11 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
         budget_observations: budget.budget_observations || ''
       });
     }
-  }, [budget]);
+    if (preSelectedClient) {
+      setSelectedClient(preSelectedClient);
+      setClientSearch(preSelectedClient.name);
+    }
+  }, [budget, preSelectedClient]);
 
   const loadClients = async () => {
     try {
@@ -168,6 +172,33 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
     }
+  };
+
+  const handleClientSearch = async (e) => {
+    const value = e.target.value;
+    setClientSearch(value);
+    
+    if (value.length > 1) {
+      try {
+        const response = await clientsApi.getAll({ search: value });
+        setClientSuggestions(response.data);
+      } catch (error) {
+        console.error('Erro ao buscar clientes:', error);
+        setClientSuggestions([]);
+      }
+    } else {
+      setClientSuggestions([]);
+    }
+  };
+
+  const handleClientSelect = (client) => {
+    setSelectedClient(client);
+    setClientSearch(client.name);
+    setFormData(prev => ({
+      ...prev,
+      client_id: client.id
+    }));
+    setClientSuggestions([]);
   };
 
   const handleInputChange = (e) => {
