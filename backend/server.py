@@ -207,6 +207,7 @@ class BudgetCreate(BaseModel):
     salesperson: Salesperson
     internal_observations: Optional[str] = None
     budget_observations: Optional[str] = None
+    items: Optional[List[dict]] = []
 
 class DashboardSummary(BaseModel):
     pending_routes: int
