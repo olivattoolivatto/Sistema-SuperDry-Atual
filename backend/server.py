@@ -648,6 +648,207 @@ async def delete_budget(budget_id: str):
         raise HTTPException(status_code=404, detail="Budget not found")
     return {"message": "Budget deleted successfully"}
 
+@api_router.get("/budgets/{budget_id}/whatsapp")
+async def generate_whatsapp_message(budget_id: str):
+    """Gerar mensagem formatada para WhatsApp"""
+    try:
+        budget = await db.budgets.find_one({"id": budget_id})
+        if not budget:
+            raise HTTPException(status_code=404, detail="Budget not found")
+        
+        # Get client info
+        client = await db.clients.find_one({"id": budget.get("client_id")})
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        
+        # Format date
+        updated_date = budget.get("updated_at", datetime.utcnow())
+        if isinstance(updated_date, str):
+            updated_date = datetime.fromisoformat(updated_date.replace('Z', '+00:00'))
+        formatted_date = updated_date.strftime("%d/%m/%Y")
+        
+        # Build WhatsApp message
+        message = f"""*#### ORÇAMENTO PERSONALIZADO ####*
+_SuperDry Lavanderia de Tapetes & Estofados_
+
+Código do Orçamento: {budget_id}
+Cliente: {budget.get('client_name', 'N/A')}
+Atendente: {budget.get('salesperson', 'N/A')}
+Data do Orçamento: {formatted_date}
+
+Quantidade de Itens: {len(budget.get('items', []))} unid."""
+
+        # Add items
+        for item in budget.get('items', []):
+            item_line = f"- {item.get('service_name', 'N/A')}"
+            
+            # Add measurements based on service type
+            if item.get('area_m2', 0) > 0:
+                if item.get('diameter'):
+                    item_line += f" - Ø{item.get('diameter')}m - {item.get('area_m2'):.1f} m²"
+                elif item.get('width') and item.get('height'):
+                    item_line += f" - {item.get('width')} x {item.get('height')} - {item.get('area_m2'):.1f} m²"
+                else:
+                    item_line += f" - {item.get('area_m2'):.1f} m²"
+            elif item.get('linear_meters', 0) > 0:
+                item_line += f" - {item.get('linear_meters'):.0f}m lineares"
+            else:
+                item_line += f" - {item.get('quantity', 1):.0f} unid."
+            
+            item_line += f" - R$ {item.get('total_value', 0):.2f}"
+            message += f"\n_{item_line}_"
+        
+        # Add total
+        message += f"\n\n*VALOR TOTAL: R$ {budget.get('total_value', 0):.2f}*"
+        
+        # Add footer
+        message += f"""
+
+*PDF com maiores detalhes em anexo!*
+
+_Caso tenha dúvidas, estou à disposição! Agradecemos a confiança._
+
+_"Todas as coisas cooperam para o bem daqueles que amam a Deus, daqueles que são chamados segundo o seu propósito." Romanos 8:28_
+
+-> Orçamento válido por até 30 dias.
+
+-> Acompanhe nossos resultados e bastidores no Instagram:
+https://www.instagram.com/p/CFvgmz8F9Ht/"""
+
+        # Clean phone number for WhatsApp URL
+        phone_clean = client.get('phone_primary', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+        message_encoded = message.replace(' ', '%20').replace('\n', '%0A')
+        whatsapp_url = f"https://wa.me/55{phone_clean}?text={message_encoded}"
+
+        return {
+            "message": message,
+            "phone": client.get("phone_primary", ""),
+            "whatsapp_url": whatsapp_url
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error generating WhatsApp message: {str(e)}")
+
+@api_router.get("/budgets/{budget_id}/pdf")
+async def generate_pdf_budget(budget_id: str):
+    """Gerar PDF do orçamento"""
+    try:
+        budget = await db.budgets.find_one({"id": budget_id})
+        if not budget:
+            raise HTTPException(status_code=404, detail="Budget not found")
+        
+        client = await db.clients.find_one({"id": budget.get("client_id")})
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        
+        # Create PDF in memory
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        styles = getSampleStyleSheet()
+        story = []
+        
+        # Custom styles
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=30,
+            alignment=1  # Center
+        )
+        
+        # Header
+        story.append(Paragraph(f"ORÇAMENTO {budget_id}", title_style))
+        story.append(Paragraph("SuperDry Lavanderia de Tapetes & Estofados", styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # Client information
+        updated_date = budget.get("updated_at", datetime.utcnow())
+        if isinstance(updated_date, str):
+            updated_date = datetime.fromisoformat(updated_date.replace('Z', '+00:00'))
+        formatted_date = updated_date.strftime("%d/%m/%Y")
+        
+        client_info = f"""
+Cliente: {budget.get('client_name', 'N/A')}
+Telefone: {client.get('phone_primary', 'N/A')}
+Vendedor: {budget.get('salesperson', 'N/A')}
+Forma de Pagamento: {budget.get('payment_method', 'N/A')}
+Data: {formatted_date}
+"""
+        story.append(Paragraph(client_info, styles['Normal']))
+        
+        # Budget observations
+        if budget.get('budget_observations'):
+            story.append(Paragraph(f"Observações do Orçamento: {budget.get('budget_observations')}", styles['Normal']))
+        
+        story.append(Spacer(1, 20))
+        
+        # Services table
+        story.append(Paragraph("SERVIÇOS", styles['Heading2']))
+        
+        table_data = [["Descrição", "Medidas", "Área M²", "Metragem Linear", "Unidade", "Valor"]]
+        
+        total_value = 0
+        for item in budget.get('items', []):
+            measures = ""
+            if item.get('width') and item.get('height'):
+                measures = f"{item.get('width')} x {item.get('height')}"
+            elif item.get('diameter'):
+                measures = f"Ø {item.get('diameter')}m"
+            
+            area_m2 = f"{item.get('area_m2', 0):.1f}" if item.get('area_m2', 0) > 0 else "-"
+            linear_meters = f"{item.get('linear_meters', 0):.1f}" if item.get('linear_meters', 0) > 0 else "-"
+            quantity = f"{item.get('quantity', 1):.0f}"
+            value = f"R$ {item.get('total_value', 0):.2f}"
+            
+            total_value += item.get('total_value', 0)
+            
+            table_data.append([
+                item.get('service_name', 'N/A'),
+                measures,
+                area_m2,
+                linear_meters, 
+                quantity,
+                value
+            ])
+        
+        # Total row
+        table_data.append(["", "", "", "", "TOTAL", f"R$ {total_value:.2f}"])
+        
+        table = Table(table_data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
+            ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(table)
+        story.append(Spacer(1, 30))
+        
+        # Signature section
+        story.append(Paragraph("_" * 50, styles['Normal']))
+        story.append(Paragraph("Assinatura do cliente", styles['Normal']))
+        
+        # Build PDF
+        doc.build(story)
+        
+        # Return PDF as response
+        buffer.seek(0)
+        return StreamingResponse(
+            BytesIO(buffer.read()),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=orcamento_{budget_id}.pdf"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error generating PDF: {str(e)}")
+
 @api_router.post("/budgets/{budget_id}/items")
 async def add_budget_item(budget_id: str, item_data: BudgetItemCreate):
     """Adicionar item ao orçamento"""
