@@ -14,6 +14,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { budgetsApi, clientsApi, servicesApi } from '../services/api';
+import { toast } from '../hooks/use-toast';
 
 const PAYMENT_METHODS = {
   PIX_CNPJ_25995295000104: 'PIX (CNPJ 25995295000104)',
