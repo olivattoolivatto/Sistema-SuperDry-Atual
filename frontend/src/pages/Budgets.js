@@ -1398,16 +1398,35 @@ export function Budgets() {
   const handleWhatsAppBudget = async (budget) => {
     try {
       const response = await budgetsApi.generateWhatsApp(budget.id);
-      const { whatsapp_url } = response.data;
+      const data = response.data;
       
-      // Open WhatsApp with the formatted message
-      window.open(whatsapp_url, '_blank');
+      // Check if URL with text is available
+      if (data.whatsapp_url_with_text) {
+        // Open WhatsApp with the formatted message
+        window.open(data.whatsapp_url_with_text, '_blank');
+        
+        toast({
+          title: "WhatsApp aberto!",
+          description: "Mensagem do orçamento formatada e pronta para envio.",
+          variant: "default",
+        });
+      } else {
+        // Message too long, open WhatsApp without text and show copy option
+        window.open(data.whatsapp_url, '_blank');
+        
+        // Copy message to clipboard
+        navigator.clipboard.writeText(data.message).then(() => {
+          toast({
+            title: "WhatsApp aberto + Mensagem copiada!",
+            description: "Cole a mensagem manualmente no WhatsApp. Já está na área de transferência.",
+            variant: "default",
+          });
+        }).catch(() => {
+          // Fallback: show message in alert for manual copy
+          alert(`WhatsApp aberto!\n\nMensagem para copiar:\n\n${data.message}`);
+        });
+      }
       
-      toast({
-        title: "WhatsApp aberto!",
-        description: "Mensagem do orçamento formatada e pronta para envio.",
-        variant: "default",
-      });
     } catch (error) {
       console.error('Erro ao gerar WhatsApp:', error);
       toast({
