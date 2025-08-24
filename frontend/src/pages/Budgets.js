@@ -206,14 +206,52 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
     }
   };
 
-  const handleClientSelect = (client) => {
-    setSelectedClient(client);
-    setClientSearch(client.name);
+  const handleAddItem = (itemData) => {
+    const newItem = {
+      id: `ITM-${String(Date.now()).slice(-7).padStart(7, '0')}`,
+      service_id: itemData.service_id,
+      service_name: services.find(s => s.id === itemData.service_id)?.name || '',
+      service_code: itemData.service_id,
+      quantity: itemData.quantity || 1,
+      unit_price: services.find(s => s.id === itemData.service_id)?.sale_price || 0,
+      area_m2: itemData.area_m2 || 0,
+      linear_meters: itemData.linear_meters || 0,
+      total_value: (itemData.quantity || 1) * (services.find(s => s.id === itemData.service_id)?.sale_price || 0),
+      observations: itemData.observations || '',
+      status: 'RETIRAR',
+      execution_location: services.find(s => s.id === itemData.service_id)?.execution_location || 'RETIRADA',
+      created_at: new Date().toISOString()
+    };
+
     setFormData(prev => ({
       ...prev,
-      client_id: client.id
+      items: [...prev.items, newItem]
     }));
-    setClientSuggestions([]);
+    setShowItemForm(false);
+  };
+
+  const handleEditItem = (item) => {
+    setEditingItem(item);
+    setShowItemForm(true);
+  };
+
+  const handleDeleteItem = (itemId) => {
+    if (window.confirm('Tem certeza que deseja excluir este item?')) {
+      setFormData(prev => ({
+        ...prev,
+        items: prev.items.filter(item => item.id !== itemId)
+      }));
+    }
+  };
+
+  const calculateTotals = () => {
+    const items = formData.items;
+    return {
+      totalValue: items.reduce((sum, item) => sum + item.total_value, 0),
+      totalArea: items.reduce((sum, item) => sum + (item.area_m2 || 0), 0),
+      totalLinear: items.reduce((sum, item) => sum + (item.linear_meters || 0), 0),
+      totalUnits: items.length
+    };
   };
 
   const handleInputChange = (e) => {
