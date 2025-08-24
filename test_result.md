@@ -181,3 +181,5 @@ test_plan:
 agent_communication:
     -agent: "main"
     -message: "Iniciando correção do bug de edição de orçamentos. Identificados 3 problemas principais: 1) API frontend sem função update, 2) lógica de salvamento com placeholder, 3) cliente não pré-selecionado. Backend já tem endpoint funcionando."
+    -agent: "main"
+    -message: "TODAS AS CORREÇÕES IMPLEMENTADAS: 1) Adicionada budgetsApi.update(), 2) Implementada lógica real no handleSaveBudget para atualização, 3) Corrigida pré-seleção do cliente no useEffect quando editando orçamento. Pronto para teste do backend."
