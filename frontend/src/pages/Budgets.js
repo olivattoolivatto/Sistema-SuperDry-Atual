@@ -11,7 +11,9 @@ import {
   DollarSign,
   Calendar,
   Package,
-  MessageSquare
+  MessageSquare,
+  MessageCircle,
+  Download
 } from 'lucide-react';
 import { budgetsApi, clientsApi, servicesApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
