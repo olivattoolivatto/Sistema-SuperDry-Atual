@@ -56,6 +56,8 @@ export const budgetsApi = {
   update: (id, data) => api.put(`/budgets/${id}`, data),
   delete: (id) => api.delete(`/budgets/${id}`),
   addItem: (budgetId, itemData) => api.post(`/budgets/${budgetId}/items`, itemData),
+  generateWhatsApp: (id) => api.get(`/budgets/${id}/whatsapp`),
+  generatePDF: (id) => api.get(`/budgets/${id}/pdf`, { responseType: 'blob' }),
 };
 
 // Places API (Google)
