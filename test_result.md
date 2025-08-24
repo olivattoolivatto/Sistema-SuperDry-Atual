@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Correção do bug de edição de orçamentos: 1) Cliente não é pré-selecionado ao editar orçamento, 2) Funcionalidade de salvar edição não está implementada (mostra placeholder 'Funcionalidade de edição será implementada em breve')"
+user_problem_statement: "Teste completo das novas funcionalidades de WhatsApp e PDF para orçamentos. CONTEXTO: Implementamos duas novas APIs: 1. GET /api/budgets/{budget_id}/whatsapp - Gerar mensagem WhatsApp formatada, 2. GET /api/budgets/{budget_id}/pdf - Gerar PDF do orçamento"
 
 backend:
   - task: "Budget Update API Endpoint"
@@ -119,6 +119,30 @@ backend:
         -working: true
         -agent: "testing"
         -comment: "✅ TESTED: PUT /api/budgets/{budget_id} endpoint working perfectly. All update scenarios tested: client change, payment method, salesperson, items modification, observations. Automatic total recalculation working. Error handling for invalid clients working correctly."
+
+  - task: "WhatsApp Message Generation API"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "✅ TESTED: GET /api/budgets/{budget_id}/whatsapp endpoint working perfectly. Message formatting with bold/italic (*text*, _text_) working correctly. Client data loading properly (name, phone). Calculations for area/metragem appearing correctly. WhatsApp URL generation with Brazil country code (+55) working. Tested with existing budgets (ORC-0000001) and new budgets. Error handling for non-existent budgets working (404 response). Message includes all required elements: company header, budget ID, client info, salesperson, items with measurements, total value, footer with Instagram link."
+
+  - task: "PDF Generation API"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "✅ TESTED: GET /api/budgets/{budget_id}/pdf endpoint working perfectly. PDF generated correctly in binary format with proper headers (application/pdf, attachment disposition). Filename format correct (orcamento_{budget_id}.pdf). PDF contains all budget data: client info, services table with measurements, totals, signature section. Tested with existing budgets (ORC-0000001) and budgets with/without items. Error handling for non-existent budgets working (404 response). PDF size appropriate (2000+ bytes for typical budgets)."
 
 frontend:
   - task: "Budget API Update Function"
