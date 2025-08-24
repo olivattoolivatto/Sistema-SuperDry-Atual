@@ -741,8 +741,8 @@ export function Budgets() {
   const handleDeleteBudget = async (budget) => {
     if (window.confirm(`Tem certeza que deseja excluir o orçamento ${budget.id}?`)) {
       try {
-        // Delete logic would go here
-        alert('Funcionalidade de exclusão será implementada em breve');
+        await budgetsApi.delete(budget.id);
+        loadBudgets();
       } catch (error) {
         console.error('Erro ao excluir orçamento:', error);
         alert('Erro ao excluir orçamento. Tente novamente.');
