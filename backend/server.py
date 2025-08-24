@@ -908,6 +908,13 @@ async def add_budget_item(budget_id: str, item_data: BudgetItemCreate):
         item_dict = item_data.dict()
         service_obj = Service(**service)
         
+        # Add measurement fields to item dict
+        item_dict["width"] = item_data.width
+        item_dict["height"] = item_data.height
+        item_dict["diameter"] = item_data.diameter
+        item_dict["fabric_folds"] = item_data.fabric_folds
+        item_dict["fabric_per_fold"] = item_data.fabric_per_fold
+        
         # Calculate area and linear meters based on measure type
         if service_obj.measure_type == MeasureType.AREA_DE_TAPETE or service_obj.measure_type == MeasureType.CARPETE_TAPETE_LOCAL:
             if item_data.width and item_data.height:
@@ -925,6 +932,9 @@ async def add_budget_item(budget_id: str, item_data: BudgetItemCreate):
         elif service_obj.measure_type in [MeasureType.METRAGEM_LINEAR_CORTINA_SIMPLES, MeasureType.METRAGEM_LINEAR_PE_DIREITO_DUPLO, MeasureType.METRAGEM_LINEAR_ESPECIAL]:
             if item_data.fabric_folds and item_data.fabric_per_fold:
                 item_dict["linear_meters"] = (item_data.fabric_folds * item_data.fabric_per_fold) / 100
+                item_dict["quantity"] = item_dict["linear_meters"]
+            elif item_data.linear_meters:
+                item_dict["linear_meters"] = item_data.linear_meters
                 item_dict["quantity"] = item_dict["linear_meters"]
         
         # Generate item ID
