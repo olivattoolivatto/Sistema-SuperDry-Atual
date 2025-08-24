@@ -206,6 +206,16 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
     }
   };
 
+  const handleClientSelect = (client) => {
+    setSelectedClient(client);
+    setClientSearch(client.name);
+    setFormData(prev => ({
+      ...prev,
+      client_id: client.id
+    }));
+    setClientSuggestions([]);
+  };
+
   const handleAddItem = (itemData) => {
     const newItem = {
       id: `ITM-${String(Date.now()).slice(-7).padStart(7, '0')}`,
