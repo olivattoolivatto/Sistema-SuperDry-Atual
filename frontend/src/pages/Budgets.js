@@ -899,7 +899,8 @@ const AddItemForm = ({ budget, onSave, onCancel }) => {
     height: '',
     diameter: '',
     fabric_folds: '',
-    fabric_per_fold: 18
+    fabric_per_fold: 18,
+    linear_meters: ''
   });
   const [loading, setLoading] = useState(false);
 
