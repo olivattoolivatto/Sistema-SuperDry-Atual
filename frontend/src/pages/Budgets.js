@@ -740,7 +740,7 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
       case 'METRAGEM_LINEAR_CORTINA_SIMPLES':
       case 'METRAGEM_LINEAR_PE_DIREITO_DUPLO':
       case 'METRAGEM_LINEAR_ESPECIAL':
-        const linearMeters = formData.fabric_folds && formData.fabric_per_fold 
+        const calculatedLinearMeters = formData.fabric_folds && formData.fabric_per_fold 
           ? ((parseFloat(formData.fabric_folds) * parseFloat(formData.fabric_per_fold)) / 100).toFixed(2)
           : '';
         return (
@@ -755,6 +755,7 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
                   value={formData.fabric_folds}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Opcional - para cálculo automático"
                 />
               </div>
               <div>
@@ -768,14 +769,23 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-700 mb-1">Metragem Linear</label>
+                <label className="block text-sm text-gray-700 mb-1">Metragem Linear *</label>
                 <input
                   type="number"
-                  value={linearMeters}
-                  readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                  name="linear_meters"
+                  value={formData.linear_meters || calculatedLinearMeters}
+                  onChange={handleInputChange}
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Digite ou será calculado automaticamente"
                 />
               </div>
+            </div>
+            <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
+              <p><strong>Como usar:</strong></p>
+              <p>• <strong>Cálculo automático:</strong> Preencha "Quantidade de Dobras" e "Tecido por Dobra"</p>
+              <p>• <strong>Manual:</strong> Digite diretamente no campo "Metragem Linear"</p>
+              <p>• Se preencher os campos de dobras, o valor será calculado automaticamente</p>
             </div>
           </div>
         );
