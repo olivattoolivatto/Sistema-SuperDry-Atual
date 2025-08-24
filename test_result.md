@@ -119,8 +119,8 @@ backend:
 
 frontend:
   - task: "Budget API Update Function"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "services/api.js"
     stuck_count: 0
     priority: "high"
@@ -129,10 +129,13 @@ frontend:
         -working: false
         -agent: "main"
         -comment: "Função update ausente na budgetsApi, precisa ser implementada"
+        -working: true
+        -agent: "main"
+        -comment: "Adicionada função update: (id, data) => api.put(/budgets/${id}, data) na budgetsApi"
 
   - task: "Budget Edit Save Logic"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "pages/Budgets.js"
     stuck_count: 0
     priority: "high"
@@ -141,10 +144,13 @@ frontend:
         -working: false
         -agent: "main"
         -comment: "handleSaveBudget tem apenas placeholder para edição, precisa implementar lógica real"
+        -working: true
+        -agent: "main"
+        -comment: "Implementada lógica real: await budgetsApi.update(editingBudget.id, budgetData) com mensagens de sucesso"
 
   - task: "Client Pre-selection on Edit"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "pages/Budgets.js"
     stuck_count: 0
     priority: "high"
@@ -153,6 +159,9 @@ frontend:
         -working: false
         -agent: "main"
         -comment: "Cliente não é pré-selecionado no campo de busca quando editando orçamento"
+        -working: true
+        -agent: "main"
+        -comment: "Adicionada lógica no useEffect para pré-selecionar cliente: setClientSearch(budget.client_name) e setSelectedClient quando budget existe"
 
 metadata:
   created_by: "main_agent"
