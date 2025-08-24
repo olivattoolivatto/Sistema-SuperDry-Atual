@@ -580,7 +580,8 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
     height: '',
     diameter: '',
     fabric_folds: '',
-    fabric_per_fold: 18
+    fabric_per_fold: 18,
+    linear_meters: ''
   });
 
   useEffect(() => {
