@@ -22,6 +22,9 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+from reportlab.lib.units import cm
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib import colors
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -794,14 +797,22 @@ async def generate_pdf_budget(budget_id: str):
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=16,
-            spaceAfter=30,
+            fontSize=19,
+            spaceAfter=10,
+            alignment=1  # Center
+        )
+
+        big_style = ParagraphStyle(
+            'BigNormal',
+            parent=styles['Normal'],
+            fontSize=int(styles['Normal'].fontSize * 1.5),   # 50% maior
+            leading=int(styles['Normal'].leading * 0.6),     # 40% menor
             alignment=1  # Center
         )
         
         # Header
         story.append(Paragraph(f"ORÇAMENTO {budget_id}", title_style))
-        story.append(Paragraph("SuperDry Lavanderia de Tapetes & Estofados", styles['Normal']))
+        story.append(Paragraph("SuperDry Lavanderia de Tapetes & Estofados", big_style))
         story.append(Spacer(1, 20))
         
         # Client information
@@ -811,24 +822,38 @@ async def generate_pdf_budget(budget_id: str):
         formatted_date = updated_date.strftime("%d/%m/%Y")
         
         client_info = f"""
-Cliente: {budget.get('client_name', 'N/A')}
-Telefone: {client.get('phone_primary', 'N/A')}
-Vendedor: {budget.get('salesperson', 'N/A')}
-Forma de Pagamento: {budget.get('payment_method', 'N/A')}
-Data: {formatted_date}
+<b>Cliente:</b> {budget.get('client_name', 'N/A')}<br/>
+<b>Telefone:</b> {client.get('phone_primary', 'N/A')}<br/>
+<b>Vendedor:</b> {budget.get('salesperson', 'N/A')}<br/>
+<b>Forma de Pagamento:</b> {budget.get('payment_method', 'N/A')}<br/>
+<b>Data:</b> {formatted_date}
 """
         story.append(Paragraph(client_info, styles['Normal']))
         
         # Budget observations
         if budget.get('budget_observations'):
-            story.append(Paragraph(f"Observações do Orçamento: {budget.get('budget_observations')}", styles['Normal']))
+            story.append(Paragraph(f"<b>Observações do Orçamento:</b> {budget.get('budget_observations')}", styles['Normal']))
         
         story.append(Spacer(1, 20))
         
         # Services table
         story.append(Paragraph("SERVIÇOS", styles['Heading2']))
+
+        # Define estilo centralizado para células
+        centered_style = ParagraphStyle(
+            'Centered',
+            parent=styles['Normal'],
+            alignment=1  # Center
+        )
         
-        table_data = [["Descrição", "Medidas", "Área M²", "Metragem Linear", "Unidade", "Valor"]]
+        table_data = [[
+            Paragraph("<b>Descrição</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white)),
+            Paragraph("<b>Medidas</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white)),
+            Paragraph("<b>Área M²</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white)),
+            Paragraph("<b>Metragem Linear</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white)),
+            Paragraph("<b>Unidade</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white)),
+            Paragraph("<b>Valor</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white))
+        ]]
         
         total_value = 0
         for item in budget.get('items', []):
@@ -846,28 +871,48 @@ Data: {formatted_date}
             total_value += item.get('total_value', 0)
             
             table_data.append([
-                item.get('service_name', 'N/A'),
-                measures,
-                area_m2,
-                linear_meters, 
-                quantity,
-                value
+                Paragraph(item.get('service_name', 'N/A'), centered_style),
+                Paragraph(measures, centered_style),
+                Paragraph(area_m2, centered_style),
+                Paragraph(linear_meters, centered_style),
+                Paragraph(quantity, centered_style),
+                Paragraph(value, centered_style)
             ])
         
         # Total row
-        table_data.append(["", "", "", "", "TOTAL", f"R$ {total_value:.2f}"])
+        table_data.append([
+            "", "", "", "",
+            Paragraph("<b>TOTAL</b>", centered_style),
+            Paragraph(f"R$ {total_value:.2f}", centered_style)
+        ])
         
-        table = Table(table_data)
+        # larguras: descrição maior, 4 colunas iguais para medidas/unidade, e valor fixo
+        col_widths = [7*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm]
+
+        table = Table(table_data, colWidths=col_widths)
         table.setStyle(TableStyle([
+            # Cabeçalho
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+
+            # Corpo da tabela
+            ('ALIGN', (0, 1), (-1, -2), 'CENTER'),
+            ('VALIGN', (0, 1), (-1, -2), 'MIDDLE'),
+            ('TEXTCOLOR', (0, 1), (-1, -2), colors.black),
             ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
+
+            # Linha total
             ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+            ('TEXTCOLOR', (0, -1), (-1, -1), colors.black),
             ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('ALIGN', (0, -1), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, -1), (-1, -1), 'MIDDLE'),
+
+            # Bordas
             ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
         
@@ -892,8 +937,6 @@ Data: {formatted_date}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error generating PDF: {str(e)}")
 
-@api_router.post("/budgets/{budget_id}/items")
-async def add_budget_item(budget_id: str, item_data: BudgetItemCreate):
     """Adicionar item ao orçamento"""
     try:
         budget = await db.budgets.find_one({"id": budget_id})
