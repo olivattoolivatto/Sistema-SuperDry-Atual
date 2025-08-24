@@ -938,6 +938,8 @@ async def generate_pdf_budget(budget_id: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error generating PDF: {str(e)}")
 
+@api_router.post("/budgets/{budget_id}/items", response_model=BudgetItem)
+async def add_budget_item(budget_id: str, item_data: BudgetItemCreate):
     """Adicionar item ao orçamento"""
     try:
         budget = await db.budgets.find_one({"id": budget_id})
