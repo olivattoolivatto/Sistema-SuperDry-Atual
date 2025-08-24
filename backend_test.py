@@ -673,6 +673,25 @@ class BudgetSystemTester:
         # Test error handling
         self.test_budget_update_invalid_client(budget_id)
         
+        # NEW: Test WhatsApp and PDF functionality
+        print("\n" + "=" * 60)
+        print("🆕 TESTING NEW WHATSAPP & PDF FEATURES")
+        print("=" * 60)
+        
+        # Test WhatsApp message generation with created budget
+        self.test_whatsapp_message_generation(budget_id)
+        
+        # Test PDF generation with created budget
+        self.test_pdf_generation(budget_id)
+        
+        # Test with existing budgets if available
+        self.test_whatsapp_with_existing_budget()
+        self.test_pdf_with_existing_budget()
+        
+        # Test error handling for non-existent budgets
+        self.test_whatsapp_nonexistent_budget()
+        self.test_pdf_nonexistent_budget()
+        
         # Cleanup
         self.cleanup_test_data()
         
