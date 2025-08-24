@@ -193,6 +193,12 @@ class BudgetItem(BaseModel):
     status: ServiceStatus = ServiceStatus.RETIRAR
     is_retoque: bool = False
     execution_location: ExecutionLocation
+    # Medidas específicas para diferentes tipos
+    width: Optional[float] = None
+    height: Optional[float] = None
+    diameter: Optional[float] = None
+    fabric_folds: Optional[int] = None
+    fabric_per_fold: Optional[float] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class BudgetItemCreate(BaseModel):
