@@ -350,17 +350,31 @@ class BudgetSystemTester:
             "internal_observations": "Orçamento com múltiplos itens",
             "items": [
                 {
+                    "id": "ITM-0000002",
                     "service_id": self.created_resources['services'][0],
+                    "service_name": "Limpeza de Sofá 3 Lugares",
+                    "service_code": self.created_resources['services'][0],
                     "quantity": 2.0,
+                    "unit_price": 150.0,
                     "total_value": 300.0,
-                    "observations": "2 sofás para limpeza"
+                    "observations": "2 sofás para limpeza",
+                    "status": "RETIRAR",
+                    "execution_location": "RETIRADA",
+                    "is_retoque": False
                 },
                 {
+                    "id": "ITM-0000003",
                     "service_id": new_service_id,
+                    "service_name": "Limpeza de Tapete Persa",
+                    "service_code": new_service_id,
                     "quantity": 1.5,
+                    "unit_price": 45.0,
                     "area_m2": 1.5,
                     "total_value": 67.5,
-                    "observations": "Tapete persa 1.5m²"
+                    "observations": "Tapete persa 1.5m²",
+                    "status": "RETIRAR",
+                    "execution_location": "RETIRADA",
+                    "is_retoque": False
                 }
             ]
         }
