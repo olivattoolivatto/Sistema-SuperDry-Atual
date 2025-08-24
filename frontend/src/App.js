@@ -5,6 +5,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Clients } from "./pages/Clients";
 import { Catalog } from "./pages/Catalog";
 import { Budgets } from "./pages/Budgets";
+import { Toaster } from "./components/ui/sonner";
 import "./App.css";
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
           </Routes>
         </Layout>
       </BrowserRouter>
+      <Toaster />
     </div>
   );
 }
