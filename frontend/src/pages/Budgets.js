@@ -570,6 +570,313 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
   );
 };
 
+const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
+  const [selectedService, setSelectedService] = useState(null);
+  const [formData, setFormData] = useState({
+    service_id: '',
+    quantity: 1,
+    observations: '',
+    width: '',
+    height: '',
+    diameter: '',
+    fabric_folds: '',
+    fabric_per_fold: 18
+  });
+
+  useEffect(() => {
+    if (editingItem) {
+      // Populate form with editing item data
+      setFormData({
+        service_id: editingItem.service_id,
+        quantity: editingItem.quantity,
+        observations: editingItem.observations || '',
+        width: '',
+        height: '',
+        diameter: '',
+        fabric_folds: '',
+        fabric_per_fold: 18
+      });
+      const service = services.find(s => s.id === editingItem.service_id);
+      setSelectedService(service);
+    }
+  }, [editingItem, services]);
+
+  const handleServiceChange = (e) => {
+    const serviceId = e.target.value;
+    const service = services.find(s => s.id === serviceId);
+    setSelectedService(service);
+    setFormData(prev => ({
+      ...prev,
+      service_id: serviceId
+    }));
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Calculate measurements based on service type
+    let calculatedData = { ...formData };
+    
+    if (selectedService) {
+      switch (selectedService.measure_type) {
+        case 'AREA_DE_TAPETE':
+        case 'CARPETE_TAPETE_LOCAL':
+        case 'AREA_PERSIANA':
+          if (formData.width && formData.height) {
+            calculatedData.area_m2 = parseFloat(formData.width) * parseFloat(formData.height);
+            calculatedData.quantity = calculatedData.area_m2;
+          }
+          break;
+        case 'TAPETE_REDONDO_DIAMETRO':
+          if (formData.diameter) {
+            const radius = parseFloat(formData.diameter) / 2;
+            calculatedData.area_m2 = radius * radius * 3.14;
+            calculatedData.quantity = calculatedData.area_m2;
+          }
+          break;
+        case 'METRAGEM_LINEAR_CORTINA_SIMPLES':
+        case 'METRAGEM_LINEAR_PE_DIREITO_DUPLO':
+        case 'METRAGEM_LINEAR_ESPECIAL':
+          if (formData.fabric_folds && formData.fabric_per_fold) {
+            calculatedData.linear_meters = (parseFloat(formData.fabric_folds) * parseFloat(formData.fabric_per_fold)) / 100;
+            calculatedData.quantity = calculatedData.linear_meters;
+          }
+          break;
+        default:
+          calculatedData.quantity = parseFloat(formData.quantity) || 1;
+      }
+    }
+    
+    onSave(calculatedData);
+  };
+
+  const renderMeasureFields = () => {
+    if (!selectedService) return null;
+
+    switch (selectedService.measure_type) {
+      case 'AREA_DE_TAPETE':
+      case 'CARPETE_TAPETE_LOCAL':
+      case 'AREA_PERSIANA':
+        return (
+          <div className="space-y-4">
+            <h4 className="font-medium text-gray-900">
+              Medidas do {selectedService.measure_type.includes('PERSIANA') ? 'Persiana' : 'Tapete/Carpete'}
+            </h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Largura (m)</label>
+                <input
+                  type="number"
+                  name="width"
+                  value={formData.width}
+                  onChange={handleInputChange}
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Altura (m)</label>
+                <input
+                  type="number"
+                  name="height"
+                  value={formData.height}
+                  onChange={handleInputChange}
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Área Total (m²)</label>
+                <input
+                  type="number"
+                  value={formData.width && formData.height ? (parseFloat(formData.width) * parseFloat(formData.height)).toFixed(2) : ''}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'TAPETE_REDONDO_DIAMETRO':
+        const radius = formData.diameter ? parseFloat(formData.diameter) / 2 : 0;
+        const area = radius ? (radius * radius * 3.14).toFixed(2) : '';
+        return (
+          <div className="space-y-4">
+            <h4 className="font-medium text-gray-900">Medidas do Tapete</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Diâmetro (m)</label>
+                <input
+                  type="number"
+                  name="diameter"
+                  value={formData.diameter}
+                  onChange={handleInputChange}
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Área Total (m²)</label>
+                <input
+                  type="number"
+                  value={area}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'METRAGEM_LINEAR_CORTINA_SIMPLES':
+      case 'METRAGEM_LINEAR_PE_DIREITO_DUPLO':
+      case 'METRAGEM_LINEAR_ESPECIAL':
+        const linearMeters = formData.fabric_folds && formData.fabric_per_fold 
+          ? ((parseFloat(formData.fabric_folds) * parseFloat(formData.fabric_per_fold)) / 100).toFixed(2)
+          : '';
+        return (
+          <div className="space-y-4">
+            <h4 className="font-medium text-gray-900">Medidas da Cortina</h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Quantidade de Dobras</label>
+                <input
+                  type="number"
+                  name="fabric_folds"
+                  value={formData.fabric_folds}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Tecido por Dobra</label>
+                <input
+                  type="number"
+                  name="fabric_per_fold"
+                  value={formData.fabric_per_fold}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Metragem Linear</label>
+                <input
+                  type="number"
+                  value={linearMeters}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return (
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Quantidade</label>
+            <input
+              type="number"
+              name="quantity"
+              value={formData.quantity}
+              onChange={handleInputChange}
+              min="1"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">
+            {editingItem ? 'Editar Item' : 'Adicionar Item'}
+          </h2>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Serviço *
+            </label>
+            <select
+              name="service_id"
+              value={formData.service_id}
+              onChange={handleServiceChange}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Selecione um serviço</option>
+              {services.map((service) => (
+                <option key={service.id} value={service.id}>
+                  {service.name} ({service.id}) - R$ {service.sale_price.toFixed(2)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedService && (
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">Informações do Serviço</h4>
+              <div className="text-sm text-blue-800 space-y-1">
+                <p><strong>Categoria:</strong> {selectedService.category}</p>
+                <p><strong>Tipo de Medida:</strong> {selectedService.measure_type}</p>
+                <p><strong>Local de Execução:</strong> {selectedService.execution_location}</p>
+                <p><strong>Preço Unitário:</strong> R$ {selectedService.sale_price.toFixed(2)}</p>
+              </div>
+            </div>
+          )}
+
+          {renderMeasureFields()}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Observações do Item
+            </label>
+            <textarea
+              name="observations"
+              value={formData.observations}
+              onChange={handleInputChange}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Observações específicas deste item"
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={!selectedService}
+              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {editingItem ? 'Atualizar' : 'Adicionar'} Item
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const AddItemForm = ({ budget, onSave, onCancel }) => {
   const [services, setServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
