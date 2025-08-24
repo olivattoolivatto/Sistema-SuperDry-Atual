@@ -217,19 +217,36 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
   };
 
   const handleAddItem = (itemData) => {
+    const service = services.find(s => s.id === itemData.service_id);
+    if (!service) return;
+
+    // Ensure numeric values
+    const quantity = parseFloat(itemData.quantity) || 1;
+    const area_m2 = parseFloat(itemData.area_m2) || 0;
+    const linear_meters = parseFloat(itemData.linear_meters) || 0;
+    const unit_price = parseFloat(service.sale_price) || 0;
+    
+    // Calculate total based on the measure type
+    let finalQuantity = quantity;
+    if (service.measure_type === 'AREA_DE_TAPETE' || service.measure_type === 'TAPETE_REDONDO_DIAMETRO' || service.measure_type === 'AREA_PERSIANA') {
+      finalQuantity = area_m2;
+    } else if (service.measure_type.includes('METRAGEM_LINEAR')) {
+      finalQuantity = linear_meters;
+    }
+
     const newItem = {
       id: `ITM-${String(Date.now()).slice(-7).padStart(7, '0')}`,
       service_id: itemData.service_id,
-      service_name: services.find(s => s.id === itemData.service_id)?.name || '',
+      service_name: service.name,
       service_code: itemData.service_id,
-      quantity: itemData.quantity || 1,
-      unit_price: services.find(s => s.id === itemData.service_id)?.sale_price || 0,
-      area_m2: itemData.area_m2 || 0,
-      linear_meters: itemData.linear_meters || 0,
-      total_value: (itemData.quantity || 1) * (services.find(s => s.id === itemData.service_id)?.sale_price || 0),
+      quantity: finalQuantity,
+      unit_price: unit_price,
+      area_m2: area_m2,
+      linear_meters: linear_meters,
+      total_value: finalQuantity * unit_price,
       observations: itemData.observations || '',
       status: 'RETIRAR',
-      execution_location: services.find(s => s.id === itemData.service_id)?.execution_location || 'RETIRADA',
+      execution_location: service.execution_location || 'RETIRADA',
       created_at: new Date().toISOString()
     };
 
