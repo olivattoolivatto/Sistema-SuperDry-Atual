@@ -1247,18 +1247,6 @@ export function Budgets() {
     }
   };
 
-  const handleAddItem = async (itemData) => {
-    try {
-      await budgetsApi.addItem(selectedBudget.id, itemData);
-      setShowAddItemForm(false);
-      setSelectedBudget(null);
-      loadBudgets();
-    } catch (error) {
-      console.error('Erro ao adicionar item:', error);
-      alert('Erro ao adicionar item. Tente novamente.');
-    }
-  };
-
   const handleDeleteBudget = async (budget) => {
     if (window.confirm(`Tem certeza que deseja excluir o orçamento ${budget.id}?`)) {
       try {
