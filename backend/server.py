@@ -806,6 +806,13 @@ async def generate_pdf_budget(budget_id: str):
         if not client:
             raise HTTPException(status_code=404, detail="Client not found")
         
+        # Get budget configuration for risk texts
+        config = await db.budget_config.find_one({})
+        if not config:
+            # Create default config if doesn't exist
+            config = BudgetConfig().dict()
+            await db.budget_config.insert_one(config)
+        
         # Create PDF in memory
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -816,9 +823,18 @@ async def generate_pdf_budget(budget_id: str):
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=19,
+            fontSize=16,
             spaceAfter=10,
             alignment=1  # Center
+        )
+        
+        section_style = ParagraphStyle(
+            'SectionHeader',
+            parent=styles['Heading2'],
+            fontSize=14,
+            spaceAfter=12,
+            spaceBefore=20,
+            textColor=colors.black
         )
 
         big_style = ParagraphStyle(
@@ -856,7 +872,7 @@ async def generate_pdf_budget(budget_id: str):
         if os.path.exists(logo_path):
             try:
                 # Create logo image with fixed sizing
-                logo = Image(logo_path, width=1.2*inch, height=0.88*inch)
+                logo = Image(logo_path, width=2*inch, height=1.5*inch)
                 
                 # Create table with client info and logo
                 info_table_data = [[client_info_paragraph, logo]]
@@ -880,26 +896,22 @@ async def generate_pdf_budget(budget_id: str):
         
         story.append(Spacer(1, 20))
         
-        # Services table
-        story.append(Paragraph("SERVIÇOS", styles['Heading2']))
-
-        # Define estilo centralizado para células
+        # Section 1: Services table
+        story.append(Paragraph("1. SERVIÇOS", section_style))
+        
+        table_data = [["Descrição", "Medidas", "Área M²", "Metragem Linear", "Unidade", "Valor"]]
+        
+        # Create centered style for table content
         centered_style = ParagraphStyle(
-            'Centered',
+            'CenteredCell',
             parent=styles['Normal'],
+            fontSize=9,
             alignment=1  # Center
         )
         
-        table_data = [[
-            Paragraph("<b>Descrição</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white)),
-            Paragraph("<b>Medidas</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white)),
-            Paragraph("<b>Área M²</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white)),
-            Paragraph("<b>Metragem Linear</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white)),
-            Paragraph("<b>Unidade</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white)),
-            Paragraph("<b>Valor</b>", ParagraphStyle('Header', parent=centered_style, textColor=colors.white))
-        ]]
-        
         total_value = 0
+        service_categories = set()  # Track categories for risk texts
+        
         for item in budget.get('items', []):
             measures = ""
             if item.get('width') and item.get('height'):
@@ -917,6 +929,31 @@ async def generate_pdf_budget(budget_id: str):
             
             total_value += item.get('total_value', 0)
             
+            # Determine service category for risk texts
+            service_name = item.get('service_name', '').upper()
+            if any(word in service_name for word in ['SOFÁ', 'CADEIRA', 'POLTRONA', 'ALMOFADA', 'ESTOFADO']):
+                service_categories.add('risks_estofados')
+            elif any(word in service_name for word in ['COLCHÃO', 'COLCHAO']):
+                service_categories.add('risks_colchoes')
+            elif 'BOX' in service_name:
+                service_categories.add('risks_box')
+            elif any(word in service_name for word in ['TAPETE', 'CARPETE']) and 'LOCAL' in service_name:
+                service_categories.add('risks_carpetes_tapetes_local')
+            elif any(word in service_name for word in ['TAPETE', 'CARPETE']):
+                service_categories.add('risks_tapetes')
+            elif 'CORTINA' in service_name:
+                service_categories.add('risks_cortinas')
+            elif 'PERSIANA' in service_name:
+                service_categories.add('risks_persianas')
+            elif any(word in service_name for word in ['CARRINHO', 'CADEIRINHA', 'BEBÊ', 'BEBE', 'INFANTIL']):
+                service_categories.add('risks_itens_infantis')
+            elif any(word in service_name for word in ['VEÍCULO', 'VEICULO', 'BANCO', 'CARRO']):
+                service_categories.add('risks_veiculos')
+            elif 'IMPERMEABILIZAÇÃO' in service_name or 'IMPERMEABILIZACAO' in service_name:
+                service_categories.add('risks_impermeabilizacao')
+            else:
+                service_categories.add('risks_outros_itens')
+            
             table_data.append([
                 Paragraph(item.get('service_name', 'N/A'), centered_style),
                 Paragraph(measures, centered_style),
@@ -928,47 +965,78 @@ async def generate_pdf_budget(budget_id: str):
         
         # Total row
         table_data.append([
-            "", "", "", "",
+            Paragraph("", centered_style),
+            Paragraph("", centered_style),
+            Paragraph("", centered_style),
+            Paragraph("", centered_style),
             Paragraph("<b>TOTAL</b>", centered_style),
-            Paragraph(f"R$ {total_value:.2f}", centered_style)
+            Paragraph(f"<b>R$ {total_value:.2f}</b>", centered_style)
         ])
         
-        # larguras: descrição maior, 4 colunas iguais para medidas/unidade, e valor fixo
-        col_widths = [7*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm]
-
-        table = Table(table_data, colWidths=col_widths)
+        table = Table(table_data)
         table.setStyle(TableStyle([
-            # Cabeçalho
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-
-            # Corpo da tabela
-            ('ALIGN', (0, 1), (-1, -2), 'CENTER'),
-            ('VALIGN', (0, 1), (-1, -2), 'MIDDLE'),
-            ('TEXTCOLOR', (0, 1), (-1, -2), colors.black),
             ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
-
-            # Linha total
             ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-            ('TEXTCOLOR', (0, -1), (-1, -1), colors.black),
             ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('ALIGN', (0, -1), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, -1), (-1, -1), 'MIDDLE'),
-
-            # Bordas
             ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
         
         story.append(table)
         story.append(Spacer(1, 30))
         
+        # Section 2: Risk texts based on service categories
+        if service_categories:
+            story.append(Paragraph("2. RISCOS E ADVERTÊNCIAS", section_style))
+            
+            category_labels = {
+                'risks_estofados': 'ESTOFADOS',
+                'risks_colchoes': 'COLCHÕES', 
+                'risks_box': 'BOX',
+                'risks_tapetes': 'TAPETES',
+                'risks_carpetes_tapetes_local': 'CARPETES E TAPETES NO LOCAL',
+                'risks_cortinas': 'CORTINAS',
+                'risks_persianas': 'PERSIANAS',
+                'risks_itens_infantis': 'ITENS INFANTIS',
+                'risks_veiculos': 'VEÍCULOS',
+                'risks_impermeabilizacao': 'IMPERMEABILIZAÇÃO',
+                'risks_outros_itens': 'OUTROS ITENS'
+            }
+            
+            for category in sorted(service_categories):
+                risk_text = config.get(category, '')
+                if risk_text:
+                    # Convert WhatsApp formatting to HTML
+                    formatted_text = format_html_text(risk_text)
+                    category_name = category_labels.get(category, category.replace('risks_', '').upper())
+                    story.append(Paragraph(f"<b>{category_name}:</b>", styles['Normal']))
+                    story.append(Paragraph(formatted_text, styles['Normal']))
+                    story.append(Spacer(1, 10))
+        
+        # Section 3: General conditions
+        general_conditions = config.get('general_conditions', '')
+        if general_conditions:
+            story.append(Paragraph("3. CONDIÇÕES GERAIS", section_style))
+            formatted_conditions = format_html_text(general_conditions)
+            story.append(Paragraph(formatted_conditions, styles['Normal']))
+            story.append(Spacer(1, 20))
+        
         # Signature section
-        story.append(Paragraph("_" * 50, styles['Normal']))
+        story.append(Spacer(1, 30))
+        story.append(Paragraph("_" * 60, styles['Normal']))
         story.append(Paragraph("Assinatura do cliente", styles['Normal']))
+        
+        # Footer
+        footer_text = config.get('footer_text', '')
+        if footer_text:
+            story.append(Spacer(1, 20))
+            formatted_footer = format_html_text(footer_text)
+            story.append(Paragraph(formatted_footer, styles['Normal']))
         
         # Build PDF
         doc.build(story)
