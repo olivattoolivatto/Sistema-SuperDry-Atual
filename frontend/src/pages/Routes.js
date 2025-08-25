@@ -381,13 +381,22 @@ export function Routes() {
 
   const handleDeleteRoute = async (routeId) => {
     try {
-      // Confirm deletion
-      if (!window.confirm(`Tem certeza que deseja excluir a rota ${routeId}?`)) {
+      console.log('Iniciando exclusão da rota:', routeId);
+      
+      // Confirm deletion with better UX
+      const confirmed = window.confirm(
+        `Tem certeza que deseja excluir a rota ${routeId}?\n\nEsta ação não pode ser desfeita.`
+      );
+      
+      if (!confirmed) {
+        console.log('Exclusão cancelada pelo usuário');
         return;
       }
 
+      console.log('Chamando API para excluir rota...');
       await routesApi.deleteRoute(routeId);
       
+      console.log('Rota excluída com sucesso, atualizando lista...');
       // Refresh saved routes list
       await loadSavedRoutes();
       
@@ -396,11 +405,13 @@ export function Routes() {
         description: `Rota ${routeId} foi excluída com sucesso.`,
         variant: "default",
       });
+      
+      console.log('Processo de exclusão concluído');
     } catch (error) {
       console.error('Erro ao excluir rota:', error);
       toast({
         title: "Erro!",
-        description: "Erro ao excluir rota. Tente novamente.",
+        description: `Erro ao excluir rota ${routeId}. Tente novamente.`,
         variant: "destructive",
       });
     }
