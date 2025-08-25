@@ -252,6 +252,35 @@ class BudgetConfig(BaseModel):
     footer_text: Optional[str] = ""
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+class SystemConfig(BaseModel):
+    # Company data
+    company_name: Optional[str] = "SuperDry Lavanderia de Tapetes & Estofados"
+    address_full: Optional[str] = ""
+    address_complement: Optional[str] = ""
+    cnpj: Optional[str] = ""
+    cep: Optional[str] = ""
+    neighborhood: Optional[str] = ""
+    city: Optional[str] = ""
+    state: Optional[str] = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    website: Optional[str] = ""
+    instagram: Optional[str] = ""
+    whatsapp: Optional[str] = ""
+    
+    # Data retention policy
+    retention_photos_years: int = 2
+    retention_signatures_years: int = 2
+    retention_documents_years: int = 2
+    retention_action: str = "ANONYMIZE"  # ANONYMIZE or DELETE
+    
+    # Future: user management fields
+    enable_user_management: bool = False
+    
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 class BudgetCreate(BaseModel):
     client_id: str
     payment_method: PaymentMethod
@@ -898,95 +927,110 @@ async def generate_pdf_budget(budget_id: str):
         
         # Section 1: Services table
         story.append(Paragraph("1. SERVIÇOS", section_style))
-        
-        table_data = [["Descrição", "Medidas", "Área M²", "Metragem Linear", "Unidade", "Valor"]]
-        
+
         # Create centered style for table content
         centered_style = ParagraphStyle(
-            'CenteredCell',
-            parent=styles['Normal'],
-            fontSize=9,
-            alignment=1  # Center
+                'CenteredCell',
+                parent=styles['Normal'],
+                fontSize=9,
+                alignment=1  # Center
         )
-        
+
+        # Cabeçalho da tabela com quebra de linha usando <br/>
+        table_data = [[
+                Paragraph("<b><font color='white'>Descrição</font></b>", centered_style),
+                Paragraph("<b><font color='white'>Medidas</font></b>", centered_style),
+                Paragraph("<b><font color='white'>Área M²</font></b>", centered_style),
+                Paragraph("<b><font color='white'>Metragem<br/>Linear</font></b>", centered_style),
+                Paragraph("<b><font color='white'>Unidade</font></b>", centered_style),
+                Paragraph("<b><font color='white'>Valor</font></b>", centered_style)
+        ]]
+
         total_value = 0
         service_categories = set()  # Track categories for risk texts
-        
+
         for item in budget.get('items', []):
-            measures = ""
-            if item.get('width') and item.get('height'):
-                measures = f"{item.get('width')} x {item.get('height')}"
-            elif item.get('diameter'):
-                measures = f"Ø {item.get('diameter')}m"
-            
-            area_m2 = item.get('area_m2')
-            linear_meters = item.get('linear_meters')
-            
-            area_m2_str = f"{area_m2:.1f}" if area_m2 and area_m2 > 0 else "-"
-            linear_meters_str = f"{linear_meters:.1f}" if linear_meters and linear_meters > 0 else "-"
-            quantity = f"{item.get('quantity', 1):.0f}"
-            value = f"R$ {item.get('total_value', 0):.2f}"
-            
-            total_value += item.get('total_value', 0)
-            
-            # Determine service category for risk texts
-            service_name = item.get('service_name', '').upper()
-            if any(word in service_name for word in ['SOFÁ', 'CADEIRA', 'POLTRONA', 'ALMOFADA', 'ESTOFADO']):
-                service_categories.add('risks_estofados')
-            elif any(word in service_name for word in ['COLCHÃO', 'COLCHAO']):
-                service_categories.add('risks_colchoes')
-            elif 'BOX' in service_name:
-                service_categories.add('risks_box')
-            elif any(word in service_name for word in ['TAPETE', 'CARPETE']) and 'LOCAL' in service_name:
-                service_categories.add('risks_carpetes_tapetes_local')
-            elif any(word in service_name for word in ['TAPETE', 'CARPETE']):
-                service_categories.add('risks_tapetes')
-            elif 'CORTINA' in service_name:
-                service_categories.add('risks_cortinas')
-            elif 'PERSIANA' in service_name:
-                service_categories.add('risks_persianas')
-            elif any(word in service_name for word in ['CARRINHO', 'CADEIRINHA', 'BEBÊ', 'BEBE', 'INFANTIL']):
-                service_categories.add('risks_itens_infantis')
-            elif any(word in service_name for word in ['VEÍCULO', 'VEICULO', 'BANCO', 'CARRO']):
-                service_categories.add('risks_veiculos')
-            elif 'IMPERMEABILIZAÇÃO' in service_name or 'IMPERMEABILIZACAO' in service_name:
-                service_categories.add('risks_impermeabilizacao')
-            else:
-                service_categories.add('risks_outros_itens')
-            
-            table_data.append([
-                Paragraph(item.get('service_name', 'N/A'), centered_style),
-                Paragraph(measures, centered_style),
-                Paragraph(area_m2_str, centered_style),
-                Paragraph(linear_meters_str, centered_style),
-                Paragraph(quantity, centered_style),
-                Paragraph(value, centered_style)
-            ])
-        
+                measures = ""
+                width = item.get('width')
+                height = item.get('height')
+                diameter = item.get('diameter')
+
+                if width and height:
+                        measures = f"{width} x {height}"
+                elif diameter:
+                        measures = f"Ø {diameter}m"
+
+                area_m2 = item.get('area_m2') or 0
+                linear_meters = item.get('linear_meters') or 0
+                quantity_val = item.get('quantity') or 1
+                total_val = item.get('total_value') or 0
+
+                area_m2_str = f"{area_m2:.1f}" if area_m2 > 0 else "-"
+                linear_meters_str = f"{linear_meters:.1f}" if linear_meters > 0 else "-"
+                quantity = f"{quantity_val:.0f}"
+                value = f"R$ {total_val:.2f}"
+
+                total_value += total_val
+
+                # Determine service category for risk texts
+                service_name = (item.get('service_name') or '').upper()
+                if any(word in service_name for word in ['SOFÁ', 'CADEIRA', 'POLTRONA', 'ALMOFADA', 'ESTOFADO']):
+                        service_categories.add('risks_estofados')
+                elif any(word in service_name for word in ['COLCHÃO', 'COLCHAO']):
+                        service_categories.add('risks_colchoes')
+                elif 'BOX' in service_name:
+                        service_categories.add('risks_box')
+                elif any(word in service_name for word in ['TAPETE', 'CARPETE']) and 'LOCAL' in service_name:
+                        service_categories.add('risks_carpetes_tapetes_local')
+                elif any(word in service_name for word in ['TAPETE', 'CARPETE']):
+                        service_categories.add('risks_tapetes')
+                elif 'CORTINA' in service_name:
+                        service_categories.add('risks_cortinas')
+                elif 'PERSIANA' in service_name:
+                        service_categories.add('risks_persianas')
+                elif any(word in service_name for word in ['CARRINHO', 'CADEIRINHA', 'BEBÊ', 'BEBE', 'INFANTIL']):
+                        service_categories.add('risks_itens_infantis')
+                elif any(word in service_name for word in ['VEÍCULO', 'VEICULO', 'BANCO', 'CARRO']):
+                        service_categories.add('risks_veiculos')
+                elif 'IMPERMEABILIZAÇÃO' in service_name or 'IMPERMEABILIZACAO' in service_name:
+                        service_categories.add('risks_impermeabilizacao')
+                else:
+                        service_categories.add('risks_outros_itens')
+
+                table_data.append([
+                        Paragraph(item.get('service_name') or 'N/A', centered_style),
+                        Paragraph(measures, centered_style),
+                        Paragraph(area_m2_str, centered_style),
+                        Paragraph(linear_meters_str, centered_style),
+                        Paragraph(quantity, centered_style),
+                        Paragraph(value, centered_style)
+                ])
+
         # Total row
         table_data.append([
-            Paragraph("", centered_style),
-            Paragraph("", centered_style),
-            Paragraph("", centered_style),
-            Paragraph("", centered_style),
-            Paragraph("<b>TOTAL</b>", centered_style),
-            Paragraph(f"<b>R$ {total_value:.2f}</b>", centered_style)
+                Paragraph("", centered_style),
+                Paragraph("", centered_style),
+                Paragraph("", centered_style),
+                Paragraph("", centered_style),
+                Paragraph("<b>TOTAL</b>", centered_style),
+                Paragraph(f"<b>R$ {total_value:.2f}</b>", centered_style)
         ])
-        
-        table = Table(table_data, colWidths=[5*inch, 1.2*inch, 1.2*inch, 1.2*inch, 1.2*inch, 1.2*inch])
+
+        # Adjusted column widths to fit A4 page
+        col_widths = [3.5*inch, 1*inch, 0.9*inch, 0.9*inch, 0.7*inch, 1*inch]
+
+        table = Table(table_data, colWidths=col_widths)
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
-            ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
-        
+
         story.append(table)
         story.append(Spacer(1, 30))
         
