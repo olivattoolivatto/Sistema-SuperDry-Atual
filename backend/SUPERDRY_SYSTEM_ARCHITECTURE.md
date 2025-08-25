@@ -1,5 +1,5 @@
 # SUPERDRY LAVANDERIA - ARQUITETURA TÉCNICA DO SISTEMA
-## Documento de Referência Completa - Versão 1.0
+## Documento de Referência Completa - Versão 2.0
 
 ---
 
@@ -7,37 +7,31 @@
 
 **Empresa:** SuperDry Lavanderia de Tapetes & Estofados  
 **Tecnologia:** React + FastAPI + MongoDB  
-**Módulos:** 15 módulos integrados  
-**APIs:** Google Maps, Calendar, Places, Directions, Geocoding  
+**Módulos:** 8/15 módulos implementados (53% concluído)  
+**APIs:** Google Places, Geocoding, OpenStreetMap (Leaflet)  
 
 ---
 
 ## 🏗️ ESTRUTURA DE MÓDULOS
 
-### ✅ FASE 1 - IMPLEMENTADA
-1. **Painel Inicial** - Dashboard com resumos gerais
-2. **Clientes** - Cadastro completo com geolocalização
-3. **Orçamentos** - Core do sistema com itens e cálculos
-4. **Catálogo** - Serviços organizados por categorias
+### ✅ IMPLEMENTADOS (8 módulos)
+1. **✅ Painel Inicial** - Dashboard com resumos e estatísticas
+2. **✅ Clientes** - CRUD completo + busca híbrida + mini mapas + adição rápida
+3. **✅ Catálogo** - Serviços organizados por 11 categorias + tipos de medição
+4. **✅ Orçamentos** - Core completo + itens + cálculos + medidas específicas + edição
+5. **✅ WhatsApp** - Mensagens formatadas + deeplinks + medidas detalhadas
+6. **✅ PDF** - Geração com logo + textos de risco + seções numeradas
+7. **✅ Config. Orçamento** - 13 seções editáveis + formatação *negrito* _itálico_
+8. **✅ Config. Sistema** - Dados empresa + LGPD + busca híbrida + mini mapa
 
-### 🚛 FASE 2 - EM IMPLEMENTAÇÃO
-5. **Rotas** - Otimização e navegação GPS
-6. **Agenda** - Integração Google Calendar
-7. **WhatsApp** - Comunicação via deeplinks
-
-### 🧽 FASE 3 - PRODUÇÃO
-8. **Lavagem/Execução** - Controle de status produtivo
-9. **Modo Técnico** - Interface para técnicos
-
-### 💰 FASE 4 - GESTÃO
-10. **Financeiro** - Controle de recebimentos
-11. **Gerenciador Financeiro** - Controle completo de contas
-12. **Relatórios** - Analytics e KPIs
-13. **Chamados** - Sistema de tickets
-
-### ⚙️ FASE 5 - CONFIGURAÇÕES
-14. **Config. Orçamento** - Templates e textos
-15. **Config. Sistema** - Dados da empresa e usuários
+### 🔄 EM PLANEJAMENTO (7 módulos)
+9. **Rotas** - Otimização GPS + Google Directions + veículos
+10. **Agenda** - Google Calendar + agendamentos
+11. **Lavagem/Execução** - Controle produtivo + status flow
+12. **Modo Técnico** - Interface técnicos + fotos + assinaturas
+13. **Financeiro** - Controle recebimentos + pagamentos
+14. **Gerenciador Financeiro** - Open Finance + categorização
+15. **Relatórios** - Analytics + KPIs + comissões
 
 ---
 
