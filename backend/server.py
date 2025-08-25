@@ -234,6 +234,24 @@ class Budget(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+class BudgetConfig(BaseModel):
+    # Risk texts for each category
+    risks_estofados: Optional[str] = ""
+    risks_colchoes: Optional[str] = ""
+    risks_box: Optional[str] = ""
+    risks_tapetes: Optional[str] = ""
+    risks_carpetes_tapetes_local: Optional[str] = ""
+    risks_cortinas: Optional[str] = ""
+    risks_persianas: Optional[str] = ""
+    risks_itens_infantis: Optional[str] = ""
+    risks_veiculos: Optional[str] = ""
+    risks_impermeabilizacao: Optional[str] = ""
+    risks_outros_itens: Optional[str] = ""
+    # General conditions and footer
+    general_conditions: Optional[str] = ""
+    footer_text: Optional[str] = ""
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 class BudgetCreate(BaseModel):
     client_id: str
     payment_method: PaymentMethod
@@ -814,7 +832,7 @@ async def generate_pdf_budget(budget_id: str):
         # Header
         story.append(Paragraph(f"ORÇAMENTO {budget_id}", title_style))
         story.append(Paragraph("SuperDry Lavanderia de Tapetes & Estofados", big_style))
-        story.append(Spacer(1, 20))
+        story.append(Spacer(1, 30))
         
         # Client information with logo - using table layout
         updated_date = budget.get("updated_at", datetime.utcnow())
@@ -838,7 +856,7 @@ async def generate_pdf_budget(budget_id: str):
         if os.path.exists(logo_path):
             try:
                 # Create logo image with fixed sizing
-                logo = Image(logo_path, width=2*inch, height=1.5*inch)
+                logo = Image(logo_path, width=1.2*inch, height=0.88*inch)
                 
                 # Create table with client info and logo
                 info_table_data = [[client_info_paragraph, logo]]
