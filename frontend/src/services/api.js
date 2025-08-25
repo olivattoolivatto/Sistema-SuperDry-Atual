@@ -77,4 +77,10 @@ export const budgetConfigApi = {
   update: (data) => api.put('/budget-config', data),
 };
 
+// System Config API
+export const systemConfigApi = {
+  get: () => api.get('/system-config'),
+  update: (data) => api.put('/system-config', data),
+};
+
 export default api;
