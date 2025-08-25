@@ -337,8 +337,11 @@ export const SystemConfig = () => {
                 value={config?.neighborhood || ''}
                 onChange={(e) => handleChange('neighborhood', e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Bairro"
+                placeholder="Preenchido automaticamente"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Preenchido automaticamente ao selecionar endereço
+              </p>
             </div>
 
             <div>
@@ -350,8 +353,11 @@ export const SystemConfig = () => {
                 value={config?.city || ''}
                 onChange={(e) => handleChange('city', e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Cidade"
+                placeholder="Preenchido automaticamente"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Preenchido automaticamente ao selecionar endereço
+              </p>
             </div>
 
             <div>
@@ -366,6 +372,9 @@ export const SystemConfig = () => {
                 placeholder="SP"
                 maxLength={2}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Preenchido automaticamente ao selecionar endereço
+              </p>
             </div>
           </div>
         </div>
