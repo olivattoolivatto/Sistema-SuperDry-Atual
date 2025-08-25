@@ -8,7 +8,8 @@ import {
   Menu,
   X,
   Settings,
-  Cog
+  Cog,
+  Route
 } from 'lucide-react';
 
 const menuItems = [
@@ -16,6 +17,7 @@ const menuItems = [
   { path: '/clients', label: 'Clientes', icon: Users },
   { path: '/catalog', label: 'Catálogo', icon: Package },
   { path: '/budgets', label: 'Orçamentos', icon: FileText },
+  { path: '/routes', label: 'Rotas', icon: Route },
   { path: '/budget-config', label: 'Config. Orçamento', icon: Settings },
   { path: '/system-config', label: 'Config. Sistema', icon: Cog }
 ];
