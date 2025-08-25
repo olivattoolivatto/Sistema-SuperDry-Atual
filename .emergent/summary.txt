@@ -1,22 +1,26 @@
 <analysis>
-The AI engineer, E1, successfully bootstrapped a comprehensive management system for a laundry business (SuperDry) from a detailed product document. The initial phase (Phase 1) focused on core functionalities: Catalog, Clients, Budgets, and a Basic Dashboard. E1 demonstrated strong problem-solving by iteratively implementing features, integrating Google Places/Geocoding APIs, and handling complex calculations. A significant portion of the trajectory involved debugging frontend-backend interactions, particularly related to data persistence, form handling, and display logic in  and . E1 proactively addressed user-reported bugs, such as missing imports, incorrect address parsing, non-clickable search results, and item saving issues. The current state is that the system has core CRUD operations for clients, catalog, and budgets, but budget editing functionality is still incomplete.
+The AI engineer, Neo, successfully advanced the SuperDry laundry management system, beginning by resolving a critical budget editing bug, which included fixing client pre-selection and implementing the actual save functionality with modern toast notifications. Following this, a quick client add feature was integrated into the budget creation flow. The user then provided the comprehensive product requirements again, which Neo meticulously analyzed to update the system's architecture documentation.
+
+Subsequently, Neo implemented core Phase 2 functionalities for budget management: first, the WhatsApp and PDF generation/sending features, meticulously addressing issues like message truncation and detailed item measurements. A company logo was also integrated into the PDF reports. Then, the Configurações do Orçamento (Budget Configuration) and Configurações do Sistema (System Configuration) screens were built, providing extensive customizable options for risk texts, general conditions, company details, and LGPD policies, with the former dynamically integrating with PDF generation. Finally, a hybrid address search (Google Places/Geocoding) was added to the System Configurations, along with interactive Leaflet mini-maps in both System Configurations and Client cards to visually display geolocation. The project is currently at a stage where a detailed summary was requested after a session fork, reflecting all these completed features.
 </analysis>
 
 <product_requirements>
-The user requires a comprehensive management system for a carpet and upholstery laundry business, SuperDry. The system is expected to be extensive, with 15 core modules: Painel Inicial (Dashboard), Clientes (Clients), Orçamentos (Budgets), Rotas (Routes), Agenda (Calendar), WhatsApp, Lavagem/Execução (Washing/Execution), Modo Técnico (Technician Mode), Financeiro (Financial), Gerenciador Financeiro (Financial Manager), Relatórios (Reports), Chamados (Tickets), Catálogo (Catalog), Config. Orçamento (Budget Config), and Config. Sistema (System Config). Key complexities include unique ID generation (CLI-, ORC-, ITM-), multiple measurement types, complex status flows, Google Maps/Calendar API integration, PDF generation, WhatsApp communication, audit system, and permissions. The system must be responsive and optimized for PC and especially for Mobile (iOS and Android).
+The SuperDry laundry business requires a comprehensive management system comprising 15 modules: Dashboard, Clients, Budgets, Routes, Calendar, WhatsApp, Washing/Execution, Technician Mode, Financial, Financial Manager, Reports, Tickets, Catalog, Budget Config, and System Config. Key features include unique ID generation (CLI-, ORC-, ITM-), diverse measurement types, complex status flows, Google Maps/Calendar API integration, PDF generation, WhatsApp communication, audit system, and permissions. The system must be responsive for PC and mobile.
 
-**Implemented in Phase 1:**
-- **Dashboard:** Summary with client, budget, route, scheduled service, washing, and financial stats.
-- **Clients Module:** Full CRUD, Google Places API integration for address search and geolocation (GPS coordinates), auto-filling address components (Bairro, Cidade, Estado), unique sequential IDs (CLI-), WhatsApp integration.
-- **Catalog of Services:** Full CRUD, 11 categories, unique sequential IDs (SRV-), multiple measurement types (Unitário, Área, Diâmetro, Metragem Linear), active/inactive status, cost/sale values. Displayed in a table format, organized by category.
-- **Budgets Module:** Full CRUD, unique sequential IDs (ORC-), integration with Clients and Catalog, comprehensive header (client, payment, salesperson, observations). Item addition with dynamic calculations based on service type, editable linear meters, unique item IDs (ITM-). Items are now saved.
+**Implemented in Phase 1 (Initial Build & Recent Enhancements):**
+*   **Dashboard:** Summary of pending items (routes, execution, financial).
+*   **Clients Module:** Full CRUD, Google Places/Geocoding API for address search, GPS coordinates, auto-filled Bairro/Cidade/Estado, unique sequential IDs (CLI-), WhatsApp integration (button). Mini-maps added to client cards for visual geolocation.
+*   **Catalog of Services:** Full CRUD, 11 categories, unique IDs (SRV-), multiple measurement types, active/inactive status, cost/sale values.
+*   **Budgets Module:** Full CRUD, unique IDs (ORC-), integration with Clients and Catalog. Header (client, payment, salesperson, observations). Item addition with dynamic calculations. **Budget editing functionality now fully implemented (client pre-selection, save logic, toast notifications).** Quick Client Add feature implemented. WhatsApp message generation (with detailed item measurements) and PDF generation (with company logo, dynamic risk texts, and general conditions) are complete.
+*   **Configurações do Orçamento (Budget Config):** New module with 11 editable risk text fields (one per category), general conditions, and footer text. Supports WhatsApp-style markdown, dynamically integrated with PDF generation.
+*   **Configurações do Sistema (System Config):** New module for company details (Name, Address, CNPJ, CEP, contacts), LGPD retention policy, and future features. Includes hybrid address search and a mini-map for company location.
 </product_requirements>
 
 <key_technical_concepts>
-- **Frontend:** React.js, Tailwind CSS, Radix UI (for professional components), React Router (for navigation).
-- **Backend:** FastAPI (Python), MongoDB (for database), Pydantic (for data models).
-- **APIs:** Google Places API (for location search), Google Geocoding API (for address details and coordinates).
-- **Core Patterns:** Unique sequential ID generation, RESTful APIs, robust data validation, hybrid search (Places + Geocoding), dynamic forms with real-time calculations, environment variable usage.
+- **Frontend:** React.js, Tailwind CSS, Radix UI, React Router, Leaflet, React-Leaflet.
+- **Backend:** FastAPI (Python), MongoDB, Pydantic, WeasyPrint, Aiofiles, urllib.parse.
+- **APIs:** Google Places API, Google Geocoding API, Google Maps (for external links).
+- **Core Patterns:** Unique sequential ID generation, RESTful APIs, data validation, hybrid search, dynamic forms, environment variables, toast notifications, PDF generation, map visualization.
 </key_technical_concepts>
 
 <code_architecture>
@@ -30,55 +34,76 @@ The application follows a full-stack architecture with React for the frontend an
 -   :
     -   **Importance:** Main FastAPI application defining all backend endpoints and MongoDB interactions.
     -   **Changes:**
-        -   Initial setup for client, service, and budget models.
-        -   Google Maps APIs (Places, Geocoding) integration for address search.
-        -   Endpoints for CRUD operations on clients, services (catalog), and budgets.
-        -   Logic for generating unique sequential IDs (CLI-, SRV-, ORC-, ITM-).
-        -   Validation and processing for budget items, including calculations for area, linear meters, and total values.
-        -   Modified  to accept  directly and process them.
+        -   Refined  to save detailed item measurements (width, height, diameter, folds).
+        -   Implemented  endpoint, handling URL encoding, length limits, and detailed item measurements.
+        -   Implemented  endpoint, including company logo, dynamic risk/conditions texts based on , detailed item measurements, and adjusted column widths.
+        -   Added  model and CRUD endpoints () for managing configurable texts.
+        -   Added  model and CRUD endpoints () for managing company details and LGPD policy.
+        -   Fixed  comparison bugs in PDF generation.
+-   :
+    -   **Importance:** Lists Python dependencies for the backend.
+    -   **Changes:** Added ,  for PDF generation.
+-   :
+    -   **Importance:** Documents the high-level architecture and logical flow of the system.
+    -   **Changes:** Created and updated to reflect all current modules, integrations, and future phases as per the detailed user specification.
+-   :
+    -   **Importance:** The company logo used in PDF generation.
+    -   **Changes:** Downloaded and saved for use by .
+-   :
+    -   **Importance:** Lists frontend (React) dependencies.
+    -   **Changes:** Added  and  for map functionalities.
 -   :
     -   **Importance:** Main React component, handles routing and overall application structure.
-    -   **Changes:** Configured  for navigation between Dashboard, Clients, Catalog, and Budgets pages.
+    -   **Changes:** Configured new routes for  and  pages. Added  component for notifications.
 -   :
-    -   **Importance:** Manages client-related UI and logic, including creation, editing, and listing.
-    -   **Changes:**
-        -   Implemented a hybrid search for Endereço completo using Google Places and Geocoding APIs, including automatic GPS coordinate saving and auto-filling Bairro, Cidade, Estado.
-        -   Added  to populate form fields upon selecting a search result.
-        -   Fixed  error by adding  to  import.
-        -   Corrected the logic for extracting  (Bairro) from address descriptions.
-        -   Added HISTÓRICO (placeholder) and NOVO ORÇAMENTO buttons to client cards, with NOVO ORÇAMENTO pre-selecting the client.
+    -   **Importance:** Defines the main layout and navigation for the application.
+    -   **Changes:** Added navigation links for  and .
 -   :
-    -   **Importance:** Displays and manages the service catalog.
-    -   **Changes:** Refactored the layout from individual cards to a tabular display, categorized by service type, with action buttons (Edit, Delete, Activate/Inactivate) on the right.
+    -   **Importance:** Centralizes API calls for the frontend.
+    -   **Changes:** Added new API functions for  (GET/PUT),  (GET/PUT), , and . Updated  to include .
+-    & :
+    -   **Importance:** Provides toast notification functionality.
+    -   **Changes:** Integrated for displaying success/error messages across the application.
 -   :
     -   **Importance:** Manages budget creation, editing, and listing.
     -   **Changes:**
-        -   Replaced client selection with a single autocomplete search field integrated with the client catalog.
-        -   Implemented  function with a backend API call for budget deletion.
-        -   Integrated item addition/editing functionality into the budget form, including a table for items, unique ITM- IDs, and dynamic calculation fields (width, height, diameter, folds).
-        -   Made the Metragem Linear field editable, allowing manual input or automatic calculation from Quantidade de Dobras and Tecido por Dobra.
-        -   Corrected a bug where budget items were not being saved by modifying both frontend () and backend () to process items during creation.
-        -   Fixed  error by ensuring numeric parsing () for all relevant numerical values before display or calculation.
-        -   Removed the Adicionar Item button from the budget card display as per user request.
-        -   *Current State:* The logic for updating an existing budget ( for ) is still displaying a placeholder message and is not fully implemented.
-
+        -   Completed budget editing functionality: client name pre-selection in ,  calls .
+        -   Replaced  calls with  for user feedback.
+        -   Implemented quick client add feature, allowing new clients to be created directly from the budget form.
+        -   Added WhatsApp and PDF action buttons to budget cards, linking to respective  and  functions.
+        -    updated to handle the new API response (including fallback for long URLs).
+-   :
+    -   **Importance:** New page to manage budget-related configurations.
+    -   **Changes:** Created, including UI for 11 risk text categories, general conditions, and footer text, with editable fields and WhatsApp-style markdown preview.
+-   :
+    -   **Importance:** New page to manage system-wide configurations.
+    -   **Changes:** Created, including UI for company details (name, address, contacts), LGPD retention policy, and future features. Implemented hybrid address search with auto-fill for , , , and a  component to display the company's geolocation.
+-   :
+    -   **Importance:** Manages client-related UI and logic.
+    -   **Changes:** Integrated the  component into each client card to display their geolocation. Fixed missing Lucide React icon imports.
+-   :
+    -   **Importance:** Reusable React component for displaying small interactive maps.
+    -   **Changes:** Created using Leaflet and OpenStreetMap to show a marker at given latitude/longitude, with a popup and a link to Google Maps.
+-   :
+    -   **Importance:** Stores notes and reminders for future development phases.
+    -   **Changes:** Created to document the requirement to validate client registration before sending to route (Phase 2).
 </code_architecture>
 
 <pending_tasks>
 -   **Phase 2:** Implement Rotas (Routes) + Agenda (Calendar) + WhatsApp.
 -   **Phase 3:** Implement Lavagem/Execução (Washing/Execution) + Modo Técnico (Technician Mode).
 -   **Phase 4:** Implement Financeiro (Financial) + Relatórios (Reports) + Chamados (Tickets).
--   **Immediate Fix:** Complete the functionality for editing budgets in , specifically ensuring the client name is pre-selected and the save operation correctly updates the budget.
+-   **Phase 5:** Implement Configurações do Orçamento + Configurações do Sistema.
 </pending_tasks>
 
 <current_work>
-The AI engineer was last working on fixing a bug related to editing budgets. The user reported two issues:
-1.  When editing a budget, the client's name is not automatically pre-selected in the input field.
-2.  Upon attempting to save an edited budget, the system displays the message: Funcionalidade de edição será implementada em breve. (Edit functionality will be implemented soon). This indicates that the update logic for budgets is not yet functional.
+Immediately before this summary request, the AI engineer completed the implementation and integration of visual geolocation using mini-maps. This involved adding the  and  libraries to the frontend, creating a reusable  component, and then integrating this component into two key areas: the Configurações do Sistema page to display the company's address, and within the  component on the Clientes page to visualize individual client locations.
 
-The AI engineer has identified the location of the placeholder message in  at line 1236 and plans to implement the update functionality and address the client pre-selection issue.
+During this process, the AI engineer debugged and resolved several frontend-related issues, primarily missing Lucide React icon imports (e.g., , , ) which caused render errors. The  component fetches  and  from the saved data, displays a marker, and provides a popup with the location that links to Google Maps for external navigation. The integration was thoroughly tested across both client and system configuration views, confirming that the maps display correctly, are interactive, and the system remains free of JavaScript errors.
+
+This concludes a significant step in preparing the system for the Rotas module by providing a clear visual representation of all geolocated entities. The last actions involved updating the  to reflect these latest advancements and explaining what a fork session entails, leading into this summary request.
 </current_work>
 
 <optional_next_step>
-Implement the budget update logic in  for  in  and ensure the client is pre-selected.
+Based on the completed geolocation, the next step is to implement the Rotas module, utilizing the now visible GPS data.
 </optional_next_step>

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 # Configuration
-BASE_URL = "https://superdry-admin.preview.emergentagent.com/api"
+BASE_URL = "https://superdry-system.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 class BudgetSystemTester:
