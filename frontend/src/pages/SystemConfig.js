@@ -326,6 +326,27 @@ export const SystemConfig = () => {
               </div>
             </div>
 
+            {/* Mini Map for Company Location */}
+            {config?.latitude && config?.longitude && (
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Localização da Empresa
+                </label>
+                <div className="border border-gray-200 rounded-lg p-2">
+                  <MiniMap
+                    latitude={config.latitude}
+                    longitude={config.longitude}
+                    title={config.company_name || "Empresa"}
+                    height="200px"
+                    className="w-full"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  📍 Lat: {config.latitude.toFixed(6)}, Lng: {config.longitude.toFixed(6)} • Clique para abrir no Google Maps
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Complemento
