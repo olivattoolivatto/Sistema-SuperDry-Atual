@@ -107,7 +107,7 @@ const ClientCard = ({ client, onEdit, onDelete, onHistory, onNewBudget }) => (
         onClick={() => onHistory(client)}
         className="flex-1 flex items-center justify-center px-3 py-2 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors"
       >
-        <Clock className="w-4 h-4 mr-1" />
+        <History className="w-4 h-4 mr-1" />
         Histórico
       </button>
       <button
