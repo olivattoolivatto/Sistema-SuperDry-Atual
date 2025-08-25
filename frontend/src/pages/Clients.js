@@ -7,7 +7,9 @@ import {
   History, 
   MessageCircle,
   Phone,
+  Mail,
   MapPin,
+  MessageSquare,
   Users,
   FileText
 } from 'lucide-react';
