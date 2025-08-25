@@ -101,30 +101,63 @@ export const SystemConfig = () => {
       console.log('Selecionando endereço:', suggestion);
       
       let fullAddress = suggestion.formatted_address || suggestion.description;
-      let neighborhood = '';
-      let city = '';
-      let state = '';
+      let neighborhood = suggestion.neighborhood || '';
+      let city = suggestion.city || '';
+      let state = suggestion.state || '';
       let latitude = null;
       let longitude = null;
       
-      // Extract location data
+      // First priority: Extract location data from search result
       if (suggestion.geometry && suggestion.geometry.location) {
         latitude = suggestion.geometry.location.lat;
         longitude = suggestion.geometry.location.lng;
+        console.log('📍 Coordenadas obtidas do resultado da busca:', { latitude, longitude });
       }
       
-      // Extract address components
-      if (suggestion.address_components) {
-        for (const component of suggestion.address_components) {
-          const types = component.types;
+      // If we don't have coordinates or address components, try to get details
+      if ((!latitude || !longitude || !neighborhood || !city || !state) && suggestion.place_id) {
+        try {
+          console.log('🔍 Buscando detalhes adicionais via place_id...');
+          const response = await placesApi.getDetails(suggestion.place_id);
+          const details = response.data.details.result;
+          console.log('Detalhes obtidos da API:', details);
           
-          if (types.includes('sublocality') || types.includes('sublocality_level_1')) {
-            neighborhood = component.long_name;
-          } else if (types.includes('locality') || types.includes('administrative_area_level_2')) {
-            city = component.long_name;
-          } else if (types.includes('administrative_area_level_1')) {
-            state = component.short_name;
+          // Update coordinates if not already available
+          if (!latitude || !longitude) {
+            latitude = details.geometry?.location?.lat || latitude;
+            longitude = details.geometry?.location?.lng || longitude;
+            console.log('📍 Coordenadas obtidas dos detalhes:', { latitude, longitude });
           }
+          
+          // Extract address components if not already available
+          if (details && details.address_components && (!neighborhood || !city || !state)) {
+            const addressComponents = details.address_components;
+            console.log('Componentes do endereço:', addressComponents);
+            
+            // Extract address components with multiple fallbacks
+            const getComponent = (types, preferLongName = true) => {
+              const component = addressComponents.find(c => 
+                types.some(type => c.types.includes(type))
+              );
+              if (!component) return '';
+              return preferLongName ? component.long_name : component.short_name;
+            };
+
+            neighborhood = neighborhood || getComponent(['sublocality_level_1', 'sublocality']) ||
+                          getComponent(['neighborhood']) ||
+                          getComponent(['administrative_area_level_4']) ||
+                          getComponent(['administrative_area_level_3']);
+            
+            city = city || getComponent(['locality']) ||
+                  getComponent(['administrative_area_level_2']) ||
+                  getComponent(['sublocality']);
+            
+            state = state || getComponent(['administrative_area_level_1'], false);
+            
+            fullAddress = details.formatted_address || fullAddress;
+          }
+        } catch (detailsError) {
+          console.log('⚠️ Erro ao obter detalhes da API, usando dados disponíveis:', detailsError);
         }
       }
       
