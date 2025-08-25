@@ -28,7 +28,7 @@ const ClientCard = ({ client, onEdit, onDelete, onHistory, onNewBudget }) => (
           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
           title="Histórico"
         >
-          <History className="w-4 h-4" />
+          <Clock className="w-4 h-4" />
         </button>
         <button
           onClick={() => onEdit(client)}
@@ -47,8 +47,8 @@ const ClientCard = ({ client, onEdit, onDelete, onHistory, onNewBudget }) => (
       </div>
     </div>
 
-    <div className="space-y-2 text-sm">
-      <div className="flex items-center text-gray-600">
+    <div className="space-y-3">
+      <div className="flex items-center text-gray-600 text-sm">
         <Phone className="w-4 h-4 mr-2" />
         <span>{client.phone_primary}</span>
         {client.phone_primary && (
@@ -59,21 +59,21 @@ const ClientCard = ({ client, onEdit, onDelete, onHistory, onNewBudget }) => (
             className="ml-2 p-1 text-green-600 hover:bg-green-50 rounded"
             title="WhatsApp"
           >
-            <MessageCircle className="w-4 h-4" />
+            <MessageSquare className="w-4 h-4" />
           </a>
         )}
       </div>
       
       {client.email && (
-        <div className="flex items-center text-gray-600">
-          <span className="w-4 h-4 mr-2">@</span>
+        <div className="flex items-center text-gray-600 text-sm">
+          <Mail className="w-4 h-4 mr-2" />
           <span>{client.email}</span>
         </div>
       )}
       
-      <div className="flex items-start text-gray-600">
+      <div className="flex items-start text-gray-600 text-sm">
         <MapPin className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-        <div>
+        <div className="flex-1">
           <p>{client.address.full_address}</p>
           {client.address.complement && (
             <p className="text-xs text-gray-500">{client.address.complement}</p>
@@ -83,6 +83,23 @@ const ClientCard = ({ client, onEdit, onDelete, onHistory, onNewBudget }) => (
           </p>
         </div>
       </div>
+
+      {/* Mini Map for Client Location */}
+      {client.address.latitude && client.address.longitude && (
+        <div className="border border-gray-200 rounded-lg p-2">
+          <MiniMap
+            latitude={client.address.latitude}
+            longitude={client.address.longitude}
+            title={client.name}
+            height="120px"
+            className="w-full"
+            zoom={16}
+          />
+          <p className="text-xs text-gray-400 mt-1 text-center">
+            📍 {client.address.neighborhood} • Clique para abrir no Google Maps
+          </p>
+        </div>
+      )}
     </div>
 
     <div className="flex space-x-2 mt-4 pt-4 border-t border-gray-100">
@@ -90,7 +107,7 @@ const ClientCard = ({ client, onEdit, onDelete, onHistory, onNewBudget }) => (
         onClick={() => onHistory(client)}
         className="flex-1 flex items-center justify-center px-3 py-2 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors"
       >
-        <History className="w-4 h-4 mr-1" />
+        <Clock className="w-4 h-4 mr-1" />
         Histórico
       </button>
       <button
