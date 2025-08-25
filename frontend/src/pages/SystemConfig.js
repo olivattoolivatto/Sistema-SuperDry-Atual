@@ -76,9 +76,126 @@ export const SystemConfig = () => {
     }));
   };
 
+  const handleAddressChange = async (e) => {
+    const value = e.target.value;
+    handleChange('address_full', value);
+
+    if (value.length > 2) {
+      try {
+        console.log('Buscando endereço:', value);
+        const response = await placesApi.search(value);
+        console.log('Resultados encontrados:', response.data.results);
+        setAddressSuggestions(response.data.results || []);
+      } catch (error) {
+        console.error('Erro ao buscar endereços:', error);
+        setAddressSuggestions([]);
+      }
+    } else {
+      setAddressSuggestions([]);
+    }
+  };
+
+  const handleAddressSelect = async (suggestion) => {
+    try {
+      console.log('Selecionando endereço:', suggestion);
+      
+      let fullAddress = suggestion.formatted_address;
+      let neighborhood = '';
+      let city = '';
+      let state = '';
+      let latitude = null;
+      let longitude = null;
+      
+      // Extract location data
+      if (suggestion.geometry && suggestion.geometry.location) {
+        latitude = suggestion.geometry.location.lat;
+        longitude = suggestion.geometry.location.lng;
+      }
+      
+      // Extract address components
+      if (suggestion.address_components) {
+        for (const component of suggestion.address_components) {
+          const types = component.types;
+          
+          if (types.includes('sublocality') || types.includes('sublocality_level_1')) {
+            neighborhood = component.long_name;
+          } else if (types.includes('locality') || types.includes('administrative_area_level_2')) {
+            city = component.long_name;
+          } else if (types.includes('administrative_area_level_1')) {
+            state = component.short_name;
+          }
+        }
+      }
+      
+      // Fallback extraction from formatted_address
+      if (!neighborhood || !city || !state) {
+        const addressParts = fullAddress.split(',').map(part => part.trim());
+        
+        if (addressParts.length >= 3) {
+          for (let i = 1; i < addressParts.length - 1; i++) {
+            const addressPart = addressParts[i];
+            
+            if (addressPart.includes('-') && !neighborhood) {
+              const dashParts = addressPart.split('-').map(p => p.trim());
+              if (dashParts.length === 2) {
+                neighborhood = dashParts[1];
+              }
+            } else if (!neighborhood) {
+              neighborhood = addressPart;
+            }
+          }
+          
+          // Extract city and state from last part
+          const lastPart = addressParts[addressParts.length - 1];
+          if (lastPart.includes('-')) {
+            const parts = lastPart.split('-').map(p => p.trim());
+            if (parts.length >= 2) {
+              state = parts[parts.length - 1];
+              city = parts[parts.length - 2];
+            }
+          }
+        }
+      }
+
+      console.log('Componentes extraídos:', { 
+        neighborhood, 
+        city, 
+        state,
+        latitude,
+        longitude,
+        fullAddress
+      });
+
+      // Update config with all fields
+      setConfig(prev => ({
+        ...prev,
+        address_full: fullAddress,
+        neighborhood: neighborhood || '',
+        city: city || '',
+        state: state || '',
+        latitude: latitude,
+        longitude: longitude
+      }));
+      
+      // Clear suggestions
+      setAddressSuggestions([]);
+      console.log('✅ Endereço selecionado e campos preenchidos automaticamente');
+      
+    } catch (error) {
+      console.error('Erro ao selecionar endereço:', error);
+      
+      // Fallback - at least save the main address
+      setConfig(prev => ({
+        ...prev,
+        address_full: suggestion.formatted_address || suggestion.description
+      }));
+      setAddressSuggestions([]);
+      console.log('⚠️ Usando fallback - apenas endereço principal preenchido');
+    }
+  };
+
   const handleAddressSearch = async (address) => {
-    // Esta função será implementada futuramente com Google Places API
-    // Por enquanto, apenas atualiza o endereço
+    // Function kept for compatibility but logic moved to handleAddressChange
     handleChange('address_full', address);
   };
 
