@@ -288,7 +288,7 @@ class RouteStop(BaseModel):
 class Route(BaseModel):
     id: str = Field(default_factory=lambda: f"RTE-{str(uuid.uuid4().int)[:7].zfill(7)}")
     vehicle_type: VehicleType
-    planned_date: date
+    planned_date: str  # Format: "YYYY-MM-DD"
     planned_start_time: str  # Format: "HH:MM"
     status: RouteStatus = RouteStatus.PLANNED
     stops: List[RouteStop] = []
