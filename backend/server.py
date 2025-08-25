@@ -355,12 +355,11 @@ async def optimize_route_with_priorities(stops: List[RouteStop], company_coords:
     
     # Sort PRIMEIRA by distance from company (closest first)
     if primeira_stops:
-        for stop in primeira_stops:
+        def calc_distance(stop):
             stop_coords = (stop.address['longitude'], stop.address['latitude'])
-            # Simple distance calculation
-            distance = ((company_coords[0] - stop_coords[0])**2 + (company_coords[1] - stop_coords[1])**2)**0.5
-            stop.temp_distance = distance
-        primeira_stops.sort(key=lambda x: x.temp_distance)
+            return ((company_coords[0] - stop_coords[0])**2 + (company_coords[1] - stop_coords[1])**2)**0.5
+        
+        primeira_stops.sort(key=calc_distance)
     
     # Use OSRM for AUTOMATICA stops optimization
     optimized_automatica = []
@@ -386,11 +385,11 @@ async def optimize_route_with_priorities(stops: List[RouteStop], company_coords:
     
     # Sort ULTIMA by distance from company (farthest first)
     if ultima_stops:
-        for stop in ultima_stops:
+        def calc_distance_reverse(stop):
             stop_coords = (stop.address['longitude'], stop.address['latitude'])
-            distance = ((company_coords[0] - stop_coords[0])**2 + (company_coords[1] - stop_coords[1])**2)**0.5
-            stop.temp_distance = distance
-        ultima_stops.sort(key=lambda x: x.temp_distance, reverse=True)
+            return ((company_coords[0] - stop_coords[0])**2 + (company_coords[1] - stop_coords[1])**2)**0.5
+        
+        ultima_stops.sort(key=calc_distance_reverse, reverse=True)
     
     # Combine in priority order
     final_order = primeira_stops + optimized_automatica + ultima_stops
@@ -398,9 +397,6 @@ async def optimize_route_with_priorities(stops: List[RouteStop], company_coords:
     # Set sequence numbers
     for i, stop in enumerate(final_order):
         stop.order_sequence = i + 1
-        # Clean up temp attribute
-        if hasattr(stop, 'temp_distance'):
-            delattr(stop, 'temp_distance')
     
     return final_order
 
