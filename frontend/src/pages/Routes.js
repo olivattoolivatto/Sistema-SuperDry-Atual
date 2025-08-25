@@ -791,7 +791,10 @@ export function Routes() {
                 <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
                   <Edit3 className="w-4 h-4" />
                 </button>
-                <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                <button 
+                  onClick={() => handleDeleteRoute(route.id)}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
