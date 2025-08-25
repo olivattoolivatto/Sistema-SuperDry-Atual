@@ -348,10 +348,15 @@ async def calculate_distance_matrix_osrm(coordinates: List[Tuple[float, float]])
 async def optimize_route_with_priorities(stops: List[RouteStop], company_coords: Tuple[float, float]) -> List[RouteStop]:
     """Optimize route considering manual priorities"""
     
+    if not stops:
+        return []
+    
     # Separate stops by priority
     primeira_stops = [s for s in stops if s.priority == Priority.PRIMEIRA]
     automatica_stops = [s for s in stops if s.priority == Priority.AUTOMATICA]
     ultima_stops = [s for s in stops if s.priority == Priority.ULTIMA]
+    
+    print(f"Priority separation: PRIMEIRA={len(primeira_stops)}, AUTOMATICA={len(automatica_stops)}, ULTIMA={len(ultima_stops)}")
     
     # Sort PRIMEIRA by distance from company (closest first)
     if primeira_stops:
@@ -397,6 +402,8 @@ async def optimize_route_with_priorities(stops: List[RouteStop], company_coords:
     # Set sequence numbers
     for i, stop in enumerate(final_order):
         stop.order_sequence = i + 1
+    
+    print(f"Final order: {len(final_order)} stops")
     
     return final_order
 
