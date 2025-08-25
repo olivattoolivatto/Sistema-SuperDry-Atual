@@ -17,6 +17,8 @@ import asyncio
 from io import BytesIO
 import aiofiles
 import re
+import requests
+from typing import Tuple
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
