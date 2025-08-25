@@ -6,14 +6,16 @@ import {
   FileText, 
   Package,
   Menu,
-  X
+  X,
+  Settings
 } from 'lucide-react';
 
 const menuItems = [
   { path: '/', label: 'Painel Inicial', icon: Home },
   { path: '/clients', label: 'Clientes', icon: Users },
   { path: '/catalog', label: 'Catálogo', icon: Package },
-  { path: '/budgets', label: 'Orçamentos', icon: FileText }
+  { path: '/budgets', label: 'Orçamentos', icon: FileText },
+  { path: '/budget-config', label: 'Config. Orçamento', icon: Settings }
 ];
 
 export function Layout({ children }) {
