@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clientsApi, placesApi } from '../services/api';
+import MiniMap from '../components/MiniMap';
 
 const ClientCard = ({ client, onEdit, onDelete, onHistory, onNewBudget }) => (
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
