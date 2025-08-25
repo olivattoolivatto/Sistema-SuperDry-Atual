@@ -379,6 +379,33 @@ export function Routes() {
     }
   };
 
+  const handleDeleteRoute = async (routeId) => {
+    try {
+      // Confirm deletion
+      if (!window.confirm(`Tem certeza que deseja excluir a rota ${routeId}?`)) {
+        return;
+      }
+
+      await routesApi.deleteRoute(routeId);
+      
+      // Refresh saved routes list
+      await loadSavedRoutes();
+      
+      toast({
+        title: "Rota excluída!",
+        description: `Rota ${routeId} foi excluída com sucesso.`,
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('Erro ao excluir rota:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao excluir rota. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'PRIMEIRA': return 'bg-red-100 text-red-800 border-red-200';
