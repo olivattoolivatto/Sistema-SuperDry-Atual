@@ -396,10 +396,42 @@ async def search_places(query: str):
 
 @api_router.get("/places/details")
 async def get_place_details(place_id: str):
-    """Get detailed information about a place"""
+    """Get detailed information about a place using fallback methods"""
     try:
-        details = gmaps.place(place_id, language='pt-BR')
-        return {"details": details}
+        # First try the official Places API
+        try:
+            details = gmaps.place(place_id, language='pt-BR')
+            return {"details": details}
+        except Exception as places_error:
+            print(f"Places API Details error: {places_error}")
+            
+            # Fallback: Use reverse geocoding to get details
+            try:
+                # First, we need to find the place by place_id using geocoding
+                geocode_results = gmaps.geocode(place_id=place_id, language='pt-BR')
+                
+                if geocode_results and len(geocode_results) > 0:
+                    result = geocode_results[0]
+                    
+                    # Format the response to match Places API structure
+                    fallback_details = {
+                        'result': {
+                            'place_id': result.get('place_id'),
+                            'formatted_address': result.get('formatted_address'),
+                            'address_components': result.get('address_components', []),
+                            'geometry': result.get('geometry', {}),
+                            'types': result.get('types', [])
+                        }
+                    }
+                    
+                    return {"details": fallback_details}
+                else:
+                    raise HTTPException(status_code=404, detail="Place not found")
+                    
+            except Exception as geocode_error:
+                print(f"Geocoding fallback error: {geocode_error}")
+                raise HTTPException(status_code=404, detail="Unable to get place details")
+                
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error getting place details: {str(e)}")
 
