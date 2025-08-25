@@ -249,16 +249,42 @@ export const SystemConfig = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Endereço Completo
               </label>
-              <input
-                type="text"
-                value={config?.address_full || ''}
-                onChange={(e) => handleAddressSearch(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Digite o endereço completo para busca automática"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Este endereço será usado como ponto de partida e chegada das rotas
-              </p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={config?.address_full || ''}
+                  onChange={handleAddressChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Digite o endereço para busca automática"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Este endereço será usado como ponto de partida e chegada das rotas
+                </p>
+                
+                {/* Address Suggestions */}
+                {addressSuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                    {addressSuggestions.map((suggestion, index) => (
+                      <button
+                        key={`${suggestion.place_id}-${index}`}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleAddressSelect(suggestion);
+                        }}
+                        className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors focus:outline-none focus:bg-blue-50"
+                      >
+                        <div className="font-medium text-gray-900 text-sm">
+                          {suggestion.structured_formatting?.main_text || suggestion.description?.split(',')[0]}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {suggestion.structured_formatting?.secondary_text || suggestion.formatted_address || suggestion.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>
