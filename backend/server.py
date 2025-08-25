@@ -872,7 +872,7 @@ async def generate_pdf_budget(budget_id: str):
         if os.path.exists(logo_path):
             try:
                 # Create logo image with fixed sizing
-                logo = Image(logo_path, width=2*inch, height=1.5*inch)
+                logo = Image(logo_path, width=1.1*inch, height=0.88*inch)
                 
                 # Create table with client info and logo
                 info_table_data = [[client_info_paragraph, logo]]
@@ -973,7 +973,7 @@ async def generate_pdf_budget(budget_id: str):
             Paragraph(f"<b>R$ {total_value:.2f}</b>", centered_style)
         ])
         
-        table = Table(table_data)
+        table = Table(table_data, colWidths=[5*inch, 1.2*inch, 1.2*inch, 1.2*inch, 1.2*inch, 1.2*inch])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
