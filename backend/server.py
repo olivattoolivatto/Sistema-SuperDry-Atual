@@ -1484,6 +1484,296 @@ async def get_dashboard():
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error getting dashboard data: {str(e)}")
 
+# Routes endpoints
+@api_router.get("/budget-items/available-for-routes")
+async def get_available_budget_items_for_routes():
+    """Get budget items available for routes (status: RETIRAR, EXECUTAR_NO_LOCAL, ENTREGAR)"""
+    try:
+        # Find budgets with items in route-eligible status
+        route_statuses = [ServiceStatus.RETIRAR, ServiceStatus.EXECUTAR_NO_LOCAL, ServiceStatus.ENTREGAR]
+        
+        pipeline = [
+            {"$unwind": "$items"},
+            {"$match": {"items.status": {"$in": route_statuses}}},
+            {"$lookup": {
+                "from": "clients",
+                "localField": "client_id", 
+                "foreignField": "id",
+                "as": "client_info"
+            }},
+            {"$unwind": "$client_info"},
+            {"$project": {
+                "budget_id": "$id",
+                "client_id": "$client_id",
+                "client_name": "$client_name",
+                "item": "$items",
+                "client_address": "$client_info.address"
+            }}
+        ]
+        
+        cursor = db.budgets.aggregate(pipeline)
+        results = []
+        
+        async for doc in cursor:
+            item_data = {
+                "budget_item_id": doc["item"]["id"],
+                "budget_id": doc["budget_id"],
+                "client_id": doc["client_id"],
+                "client_name": doc["client_name"],
+                "service_name": doc["item"]["service_name"],
+                "service_code": doc["item"]["service_code"],
+                "service_value": doc["item"]["total_value"],
+                "status": doc["item"]["status"],
+                "neighborhood": doc["client_address"].get("neighborhood", ""),
+                "address": doc["client_address"]
+            }
+            results.append(item_data)
+        
+        return {"available_items": results}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching available items: {str(e)}")
+
+@api_router.post("/routes", response_model=Route)
+async def create_route(route_data: RouteCreate):
+    """Create a new route"""
+    try:
+        # Get company address from system config
+        system_config = await db.system_config.find_one({})
+        if not system_config or not system_config.get('latitude') or not system_config.get('longitude'):
+            raise HTTPException(status_code=400, detail="Company GPS coordinates not configured")
+        
+        company_address = {
+            "full_address": system_config.get('address_full', ''),
+            "latitude": system_config['latitude'],
+            "longitude": system_config['longitude'],
+            "neighborhood": system_config.get('neighborhood', ''),
+            "city": system_config.get('city', ''),
+            "state": system_config.get('state', '')
+        }
+        
+        # Generate route ID
+        last_route = await db.routes.find_one(sort=[("created_at", -1)])
+        if last_route:
+            last_id_num = int(last_route["id"].split("-")[1])
+            new_id_num = last_id_num + 1
+        else:
+            new_id_num = 1
+        
+        route_id = f"RTE-{str(new_id_num).zfill(7)}"
+        
+        # Create route
+        route = Route(
+            id=route_id,
+            vehicle_type=route_data.vehicle_type,
+            planned_date=route_data.planned_date,
+            planned_start_time=route_data.planned_start_time,
+            company_address=company_address,
+            stops=[]
+        )
+        
+        # Insert route
+        await db.routes.insert_one(route.dict())
+        return route
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error creating route: {str(e)}")
+
+@api_router.get("/routes", response_model=List[Route])
+async def get_routes(limit: int = 20):
+    """Get routes (limited to 20 most recent)"""
+    try:
+        cursor = db.routes.find().sort("created_at", -1).limit(limit)
+        routes = []
+        async for route in cursor:
+            routes.append(Route(**route))
+        return routes
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching routes: {str(e)}")
+
+@api_router.get("/routes/{route_id}", response_model=Route)
+async def get_route(route_id: str):
+    """Get specific route by ID"""
+    try:
+        route = await db.routes.find_one({"id": route_id})
+        if not route:
+            raise HTTPException(status_code=404, detail="Route not found")
+        return Route(**route)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching route: {str(e)}")
+
+@api_router.put("/routes/{route_id}/stops")
+async def update_route_stops(route_id: str, stops_data: List[dict]):
+    """Update route stops with priorities"""
+    try:
+        route = await db.routes.find_one({"id": route_id})
+        if not route:
+            raise HTTPException(status_code=404, detail="Route not found")
+        
+        # Process stops data
+        stops = []
+        for stop_data in stops_data:
+            # Get budget item details
+            budget = await db.budgets.find_one({"items.id": stop_data["budget_item_id"]})
+            if not budget:
+                continue
+                
+            # Find the specific item
+            budget_item = None
+            for item in budget["items"]:
+                if item["id"] == stop_data["budget_item_id"]:
+                    budget_item = item
+                    break
+            
+            if not budget_item:
+                continue
+            
+            # Get client details
+            client = await db.clients.find_one({"id": budget["client_id"]})
+            if not client:
+                continue
+            
+            # Generate stop ID
+            last_stop = await db.routes.find_one({"stops.id": {"$exists": True}}, sort=[("created_at", -1)])
+            stop_counter = 1
+            if last_stop and last_stop.get("stops"):
+                for stop in last_stop["stops"]:
+                    if stop.get("id", "").startswith("STP-"):
+                        try:
+                            stop_num = int(stop["id"].split("-")[1])
+                            stop_counter = max(stop_counter, stop_num + 1)
+                        except:
+                            pass
+            
+            stop_id = f"STP-{str(stop_counter).zfill(7)}"
+            
+            # Calculate estimated duration based on status
+            estimated_duration = 30  # Default for RETIRAR/ENTREGAR
+            if budget_item["status"] == ServiceStatus.EXECUTAR_NO_LOCAL:
+                estimated_duration = 120
+            
+            stop = RouteStop(
+                id=stop_id,
+                route_id=route_id,
+                budget_item_id=stop_data["budget_item_id"],
+                client_id=budget["client_id"],
+                client_name=budget["client_name"],
+                service_name=budget_item["service_name"],
+                service_value=budget_item["total_value"],
+                address=client["address"],
+                priority=Priority(stop_data.get("priority", "AUTOMATICA")),
+                estimated_duration=estimated_duration,
+                service_status=ServiceStatus(budget_item["status"])
+            )
+            stops.append(stop)
+        
+        # Update route with stops
+        await db.routes.update_one(
+            {"id": route_id},
+            {
+                "$set": {
+                    "stops": [stop.dict() for stop in stops],
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        return {"message": "Route stops updated successfully", "stops_count": len(stops)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error updating route stops: {str(e)}")
+
+@api_router.post("/routes/{route_id}/optimize")
+async def optimize_route(route_id: str):
+    """Optimize route using OSRM with priorities"""
+    try:
+        route = await db.routes.find_one({"id": route_id})
+        if not route:
+            raise HTTPException(status_code=404, detail="Route not found")
+        
+        if not route.get("stops"):
+            raise HTTPException(status_code=400, detail="Route has no stops to optimize")
+        
+        # Convert dict stops to RouteStop objects
+        stops = [RouteStop(**stop) for stop in route["stops"]]
+        
+        # Get company coordinates
+        company_coords = (
+            route["company_address"]["longitude"],
+            route["company_address"]["latitude"]
+        )
+        
+        # Optimize stops with priorities
+        optimized_stops = await optimize_route_with_priorities(stops, company_coords)
+        
+        # Merge stops at same address (same lat/lng)
+        merged_stops = []
+        address_groups = {}
+        
+        for stop in optimized_stops:
+            address_key = f"{stop.address['latitude']},{stop.address['longitude']}"
+            if address_key in address_groups:
+                # Merge with existing stop - add 60 minutes for additional service
+                existing_stop = address_groups[address_key]
+                existing_stop.estimated_duration += 60
+                existing_stop.service_name += f" + {stop.service_name}"
+                existing_stop.service_value += stop.service_value
+            else:
+                address_groups[address_key] = stop
+                merged_stops.append(stop)
+        
+        # Calculate route geometry and totals using OSRM
+        all_coords = [company_coords]
+        all_coords.extend([(s.address['longitude'], s.address['latitude']) for s in merged_stops])
+        all_coords.append(company_coords)
+        
+        osrm_result = await calculate_route_osrm(all_coords)
+        
+        total_duration = sum(stop.estimated_duration for stop in merged_stops)
+        total_distance = 0.0
+        route_geometry = None
+        
+        if 'trips' in osrm_result and len(osrm_result['trips']) > 0:
+            trip = osrm_result['trips'][0]
+            total_distance = trip.get('distance', 0) / 1000  # Convert to km
+            total_duration += trip.get('duration', 0) / 60  # Add travel time in minutes
+            route_geometry = trip.get('geometry')
+        
+        # Update route with optimization results
+        await db.routes.update_one(
+            {"id": route_id},
+            {
+                "$set": {
+                    "stops": [stop.dict() for stop in merged_stops],
+                    "total_duration": int(total_duration),
+                    "total_distance": round(total_distance, 2),
+                    "route_geometry": route_geometry,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        return {
+            "message": "Route optimized successfully",
+            "total_stops": len(merged_stops),
+            "total_duration_minutes": int(total_duration),
+            "total_distance_km": round(total_distance, 2),
+            "osrm_status": "success" if 'trips' in osrm_result else "fallback"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error optimizing route: {str(e)}")
+
+@api_router.delete("/routes/{route_id}")
+async def delete_route(route_id: str):
+    """Delete a route"""
+    try:
+        result = await db.routes.delete_one({"id": route_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Route not found")
+        return {"message": "Route deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error deleting route: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
