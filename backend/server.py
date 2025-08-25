@@ -252,6 +252,57 @@ class BudgetConfig(BaseModel):
     footer_text: Optional[str] = ""
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+# Route models
+class VehicleType(str, Enum):
+    CARRO = "CARRO"
+    MOTO = "MOTO"
+
+class Priority(str, Enum):
+    PRIMEIRA = "PRIMEIRA"
+    AUTOMATICA = "AUTOMATICA"
+    ULTIMA = "ULTIMA"
+
+class RouteStatus(str, Enum):
+    PLANNED = "PLANNED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+class RouteStop(BaseModel):
+    id: str = Field(default_factory=lambda: f"STP-{str(uuid.uuid4().int)[:7].zfill(7)}")
+    route_id: str
+    budget_item_id: str
+    client_id: str
+    client_name: str
+    service_name: str
+    service_value: float
+    address: dict  # Contains full_address, latitude, longitude, neighborhood
+    priority: Priority = Priority.AUTOMATICA
+    estimated_duration: int = 30  # minutes (30 for Retirar/Entregar, 120 for Executar)
+    service_status: ServiceStatus
+    order_sequence: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class Route(BaseModel):
+    id: str = Field(default_factory=lambda: f"RTE-{str(uuid.uuid4().int)[:7].zfill(7)}")
+    vehicle_type: VehicleType
+    planned_date: date
+    planned_start_time: str  # Format: "HH:MM"
+    status: RouteStatus = RouteStatus.PLANNED
+    stops: List[RouteStop] = []
+    total_duration: int = 0  # minutes
+    total_distance: float = 0.0  # km
+    company_address: dict  # Start/end point
+    route_geometry: Optional[dict] = None  # OSRM route data
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class RouteCreate(BaseModel):
+    vehicle_type: VehicleType
+    planned_date: date
+    planned_start_time: str
+    stops: List[dict] = []  # Will contain budget_item_ids and priorities
+
 class SystemConfig(BaseModel):
     # Company data
     company_name: Optional[str] = "SuperDry Lavanderia de Tapetes & Estofados"
