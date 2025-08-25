@@ -71,4 +71,10 @@ export const dashboardApi = {
   getSummary: () => api.get('/dashboard'),
 };
 
+// Budget Config API
+export const budgetConfigApi = {
+  get: () => api.get('/budget-config'),
+  update: (data) => api.put('/budget-config', data),
+};
+
 export default api;
