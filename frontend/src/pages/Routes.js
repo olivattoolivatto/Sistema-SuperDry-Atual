@@ -584,7 +584,7 @@ export function Routes() {
                 <Clock className="w-5 h-5 text-green-600 mr-2" />
                 <div>
                   <div className="text-sm text-green-600 font-medium">Duração Estimada</div>
-                  <div className="text-2xl font-bold text-green-900">{Math.round(optimizedRoute.total_duration / 60)}h {optimizedRoute.total_duration % 60}min</div>
+                  <div className="text-2xl font-bold text-green-900">{Math.floor(optimizedRoute.total_duration / 60)}h {optimizedRoute.total_duration % 60}min</div>
                 </div>
               </div>
             </div>
@@ -599,37 +599,129 @@ export function Routes() {
             </div>
           </div>
 
-          {/* Route Stops */}
+          {/* Route Stops with Priority Controls */}
           <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Paradas da Rota</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Paradas da Rota - Controle de Prioridades</h3>
             <div className="space-y-3">
               {optimizedRoute.stops.map((stop, index) => (
-                <div key={stop.id} className="flex items-center p-4 bg-gray-50 rounded-lg">
-                  <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                <div key={stop.id} className="flex items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  {/* Stop Number */}
+                  <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold mr-4">
                     {index + 1}
                   </div>
-                  <div className="ml-4 flex-1">
+                  
+                  {/* Stop Details */}
+                  <div className="flex-1">
                     <div className="text-sm font-medium text-gray-900">{stop.client_name}</div>
-                    <div className="text-sm text-gray-500">{stop.service_name}</div>
-                    <div className="text-xs text-gray-400">{stop.address.neighborhood}</div>
+                    <div className="text-sm text-gray-600">{stop.service_name}</div>
+                    <div className="text-xs text-gray-500">{stop.address.neighborhood} • {stop.service_status}</div>
                   </div>
+                  
+                  {/* Priority Control */}
+                  <div className="mx-4">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">PRIORIDADE</label>
+                    <select
+                      value={stopPriorities[stop.id] || stop.priority}
+                      onChange={(e) => handlePriorityChange(stop.id, e.target.value)}
+                      className={`text-xs px-3 py-1 rounded-full border font-medium ${getPriorityColor(stopPriorities[stop.id] || stop.priority)}`}
+                    >
+                      <option value="PRIMEIRA">Primeira</option>
+                      <option value="AUTOMATICA">Automática</option>
+                      <option value="ULTIMA">Última</option>
+                    </select>
+                  </div>
+
+                  {/* Duration and Value */}
                   <div className="text-right">
                     <div className="text-sm font-medium text-gray-900">R$ {stop.service_value.toFixed(2)}</div>
-                    <div className="text-xs text-gray-500">{stop.estimated_duration} min</div>
+                    <div className="text-xs text-gray-500 flex items-center">
+                      <Clock className="w-3 h-3 mr-1" />
+                      {stop.estimated_duration} min
+                    </div>
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Priority Legend */}
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+              <h4 className="text-sm font-medium text-blue-900 mb-2">Legenda das Prioridades:</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                <div className="flex items-center">
+                  <span className="inline-block w-3 h-3 bg-red-100 border border-red-200 rounded mr-2"></span>
+                  <span><b>Primeira:</b> Mais próxima da empresa (prioritária)</span>
+                </div>
+                <div className="flex items-center">
+                  <span className="inline-block w-3 h-3 bg-blue-100 border border-blue-200 rounded mr-2"></span>
+                  <span><b>Automática:</b> Otimização pelo sistema</span>
+                </div>
+                <div className="flex items-center">
+                  <span className="inline-block w-3 h-3 bg-yellow-100 border border-yellow-200 rounded mr-2"></span>
+                  <span><b>Última:</b> Mais distante da empresa (final)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Map */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Mapa da Rota Otimizada</h3>
+            <div className="border border-gray-300 rounded-lg overflow-hidden">
+              <div 
+                ref={mapRef}
+                style={{ height: '400px', width: '100%' }}
+                className="bg-gray-100"
+              />
+            </div>
+            <div className="mt-2 text-xs text-gray-500 flex items-center">
+              <MapPin className="w-3 h-3 mr-1" />
+              Mapa centralizado em Cuiabá • 🏢 = Empresa (início/fim) • Números = Paradas ordenadas
+            </div>
+          </div>
+
+          {/* Route Details Summary */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Resumo da Rota Otimizada</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-gray-500">Início:</span>
+                <div className="font-medium">{routeTime}</div>
+              </div>
+              <div>
+                <span className="text-gray-500">Duração Total:</span>
+                <div className="font-medium">{Math.floor(optimizedRoute.total_duration / 60)}h {optimizedRoute.total_duration % 60}min</div>
+              </div>
+              <div>
+                <span className="text-gray-500">Distância:</span>
+                <div className="font-medium">{optimizedRoute.total_distance} km</div>
+              </div>
+              <div>
+                <span className="text-gray-500">Valor Total:</span>
+                <div className="font-medium text-green-600">
+                  R$ {optimizedRoute.stops.reduce((total, stop) => total + stop.service_value, 0).toFixed(2)}
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex justify-end space-x-4">
             <button
-              onClick={() => setOptimizedRoute(null)}
+              onClick={() => {
+                setOptimizedRoute(null);
+                setStopPriorities({});
+              }}
               className="flex items-center px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
             >
               <Edit3 className="w-4 h-4 mr-2" />
               Editar
+            </button>
+            <button
+              onClick={() => handleOptimizeRoute(currentVehicleType)}
+              className="flex items-center px-4 py-2 text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Re-otimizar
             </button>
             <button
               onClick={handleSaveRoute}
