@@ -241,10 +241,16 @@ export function Routes() {
   };
 
   const handleOptimizeRoute = async (vehicleType) => {
+    console.log('🚀 handleOptimizeRoute called with vehicleType:', vehicleType);
+    
     try {
       const items = vehicleType === 'CARRO' ? carRouteItems : motoRouteItems;
       
+      console.log(`📦 Items for ${vehicleType}:`, items);
+      console.log(`📦 Items length:`, items.length);
+      
       if (items.length === 0) {
+        console.log('⚠️ No items to optimize');
         toast({
           title: "Aviso",
           description: "Adicione itens à rota antes de otimizar.",
@@ -253,6 +259,7 @@ export function Routes() {
         return;
       }
 
+      console.log('🔨 Creating route...');
       // Create route
       const routeData = {
         vehicle_type: vehicleType,
@@ -262,6 +269,7 @@ export function Routes() {
       };
 
       const createResponse = await routesApi.createRoute(routeData);
+      console.log('✅ Route created:', createResponse.data.id);
       const routeId = createResponse.data.id;
       
       // Add stops with default priorities
@@ -270,13 +278,18 @@ export function Routes() {
         priority: 'AUTOMATICA'
       }));
       
+      console.log('📍 Adding stops:', stopsData);
       await routesApi.updateRouteStops(routeId, stopsData);
       
       // Optimize route
+      console.log('⚡ Optimizing route...');
       const optimizeResponse = await routesApi.optimizeRoute(routeId);
+      console.log('⚡ Optimization response:', optimizeResponse.data);
       
       // Get optimized route details
+      console.log('📋 Getting route details...');
       const routeDetails = await routesApi.getRoute(routeId);
+      console.log('📋 Route details:', routeDetails.data);
       
       setOptimizedRoute(routeDetails.data);
       setCurrentVehicleType(vehicleType);
@@ -294,6 +307,8 @@ export function Routes() {
       } else {
         setMotoRouteItems([]);
       }
+      
+      console.log('🎉 Route optimization completed successfully!');
       
       toast({
         title: "Sucesso!",
