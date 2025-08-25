@@ -799,12 +799,16 @@ export function Routes() {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                <button 
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Editar rota"
+                >
                   <Edit3 className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => handleDeleteRoute(route.id)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title={`Excluir rota ${route.id}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
