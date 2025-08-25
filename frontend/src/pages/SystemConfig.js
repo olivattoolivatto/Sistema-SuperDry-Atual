@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, MapPin, Building2, Shield, Users } from 'lucide-react';
 import { systemConfigApi, placesApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
+import MiniMap from '../components/MiniMap';
 
 const formatCNPJ = (value) => {
   const numbers = value.replace(/\D/g, '');
