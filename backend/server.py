@@ -361,6 +361,12 @@ async def search_places(query: str):
                         main_text = parts[0] if len(parts) >= 1 else formatted_address
                         secondary_text = ', '.join(parts[1:]) if len(parts) > 1 else ''
                         
+                        # Get geometry/coordinates from geocode result
+                        geometry = geocode.get('geometry', {})
+                        location = geometry.get('location', {})
+                        latitude = location.get('lat') if isinstance(location, dict) else None
+                        longitude = location.get('lng') if isinstance(location, dict) else None
+                        
                         formatted_result = {
                             'place_id': geocode.get('place_id'),
                             'description': formatted_address,
@@ -371,6 +377,12 @@ async def search_places(query: str):
                             'neighborhood': neighborhood,
                             'city': city,
                             'state': state,
+                            'geometry': {
+                                'location': {
+                                    'lat': latitude,
+                                    'lng': longitude
+                                }
+                            } if latitude and longitude else None,
                             'source': 'geocoding'
                         }
                         results.append(formatted_result)
