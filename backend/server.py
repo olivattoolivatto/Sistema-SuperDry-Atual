@@ -1697,7 +1697,17 @@ async def optimize_route(route_id: str):
             raise HTTPException(status_code=400, detail="Route has no stops to optimize")
         
         # Convert dict stops to RouteStop objects
-        stops = [RouteStop(**stop) for stop in route["stops"]]
+        stops = []
+        for stop_dict in route["stops"]:
+            print(f"Converting stop: {stop_dict.get('id', 'NO_ID')} - {stop_dict.get('client_name', 'NO_NAME')}")
+            try:
+                stop_obj = RouteStop(**stop_dict)
+                stops.append(stop_obj)
+                print(f"Successfully converted stop: {stop_obj.id}")
+            except Exception as e:
+                print(f"Error converting stop: {e}")
+        
+        print(f"Total stops converted: {len(stops)}")
         
         # Get company coordinates
         company_coords = (
