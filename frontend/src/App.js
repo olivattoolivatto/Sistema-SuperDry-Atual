@@ -6,6 +6,7 @@ import { Clients } from "./pages/Clients";
 import { Catalog } from "./pages/Catalog";
 import { Budgets } from "./pages/Budgets";
 import { BudgetConfig } from "./pages/BudgetConfig";
+import { SystemConfig } from "./pages/SystemConfig";
 import { Toaster } from "./components/ui/sonner";
 import "./App.css";
 
@@ -20,6 +21,7 @@ function App() {
             <Route path="/catalog" element={<Catalog />} />
             <Route path="/budgets" element={<Budgets />} />
             <Route path="/budget-config" element={<BudgetConfig />} />
+            <Route path="/system-config" element={<SystemConfig />} />
           </Routes>
         </Layout>
       </BrowserRouter>
