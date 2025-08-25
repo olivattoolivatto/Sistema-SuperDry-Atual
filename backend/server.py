@@ -367,26 +367,40 @@ async def optimize_route_with_priorities(stops: List[RouteStop], company_coords:
         primeira_stops.sort(key=calc_distance)
     
     # Use OSRM for AUTOMATICA stops optimization
-    optimized_automatica = []
-    if automatica_stops:
-        # Prepare coordinates for OSRM (include company at start and end)
-        coords = [company_coords]  # Start at company
-        coords.extend([(s.address['longitude'], s.address['latitude']) for s in automatica_stops])
-        coords.append(company_coords)  # End at company
-        
-        osrm_result = await calculate_route_osrm(coords)
-        
-        if 'trips' in osrm_result and len(osrm_result['trips']) > 0:
-            # Get the optimized waypoint order
-            waypoints = osrm_result['waypoints']
-            # Skip first and last (company positions)
-            for i, waypoint in enumerate(waypoints[1:-1]):
-                waypoint_index = waypoint.get('waypoint_index', i)
-                if waypoint_index < len(automatica_stops):
-                    optimized_automatica.append(automatica_stops[waypoint_index])
-        else:
-            # Fallback to original order
-            optimized_automatica = automatica_stops
+    optimized_automatica = automatica_stops.copy()  # Start with original order as fallback
+    
+    if automatica_stops and len(automatica_stops) > 1:
+        # Only use OSRM if we have multiple stops to optimize
+        try:
+            # Prepare coordinates for OSRM (include company at start and end)
+            coords = [company_coords]  # Start at company
+            coords.extend([(s.address['longitude'], s.address['latitude']) for s in automatica_stops])
+            coords.append(company_coords)  # End at company
+            
+            osrm_result = await calculate_route_osrm(coords)
+            
+            if 'trips' in osrm_result and len(osrm_result['trips']) > 0:
+                # Get the optimized waypoint order
+                waypoints = osrm_result['waypoints']
+                optimized_order = []
+                
+                # Skip first and last (company positions)
+                for i, waypoint in enumerate(waypoints[1:-1]):
+                    waypoint_index = waypoint.get('waypoint_index', i)
+                    if waypoint_index < len(automatica_stops):
+                        optimized_order.append(automatica_stops[waypoint_index])
+                
+                if optimized_order:
+                    optimized_automatica = optimized_order
+                    print(f"OSRM optimization successful: {len(optimized_order)} stops reordered")
+                else:
+                    print("OSRM returned empty order, using original")
+            else:
+                print("OSRM response missing trips data, using original order")
+        except Exception as e:
+            print(f"OSRM optimization failed: {e}, using original order")
+    else:
+        print(f"Single or no AUTOMATICA stops, skipping OSRM optimization")
     
     # Sort ULTIMA by distance from company (farthest first)
     if ultima_stops:
