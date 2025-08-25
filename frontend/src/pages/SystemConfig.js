@@ -99,7 +99,7 @@ export const SystemConfig = () => {
     try {
       console.log('Selecionando endereço:', suggestion);
       
-      let fullAddress = suggestion.formatted_address;
+      let fullAddress = suggestion.formatted_address || suggestion.description;
       let neighborhood = '';
       let city = '';
       let state = '';
@@ -127,33 +127,61 @@ export const SystemConfig = () => {
         }
       }
       
-      // Fallback extraction from formatted_address
+      // Enhanced fallback extraction from formatted_address
       if (!neighborhood || !city || !state) {
-        const addressParts = fullAddress.split(',').map(part => part.trim());
+        console.log('Usando fallback parsing para:', fullAddress);
         
-        if (addressParts.length >= 3) {
-          for (let i = 1; i < addressParts.length - 1; i++) {
-            const addressPart = addressParts[i];
-            
-            if (addressPart.includes('-') && !neighborhood) {
-              const dashParts = addressPart.split('-').map(p => p.trim());
-              if (dashParts.length === 2) {
-                neighborhood = dashParts[1];
+        // Parse "Rua das Flôres, 123 - Dr. Fábio Leite, Cuiabá - MT, 78087, Brasil"
+        const parts = fullAddress.split(',').map(part => part.trim());
+        
+        if (parts.length >= 3) {
+          // Try to extract state from last meaningful part
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const part = parts[i];
+            if (part.includes(' - ') && !state) {
+              const dashParts = part.split(' - ');
+              if (dashParts.length >= 2) {
+                const lastDash = dashParts[dashParts.length - 1].trim();
+                if (lastDash.length === 2 && /^[A-Z]{2}$/.test(lastDash)) {
+                  state = lastDash;
+                  // City is usually before the state
+                  if (dashParts.length >= 2) {
+                    city = dashParts[dashParts.length - 2].trim();
+                  }
+                }
               }
-            } else if (!neighborhood) {
-              neighborhood = addressPart;
             }
           }
           
-          // Extract city and state from last part
-          const lastPart = addressParts[addressParts.length - 1];
-          if (lastPart.includes('-')) {
-            const parts = lastPart.split('-').map(p => p.trim());
-            if (parts.length >= 2) {
-              state = parts[parts.length - 1];
-              city = parts[parts.length - 2];
+          // Try to extract neighborhood from earlier parts
+          if (!neighborhood && parts.length >= 2) {
+            const secondPart = parts[1];
+            if (secondPart.includes(' - ')) {
+              const dashParts = secondPart.split(' - ');
+              if (dashParts.length >= 2) {
+                neighborhood = dashParts[dashParts.length - 1].trim();
+              }
+            } else {
+              neighborhood = parts[1];
             }
           }
+          
+          // If city not found yet, try from earlier parts
+          if (!city && parts.length >= 3) {
+            const thirdPart = parts[2];
+            if (thirdPart.includes(' - ')) {
+              const dashParts = thirdPart.split(' - ');
+              city = dashParts[0].trim();
+            }
+          }
+        }
+        
+        // Additional fallback for Brazilian addresses
+        if (!city && fullAddress.includes('Cuiabá')) {
+          city = 'Cuiabá';
+        }
+        if (!state && fullAddress.includes(' MT')) {
+          state = 'MT';
         }
       }
 
@@ -179,6 +207,16 @@ export const SystemConfig = () => {
       
       // Clear suggestions
       setAddressSuggestions([]);
+      
+      // Show success message
+      if (neighborhood || city || state) {
+        toast({
+          title: "Endereço selecionado!",
+          description: `Campos preenchidos automaticamente: ${[neighborhood, city, state].filter(Boolean).join(', ')}`,
+          variant: "default",
+        });
+      }
+      
       console.log('✅ Endereço selecionado e campos preenchidos automaticamente');
       
     } catch (error) {
