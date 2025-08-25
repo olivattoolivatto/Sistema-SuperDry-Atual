@@ -1124,6 +1124,34 @@ async def update_budget_config(config: BudgetConfig):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error updating budget config: {str(e)}")
 
+@api_router.get("/system-config", response_model=SystemConfig)
+async def get_system_config():
+    """Obter configurações do sistema"""
+    try:
+        config = await db.system_config.find_one({})
+        if not config:
+            # Create default config if doesn't exist
+            default_config = SystemConfig()
+            await db.system_config.insert_one(default_config.dict())
+            return default_config
+        return SystemConfig(**config)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching system config: {str(e)}")
+
+@api_router.put("/system-config", response_model=SystemConfig)
+async def update_system_config(config: SystemConfig):
+    """Atualizar configurações do sistema"""
+    try:
+        config.updated_at = datetime.utcnow()
+        config_dict = config.dict()
+        
+        # Upsert - update if exists, insert if doesn't
+        await db.system_config.replace_one({}, config_dict, upsert=True)
+        
+        return config
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error updating system config: {str(e)}")
+
 @api_router.post("/budgets/{budget_id}/items", response_model=BudgetItem)
 async def add_budget_item(budget_id: str, item_data: BudgetItemCreate):
     """Adicionar item ao orçamento"""
