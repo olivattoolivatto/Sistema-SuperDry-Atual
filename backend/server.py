@@ -299,12 +299,118 @@ class Route(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+# OSRM Integration Functions
+OSRM_BASE_URL = "http://router.project-osrm.org"
+
+def format_coordinates_for_osrm(coordinates: List[Tuple[float, float]]) -> str:
+    """Format coordinates for OSRM API (longitude,latitude)"""
+    return ";".join([f"{lng},{lat}" for lng, lat in coordinates])
+
+async def calculate_route_osrm(coordinates: List[Tuple[float, float]], vehicle_type: str = "driving") -> dict:
+    """Calculate route using OSRM API"""
+    try:
+        coords_str = format_coordinates_for_osrm(coordinates)
+        
+        # Use OSRM Trip service for route optimization
+        url = f"{OSRM_BASE_URL}/trip/v1/{vehicle_type}/{coords_str}"
+        
+        params = {
+            'source': 'first',  # Start from first coordinate (company)
+            'destination': 'last',  # End at last coordinate (company)
+            'roundtrip': 'true',
+            'steps': 'true',
+            'geometries': 'geojson',
+            'overview': 'full'
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        
+        return response.json()
+    except Exception as e:
+        print(f"OSRM API Error: {e}")
+        return {"error": str(e)}
+
+async def calculate_distance_matrix_osrm(coordinates: List[Tuple[float, float]]) -> dict:
+    """Calculate distance matrix using OSRM Table API"""
+    try:
+        coords_str = format_coordinates_for_osrm(coordinates)
+        url = f"{OSRM_BASE_URL}/table/v1/driving/{coords_str}"
+        
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        
+        return response.json()
+    except Exception as e:
+        print(f"OSRM Table API Error: {e}")
+        return {"error": str(e)}
+
+async def optimize_route_with_priorities(stops: List[RouteStop], company_coords: Tuple[float, float]) -> List[RouteStop]:
+    """Optimize route considering manual priorities"""
+    
+    # Separate stops by priority
+    primeira_stops = [s for s in stops if s.priority == Priority.PRIMEIRA]
+    automatica_stops = [s for s in stops if s.priority == Priority.AUTOMATICA]
+    ultima_stops = [s for s in stops if s.priority == Priority.ULTIMA]
+    
+    # Sort PRIMEIRA by distance from company (closest first)
+    if primeira_stops:
+        for stop in primeira_stops:
+            stop_coords = (stop.address['longitude'], stop.address['latitude'])
+            # Simple distance calculation
+            distance = ((company_coords[0] - stop_coords[0])**2 + (company_coords[1] - stop_coords[1])**2)**0.5
+            stop.temp_distance = distance
+        primeira_stops.sort(key=lambda x: x.temp_distance)
+    
+    # Use OSRM for AUTOMATICA stops optimization
+    optimized_automatica = []
+    if automatica_stops:
+        # Prepare coordinates for OSRM (include company at start and end)
+        coords = [company_coords]  # Start at company
+        coords.extend([(s.address['longitude'], s.address['latitude']) for s in automatica_stops])
+        coords.append(company_coords)  # End at company
+        
+        osrm_result = await calculate_route_osrm(coords)
+        
+        if 'trips' in osrm_result and len(osrm_result['trips']) > 0:
+            # Get the optimized waypoint order
+            waypoints = osrm_result['waypoints']
+            # Skip first and last (company positions)
+            for i, waypoint in enumerate(waypoints[1:-1]):
+                waypoint_index = waypoint.get('waypoint_index', i)
+                if waypoint_index < len(automatica_stops):
+                    optimized_automatica.append(automatica_stops[waypoint_index])
+        else:
+            # Fallback to original order
+            optimized_automatica = automatica_stops
+    
+    # Sort ULTIMA by distance from company (farthest first)
+    if ultima_stops:
+        for stop in ultima_stops:
+            stop_coords = (stop.address['longitude'], stop.address['latitude'])
+            distance = ((company_coords[0] - stop_coords[0])**2 + (company_coords[1] - stop_coords[1])**2)**0.5
+            stop.temp_distance = distance
+        ultima_stops.sort(key=lambda x: x.temp_distance, reverse=True)
+    
+    # Combine in priority order
+    final_order = primeira_stops + optimized_automatica + ultima_stops
+    
+    # Set sequence numbers
+    for i, stop in enumerate(final_order):
+        stop.order_sequence = i + 1
+        # Clean up temp attribute
+        if hasattr(stop, 'temp_distance'):
+            delattr(stop, 'temp_distance')
+    
+    return final_order
+
 class RouteCreate(BaseModel):
     vehicle_type: VehicleType
     planned_date: date
     planned_start_time: str
     stops: List[dict] = []  # Will contain budget_item_ids and priorities
 
+# SystemConfig class definition starts here
 class SystemConfig(BaseModel):
     # Company data
     company_name: Optional[str] = "SuperDry Lavanderia de Tapetes & Estofados"
