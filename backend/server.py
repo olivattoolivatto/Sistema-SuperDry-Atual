@@ -406,7 +406,7 @@ async def optimize_route_with_priorities(stops: List[RouteStop], company_coords:
 
 class RouteCreate(BaseModel):
     vehicle_type: VehicleType
-    planned_date: date
+    planned_date: str  # Format: "YYYY-MM-DD"
     planned_start_time: str
     stops: List[dict] = []  # Will contain budget_item_ids and priorities
 
