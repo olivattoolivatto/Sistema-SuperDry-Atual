@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   MapPin, 
   Truck, 
@@ -10,10 +10,21 @@ import {
   Clock,
   Route as RouteIcon,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from '../hooks/use-toast';
 import { routesApi } from '../services/api';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix for default markers in leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
 
 export function Routes() {
   const [availableItems, setAvailableItems] = useState([]);
@@ -28,11 +39,32 @@ export function Routes() {
   const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0]);
   const [routeTime, setRouteTime] = useState('08:00');
   const [currentVehicleType, setCurrentVehicleType] = useState('CARRO');
+  
+  // Map state
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const [stopPriorities, setStopPriorities] = useState({});
 
   useEffect(() => {
     loadAvailableItems();
     loadSavedRoutes();
   }, []);
+
+  // Initialize map when optimized route is available
+  useEffect(() => {
+    if (optimizedRoute && mapRef.current && !mapInstanceRef.current) {
+      initializeMap();
+    } else if (optimizedRoute && mapInstanceRef.current) {
+      updateMapWithRoute();
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [optimizedRoute]);
 
   const loadAvailableItems = async () => {
     try {
@@ -56,6 +88,111 @@ export function Routes() {
       setSavedRoutes(response.data);
     } catch (error) {
       console.error('Erro ao carregar rotas salvas:', error);
+    }
+  };
+
+  const initializeMap = () => {
+    if (!optimizedRoute?.company_address) return;
+
+    const companyLat = optimizedRoute.company_address.latitude;
+    const companyLng = optimizedRoute.company_address.longitude;
+
+    // Create map centered on company location (Cuiabá region)
+    mapInstanceRef.current = L.map(mapRef.current).setView([companyLat, companyLng], 13);
+
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(mapInstanceRef.current);
+
+    updateMapWithRoute();
+  };
+
+  const updateMapWithRoute = () => {
+    if (!mapInstanceRef.current || !optimizedRoute) return;
+
+    // Clear existing layers
+    mapInstanceRef.current.eachLayer((layer) => {
+      if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+        mapInstanceRef.current.removeLayer(layer);
+      }
+    });
+
+    const companyLat = optimizedRoute.company_address.latitude;
+    const companyLng = optimizedRoute.company_address.longitude;
+
+    // Add company marker (start/end point)
+    const companyIcon = L.divIcon({
+      html: `<div style="background-color: #10B981; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🏢</div>`,
+      className: 'custom-div-icon',
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
+    });
+
+    L.marker([companyLat, companyLng], { icon: companyIcon })
+      .addTo(mapInstanceRef.current)
+      .bindPopup(`<b>Empresa - Início/Fim da Rota</b><br>${optimizedRoute.company_address.full_address}`);
+
+    // Add numbered markers for each stop
+    optimizedRoute.stops.forEach((stop, index) => {
+      const lat = stop.address.latitude;
+      const lng = stop.address.longitude;
+      
+      if (lat && lng) {
+        // Create numbered marker
+        const markerIcon = L.divIcon({
+          html: `<div style="background-color: #3B82F6; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${index + 1}</div>`,
+          className: 'custom-div-icon',
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        const marker = L.marker([lat, lng], { icon: markerIcon })
+          .addTo(mapInstanceRef.current);
+
+        // Create popup content with stop details
+        const popupContent = `
+          <div style="min-width: 200px;">
+            <b>Parada ${index + 1}: ${stop.client_name}</b><br>
+            <b>Serviço:</b> ${stop.service_name}<br>
+            <b>Valor:</b> R$ ${stop.service_value.toFixed(2)}<br>
+            <b>Duração:</b> ${stop.estimated_duration} minutos<br>
+            <b>Prioridade:</b> ${stop.priority}<br>
+            <b>Status:</b> ${stop.service_status}<br>
+            <small>${stop.address.full_address}</small>
+          </div>
+        `;
+        
+        marker.bindPopup(popupContent);
+      }
+    });
+
+    // Draw route if geometry is available
+    if (optimizedRoute.route_geometry && optimizedRoute.route_geometry.coordinates) {
+      const routeCoords = optimizedRoute.route_geometry.coordinates.map(coord => [coord[1], coord[0]]);
+      
+      L.polyline(routeCoords, {
+        color: '#3B82F6',
+        weight: 4,
+        opacity: 0.8
+      }).addTo(mapInstanceRef.current);
+    }
+
+    // Adjust map view to fit all markers
+    if (optimizedRoute.stops.length > 0) {
+      const group = new L.featureGroup();
+      
+      // Add company marker to group
+      group.addLayer(L.marker([companyLat, companyLng]));
+      
+      // Add stop markers to group
+      optimizedRoute.stops.forEach(stop => {
+        if (stop.address.latitude && stop.address.longitude) {
+          group.addLayer(L.marker([stop.address.latitude, stop.address.longitude]));
+        }
+      });
+
+      mapInstanceRef.current.fitBounds(group.getBounds().pad(0.1));
     }
   };
 
@@ -144,6 +281,13 @@ export function Routes() {
       setOptimizedRoute(routeDetails.data);
       setCurrentVehicleType(vehicleType);
       
+      // Initialize stop priorities state
+      const priorities = {};
+      routeDetails.data.stops.forEach(stop => {
+        priorities[stop.id] = stop.priority;
+      });
+      setStopPriorities(priorities);
+      
       // Clear the route items that were optimized
       if (vehicleType === 'CARRO') {
         setCarRouteItems([]);
@@ -167,6 +311,44 @@ export function Routes() {
     }
   };
 
+  const handlePriorityChange = async (stopId, newPriority) => {
+    try {
+      setStopPriorities(prev => ({
+        ...prev,
+        [stopId]: newPriority
+      }));
+
+      // Update backend with new priorities
+      const updatedStops = optimizedRoute.stops.map(stop => ({
+        budget_item_id: stop.budget_item_id,
+        priority: stop.id === stopId ? newPriority : stopPriorities[stop.id] || stop.priority
+      }));
+
+      await routesApi.updateRouteStops(optimizedRoute.id, updatedStops);
+      
+      // Re-optimize with new priorities  
+      await routesApi.optimizeRoute(optimizedRoute.id);
+      
+      // Refresh route data
+      const routeDetails = await routesApi.getRoute(optimizedRoute.id);
+      setOptimizedRoute(routeDetails.data);
+      
+      toast({
+        title: "Prioridade atualizada!",
+        description: `Rota re-otimizada com nova prioridade.`,
+        variant: "default",
+      });
+
+    } catch (error) {
+      console.error('Erro ao atualizar prioridade:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao atualizar prioridade.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSaveRoute = async () => {
     if (!optimizedRoute) {
       toast({
@@ -180,6 +362,7 @@ export function Routes() {
     try {
       await loadSavedRoutes(); // Refresh saved routes
       setOptimizedRoute(null); // Clear current optimization
+      setStopPriorities({});
       
       toast({
         title: "Sucesso!",
@@ -193,6 +376,22 @@ export function Routes() {
         description: "Erro ao salvar rota. Tente novamente.",
         variant: "destructive",
       });
+    }
+  };
+
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'PRIMEIRA': return 'bg-red-100 text-red-800 border-red-200';
+      case 'ULTIMA': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default: return 'bg-blue-100 text-blue-800 border-blue-200';
+    }
+  };
+
+  const getPriorityLabel = (priority) => {
+    switch (priority) {
+      case 'PRIMEIRA': return 'Primeira';
+      case 'ULTIMA': return 'Última';
+      default: return 'Automática';
     }
   };
 
