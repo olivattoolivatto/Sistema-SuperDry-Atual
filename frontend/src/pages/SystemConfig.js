@@ -27,6 +27,7 @@ export const SystemConfig = () => {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
 
   useEffect(() => {
     loadConfig();
