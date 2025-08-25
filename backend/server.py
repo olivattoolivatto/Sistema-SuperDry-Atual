@@ -984,6 +984,34 @@ async def generate_pdf_budget(budget_id: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error generating PDF: {str(e)}")
 
+@api_router.get("/budget-config", response_model=BudgetConfig)
+async def get_budget_config():
+    """Obter configurações do orçamento"""
+    try:
+        config = await db.budget_config.find_one({})
+        if not config:
+            # Create default config if doesn't exist
+            default_config = BudgetConfig()
+            await db.budget_config.insert_one(default_config.dict())
+            return default_config
+        return BudgetConfig(**config)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching budget config: {str(e)}")
+
+@api_router.put("/budget-config", response_model=BudgetConfig)
+async def update_budget_config(config: BudgetConfig):
+    """Atualizar configurações do orçamento"""
+    try:
+        config.updated_at = datetime.utcnow()
+        config_dict = config.dict()
+        
+        # Upsert - update if exists, insert if doesn't
+        await db.budget_config.replace_one({}, config_dict, upsert=True)
+        
+        return config
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error updating budget config: {str(e)}")
+
 @api_router.post("/budgets/{budget_id}/items", response_model=BudgetItem)
 async def add_budget_item(budget_id: str, item_data: BudgetItemCreate):
     """Adicionar item ao orçamento"""
