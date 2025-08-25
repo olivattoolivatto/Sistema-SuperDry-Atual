@@ -840,7 +840,11 @@ function RouteSection({ title, icon, items, onRemoveItem, onOptimize, vehicleCol
         {items.length > 0 && (
           <button
             onClick={onOptimize}
-            className={`flex items-center px-4 py-2 bg-${vehicleColor}-600 text-white hover:bg-${vehicleColor}-700 rounded-lg transition-colors`}
+            className={`flex items-center px-4 py-2 text-white rounded-lg transition-colors ${
+              vehicleColor === 'blue' 
+                ? 'bg-blue-600 hover:bg-blue-700' 
+                : 'bg-green-600 hover:bg-green-700'
+            }`}
           >
             <Play className="w-4 h-4 mr-2" />
             Otimizar Rota
