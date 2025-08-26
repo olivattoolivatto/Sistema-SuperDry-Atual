@@ -48,7 +48,16 @@ export function Routes() {
   useEffect(() => {
     loadAvailableItems();
     loadSavedRoutes();
+    
+    console.log('🚀 Routes component mounted');
   }, []);
+
+  useEffect(() => {
+    console.log('🔍 State updated:');
+    console.log('- carRouteItems:', carRouteItems.length);
+    console.log('- motoRouteItems:', motoRouteItems.length);
+    console.log('- availableItems:', availableItems.length);
+  }, [carRouteItems, motoRouteItems, availableItems]);
 
   // Initialize map when optimized route is available
   useEffect(() => {
