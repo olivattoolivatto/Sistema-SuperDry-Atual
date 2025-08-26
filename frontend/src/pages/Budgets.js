@@ -1352,20 +1352,44 @@ const AddItemForm = ({ budget, onSave, onCancel }) => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Serviço *
             </label>
-            <select
-              name="service_id"
-              value={formData.service_id}
-              onChange={handleServiceChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Selecione um serviço</option>
-              {services.map((service) => (
-                <option key={service.id} value={service.id}>
-                  {service.name} ({service.id}) - R$ {service.sale_price.toFixed(2)}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                type="text"
+                value={serviceSearchTerm}
+                onChange={handleServiceSearchChange}
+                onFocus={() => {
+                  if (serviceSearchTerm.length >= 2) {
+                    setShowServiceDropdown(true);
+                  }
+                }}
+                placeholder="Digite para pesquisar serviços (mín. 2 caracteres)"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              
+              {showServiceDropdown && filteredServices.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {filteredServices.map((service) => (
+                    <div
+                      key={service.id}
+                      onClick={() => handleServiceSelect(service)}
+                      className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium text-gray-900">{service.name}</div>
+                      <div className="text-sm text-gray-500">
+                        {service.id} • {service.category} • R$ {service.sale_price.toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {serviceSearchTerm.length >= 2 && filteredServices.length === 0 && showServiceDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500">
+                  Nenhum serviço encontrado para "{serviceSearchTerm}"
+                </div>
+              )}
+            </div>
           </div>
 
           {selectedService && (
