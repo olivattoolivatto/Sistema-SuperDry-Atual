@@ -421,6 +421,8 @@ export function Routes() {
   };
 
   const handleVehicleAssignment = (item, vehicleType) => {
+    logAction('VEHICLE_ASSIGNMENT_START', { item: item.budget_item_id, vehicleType, clientName: item.client_name });
+    
     console.log('🚗 handleVehicleAssignment called:', { item: item.budget_item_id, vehicleType });
     console.log('🚗 Current carRouteItems:', carRouteItems);
     console.log('🚗 Current motoRouteItems:', motoRouteItems);
@@ -432,6 +434,7 @@ export function Routes() {
         console.log('🚗 New car route items:', newItems);
         return newItems;
       });
+      logAction('ITEM_ADDED_TO_CAR', { item: item.budget_item_id, clientName: item.client_name });
     } else {
       console.log('🏍️ Adding to moto route items');
       setMotoRouteItems(prev => {
@@ -439,6 +442,7 @@ export function Routes() {
         console.log('🏍️ New moto route items:', newItems);
         return newItems;
       });
+      logAction('ITEM_ADDED_TO_MOTO', { item: item.budget_item_id, clientName: item.client_name });
     }
     
     // Remove from available items
@@ -451,6 +455,7 @@ export function Routes() {
     setSelectedItems(newSelected);
     
     console.log('✅ Vehicle assignment completed');
+    logAction('VEHICLE_ASSIGNMENT_COMPLETED', { vehicleType, remainingAvailable: availableItems.length - 1 });
   };
 
   const handleRemoveFromRoute = (itemId, fromRoute) => {
