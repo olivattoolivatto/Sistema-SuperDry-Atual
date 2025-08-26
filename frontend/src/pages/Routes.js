@@ -1526,6 +1526,9 @@ export function Routes() {
                   <div className="text-xs text-blue-600 mt-1">
                     <strong>Bairros:</strong> {getRouteNeighborhoods(route.stops)}
                   </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    <strong>Última edição:</strong> {new Date(route.updated_at).toLocaleString('pt-BR')}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
