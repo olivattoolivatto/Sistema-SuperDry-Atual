@@ -37,6 +37,25 @@ export function Routes() {
   const [loading, setLoading] = useState(true);
   const [debugInfo, setDebugInfo] = useState(''); // Debug info state
   
+  // Enhanced logging system
+  const logAction = (action, data) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${action}: ${JSON.stringify(data, null, 2)}`;
+    console.log(`🔍 USER ACTION: ${logEntry}`);
+    
+    // Also store in localStorage for persistence
+    const existingLogs = localStorage.getItem('routesDebugLogs') || '';
+    const newLogs = existingLogs + '\n' + logEntry;
+    localStorage.setItem('routesDebugLogs', newLogs);
+  };
+
+  // Clear logs on component mount
+  useEffect(() => {
+    console.log('🧹 Clearing previous debug logs...');
+    localStorage.removeItem('routesDebugLogs');
+    logAction('COMPONENT_MOUNTED', { timestamp: new Date().toISOString() });
+  }, []);
+  
   // Route optimization form
   const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0]);
   const [routeTime, setRouteTime] = useState('08:00');
