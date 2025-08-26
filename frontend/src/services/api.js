@@ -90,7 +90,9 @@ export const routesApi = {
   getRoutes: (limit = 20) => api.get('/routes', { params: { limit } }),
   getRoute: (routeId) => api.get(`/routes/${routeId}`),
   updateRouteStops: (routeId, stopsData) => api.put(`/routes/${routeId}/stops`, stopsData),
-  optimizeRoute: (routeId) => api.post(`/routes/${routeId}/optimize`),
+  optimizeRoute: (routeId, options = {}) => api.post(`/routes/${routeId}/optimize`, null, { 
+    params: { route_type: options.route_type || 'CURTA' } 
+  }),
   deleteRoute: (routeId) => api.delete(`/routes/${routeId}`),
 };
 
