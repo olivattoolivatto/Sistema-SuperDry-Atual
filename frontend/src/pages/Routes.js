@@ -852,6 +852,8 @@ export function Routes() {
       });
     }
   };
+
+  const handleDeleteRoute = async (routeId) => {
     try {
       console.log('Iniciando exclusão da rota:', routeId);
       
