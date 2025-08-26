@@ -992,9 +992,7 @@ export function Routes() {
           {prioritizationItems.length > 0 && (
             <button
               onClick={() => {
-                console.log('🚀 BOTÃO CALCULAR ROTA CLICADO!');
-                console.log('Items na priorização:', prioritizationItems);
-                handleOptimizeFromPrioritization();
+                handleCalculateOptimizedRoute(routeType);
               }}
               className="flex items-center px-6 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-lg transition-colors"
             >
