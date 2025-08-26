@@ -40,6 +40,7 @@ export function Routes() {
   const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0]);
   const [routeTime, setRouteTime] = useState('08:00');
   const [currentVehicleType, setCurrentVehicleType] = useState('CARRO');
+  const [routeType, setRouteType] = useState('CURTA'); // New: CURTA or EFICIENTE
   
   // Map state
   const mapRef = useRef(null);
