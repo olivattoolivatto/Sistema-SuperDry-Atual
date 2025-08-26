@@ -380,6 +380,8 @@ export function Routes() {
       // Draw route line if geometry is available
       if (optimizedRoute.route_geometry && optimizedRoute.route_geometry.coordinates) {
         console.log('🛣️ Drawing route line...');
+        logAction('DRAWING_ROUTE_GEOMETRY', { geometryPoints: optimizedRoute.route_geometry.coordinates.length });
+        
         const routeCoords = optimizedRoute.route_geometry.coordinates.map(coord => [coord[1], coord[0]]);
         
         const routeLine = L.polyline(routeCoords, {
@@ -390,8 +392,10 @@ export function Routes() {
         }).addTo(mapInstanceRef.current);
 
         console.log('✅ Route line drawn with', routeCoords.length, 'points');
+        logAction('ROUTE_LINE_DRAWN', { points: routeCoords.length, type: 'geometry' });
       } else {
         console.log('⚠️ No route geometry available');
+        logAction('NO_ROUTE_GEOMETRY', {});
         
         // Draw simple lines between points if no geometry
         if (optimizedRoute.stops.length > 0) {
@@ -411,12 +415,14 @@ export function Routes() {
           }).addTo(mapInstanceRef.current);
           
           console.log('✅ Simple route line drawn');
+          logAction('SIMPLE_ROUTE_LINE_DRAWN', { points: simpleRoute.length });
         }
       }
 
       // Adjust map view to fit all markers
       if (markers.length > 1) {
         console.log('🔍 Fitting bounds for', markers.length, 'markers');
+        logAction('FITTING_MAP_BOUNDS', { markersCount: markers.length });
         const group = new L.featureGroup(markers);
         mapInstanceRef.current.fitBounds(group.getBounds().pad(0.15));
       } else {
