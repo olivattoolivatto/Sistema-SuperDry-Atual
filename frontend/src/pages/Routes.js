@@ -710,6 +710,29 @@ export function Routes() {
       return;
     }
 
+    // Validate that all clients have proper neighborhood (not "BAIRRO A COMPLETAR")
+    const itemsWithIncompleteNeighborhood = prioritizationItems.filter(item => {
+      const neighborhood = item.address?.neighborhood || item.neighborhood || '';
+      return neighborhood === 'BAIRRO A COMPLETAR' || neighborhood.toUpperCase() === 'BAIRRO A COMPLETAR';
+    });
+
+    if (itemsWithIncompleteNeighborhood.length > 0) {
+      console.log('❌ Clientes com bairro incompleto:', itemsWithIncompleteNeighborhood);
+      logAction('CALCULATE_ROUTE_ERROR', { 
+        error: 'Clients with incomplete neighborhood', 
+        routeType,
+        clientsWithIncompleteNeighborhood: itemsWithIncompleteNeighborhood.map(item => item.client_name)
+      });
+      
+      const clientNames = itemsWithIncompleteNeighborhood.map(item => item.client_name).join(', ');
+      toast({
+        title: "Cadastros Incompletos!",
+        description: `Os seguintes clientes precisam ter o BAIRRO completado no cadastro: ${clientNames}. Por favor, edite o cadastro dos clientes antes de otimizar a rota.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       console.log('🔨 Criando rota...');
       logAction('CREATING_ROUTE', { vehicleType: currentVehicleType, date: routeDate, time: routeTime });
