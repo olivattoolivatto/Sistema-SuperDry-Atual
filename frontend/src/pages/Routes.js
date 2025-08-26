@@ -759,7 +759,99 @@ export function Routes() {
     }
   };
 
-  const handleDeleteRoute = async (routeId) => {
+  const handleEditRoute = async (routeId) => {
+    logAction('EDIT_ROUTE_START', { routeId });
+    
+    try {
+      console.log('✏️ Loading route for editing:', routeId);
+      
+      // Get route details
+      const routeDetails = await routesApi.getRoute(routeId);
+      const route = routeDetails.data;
+      
+      console.log('📋 Route details loaded:', route);
+      logAction('ROUTE_DETAILS_LOADED_FOR_EDIT', { 
+        routeId, 
+        stopsCount: route.stops?.length || 0,
+        vehicleType: route.vehicle_type,
+        status: route.status
+      });
+      
+      // Set the optimized route to display it
+      setOptimizedRoute(route);
+      setDebugInfo(`Editando rota ${routeId} - ${route.stops?.length || 0} paradas - ${route.total_distance || '0'} km - ${route.total_duration || '0'} min`);
+      
+      // Set form data for editing
+      setRouteDate(route.planned_date);
+      setRouteTime(route.planned_start_time);
+      setCurrentVehicleType(route.vehicle_type);
+      
+      // Load route stops into prioritization for editing
+      if (route.stops && route.stops.length > 0) {
+        // Convert route stops back to prioritization items format
+        const prioritizationItems = route.stops.map(stop => ({
+          budget_item_id: stop.budget_item_id,
+          budget_id: stop.budget_id,
+          service_name: stop.service_name,
+          service_value: stop.service_value,
+          client_name: stop.client_name,
+          address: stop.address,
+          priority: stop.priority || 'AUTOMATICA',
+          service_status: stop.service_status
+        }));
+        
+        setPrioritizationItems(prioritizationItems);
+        
+        // Initialize priorities
+        const priorities = {};
+        route.stops.forEach(stop => {
+          priorities[stop.budget_item_id] = stop.priority || 'AUTOMATICA';
+        });
+        setStopPriorities(priorities);
+        
+        console.log('📍 Route stops loaded into prioritization:', prioritizationItems);
+        logAction('ROUTE_STOPS_LOADED_FOR_EDIT', { 
+          routeId, 
+          stopsCount: prioritizationItems.length,
+          stops: prioritizationItems.map(s => ({ id: s.budget_item_id, client: s.client_name, priority: s.priority }))
+        });
+      }
+      
+      // Scroll to visualization section
+      setTimeout(() => {
+        const visualizationSection = document.getElementById('visualization-section');
+        if (visualizationSection) {
+          visualizationSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          console.log('📍 Scrolled to visualization section for editing');
+        }
+        
+        // Also scroll to prioritization section so user can see the items loaded
+        setTimeout(() => {
+          const prioritizationSection = document.querySelector('h2:contains("Priorização de Rota")');
+          if (prioritizationSection) {
+            prioritizationSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 1000);
+      }, 500);
+      
+      toast({
+        title: "Rota carregada para edição!",
+        description: `Rota ${routeId} carregada com ${route.stops?.length || 0} paradas. Modifique as prioridades e clique em "Calcular Rota Otimizada" para atualizar.`,
+        variant: "default",
+      });
+      
+      logAction('EDIT_ROUTE_SUCCESS', { routeId });
+      
+    } catch (error) {
+      console.error('❌ Error loading route for editing:', error);
+      logAction('EDIT_ROUTE_ERROR', { routeId, error: error.message });
+      toast({
+        title: "Erro!",
+        description: "Erro ao carregar rota para edição. Verifique o console para detalhes.",
+        variant: "destructive",
+      });
+    }
+  };
     try {
       console.log('Iniciando exclusão da rota:', routeId);
       
