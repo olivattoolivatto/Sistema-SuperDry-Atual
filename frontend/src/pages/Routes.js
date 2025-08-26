@@ -1160,8 +1160,8 @@ export function Routes() {
         </div>
 
         <div className="space-y-3">
-          {savedRoutes.slice(0, 20).map((route) => (
-            <div key={route.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          {savedRoutes.slice(0, 20).map((route, index) => (
+            <div key={`saved-${route.id}-${index}`} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center">
                 {route.vehicle_type === 'CARRO' ? (
                   <Truck className="w-5 h-5 text-blue-600 mr-3" />
