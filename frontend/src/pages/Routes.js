@@ -425,15 +425,23 @@ export function Routes() {
         logAction('FITTING_MAP_BOUNDS', { markersCount: markers.length });
         const group = new L.featureGroup(markers);
         mapInstanceRef.current.fitBounds(group.getBounds().pad(0.15));
+        logAction('MAP_BOUNDS_SET', { type: 'fitted_to_markers' });
       } else {
         // Fallback to company location
         mapInstanceRef.current.setView([companyLat, companyLng], 13);
+        logAction('MAP_BOUNDS_SET', { type: 'fallback_to_company', coordinates: [companyLat, companyLng] });
       }
 
       console.log('✅ Map update completed successfully');
+      logAction('UPDATE_MAP_SUCCESS', { 
+        stopsCount: optimizedRoute.stops.length,
+        markersCount: markers.length,
+        hasRouteGeometry: !!(optimizedRoute.route_geometry && optimizedRoute.route_geometry.coordinates)
+      });
 
     } catch (error) {
       console.error('❌ Error updating map:', error);
+      logAction('UPDATE_MAP_ERROR', { error: error.message, stack: error.stack });
     }
   };
 
