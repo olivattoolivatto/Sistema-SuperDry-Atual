@@ -1428,6 +1428,7 @@ export function Routes() {
               </div>
               <div className="flex items-center space-x-2">
                 <button 
+                  onClick={() => handleEditRoute(route.id)}
                   className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                   title="Editar rota"
                 >
