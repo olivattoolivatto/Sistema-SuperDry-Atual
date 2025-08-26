@@ -576,6 +576,17 @@ export function Routes() {
       
       console.log('🎉 OTIMIZAÇÃO CONCLUÍDA COM SUCESSO!');
       
+      // Scroll to the visualization section after a short delay
+      setTimeout(() => {
+        const visualizationSection = document.querySelector('h2:has-text("Visualizar e Salvar")');
+        if (visualizationSection) {
+          visualizationSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+          // Fallback: scroll to bottom
+          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+      }, 1000);
+      
       toast({
         title: "Sucesso!",
         description: `Rota ${routeType.toLowerCase()} otimizada com ${optimizeResponse.data.total_stops || 0} paradas.`,
