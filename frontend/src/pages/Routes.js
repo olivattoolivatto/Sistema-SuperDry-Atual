@@ -103,20 +103,60 @@ export function Routes() {
   };
 
   const initializeMap = () => {
-    if (!optimizedRoute?.company_address) return;
+    console.log('🗺️ Initializing map...');
+    console.log('- mapRef.current:', !!mapRef.current);
+    console.log('- optimizedRoute:', !!optimizedRoute);
+    console.log('- company_address:', !!optimizedRoute?.company_address);
+    
+    if (!mapRef.current) {
+      console.log('❌ Map container not available');
+      return;
+    }
+
+    if (!optimizedRoute?.company_address) {
+      console.log('❌ Company address not available');
+      return;
+    }
 
     const companyLat = optimizedRoute.company_address.latitude;
     const companyLng = optimizedRoute.company_address.longitude;
 
-    // Create map centered on company location (Cuiabá region)
-    mapInstanceRef.current = L.map(mapRef.current).setView([companyLat, companyLng], 13);
+    console.log('📍 Company coordinates:', { lat: companyLat, lng: companyLng });
 
-    // Add OpenStreetMap tiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(mapInstanceRef.current);
+    if (!companyLat || !companyLng) {
+      console.log('❌ Invalid company coordinates');
+      return;
+    }
 
-    updateMapWithRoute();
+    try {
+      // Remove existing map if any
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+
+      // Create map centered on company location (Cuiabá region)
+      mapInstanceRef.current = L.map(mapRef.current, {
+        center: [companyLat, companyLng],
+        zoom: 13,
+        zoomControl: true,
+        scrollWheelZoom: true
+      });
+
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(mapInstanceRef.current);
+
+      console.log('✅ Map initialized successfully');
+
+      // Update with route data
+      updateMapWithRoute();
+      
+    } catch (error) {
+      console.error('❌ Error initializing map:', error);
+    }
   };
 
   const updateMapWithRoute = () => {
