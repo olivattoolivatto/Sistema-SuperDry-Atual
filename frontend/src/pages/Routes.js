@@ -254,9 +254,15 @@ export function Routes() {
     console.log('- mapInstanceRef.current:', !!mapInstanceRef.current);
     console.log('- optimizedRoute:', !!optimizedRoute);
     console.log('- stops count:', optimizedRoute?.stops?.length || 0);
+    console.log('- company_address:', !!optimizedRoute?.company_address);
     
-    if (!mapInstanceRef.current || !optimizedRoute) {
-      console.log('❌ Map instance or route not available');
+    if (!mapInstanceRef.current || !optimizedRoute || !optimizedRoute.company_address) {
+      console.log('❌ Map instance, route, or company address not available');
+      return;
+    }
+
+    if (!optimizedRoute.stops || optimizedRoute.stops.length === 0) {
+      console.log('❌ No stops available in route');
       return;
     }
 
