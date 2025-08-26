@@ -61,20 +61,25 @@ export function Routes() {
     console.log('- availableItems:', availableItems.length);
   }, [carRouteItems, motoRouteItems, availableItems]);
 
-  // Initialize map when optimized route is available
+  // Initialize map when component mounts
   useEffect(() => {
-    if (optimizedRoute && mapRef.current && !mapInstanceRef.current) {
-      initializeMap();
-    } else if (optimizedRoute && mapInstanceRef.current) {
+    // Always initialize map after a short delay
+    const timer = setTimeout(() => {
+      if (mapRef.current && !mapInstanceRef.current) {
+        console.log('🗺️ Initializing map on component mount');
+        initializeEmptyMap();
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Update map when optimized route changes
+  useEffect(() => {
+    if (optimizedRoute && mapInstanceRef.current) {
+      console.log('🗺️ Updating map with new route data');
       updateMapWithRoute();
     }
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
   }, [optimizedRoute]);
 
   const loadAvailableItems = async () => {
