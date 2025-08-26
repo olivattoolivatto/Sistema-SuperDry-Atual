@@ -268,89 +268,43 @@ export function Routes() {
   };
 
   const handleOptimizeRoute = async (vehicleType) => {
-    console.log('🚀 handleOptimizeRoute called with vehicleType:', vehicleType);
+    console.log('🚀 Moving items to prioritization for vehicleType:', vehicleType);
     
-    try {
-      const items = vehicleType === 'CARRO' ? carRouteItems : motoRouteItems;
-      
-      console.log(`📦 Items for ${vehicleType}:`, items);
-      console.log(`📦 Items length:`, items.length);
-      
-      if (items.length === 0) {
-        console.log('⚠️ No items to optimize');
-        toast({
-          title: "Aviso",
-          description: "Adicione itens à rota antes de otimizar.",
-          variant: "default",
-        });
-        return;
-      }
-
-      console.log('🔨 Creating route...');
-      // Create route
-      const routeData = {
-        vehicle_type: vehicleType,
-        planned_date: routeDate,
-        planned_start_time: routeTime,
-        stops: []
-      };
-
-      const createResponse = await routesApi.createRoute(routeData);
-      console.log('✅ Route created:', createResponse.data.id);
-      const routeId = createResponse.data.id;
-      
-      // Add stops with default priorities
-      const stopsData = items.map(item => ({
-        budget_item_id: item.budget_item_id,
-        priority: 'AUTOMATICA'
-      }));
-      
-      console.log('📍 Adding stops:', stopsData);
-      await routesApi.updateRouteStops(routeId, stopsData);
-      
-      // Optimize route
-      console.log('⚡ Optimizing route...');
-      const optimizeResponse = await routesApi.optimizeRoute(routeId);
-      console.log('⚡ Optimization response:', optimizeResponse.data);
-      
-      // Get optimized route details
-      console.log('📋 Getting route details...');
-      const routeDetails = await routesApi.getRoute(routeId);
-      console.log('📋 Route details:', routeDetails.data);
-      
-      setOptimizedRoute(routeDetails.data);
-      setCurrentVehicleType(vehicleType);
-      
-      // Initialize stop priorities state
-      const priorities = {};
-      routeDetails.data.stops.forEach(stop => {
-        priorities[stop.id] = stop.priority;
-      });
-      setStopPriorities(priorities);
-      
-      // Clear the route items that were optimized
-      if (vehicleType === 'CARRO') {
-        setCarRouteItems([]);
-      } else {
-        setMotoRouteItems([]);
-      }
-      
-      console.log('🎉 Route optimization completed successfully!');
-      
+    const items = vehicleType === 'CARRO' ? carRouteItems : motoRouteItems;
+    
+    if (items.length === 0) {
       toast({
-        title: "Sucesso!",
-        description: `Rota ${vehicleType.toLowerCase()} otimizada com ${optimizeResponse.data.total_stops} paradas.`,
+        title: "Aviso",
+        description: "Adicione itens à rota antes de enviar para priorização.",
         variant: "default",
       });
-      
-    } catch (error) {
-      console.error('Erro ao otimizar rota:', error);
-      toast({
-        title: "Erro!",
-        description: "Erro ao otimizar rota. Tente novamente.",
-        variant: "destructive",
-      });
+      return;
     }
+
+    // Add items to prioritization list with default priority and vehicle type
+    const itemsWithPriority = items.map(item => ({
+      ...item,
+      priority: 'AUTOMATICA',
+      vehicleType: vehicleType
+    }));
+
+    setPrioritizationItems(prev => [...prev, ...itemsWithPriority]);
+    setCurrentVehicleType(vehicleType);
+    
+    // Clear the route items that were moved to prioritization
+    if (vehicleType === 'CARRO') {
+      setCarRouteItems([]);
+    } else {
+      setMotoRouteItems([]);
+    }
+    
+    toast({
+      title: "Itens enviados!",
+      description: `${items.length} itens enviados para priorização de rota.`,
+      variant: "default",
+    });
+
+    console.log('✅ Items moved to prioritization successfully');
   };
 
   const handlePriorityChange = async (stopId, newPriority) => {
