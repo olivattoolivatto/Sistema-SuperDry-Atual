@@ -144,9 +144,10 @@ export function Routes() {
     logAction('COMPONENT_MOUNTED', { timestamp: new Date().toISOString() });
   }, []);
   
-  // Route optimization form
-  const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0]);
-  const [routeTime, setRouteTime] = useState('08:00');
+  // Route optimization form with future date suggestions
+  const { suggestedDate, suggestedTime } = getSuggestedDateTime();
+  const [routeDate, setRouteDate] = useState(suggestedDate);
+  const [routeTime, setRouteTime] = useState(suggestedTime);
   const [currentVehicleType, setCurrentVehicleType] = useState('CARRO');
   const [routeType, setRouteType] = useState('CURTA'); // New: CURTA or EFICIENTE
   
