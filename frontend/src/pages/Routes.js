@@ -160,90 +160,138 @@ export function Routes() {
   };
 
   const updateMapWithRoute = () => {
-    if (!mapInstanceRef.current || !optimizedRoute) return;
-
-    // Clear existing layers
-    mapInstanceRef.current.eachLayer((layer) => {
-      if (layer instanceof L.Marker || layer instanceof L.Polyline) {
-        mapInstanceRef.current.removeLayer(layer);
-      }
-    });
-
-    const companyLat = optimizedRoute.company_address.latitude;
-    const companyLng = optimizedRoute.company_address.longitude;
-
-    // Add company marker (start/end point)
-    const companyIcon = L.divIcon({
-      html: `<div style="background-color: #10B981; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🏢</div>`,
-      className: 'custom-div-icon',
-      iconSize: [30, 30],
-      iconAnchor: [15, 15]
-    });
-
-    L.marker([companyLat, companyLng], { icon: companyIcon })
-      .addTo(mapInstanceRef.current)
-      .bindPopup(`<b>Empresa - Início/Fim da Rota</b><br>${optimizedRoute.company_address.full_address}`);
-
-    // Add numbered markers for each stop
-    optimizedRoute.stops.forEach((stop, index) => {
-      const lat = stop.address.latitude;
-      const lng = stop.address.longitude;
-      
-      if (lat && lng) {
-        // Create numbered marker
-        const markerIcon = L.divIcon({
-          html: `<div style="background-color: #3B82F6; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${index + 1}</div>`,
-          className: 'custom-div-icon',
-          iconSize: [30, 30],
-          iconAnchor: [15, 15]
-        });
-
-        const marker = L.marker([lat, lng], { icon: markerIcon })
-          .addTo(mapInstanceRef.current);
-
-        // Create popup content with stop details
-        const popupContent = `
-          <div style="min-width: 200px;">
-            <b>Parada ${index + 1}: ${stop.client_name}</b><br>
-            <b>Serviço:</b> ${stop.service_name}<br>
-            <b>Valor:</b> R$ ${stop.service_value.toFixed(2)}<br>
-            <b>Duração:</b> ${stop.estimated_duration} minutos<br>
-            <b>Prioridade:</b> ${stop.priority}<br>
-            <b>Status:</b> ${stop.service_status}<br>
-            <small>${stop.address.full_address}</small>
-          </div>
-        `;
-        
-        marker.bindPopup(popupContent);
-      }
-    });
-
-    // Draw route if geometry is available
-    if (optimizedRoute.route_geometry && optimizedRoute.route_geometry.coordinates) {
-      const routeCoords = optimizedRoute.route_geometry.coordinates.map(coord => [coord[1], coord[0]]);
-      
-      L.polyline(routeCoords, {
-        color: '#3B82F6',
-        weight: 4,
-        opacity: 0.8
-      }).addTo(mapInstanceRef.current);
+    console.log('🗺️ Updating map with route...');
+    console.log('- mapInstanceRef.current:', !!mapInstanceRef.current);
+    console.log('- optimizedRoute:', !!optimizedRoute);
+    console.log('- stops count:', optimizedRoute?.stops?.length || 0);
+    
+    if (!mapInstanceRef.current || !optimizedRoute) {
+      console.log('❌ Map instance or route not available');
+      return;
     }
 
-    // Adjust map view to fit all markers
-    if (optimizedRoute.stops.length > 0) {
-      const group = new L.featureGroup();
-      
-      // Add company marker to group
-      group.addLayer(L.marker([companyLat, companyLng]));
-      
-      // Add stop markers to group
-      optimizedRoute.stops.forEach(stop => {
-        if (stop.address.latitude && stop.address.longitude) {
-          group.addLayer(L.marker([stop.address.latitude, stop.address.longitude]));
+    try {
+      // Clear existing markers and polylines, but keep the base map
+      mapInstanceRef.current.eachLayer((layer) => {
+        if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+          mapInstanceRef.current.removeLayer(layer);
         }
       });
 
-      mapInstanceRef.current.fitBounds(group.getBounds().pad(0.1));
+      const companyLat = optimizedRoute.company_address.latitude;
+      const companyLng = optimizedRoute.company_address.longitude;
+
+      console.log('🏢 Adding company marker at:', { lat: companyLat, lng: companyLng });
+
+      // Add company marker (start/end point)
+      const companyIcon = L.divIcon({
+        html: `<div style="background-color: #10B981; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 3px 6px rgba(0,0,0,0.4); font-size: 16px;">🏢</div>`,
+        className: 'custom-div-icon',
+        iconSize: [35, 35],
+        iconAnchor: [17, 17]
+      });
+
+      const companyMarker = L.marker([companyLat, companyLng], { icon: companyIcon })
+        .addTo(mapInstanceRef.current)
+        .bindPopup(`<div style="font-size: 14px;"><b>🏢 Empresa - Início/Fim da Rota</b><br>${optimizedRoute.company_address.full_address || 'Endereço da empresa'}</div>`);
+
+      console.log('✅ Company marker added');
+
+      // Add numbered markers for each stop
+      const markers = [companyMarker]; // For bounds calculation
+      
+      optimizedRoute.stops.forEach((stop, index) => {
+        const lat = stop.address.latitude;
+        const lng = stop.address.longitude;
+        
+        console.log(`📍 Adding stop ${index + 1} at:`, { lat, lng, client: stop.client_name });
+        
+        if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+          // Create numbered marker with better visibility
+          const markerIcon = L.divIcon({
+            html: `<div style="background-color: #DC2626; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 3px 6px rgba(0,0,0,0.4); font-size: 14px;">${index + 1}</div>`,
+            className: 'custom-div-icon',
+            iconSize: [35, 35],
+            iconAnchor: [17, 17]
+          });
+
+          const marker = L.marker([lat, lng], { icon: markerIcon })
+            .addTo(mapInstanceRef.current);
+
+          // Create detailed popup content
+          const popupContent = `
+            <div style="min-width: 250px; font-size: 13px;">
+              <h4 style="margin: 0 0 8px 0; color: #DC2626; font-weight: bold;">Parada ${index + 1}: ${stop.client_name}</h4>
+              <p style="margin: 4px 0;"><b>Serviço:</b> ${stop.service_name}</p>
+              <p style="margin: 4px 0;"><b>Valor:</b> R$ ${stop.service_value.toFixed(2)}</p>
+              <p style="margin: 4px 0;"><b>Duração:</b> ${stop.estimated_duration} minutos</p>
+              <p style="margin: 4px 0;"><b>Prioridade:</b> <span style="color: #7C3AED;">${stop.priority}</span></p>
+              <p style="margin: 4px 0;"><b>Tipo:</b> ${stop.service_status}</p>
+              <hr style="margin: 8px 0;">
+              <p style="margin: 0; font-size: 11px; color: #666;">${stop.address.full_address || stop.address.neighborhood}</p>
+            </div>
+          `;
+          
+          marker.bindPopup(popupContent);
+          markers.push(marker);
+          
+          console.log(`✅ Stop ${index + 1} marker added`);
+        } else {
+          console.log(`❌ Invalid coordinates for stop ${index + 1}:`, { lat, lng });
+        }
+      });
+
+      // Draw route line if geometry is available
+      if (optimizedRoute.route_geometry && optimizedRoute.route_geometry.coordinates) {
+        console.log('🛣️ Drawing route line...');
+        const routeCoords = optimizedRoute.route_geometry.coordinates.map(coord => [coord[1], coord[0]]);
+        
+        const routeLine = L.polyline(routeCoords, {
+          color: '#DC2626',
+          weight: 5,
+          opacity: 0.8,
+          dashArray: '10, 5'
+        }).addTo(mapInstanceRef.current);
+
+        console.log('✅ Route line drawn with', routeCoords.length, 'points');
+      } else {
+        console.log('⚠️ No route geometry available');
+        
+        // Draw simple lines between points if no geometry
+        if (optimizedRoute.stops.length > 0) {
+          const simpleRoute = [
+            [companyLat, companyLng],
+            ...optimizedRoute.stops
+              .filter(stop => stop.address.latitude && stop.address.longitude)
+              .map(stop => [stop.address.latitude, stop.address.longitude]),
+            [companyLat, companyLng]
+          ];
+          
+          L.polyline(simpleRoute, {
+            color: '#3B82F6',
+            weight: 3,
+            opacity: 0.6,
+            dashArray: '5, 10'
+          }).addTo(mapInstanceRef.current);
+          
+          console.log('✅ Simple route line drawn');
+        }
+      }
+
+      // Adjust map view to fit all markers
+      if (markers.length > 1) {
+        console.log('🔍 Fitting bounds for', markers.length, 'markers');
+        const group = new L.featureGroup(markers);
+        mapInstanceRef.current.fitBounds(group.getBounds().pad(0.15));
+      } else {
+        // Fallback to company location
+        mapInstanceRef.current.setView([companyLat, companyLng], 13);
+      }
+
+      console.log('✅ Map update completed successfully');
+
+    } catch (error) {
+      console.error('❌ Error updating map:', error);
     }
   };
 
