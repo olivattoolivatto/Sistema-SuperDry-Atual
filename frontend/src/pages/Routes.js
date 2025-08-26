@@ -1051,7 +1051,7 @@ export function Routes() {
           </div>
         </div>
 
-        {optimizedRoute ? (
+        {optimizedRoute && optimizedRoute.stops && optimizedRoute.stops.length > 0 ? (
           <div>
             {/* Route Summary */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1060,7 +1060,7 @@ export function Routes() {
                   <MapPin className="w-5 h-5 text-blue-600 mr-2" />
                   <div>
                     <div className="text-sm text-blue-600 font-medium">Total de Paradas</div>
-                    <div className="text-2xl font-bold text-blue-900">{optimizedRoute.stops.length}</div>
+                    <div className="text-2xl font-bold text-blue-900">{optimizedRoute.stops?.length || 0}</div>
                   </div>
                 </div>
               </div>
@@ -1069,7 +1069,7 @@ export function Routes() {
                   <Clock className="w-5 h-5 text-green-600 mr-2" />
                   <div>
                     <div className="text-sm text-green-600 font-medium">Duração Estimada</div>
-                    <div className="text-2xl font-bold text-green-900">{Math.floor(optimizedRoute.total_duration / 60)}h {optimizedRoute.total_duration % 60}min</div>
+                    <div className="text-2xl font-bold text-green-900">{Math.floor((optimizedRoute.total_duration || 0) / 60)}h {(optimizedRoute.total_duration || 0) % 60}min</div>
                   </div>
                 </div>
               </div>
@@ -1078,7 +1078,7 @@ export function Routes() {
                   <RouteIcon className="w-5 h-5 text-purple-600 mr-2" />
                   <div>
                     <div className="text-sm text-purple-600 font-medium">Distância Total</div>
-                    <div className="text-2xl font-bold text-purple-900">{optimizedRoute.total_distance} km</div>
+                    <div className="text-2xl font-bold text-purple-900">{optimizedRoute.total_distance || 0} km</div>
                   </div>
                 </div>
               </div>
