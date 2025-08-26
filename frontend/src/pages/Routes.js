@@ -477,9 +477,12 @@ export function Routes() {
   };
 
   const handleOptimizeRoute = async (vehicleType) => {
+    logAction('MOVE_TO_PRIORITIZATION_START', { vehicleType });
+    
     console.log('🚀 Moving items to prioritization for vehicleType:', vehicleType);
     
     const items = vehicleType === 'CARRO' ? carRouteItems : motoRouteItems;
+    logAction('ITEMS_TO_PRIORITIZE', { count: items.length, items: items.map(i => ({ id: i.budget_item_id, client: i.client_name })) });
     
     if (items.length === 0) {
       toast({
@@ -514,6 +517,7 @@ export function Routes() {
     });
 
     console.log('✅ Items moved to prioritization successfully');
+    logAction('MOVE_TO_PRIORITIZATION_COMPLETED', { vehicleType, totalPrioritizationItems: prioritizationItems.length + items.length });
   };
 
   const handlePriorityChange = async (itemId, newPriority) => {
