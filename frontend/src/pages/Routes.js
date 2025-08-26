@@ -1015,6 +1015,18 @@ export function Routes() {
           </div>
         </div>
 
+        {/* Debug Information */}
+        {debugInfo && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="text-sm text-blue-800">
+              <strong>🔧 Debug:</strong> {debugInfo}
+            </div>
+            <div className="text-xs text-blue-600 mt-1">
+              optimizedRoute: {optimizedRoute ? `${optimizedRoute.stops.length} paradas` : 'null'}
+            </div>
+          </div>
+        )}
+
         {/* Interactive Map - ALWAYS VISIBLE */}
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
