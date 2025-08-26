@@ -1177,6 +1177,18 @@ export function Routes() {
             <MapPin className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma Rota Otimizada</h3>
             <p>Use o botão "Calcular Rota Otimizada" na seção de priorização para gerar uma rota.</p>
+            
+            {/* Additional debug info when no route */}
+            <div className="mt-4 text-xs text-gray-400">
+              <p>Debug: optimizedRoute = {optimizedRoute ? 'exists' : 'null'}</p>
+              {optimizedRoute && (
+                <>
+                  <p>- stops: {optimizedRoute.stops ? optimizedRoute.stops.length : 'no stops'}</p>
+                  <p>- total_distance: {optimizedRoute.total_distance || 'undefined'}</p>
+                  <p>- company_address: {optimizedRoute.company_address ? 'exists' : 'missing'}</p>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
