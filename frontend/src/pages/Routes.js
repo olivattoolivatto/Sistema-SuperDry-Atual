@@ -1254,8 +1254,8 @@ function RouteSection({ title, icon, items, onRemoveItem, onOptimize, vehicleCol
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {items.map((item) => (
-              <tr key={item.budget_item_id} className="hover:bg-gray-50">
+            {items.map((item, index) => (
+              <tr key={`route-item-${item.budget_item_id}-${index}`} className="hover:bg-gray-50">
                 <td className="px-4 py-4">
                   <div className="text-sm font-medium text-gray-900">{item.service_name}</div>
                   <div className="text-sm text-gray-500">{item.service_code}</div>
