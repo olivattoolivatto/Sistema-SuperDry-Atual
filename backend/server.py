@@ -1772,7 +1772,8 @@ async def optimize_route(route_id: str, route_type: str = "CURTA"):
         all_coords.extend([(s.address['longitude'], s.address['latitude']) for s in merged_stops])
         all_coords.append(company_coords)
         
-        osrm_result = await calculate_route_osrm(all_coords)
+        print(f"🎯 Calculating {route_type} route with {len(all_coords)} coordinates")
+        osrm_result = await calculate_route_osrm(all_coords, "driving", route_type)
         
         total_duration = sum(stop.estimated_duration for stop in merged_stops)
         total_distance = 0.0
