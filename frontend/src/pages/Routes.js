@@ -550,7 +550,9 @@ export function Routes() {
       
       // CRITICAL: Set the optimized route data
       console.log('💾 Definindo optimizedRoute state...');
+      console.log('💾 Dados recebidos:', routeDetails.data);
       setOptimizedRoute(routeDetails.data);
+      setDebugInfo(`Rota ${routeId} otimizada às ${new Date().toLocaleTimeString()} - ${routeDetails.data.stops.length} paradas`);
       console.log('💾 optimizedRoute definido!');
       
       // Initialize stop priorities state
