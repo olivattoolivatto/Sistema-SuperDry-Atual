@@ -1482,12 +1482,16 @@ export function Routes() {
                   <Bike className="w-5 h-5 text-green-600 mr-3" />
                 )}
                 <div>
-                  <div className="text-sm font-medium text-gray-900">{route.id}</div>
+                  <div className="text-sm font-medium text-gray-900">{generateRouteAlias(route.planned_date, route.planned_start_time)}</div>
+                  <div className="text-xs text-gray-500 font-mono">{route.id}</div>
                   <div className="text-xs text-gray-500">
                     {new Date(route.planned_date).toLocaleDateString('pt-BR')} às {route.planned_start_time}
                   </div>
                   <div className="text-xs text-gray-500">
                     {route.stops.length} paradas • {Math.round(route.total_duration / 60)}h {route.total_duration % 60}min
+                  </div>
+                  <div className="text-xs text-blue-600 mt-1">
+                    <strong>Bairros:</strong> {getRouteNeighborhoods(route.stops)}
                   </div>
                 </div>
               </div>
