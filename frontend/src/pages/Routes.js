@@ -578,12 +578,10 @@ export function Routes() {
       
       // Scroll to the visualization section after a short delay
       setTimeout(() => {
-        const visualizationSection = document.querySelector('h2:has-text("Visualizar e Salvar")');
+        const visualizationSection = document.getElementById('visualization-section');
         if (visualizationSection) {
           visualizationSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-          // Fallback: scroll to bottom
-          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+          console.log('📍 Scrolled to visualization section');
         }
       }, 1000);
       
