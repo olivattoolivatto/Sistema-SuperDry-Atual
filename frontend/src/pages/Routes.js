@@ -613,6 +613,31 @@ export function Routes() {
       return;
     }
 
+    // Validate that all clients have addresses
+    const itemsWithoutAddress = prioritizationItems.filter(item => {
+      return !item.address || 
+             !item.address.latitude || 
+             !item.address.longitude || 
+             !item.address.full_address;
+    });
+
+    if (itemsWithoutAddress.length > 0) {
+      console.log('❌ Clientes sem endereço completo:', itemsWithoutAddress);
+      logAction('CALCULATE_ROUTE_ERROR', { 
+        error: 'Clients without complete address', 
+        routeType,
+        clientsWithoutAddress: itemsWithoutAddress.map(item => item.client_name)
+      });
+      
+      const clientNames = itemsWithoutAddress.map(item => item.client_name).join(', ');
+      toast({
+        title: "Endereços Incompletos!",
+        description: `Os seguintes clientes não possuem endereço completo cadastrado: ${clientNames}. Por favor, complete o cadastro antes de otimizar a rota.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       console.log('🔨 Criando rota...');
       logAction('CREATING_ROUTE', { vehicleType: currentVehicleType, date: routeDate, time: routeTime });
