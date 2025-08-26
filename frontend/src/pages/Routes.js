@@ -897,7 +897,7 @@ export function Routes() {
             {/* Prioritization List */}
             <div className="space-y-3">
               {prioritizationItems.map((item, index) => (
-                <div key={item.budget_item_id} className="flex items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div key={`priority-${item.budget_item_id}-${index}`} className="flex items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
                   {/* Item Number */}
                   <div className="flex-shrink-0 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold mr-4">
                     {index + 1}
