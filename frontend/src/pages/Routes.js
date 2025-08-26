@@ -269,6 +269,14 @@ export function Routes() {
   };
 
   const updateMapWithRoute = () => {
+    logAction('UPDATE_MAP_START', { 
+      hasMapInstance: !!mapInstanceRef.current, 
+      hasOptimizedRoute: !!optimizedRoute,
+      stopsCount: optimizedRoute?.stops?.length || 0,
+      hasCompanyAddress: !!optimizedRoute?.company_address,
+      hasRouteGeometry: !!optimizedRoute?.route_geometry
+    });
+    
     console.log('🗺️ Updating map with route...');
     console.log('- mapInstanceRef.current:', !!mapInstanceRef.current);
     console.log('- optimizedRoute:', !!optimizedRoute);
@@ -277,15 +285,24 @@ export function Routes() {
     
     if (!mapInstanceRef.current || !optimizedRoute || !optimizedRoute.company_address) {
       console.log('❌ Map instance, route, or company address not available');
+      logAction('UPDATE_MAP_FAILED', { 
+        reason: 'Missing requirements',
+        hasMapInstance: !!mapInstanceRef.current,
+        hasOptimizedRoute: !!optimizedRoute,
+        hasCompanyAddress: !!optimizedRoute?.company_address
+      });
       return;
     }
 
     if (!optimizedRoute.stops || optimizedRoute.stops.length === 0) {
       console.log('❌ No stops available in route');
+      logAction('UPDATE_MAP_FAILED', { reason: 'No stops available' });
       return;
     }
 
     try {
+      logAction('MAP_CLEARING_LAYERS', {});
+      
       // Clear existing markers and polylines, but keep the base map
       mapInstanceRef.current.eachLayer((layer) => {
         if (layer instanceof L.Marker || layer instanceof L.Polyline) {
