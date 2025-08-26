@@ -1171,6 +1171,24 @@ const AddItemForm = ({ budget, onSave, onCancel }) => {
     }));
   };
 
+  const handleServiceSelect = (service) => {
+    setSelectedService(service);
+    setServiceSearchTerm(service.name);
+    setFormData(prev => ({ ...prev, service_id: service.id }));
+    setShowServiceDropdown(false);
+  };
+
+  const handleServiceSearchChange = (e) => {
+    const value = e.target.value;
+    setServiceSearchTerm(value);
+    
+    // Clear selected service if search is cleared
+    if (value === '') {
+      setSelectedService(null);
+      setFormData(prev => ({ ...prev, service_id: '' }));
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
