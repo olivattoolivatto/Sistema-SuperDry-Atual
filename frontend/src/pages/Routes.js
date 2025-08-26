@@ -207,19 +207,36 @@ export function Routes() {
   };
 
   const handleVehicleAssignment = (item, vehicleType) => {
+    console.log('🚗 handleVehicleAssignment called:', { item: item.budget_item_id, vehicleType });
+    console.log('🚗 Current carRouteItems:', carRouteItems);
+    console.log('🚗 Current motoRouteItems:', motoRouteItems);
+    
     if (vehicleType === 'CARRO') {
-      setCarRouteItems(prev => [...prev, item]);
+      console.log('🚗 Adding to car route items');
+      setCarRouteItems(prev => {
+        const newItems = [...prev, item];
+        console.log('🚗 New car route items:', newItems);
+        return newItems;
+      });
     } else {
-      setMotoRouteItems(prev => [...prev, item]);
+      console.log('🏍️ Adding to moto route items');
+      setMotoRouteItems(prev => {
+        const newItems = [...prev, item];
+        console.log('🏍️ New moto route items:', newItems);
+        return newItems;
+      });
     }
     
     // Remove from available items
+    console.log('➖ Removing from available items');
     setAvailableItems(prev => prev.filter(i => i.budget_item_id !== item.budget_item_id));
     
     // Remove from selection
     const newSelected = new Set(selectedItems);
     newSelected.delete(item.budget_item_id);
     setSelectedItems(newSelected);
+    
+    console.log('✅ Vehicle assignment completed');
   };
 
   const handleRemoveFromRoute = (itemId, fromRoute) => {
