@@ -35,6 +35,7 @@ export function Routes() {
   const [savedRoutes, setSavedRoutes] = useState([]);
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [loading, setLoading] = useState(true);
+  const [debugInfo, setDebugInfo] = useState(''); // Debug info state
   
   // Route optimization form
   const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0]);
