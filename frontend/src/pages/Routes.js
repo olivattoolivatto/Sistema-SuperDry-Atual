@@ -452,7 +452,13 @@ export function Routes() {
   };
 
   const handleOptimizeFromPrioritization = async () => {
+    console.log('🚀 === INICIANDO OTIMIZAÇÃO ===');
+    console.log('Prioritization items:', prioritizationItems);
+    console.log('Route type:', routeType);
+    console.log('Vehicle type:', currentVehicleType);
+    
     if (prioritizationItems.length === 0) {
+      console.log('❌ Nenhum item para otimizar');
       toast({
         title: "Aviso",
         description: "Adicione itens à lista de priorização antes de otimizar.",
@@ -462,9 +468,7 @@ export function Routes() {
     }
 
     try {
-      console.log('🔨 Creating route from prioritization...');
-      console.log('🎯 Route type selected:', routeType);
-      console.log('📦 Items to optimize:', prioritizationItems);
+      console.log('🔨 Criando rota...');
       
       // Create route
       const routeData = {
@@ -474,73 +478,63 @@ export function Routes() {
         stops: []
       };
 
+      console.log('📤 Enviando dados para criar rota:', routeData);
       const createResponse = await routesApi.createRoute(routeData);
-      console.log('✅ Route created:', createResponse.data.id);
+      console.log('✅ Rota criada:', createResponse.data);
       const routeId = createResponse.data.id;
       
       // Add stops with priorities from prioritization list
       const stopsData = prioritizationItems.map(item => ({
         budget_item_id: item.budget_item_id,
-        priority: item.priority,
-        route_type: routeType // Add route type info
+        priority: item.priority
       }));
       
-      console.log('📍 Adding stops with priorities and route type:', stopsData);
-      await routesApi.updateRouteStops(routeId, stopsData);
+      console.log('📍 Adicionando paradas:', stopsData);
+      const stopsResponse = await routesApi.updateRouteStops(routeId, stopsData);
+      console.log('✅ Paradas adicionadas:', stopsResponse.data);
       
       // Optimize route based on selected type
-      console.log(`⚡ Optimizing ${routeType} route...`);
+      console.log(`⚡ Otimizando rota ${routeType}...`);
       const optimizeResponse = await routesApi.optimizeRoute(routeId, { route_type: routeType });
-      console.log('⚡ Optimization response:', optimizeResponse.data);
+      console.log('⚡ Resposta da otimização:', optimizeResponse.data);
       
       // Get optimized route details
-      console.log('📋 Getting route details...');
+      console.log('📋 Buscando detalhes da rota...');
       const routeDetails = await routesApi.getRoute(routeId);
-      console.log('📋 Route details:', routeDetails.data);
+      console.log('📋 Detalhes da rota:', routeDetails.data);
       
-      // Ensure we have valid route data before setting
-      if (routeDetails.data && routeDetails.data.stops && routeDetails.data.stops.length > 0) {
-        setOptimizedRoute(routeDetails.data);
-        
-        // Initialize stop priorities state
-        const priorities = {};
+      // CRITICAL: Set the optimized route data
+      console.log('💾 Definindo optimizedRoute state...');
+      setOptimizedRoute(routeDetails.data);
+      console.log('💾 optimizedRoute definido!');
+      
+      // Initialize stop priorities state
+      const priorities = {};
+      if (routeDetails.data.stops) {
         routeDetails.data.stops.forEach(stop => {
           priorities[stop.id] = stop.priority;
         });
-        setStopPriorities(priorities);
-
-        // Clear prioritization items after successful optimization
-        setPrioritizationItems([]);
-        
-        console.log('🎉 Route optimization completed successfully!');
-        
-        toast({
-          title: "Sucesso!",
-          description: `Rota ${routeType.toLowerCase()} otimizada com ${optimizeResponse.data.total_stops} paradas.`,
-          variant: "default",
-        });
-
-        // Force map update after setting route
-        setTimeout(() => {
-          if (mapInstanceRef.current) {
-            mapInstanceRef.current.invalidateSize();
-          }
-        }, 100);
-        
-      } else {
-        console.error('❌ Invalid route data received');
-        toast({
-          title: "Erro!",
-          description: "Dados da rota inválidos. Tente novamente.",
-          variant: "destructive",
-        });
       }
+      setStopPriorities(priorities);
+
+      // Clear prioritization items after successful optimization
+      console.log('🧹 Limpando lista de priorização...');
+      setPrioritizationItems([]);
+      
+      console.log('🎉 OTIMIZAÇÃO CONCLUÍDA COM SUCESSO!');
+      
+      toast({
+        title: "Sucesso!",
+        description: `Rota ${routeType.toLowerCase()} otimizada com ${optimizeResponse.data.total_stops || 0} paradas.`,
+        variant: "default",
+      });
       
     } catch (error) {
-      console.error('Erro ao otimizar rota:', error);
+      console.error('❌ ERRO NA OTIMIZAÇÃO:', error);
+      console.error('Error details:', error.response?.data || error.message);
       toast({
         title: "Erro!",
-        description: "Erro ao otimizar rota. Tente novamente.",
+        description: "Erro ao otimizar rota. Verifique o console para detalhes.",
         variant: "destructive",
       });
     }
