@@ -107,6 +107,46 @@ export function Routes() {
     }
   };
 
+  const initializeEmptyMap = () => {
+    console.log('🗺️ Initializing empty map...');
+    
+    if (!mapRef.current) {
+      console.log('❌ Map container not available');
+      return;
+    }
+
+    try {
+      // Remove existing map if any
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+
+      // Default to Cuiabá coordinates
+      const defaultLat = -15.601481;
+      const defaultLng = -56.097389;
+
+      // Create map centered on Cuiabá
+      mapInstanceRef.current = L.map(mapRef.current, {
+        center: [defaultLat, defaultLng],
+        zoom: 11,
+        zoomControl: true,
+        scrollWheelZoom: true
+      });
+
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(mapInstanceRef.current);
+
+      console.log('✅ Empty map initialized successfully');
+      
+    } catch (error) {
+      console.error('❌ Error initializing empty map:', error);
+    }
+  };
+
   const initializeMap = () => {
     console.log('🗺️ Initializing map...');
     console.log('- mapRef.current:', !!mapRef.current);
