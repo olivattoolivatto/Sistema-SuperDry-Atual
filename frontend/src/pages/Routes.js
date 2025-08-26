@@ -1080,6 +1080,24 @@ export function Routes() {
             <tbody className="bg-white divide-y divide-gray-200">
               {availableItems.map((item, index) => (
                 <tr key={`available-${item.budget_item_id}-${index}`} className="hover:bg-gray-50">
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleVehicleAssignment(item, 'CARRO')}
+                        className="inline-flex items-center px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200"
+                      >
+                        <Truck className="w-3 h-3 mr-1" />
+                        Carro
+                      </button>
+                      <button
+                        onClick={() => handleVehicleAssignment(item, 'MOTO')}
+                        className="inline-flex items-center px-3 py-1 text-xs bg-green-100 text-green-800 rounded-full hover:bg-green-200"
+                      >
+                        <Bike className="w-3 h-3 mr-1" />
+                        Moto
+                      </button>
+                    </div>
+                  </td>
                   <td className="px-4 py-4 whitespace-nowrap hidden">
                     <input
                       type="checkbox"
@@ -1100,24 +1118,6 @@ export function Routes() {
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                     R$ {item.service_value.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleVehicleAssignment(item, 'CARRO')}
-                        className="inline-flex items-center px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200"
-                      >
-                        <Truck className="w-3 h-3 mr-1" />
-                        Carro
-                      </button>
-                      <button
-                        onClick={() => handleVehicleAssignment(item, 'MOTO')}
-                        className="inline-flex items-center px-3 py-1 text-xs bg-green-100 text-green-800 rounded-full hover:bg-green-200"
-                      >
-                        <Bike className="w-3 h-3 mr-1" />
-                        Moto
-                      </button>
-                    </div>
                   </td>
                 </tr>
               ))}
