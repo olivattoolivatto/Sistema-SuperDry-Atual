@@ -827,7 +827,8 @@ export function Routes() {
         
         // Also scroll to prioritization section so user can see the items loaded
         setTimeout(() => {
-          const prioritizationSection = document.querySelector('h2:contains("Priorização de Rota")');
+          const prioritizationElements = document.querySelectorAll('h2');
+          const prioritizationSection = Array.from(prioritizationElements).find(h2 => h2.textContent.includes('Priorização de Rota'));
           if (prioritizationSection) {
             prioritizationSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
