@@ -52,6 +52,21 @@ export function Routes() {
     loadSavedRoutes();
     
     console.log('🚀 Routes component mounted');
+    console.log('🗺️ Leaflet disponível:', typeof L !== 'undefined');
+    
+    // Check if Leaflet CSS is loaded
+    const leafletCSS = document.querySelector('link[href*="leaflet"]');
+    console.log('🎨 Leaflet CSS encontrado:', !!leafletCSS);
+    
+    if (typeof L === 'undefined') {
+      console.log('❌ Leaflet não carregado! Tentando importar...');
+      import('leaflet').then((leaflet) => {
+        window.L = leaflet.default;
+        console.log('✅ Leaflet importado dinamicamente');
+      }).catch(err => {
+        console.error('❌ Erro ao importar Leaflet:', err);
+      });
+    }
   }, []);
 
   useEffect(() => {
