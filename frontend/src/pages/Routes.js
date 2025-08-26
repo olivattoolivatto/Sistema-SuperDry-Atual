@@ -328,6 +328,7 @@ export function Routes() {
         .bindPopup(`<div style="font-size: 14px;"><b>🏢 Empresa - Início/Fim da Rota</b><br>${optimizedRoute.company_address.full_address || 'Endereço da empresa'}</div>`);
 
       console.log('✅ Company marker added');
+      logAction('COMPANY_MARKER_ADDED', { coordinates: [companyLat, companyLng] });
 
       // Add numbered markers for each stop
       const markers = [companyMarker]; // For bounds calculation
@@ -337,6 +338,7 @@ export function Routes() {
         const lng = stop.address.longitude;
         
         console.log(`📍 Adding stop ${index + 1} at:`, { lat, lng, client: stop.client_name });
+        logAction('ADDING_STOP_MARKER', { stopIndex: index + 1, coordinates: [lat, lng], clientName: stop.client_name });
         
         if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
           // Create numbered marker with better visibility
@@ -368,8 +370,10 @@ export function Routes() {
           markers.push(marker);
           
           console.log(`✅ Stop ${index + 1} marker added`);
+          logAction('STOP_MARKER_ADDED', { stopIndex: index + 1, clientName: stop.client_name });
         } else {
           console.log(`❌ Invalid coordinates for stop ${index + 1}:`, { lat, lng });
+          logAction('INVALID_STOP_COORDINATES', { stopIndex: index + 1, coordinates: [lat, lng] });
         }
       });
 
