@@ -1700,8 +1700,8 @@ async def update_route_stops(route_id: str, stops_data: List[dict]):
         raise HTTPException(status_code=400, detail=f"Error updating route stops: {str(e)}")
 
 @api_router.post("/routes/{route_id}/optimize")
-async def optimize_route(route_id: str):
-    """Optimize route using OSRM with priorities"""
+async def optimize_route(route_id: str, route_type: str = "CURTA"):
+    """Optimize route using OSRM with priorities and route type"""
     try:
         route = await db.routes.find_one({"id": route_id})
         if not route:
