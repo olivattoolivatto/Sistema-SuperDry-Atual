@@ -985,7 +985,7 @@ export function Routes() {
             <tbody className="bg-white divide-y divide-gray-200">
               {availableItems.map((item, index) => (
                 <tr key={`available-${item.budget_item_id}-${index}`} className="hover:bg-gray-50">
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap hidden">
                     <input
                       type="checkbox"
                       checked={selectedItems.has(item.budget_item_id)}
