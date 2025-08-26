@@ -31,7 +31,6 @@ export function Routes() {
   const [carRouteItems, setCarRouteItems] = useState([]);
   const [motoRouteItems, setMotoRouteItems] = useState([]);
   const [prioritizationItems, setPrioritizationItems] = useState([]); // New: items in prioritization stage
-  const [currentVehicleType, setCurrentVehicleType] = useState('CARRO');
   const [optimizedRoute, setOptimizedRoute] = useState(null);
   const [savedRoutes, setSavedRoutes] = useState([]);
   const [selectedItems, setSelectedItems] = useState(new Set());
