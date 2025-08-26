@@ -51,7 +51,7 @@ export function Routes() {
     console.log('🔧 Debug function available: window.extractRoutesDebugLogs()');
   }, []);
 
-  // Generate route alias based on date and time
+  // Generate route alias based on date and time with future suggestions
   const generateRouteAlias = (planned_date, planned_start_time) => {
     try {
       const date = new Date(planned_date);
@@ -78,12 +78,44 @@ export function Routes() {
     }
   };
 
-  // Get neighborhoods from route stops
+  // Get suggested future date and time for new routes
+  const getSuggestedDateTime = () => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    let suggestedDate, suggestedTime;
+    
+    if (currentHour < 13) {
+      // If before 1 PM, suggest today at 1 PM
+      suggestedDate = now.toISOString().split('T')[0];
+      suggestedTime = '13:00';
+    } else {
+      // If after 1 PM, suggest tomorrow at 8 AM
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      suggestedDate = tomorrow.toISOString().split('T')[0];
+      suggestedTime = '08:00';
+    }
+    
+    return { suggestedDate, suggestedTime };
+  };
+
+  // Get neighborhoods from route stops with VG suffix for Várzea Grande
   const getRouteNeighborhoods = (stops) => {
     if (!stops || stops.length === 0) return '';
     
     const neighborhoods = stops
-      .map(stop => stop.address?.neighborhood || stop.neighborhood)
+      .map(stop => {
+        let neighborhood = stop.address?.neighborhood || stop.neighborhood || '';
+        
+        // Add (VG) suffix if city is Várzea Grande
+        const city = stop.address?.city || stop.city || '';
+        if (city.toLowerCase().includes('várzea grande') || city.toLowerCase().includes('varzea grande')) {
+          neighborhood = neighborhood ? `${neighborhood} (VG)` : 'Várzea Grande (VG)';
+        }
+        
+        return neighborhood;
+      })
       .filter(n => n && n.trim() !== '')
       .filter((neighborhood, index, arr) => arr.indexOf(neighborhood) === index); // Remove duplicates
     
