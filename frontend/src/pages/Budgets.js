@@ -698,6 +698,9 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
 
 const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
   const [selectedService, setSelectedService] = useState(null);
+  const [serviceSearchTerm, setServiceSearchTerm] = useState('');
+  const [filteredServices, setFilteredServices] = useState([]);
+  const [showServiceDropdown, setShowServiceDropdown] = useState(false);
   const [formData, setFormData] = useState({
     service_id: '',
     quantity: 1,
@@ -709,6 +712,37 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
     fabric_per_fold: 18,
     linear_meters: ''
   });
+
+  // Function to normalize text (remove accents, case insensitive, whitespace insensitive)
+  const normalizeText = (text) => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+  };
+
+  // Filter services based on search term
+  useEffect(() => {
+    if (serviceSearchTerm.length >= 2) {
+      const normalizedSearch = normalizeText(serviceSearchTerm);
+      const filtered = services.filter(service => {
+        const normalizedName = normalizeText(service.name);
+        const normalizedId = normalizeText(service.id);
+        const normalizedCategory = normalizeText(service.category || '');
+        
+        return normalizedName.includes(normalizedSearch) ||
+               normalizedId.includes(normalizedSearch) ||
+               normalizedCategory.includes(normalizedSearch);
+      });
+      setFilteredServices(filtered);
+      setShowServiceDropdown(true);
+    } else {
+      setFilteredServices([]);
+      setShowServiceDropdown(false);
+    }
+  }, [serviceSearchTerm, services]);
 
   useEffect(() => {
     if (editingItem) {
