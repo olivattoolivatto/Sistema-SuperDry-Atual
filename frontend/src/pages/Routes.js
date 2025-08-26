@@ -1129,8 +1129,19 @@ export function Routes() {
             <div className="flex justify-end space-x-4">
               <button
                 onClick={() => {
+                  console.log('🧹 Clearing route data...');
                   setOptimizedRoute(null);
                   setStopPriorities({});
+                  setDebugInfo('');
+                  
+                  // Reinitialize empty map
+                  if (mapInstanceRef.current) {
+                    setTimeout(() => {
+                      initializeEmptyMap();
+                    }, 100);
+                  }
+                  
+                  console.log('✅ Route data cleared');
                 }}
                 className="flex items-center px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
