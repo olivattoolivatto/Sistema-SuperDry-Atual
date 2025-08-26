@@ -265,37 +265,61 @@ const ClientForm = ({ client, onSave, onCancel }) => {
               city = city || thirdLastPart;
             }
             
-            // Extract neighborhood correctly - NEW LOGIC
-            // Format example: "R. Mal. Mascarenhas de Morães, 278-A - Duque de Caxias II, Cuiabá - MT, 78043-352, Brasil"
-            // Neighborhood = what comes before the city (reading right to left)
+            // NEW ADVANCED NEIGHBORHOOD EXTRACTION LOGIC
+            // Example: "R. Mal. Mascarenhas de Morães, 278-A - Duque de Caxias II, Cuiabá - MT, 78043-352, Brasil"
+            // Target: Extract "Duque de Caxias II" (between last comma before city and before dash, reading right to left)
             if (parts.length >= 3 && !neighborhood) {
-              // Find the part with city - state format
-              const cityStateIndex = parts.findIndex(part => 
-                part.includes(' - ') && part.split(' - ')[1].length <= 3
-              );
+              console.log('🔍 Analyzing address parts for neighborhood extraction:', parts);
+              
+              // Strategy 1: Find city-state part (e.g., "Cuiabá - MT")
+              let cityStateIndex = -1;
+              for (let i = parts.length - 1; i >= 0; i--) {
+                const part = parts[i].trim();
+                // Look for pattern: "City - State" where state is 2-3 chars
+                if (part.includes(' - ') && part.split(' - ')[1].length <= 3) {
+                  cityStateIndex = i;
+                  break;
+                }
+              }
               
               if (cityStateIndex > 0) {
-                // The neighborhood is the part immediately before the city-state part
-                const neighborhoodPart = parts[cityStateIndex - 1].trim();
+                // Get the part immediately before city-state
+                const potentialNeighborhoodPart = parts[cityStateIndex - 1].trim();
+                console.log('📍 Potential neighborhood part:', potentialNeighborhoodPart);
                 
-                // If neighborhood part contains a dash, take what's after the dash
-                if (neighborhoodPart.includes(' - ')) {
-                  const dashSplit = neighborhoodPart.split(' - ');
-                  neighborhood = dashSplit[dashSplit.length - 1].trim(); // Take last part after dash
+                // Strategy 2: Extract from potential neighborhood part
+                if (potentialNeighborhoodPart.includes(' - ')) {
+                  // Split by dash and take the part after the last dash
+                  const dashParts = potentialNeighborhoodPart.split(' - ');
+                  neighborhood = dashParts[dashParts.length - 1].trim();
+                  console.log('✅ Neighborhood extracted after dash:', neighborhood);
                 } else {
-                  neighborhood = neighborhoodPart;
+                  // No dash, use the whole part as neighborhood
+                  neighborhood = potentialNeighborhoodPart;
+                  console.log('✅ Neighborhood extracted (no dash):', neighborhood);
                 }
               } else {
-                // Fallback to old logic if new logic doesn't work
-                const addressPart = parts[1]; // "número - Bairro"
-                if (addressPart && addressPart.includes(' - ')) {
-                  const addressSplit = addressPart.split(' - ');
-                  if (addressSplit.length >= 2) {
-                    neighborhood = addressSplit[1];
+                // Fallback: Try to extract from any part that contains a dash
+                console.log('🔄 Fallback: looking for dash in any part...');
+                for (let i = 1; i < parts.length - 2; i++) { // Skip first and last two parts
+                  const part = parts[i].trim();
+                  if (part.includes(' - ')) {
+                    const dashParts = part.split(' - ');
+                    if (dashParts.length >= 2) {
+                      neighborhood = dashParts[dashParts.length - 1].trim();
+                      console.log('✅ Fallback neighborhood extracted:', neighborhood);
+                      break;
+                    }
                   }
-                } else {
-                  neighborhood = addressPart;
                 }
+              }
+              
+              // Final fallback: if still no neighborhood, set a placeholder
+              if (!neighborhood || neighborhood.length < 2) {
+                neighborhood = 'BAIRRO A COMPLETAR';
+                console.log('⚠️ Using placeholder neighborhood');
+              } else {
+                console.log('✅ Final neighborhood result:', neighborhood);
               }
             }
           }
