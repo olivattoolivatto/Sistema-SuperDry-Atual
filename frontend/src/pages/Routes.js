@@ -925,12 +925,158 @@ export function Routes() {
             >
               <Save className="w-4 h-4 mr-2" />
               Salvar Rota
-            </button>
+      {/* Section 5: Visualize and Save (Always Visible) */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-center mb-6">
+          <RouteIcon className="w-5 h-5 text-blue-600 mr-2" />
+          <h2 className="text-xl font-semibold text-gray-900">Visualizar e Salvar</h2>
+        </div>
+
+        {/* Route Planning Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Data da Rota
+            </label>
+            <input
+              type="date"
+              value={routeDate}
+              onChange={(e) => setRouteDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Horário de Início
+            </label>
+            <input
+              type="time"
+              value={routeTime}
+              onChange={(e) => setRouteTime(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex items-end">
+            <div className="bg-white px-4 py-2 rounded-lg border border-gray-300">
+              <div className="flex items-center">
+                {currentVehicleType === 'CARRO' ? (
+                  <Truck className="w-4 h-4 text-blue-600 mr-2" />
+                ) : (
+                  <Bike className="w-4 h-4 text-green-600 mr-2" />
+                )}
+                <span className="text-sm font-medium">
+                  {currentVehicleType}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
-      )}
 
-      {/* Section 5: Saved Routes */}
+        {optimizedRoute ? (
+          <div>
+            {/* Route Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <MapPin className="w-5 h-5 text-blue-600 mr-2" />
+                  <div>
+                    <div className="text-sm text-blue-600 font-medium">Total de Paradas</div>
+                    <div className="text-2xl font-bold text-blue-900">{optimizedRoute.stops.length}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <Clock className="w-5 h-5 text-green-600 mr-2" />
+                  <div>
+                    <div className="text-sm text-green-600 font-medium">Duração Estimada</div>
+                    <div className="text-2xl font-bold text-green-900">{Math.floor(optimizedRoute.total_duration / 60)}h {optimizedRoute.total_duration % 60}min</div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <RouteIcon className="w-5 h-5 text-purple-600 mr-2" />
+                  <div>
+                    <div className="text-sm text-purple-600 font-medium">Distância Total</div>
+                    <div className="text-2xl font-bold text-purple-900">{optimizedRoute.total_distance} km</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Interactive Map */}
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Mapa da Rota Otimizada</h3>
+              <div className="border border-gray-300 rounded-lg overflow-hidden">
+                <div 
+                  ref={mapRef}
+                  style={{ height: '400px', width: '100%' }}
+                  className="bg-gray-100"
+                />
+              </div>
+              <div className="mt-2 text-xs text-gray-500 flex items-center">
+                <MapPin className="w-3 h-3 mr-1" />
+                Mapa centralizado em Cuiabá • 🏢 = Empresa (início/fim) • Números = Paradas ordenadas
+              </div>
+            </div>
+
+            {/* Route Details Summary */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">Resumo da Rota Otimizada</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Início:</span>
+                  <div className="font-medium">{routeTime}</div>
+                </div>
+                <div>
+                  <span className="text-gray-500">Duração Total:</span>
+                  <div className="font-medium">{Math.floor(optimizedRoute.total_duration / 60)}h {optimizedRoute.total_duration % 60}min</div>
+                </div>
+                <div>
+                  <span className="text-gray-500">Distância:</span>
+                  <div className="font-medium">{optimizedRoute.total_distance} km</div>
+                </div>
+                <div>
+                  <span className="text-gray-500">Valor Total:</span>
+                  <div className="font-medium text-green-600">
+                    R$ {optimizedRoute.stops.reduce((total, stop) => total + stop.service_value, 0).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => {
+                  setOptimizedRoute(null);
+                  setStopPriorities({});
+                }}
+                className="flex items-center px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <Edit3 className="w-4 h-4 mr-2" />
+                Limpar
+              </button>
+              <button
+                onClick={handleSaveRoute}
+                className="flex items-center px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Salvar Rota
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-500">
+            <MapPin className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma Rota Otimizada</h3>
+            <p>Use o botão "Calcular Rota Otimizada" na seção de priorização para gerar uma rota.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Section 6: Saved Routes */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center mb-6">
           <RouteIcon className="w-5 h-5 text-orange-600 mr-2" />
