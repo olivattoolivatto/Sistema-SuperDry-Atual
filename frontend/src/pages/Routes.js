@@ -307,41 +307,96 @@ export function Routes() {
     console.log('✅ Items moved to prioritization successfully');
   };
 
-  const handlePriorityChange = async (stopId, newPriority) => {
-    try {
-      setStopPriorities(prev => ({
-        ...prev,
-        [stopId]: newPriority
-      }));
+  const handlePriorityChange = async (itemId, newPriority) => {
+    setPrioritizationItems(prev => 
+      prev.map(item => 
+        item.budget_item_id === itemId 
+          ? { ...item, priority: newPriority }
+          : item
+      )
+    );
+  };
 
-      // Update backend with new priorities
-      const updatedStops = optimizedRoute.stops.map(stop => ({
-        budget_item_id: stop.budget_item_id,
-        priority: stop.id === stopId ? newPriority : stopPriorities[stop.id] || stop.priority
-      }));
-
-      await routesApi.updateRouteStops(optimizedRoute.id, updatedStops);
-      
-      // Re-optimize with new priorities  
-      await routesApi.optimizeRoute(optimizedRoute.id);
-      
-      // Refresh route data
-      const routeDetails = await routesApi.getRoute(optimizedRoute.id);
-      setOptimizedRoute(routeDetails.data);
-      
+  const handleOptimizeFromPrioritization = async () => {
+    if (prioritizationItems.length === 0) {
       toast({
-        title: "Prioridade atualizada!",
-        description: `Rota re-otimizada com nova prioridade.`,
+        title: "Aviso",
+        description: "Adicione itens à lista de priorização antes de otimizar.",
         variant: "default",
       });
+      return;
+    }
 
+    try {
+      console.log('🔨 Creating route from prioritization...');
+      
+      // Create route
+      const routeData = {
+        vehicle_type: currentVehicleType,
+        planned_date: routeDate,
+        planned_start_time: routeTime,
+        stops: []
+      };
+
+      const createResponse = await routesApi.createRoute(routeData);
+      console.log('✅ Route created:', createResponse.data.id);
+      const routeId = createResponse.data.id;
+      
+      // Add stops with priorities from prioritization list
+      const stopsData = prioritizationItems.map(item => ({
+        budget_item_id: item.budget_item_id,
+        priority: item.priority
+      }));
+      
+      console.log('📍 Adding stops with priorities:', stopsData);
+      await routesApi.updateRouteStops(routeId, stopsData);
+      
+      // Optimize route
+      console.log('⚡ Optimizing route...');
+      const optimizeResponse = await routesApi.optimizeRoute(routeId);
+      console.log('⚡ Optimization response:', optimizeResponse.data);
+      
+      // Get optimized route details
+      console.log('📋 Getting route details...');
+      const routeDetails = await routesApi.getRoute(routeId);
+      console.log('📋 Route details:', routeDetails.data);
+      
+      setOptimizedRoute(routeDetails.data);
+      
+      // Initialize stop priorities state
+      const priorities = {};
+      routeDetails.data.stops.forEach(stop => {
+        priorities[stop.id] = stop.priority;
+      });
+      setStopPriorities(priorities);
+      
+      console.log('🎉 Route optimization completed successfully!');
+      
+      toast({
+        title: "Sucesso!",
+        description: `Rota otimizada com ${optimizeResponse.data.total_stops} paradas.`,
+        variant: "default",
+      });
+      
     } catch (error) {
-      console.error('Erro ao atualizar prioridade:', error);
+      console.error('Erro ao otimizar rota:', error);
       toast({
         title: "Erro!",
-        description: "Erro ao atualizar prioridade.",
+        description: "Erro ao otimizar rota. Tente novamente.",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleRemoveFromPrioritization = (itemId) => {
+    const itemToRemove = prioritizationItems.find(item => item.budget_item_id === itemId);
+    
+    // Remove from prioritization list
+    setPrioritizationItems(prev => prev.filter(item => item.budget_item_id !== itemId));
+    
+    // Add back to available items
+    if (itemToRemove) {
+      setAvailableItems(prev => [...prev, itemToRemove]);
     }
   };
 
