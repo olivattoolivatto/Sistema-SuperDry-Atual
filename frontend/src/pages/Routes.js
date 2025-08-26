@@ -35,6 +35,23 @@ export function Routes() {
   const [savedRoutes, setSavedRoutes] = useState([]);
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [loading, setLoading] = useState(true);
+  // Debug tools
+  const extractDebugLogs = () => {
+    const logs = localStorage.getItem('routesDebugLogs') || '';
+    console.log('📋 DEBUG LOGS EXPORT:');
+    console.log('='.repeat(80));
+    console.log(logs);
+    console.log('='.repeat(80));
+    return logs;
+  };
+
+  // Add debug logs to global window for easy access
+  useEffect(() => {
+    window.extractRoutesDebugLogs = extractDebugLogs;
+    console.log('🔧 Debug function available: window.extractRoutesDebugLogs()');
+  }, []);
+
+  // Debug state
   const [debugInfo, setDebugInfo] = useState(''); // Debug info state
   
   // Enhanced logging system
