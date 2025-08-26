@@ -654,17 +654,65 @@ export function Routes() {
 
         {prioritizationItems.length > 0 ? (
           <div>
-            {/* Vehicle Type Indicator */}
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center">
-                {currentVehicleType === 'CARRO' ? (
-                  <Truck className="w-4 h-4 text-blue-600 mr-2" />
-                ) : (
-                  <Bike className="w-4 h-4 text-green-600 mr-2" />
-                )}
-                <span className="text-sm font-medium text-gray-700">
-                  Tipo de Veículo: <span className="font-bold">{currentVehicleType}</span>
-                </span>
+            {/* Vehicle Type and Route Type Selectors */}
+            <div className="mb-6 space-y-4">
+              {/* Vehicle Type Indicator */}
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center">
+                  {currentVehicleType === 'CARRO' ? (
+                    <Truck className="w-4 h-4 text-blue-600 mr-2" />
+                  ) : (
+                    <Bike className="w-4 h-4 text-green-600 mr-2" />
+                  )}
+                  <span className="text-sm font-medium text-gray-700">
+                    Tipo de Veículo: <span className="font-bold">{currentVehicleType}</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Route Type Selection */}
+              <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                <h4 className="text-sm font-medium text-purple-900 mb-3">Tipo de Rota:</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setRouteType('CURTA')}
+                    className={`flex items-center justify-center px-4 py-3 rounded-lg border-2 transition-colors ${
+                      routeType === 'CURTA'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                    }`}
+                  >
+                    <RouteIcon className="w-4 h-4 mr-2" />
+                    <div className="text-left">
+                      <div className="font-medium">ROTA CURTA</div>
+                      <div className="text-xs opacity-75">Menor distância possível</div>
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => setRouteType('EFICIENTE')}
+                    className={`flex items-center justify-center px-4 py-3 rounded-lg border-2 transition-colors ${
+                      routeType === 'EFICIENTE'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-green-300'
+                    }`}
+                  >
+                    <Clock className="w-4 h-4 mr-2" />
+                    <div className="text-left">
+                      <div className="font-medium">ROTA EFICIENTE</div>
+                      <div className="text-xs opacity-75">Menor tempo, melhor trânsito</div>
+                    </div>
+                  </button>
+                </div>
+                
+                {/* Route type description */}
+                <div className="mt-3 text-xs text-gray-600">
+                  {routeType === 'CURTA' ? (
+                    "🎯 Calcula o trajeto com menor quilometragem total"
+                  ) : (
+                    "⚡ Considera trânsito, lado da rua e eficiência temporal"
+                  )}
+                </div>
               </div>
             </div>
 
