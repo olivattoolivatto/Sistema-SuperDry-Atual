@@ -265,18 +265,37 @@ const ClientForm = ({ client, onSave, onCancel }) => {
               city = city || thirdLastPart;
             }
             
-            // Extract neighborhood correctly from second part after dash
-            if (parts.length >= 2 && !neighborhood) {
-              const addressPart = parts[1]; // "número - Bairro"
-              if (addressPart && addressPart.includes(' - ')) {
-                // Split by dash and take the part after it (Bairro)
-                const addressSplit = addressPart.split(' - ');
-                if (addressSplit.length >= 2) {
-                  neighborhood = addressSplit[1]; // Take the neighborhood part after the dash
+            // Extract neighborhood correctly - NEW LOGIC
+            // Format example: "R. Mal. Mascarenhas de Morães, 278-A - Duque de Caxias II, Cuiabá - MT, 78043-352, Brasil"
+            // Neighborhood = what comes before the city (reading right to left)
+            if (parts.length >= 3 && !neighborhood) {
+              // Find the part with city - state format
+              const cityStateIndex = parts.findIndex(part => 
+                part.includes(' - ') && part.split(' - ')[1].length <= 3
+              );
+              
+              if (cityStateIndex > 0) {
+                // The neighborhood is the part immediately before the city-state part
+                const neighborhoodPart = parts[cityStateIndex - 1].trim();
+                
+                // If neighborhood part contains a dash, take what's after the dash
+                if (neighborhoodPart.includes(' - ')) {
+                  const dashSplit = neighborhoodPart.split(' - ');
+                  neighborhood = dashSplit[dashSplit.length - 1].trim(); // Take last part after dash
+                } else {
+                  neighborhood = neighborhoodPart;
                 }
               } else {
-                // If no dash, the whole second part might be the neighborhood
-                neighborhood = addressPart;
+                // Fallback to old logic if new logic doesn't work
+                const addressPart = parts[1]; // "número - Bairro"
+                if (addressPart && addressPart.includes(' - ')) {
+                  const addressSplit = addressPart.split(' - ');
+                  if (addressSplit.length >= 2) {
+                    neighborhood = addressSplit[1];
+                  }
+                } else {
+                  neighborhood = addressPart;
+                }
               }
             }
           }
