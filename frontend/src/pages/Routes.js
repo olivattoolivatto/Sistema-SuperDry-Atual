@@ -51,6 +51,45 @@ export function Routes() {
     console.log('🔧 Debug function available: window.extractRoutesDebugLogs()');
   }, []);
 
+  // Generate route alias based on date and time
+  const generateRouteAlias = (planned_date, planned_start_time) => {
+    try {
+      const date = new Date(planned_date);
+      const [hours] = planned_start_time.split(':');
+      const hour = parseInt(hours);
+      
+      // Determine period
+      const period = hour >= 13 ? 'TARDE' : 'MANHÃ';
+      
+      // Get day of week in Portuguese
+      const dayNames = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+      const dayName = dayNames[date.getDay()];
+      
+      // Format date as DD/MM/YY
+      const formattedDate = date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit'
+      });
+      
+      return `Rota ${period} da ${dayName} ${formattedDate}`;
+    } catch (error) {
+      return `Rota ${planned_date}`;
+    }
+  };
+
+  // Get neighborhoods from route stops
+  const getRouteNeighborhoods = (stops) => {
+    if (!stops || stops.length === 0) return '';
+    
+    const neighborhoods = stops
+      .map(stop => stop.address?.neighborhood || stop.neighborhood)
+      .filter(n => n && n.trim() !== '')
+      .filter((neighborhood, index, arr) => arr.indexOf(neighborhood) === index); // Remove duplicates
+    
+    return neighborhoods.length > 0 ? neighborhoods.join(', ') : 'Bairros não informados';
+  };
+
   // Debug state
   const [debugInfo, setDebugInfo] = useState(''); // Debug info state
   
