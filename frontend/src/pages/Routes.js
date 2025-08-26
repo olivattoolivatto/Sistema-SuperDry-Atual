@@ -108,42 +108,71 @@ export function Routes() {
   };
 
   const initializeEmptyMap = () => {
-    console.log('🗺️ Initializing empty map...');
+    console.log('🗺️ Tentando inicializar mapa vazio...');
     
     if (!mapRef.current) {
-      console.log('❌ Map container not available');
+      console.log('❌ Elemento do mapa não encontrado');
       return;
     }
 
     try {
       // Remove existing map if any
       if (mapInstanceRef.current) {
+        console.log('🧹 Removendo mapa existente...');
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
+
+      // Check if Leaflet is available
+      if (typeof L === 'undefined') {
+        console.log('❌ Leaflet não está disponível');
+        return;
+      }
+
+      console.log('✅ Leaflet disponível, criando mapa...');
 
       // Default to Cuiabá coordinates
       const defaultLat = -15.601481;
       const defaultLng = -56.097389;
 
-      // Create map centered on Cuiabá
-      mapInstanceRef.current = L.map(mapRef.current, {
-        center: [defaultLat, defaultLng],
-        zoom: 11,
-        zoomControl: true,
-        scrollWheelZoom: true
-      });
+      // Create map with basic configuration
+      mapInstanceRef.current = L.map(mapRef.current).setView([defaultLat, defaultLng], 11);
 
       // Add OpenStreetMap tiles
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
+        attribution: '© OpenStreetMap contributors'
       }).addTo(mapInstanceRef.current);
 
-      console.log('✅ Empty map initialized successfully');
+      // Add a simple marker to show the map is working
+      L.marker([defaultLat, defaultLng])
+        .addTo(mapInstanceRef.current)
+        .bindPopup('Centro de Cuiabá<br>Aguardando dados da rota...');
+
+      console.log('✅ Mapa vazio inicializado com sucesso!');
+      
+      // Force resize after initialization
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+          console.log('🔄 Mapa redimensionado');
+        }
+      }, 100);
       
     } catch (error) {
-      console.error('❌ Error initializing empty map:', error);
+      console.error('❌ Erro ao inicializar mapa vazio:', error);
+      
+      // Fallback: show simple message in map container
+      if (mapRef.current) {
+        mapRef.current.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #f3f4f6; color: #6b7280; font-size: 14px;">
+            <div style="text-align: center;">
+              <div>🗺️</div>
+              <div>Mapa será exibido aqui</div>
+              <div style="font-size: 12px; margin-top: 8px;">Aguardando otimização de rota...</div>
+            </div>
+          </div>
+        `;
+      }
     }
   };
 
