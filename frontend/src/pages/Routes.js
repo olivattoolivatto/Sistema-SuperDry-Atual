@@ -731,7 +731,11 @@ export function Routes() {
           </div>
           {prioritizationItems.length > 0 && (
             <button
-              onClick={handleOptimizeFromPrioritization}
+              onClick={() => {
+                console.log('🚀 BOTÃO CALCULAR ROTA CLICADO!');
+                console.log('Items na priorização:', prioritizationItems);
+                handleOptimizeFromPrioritization();
+              }}
               className="flex items-center px-6 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-lg transition-colors"
             >
               <Play className="w-4 h-4 mr-2" />
