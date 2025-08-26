@@ -319,7 +319,7 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
     }
 
     const newItem = {
-      id: `ITM-${String(Date.now()).slice(-7).padStart(7, '0')}`,
+      id: editingItem ? editingItem.id : `ITM-${String(Date.now()).slice(-7).padStart(7, '0')}`,
       service_id: itemData.service_id,
       service_name: service.name,
       service_code: itemData.service_id,
@@ -329,16 +329,20 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
       linear_meters: linear_meters,
       total_value: finalQuantity * unit_price,
       observations: itemData.observations || '',
-      status: 'RETIRAR',
+      status: editingItem ? editingItem.status : 'RETIRAR',
       execution_location: service.execution_location || 'RETIRADA',
-      created_at: new Date().toISOString()
+      is_retoque: editingItem ? editingItem.is_retoque : false,
+      created_at: editingItem ? editingItem.created_at : new Date().toISOString()
     };
 
     setFormData(prev => ({
       ...prev,
-      items: [...prev.items, newItem]
+      items: editingItem 
+        ? prev.items.map(item => item.id === editingItem.id ? newItem : item)
+        : [...prev.items, newItem]
     }));
     setShowItemForm(false);
+    setEditingItem(null); // Clear editing state
   };
 
   const handleEditItem = (item) => {
