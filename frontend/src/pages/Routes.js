@@ -974,6 +974,27 @@ export function Routes() {
           </div>
         </div>
 
+        {/* Interactive Map - ALWAYS VISIBLE */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            {optimizedRoute ? 'Mapa da Rota Otimizada' : 'Mapa de Cuiabá - Aguardando Rota'}
+          </h3>
+          <div className="border border-gray-300 rounded-lg overflow-hidden">
+            <div 
+              ref={mapRef}
+              style={{ height: '400px', width: '100%' }}
+              className="bg-gray-100"
+            />
+          </div>
+          <div className="mt-2 text-xs text-gray-500 flex items-center">
+            <MapPin className="w-3 h-3 mr-1" />
+            {optimizedRoute 
+              ? 'Mapa com rota otimizada • 🏢 = Empresa • Números = Paradas'
+              : 'Mapa aguardando dados da otimização de rota'
+            }
+          </div>
+        </div>
+
         {optimizedRoute ? (
           <div>
             {/* Route Summary */}
