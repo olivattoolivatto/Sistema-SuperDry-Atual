@@ -306,29 +306,48 @@ def format_coordinates_for_osrm(coordinates: List[Tuple[float, float]]) -> str:
     """Format coordinates for OSRM API (longitude,latitude)"""
     return ";".join([f"{lng},{lat}" for lng, lat in coordinates])
 
-async def calculate_route_osrm(coordinates: List[Tuple[float, float]], vehicle_type: str = "driving") -> dict:
-    """Calculate route using OSRM API"""
+async def calculate_route_osrm(coordinates: List[Tuple[float, float]], vehicle_type: str = "driving", route_type: str = "CURTA") -> dict:
+    """Calculate route using OSRM API with different optimization strategies"""
     try:
         coords_str = format_coordinates_for_osrm(coordinates)
         
-        # Use OSRM Trip service for route optimization
-        url = f"{OSRM_BASE_URL}/trip/v1/{vehicle_type}/{coords_str}"
+        if route_type == "EFICIENTE":
+            # For efficient routes, try to get more detailed routing with annotations
+            url = f"{OSRM_BASE_URL}/trip/v1/{vehicle_type}/{coords_str}"
+            params = {
+                'source': 'first',  # Start from first coordinate (company)
+                'destination': 'last',  # End at last coordinate (company)
+                'roundtrip': 'true',
+                'steps': 'true',
+                'geometries': 'geojson',
+                'overview': 'full',
+                'annotations': 'true',  # Get additional info for efficiency
+            }
+        else:
+            # For short routes, optimize for distance
+            url = f"{OSRM_BASE_URL}/trip/v1/{vehicle_type}/{coords_str}"
+            params = {
+                'source': 'first',  # Start from first coordinate (company)
+                'destination': 'last',  # End at last coordinate (company)
+                'roundtrip': 'true',
+                'steps': 'true',
+                'geometries': 'geojson',
+                'overview': 'full'
+            }
         
-        params = {
-            'source': 'first',  # Start from first coordinate (company)
-            'destination': 'last',  # End at last coordinate (company)
-            'roundtrip': 'true',
-            'steps': 'true',
-            'geometries': 'geojson',
-            'overview': 'full'
-        }
+        print(f"🚗 OSRM request: {url}")
+        print(f"📊 Route type: {route_type}")
+        print(f"📍 Coordinates: {len(coordinates)} points")
         
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, timeout=15)
         response.raise_for_status()
         
-        return response.json()
+        result = response.json()
+        print(f"✅ OSRM response received: {len(result.get('trips', []))} trips")
+        
+        return result
     except Exception as e:
-        print(f"OSRM API Error: {e}")
+        print(f"❌ OSRM API Error: {e}")
         return {"error": str(e)}
 
 async def calculate_distance_matrix_osrm(coordinates: List[Tuple[float, float]]) -> dict:
