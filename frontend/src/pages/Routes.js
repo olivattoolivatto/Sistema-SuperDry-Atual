@@ -1022,7 +1022,10 @@ export function Routes() {
               <strong>🔧 Debug:</strong> {debugInfo}
             </div>
             <div className="text-xs text-blue-600 mt-1">
-              optimizedRoute: {optimizedRoute ? `${optimizedRoute.stops.length} paradas` : 'null'}
+              optimizedRoute: {optimizedRoute ? `${optimizedRoute.stops?.length || 0} paradas - ${optimizedRoute.total_distance || '0'} km - ${optimizedRoute.total_duration || '0'} min` : 'null'}
+            </div>
+            <div className="text-xs text-blue-600 mt-1">
+              Last updated: {new Date().toLocaleTimeString()}
             </div>
           </div>
         )}
