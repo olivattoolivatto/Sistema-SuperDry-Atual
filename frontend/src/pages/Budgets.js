@@ -759,9 +759,30 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
         linear_meters: editingItem.linear_meters || ''
       });
       const service = services.find(s => s.id === editingItem.service_id);
-      setSelectedService(service);
+      if (service) {
+        setSelectedService(service);
+        setServiceSearchTerm(service.name); // Set search term to service name
+      }
     }
   }, [editingItem, services]);
+
+  const handleServiceSelect = (service) => {
+    setSelectedService(service);
+    setServiceSearchTerm(service.name);
+    setFormData(prev => ({ ...prev, service_id: service.id }));
+    setShowServiceDropdown(false);
+  };
+
+  const handleServiceSearchChange = (e) => {
+    const value = e.target.value;
+    setServiceSearchTerm(value);
+    
+    // Clear selected service if search is cleared
+    if (value === '') {
+      setSelectedService(null);
+      setFormData(prev => ({ ...prev, service_id: '' }));
+    }
+  };
 
   const handleServiceChange = (e) => {
     const serviceId = e.target.value;
