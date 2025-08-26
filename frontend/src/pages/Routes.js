@@ -1057,6 +1057,9 @@ export function Routes() {
           <table className="min-w-full table-auto">
             <thead>
               <tr className="bg-gray-50">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Selecionar Veículo
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden">
                   Selecionar
                 </th>
@@ -1071,9 +1074,6 @@ export function Routes() {
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Valor
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Selecionar Veículo
                 </th>
               </tr>
             </thead>
