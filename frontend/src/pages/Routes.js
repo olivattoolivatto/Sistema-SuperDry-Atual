@@ -465,6 +465,12 @@ export function Routes() {
     }
   };
 
+  console.log('🔍 Current state values:');
+  console.log('- carRouteItems:', carRouteItems);
+  console.log('- motoRouteItems:', motoRouteItems);
+  console.log('- availableItems:', availableItems.length);
+  console.log('- optimizedRoute:', optimizedRoute ? optimizedRoute.id : 'null');
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
