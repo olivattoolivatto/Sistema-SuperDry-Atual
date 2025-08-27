@@ -51,6 +51,28 @@ export function Routes() {
     console.log('🔧 Debug function available: window.extractRoutesDebugLogs()');
   }, []);
 
+  // Convert UTC to Cuiabá timezone (GMT-4)
+  const formatCuiabaTime = (utcDateString) => {
+    try {
+      const utcDate = new Date(utcDateString);
+      // Cuiabá is GMT-4 (4 hours behind UTC)
+      const cuiabaTime = new Date(utcDate.getTime() - (4 * 60 * 60 * 1000));
+      
+      return cuiabaTime.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: 'America/Cuiaba' // This ensures proper timezone handling
+      });
+    } catch (error) {
+      // Fallback to UTC if conversion fails
+      return new Date(utcDateString).toLocaleString('pt-BR');
+    }
+  };
+
   // Generate route alias based on date and time with future suggestions
   const generateRouteAlias = (planned_date, planned_start_time) => {
     try {
