@@ -1155,22 +1155,11 @@ export function Routes() {
 
       {/* Section 4: Route Prioritization */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center mb-6">
           <div className="flex items-center">
             <RouteIcon className="w-5 h-5 text-purple-600 mr-2" />
             <h2 className="text-xl font-semibold text-gray-900">Priorização de Rota</h2>
           </div>
-          {prioritizationItems.length > 0 && (
-            <button
-              onClick={() => {
-                handleCalculateOptimizedRoute(routeType);
-              }}
-              className="flex items-center px-6 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-lg transition-colors"
-            >
-              <Play className="w-4 h-4 mr-2" />
-              Calcular Rota Otimizada
-            </button>
-          )}
         </div>
 
         {prioritizationItems.length > 0 ? (
