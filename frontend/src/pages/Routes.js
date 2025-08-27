@@ -945,10 +945,27 @@ export function Routes() {
     } catch (error) {
       console.error('❌ ERRO NA OTIMIZAÇÃO:', error);
       console.error('Error details:', error.response?.data || error.message);
-      logAction('CALCULATE_ROUTE_ERROR', { error: error.message, routeType });
+      console.error('Error code:', error.code);
+      
+      let errorMessage = "Erro ao otimizar rota. Verifique o console para detalhes.";
+      
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        errorMessage = "Timeout na otimização da rota. O OSRM pode estar sobrecarregado. Tente novamente em alguns segundos.";
+        console.error('🕒 TIMEOUT ERROR: OSRM optimization took too long');
+      } else if (error.response?.status === 500) {
+        errorMessage = "Erro interno no servidor durante a otimização. Verifique se todos os endereços são válidos.";
+      }
+      
+      logAction('CALCULATE_ROUTE_ERROR', { 
+        error: error.message, 
+        routeType, 
+        errorCode: error.code,
+        isTimeout: error.code === 'ECONNABORTED'
+      });
+      
       toast({
         title: "Erro!",
-        description: "Erro ao otimizar rota. Verifique o console para detalhes.",
+        description: errorMessage,
         variant: "destructive",
       });
     }
