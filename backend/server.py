@@ -400,23 +400,32 @@ async def optimize_route_with_priorities(stops: List[RouteStop], company_coords:
             osrm_result = await calculate_route_osrm(coords)
             
             if 'trips' in osrm_result and len(osrm_result['trips']) > 0:
-                # Get the optimized waypoint order
+                # Get the optimized waypoint order from OSRM
                 waypoints = osrm_result['waypoints']
                 optimized_order = []
                 
-                # Skip first and last (company positions)
+                print(f"🗺️ OSRM returned {len(waypoints)} waypoints")
+                
+                # Skip first and last waypoints (company positions)
                 for i, waypoint in enumerate(waypoints[1:-1]):
                     waypoint_index = waypoint.get('waypoint_index', i)
+                    print(f"📍 Waypoint {i+1}: index={waypoint_index}, hint={waypoint.get('hint', '')[:20]}...")
+                    
                     if waypoint_index < len(automatica_stops):
                         optimized_order.append(automatica_stops[waypoint_index])
+                        print(f"✅ Added stop: {automatica_stops[waypoint_index].client_name}")
                 
                 if optimized_order:
                     optimized_automatica = optimized_order
-                    print(f"OSRM optimization successful: {len(optimized_order)} stops reordered")
+                    print(f"🚀 OSRM optimization successful: {len(optimized_order)} stops reordered")
+                    
+                    # Log the optimized sequence
+                    for idx, stop in enumerate(optimized_automatica):
+                        print(f"  {idx+1}. {stop.client_name} (Priority: {stop.priority})")
                 else:
-                    print("OSRM returned empty order, using original")
+                    print("❌ OSRM returned empty order, using original")
             else:
-                print("OSRM response missing trips data, using original order")
+                print("❌ OSRM response missing trips data, using original order")
         except Exception as e:
             print(f"OSRM optimization failed: {e}, using original order")
     else:
