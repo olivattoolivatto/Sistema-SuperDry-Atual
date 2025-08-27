@@ -428,15 +428,50 @@ export function Routes() {
 
       // Add company marker (start/end point)
       const companyIcon = L.divIcon({
-        html: `<div style="background-color: #10B981; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 3px 6px rgba(0,0,0,0.4); font-size: 16px;">🏢</div>`,
-        className: 'custom-div-icon',
-        iconSize: [35, 35],
-        iconAnchor: [17, 17]
+        className: 'company-marker',
+        html: `<div style="
+          background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+          color: white;
+          width: 50px;
+          height: 50px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          border: 4px solid white;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+          font-size: 20px;
+          position: relative;
+        ">
+          🏢
+          <div style="
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #059669;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 8px;
+            white-space: nowrap;
+          ">INÍCIO/FIM</div>
+        </div>`,
+        iconSize: [50, 50],
+        iconAnchor: [25, 25]
       });
-
+      
       const companyMarker = L.marker([companyLat, companyLng], { icon: companyIcon })
         .addTo(mapInstanceRef.current)
-        .bindPopup(`<div style="font-size: 14px;"><b>🏢 Empresa - Início/Fim da Rota</b><br>${optimizedRoute.company_address.full_address || 'Endereço da empresa'}</div>`);
+        .bindPopup(`<div style="text-align: center;">
+          <h4 style="margin: 0 0 8px 0; color: #10B981; font-weight: bold;">🏢 ${optimizedRoute.company_address.name || 'SuperDry - Sede'}</h4>
+          <div style="background: #F0FDF4; padding: 8px; border-radius: 6px; margin: 8px 0;">
+            <p style="margin: 0; color: #059669; font-weight: bold;">🚀 INÍCIO da Rota (1º local)</p>
+            <p style="margin: 4px 0 0 0; color: #059669; font-weight: bold;">🏁 FIM da Rota (último local)</p>
+          </div>
+          <p style="margin: 4px 0; font-size: 11px; color: #666;">${optimizedRoute.company_address.full_address || 'Endereço da empresa'}</p>
+        </div>`);
 
       console.log('✅ Company marker added');
       logAction('COMPANY_MARKER_ADDED', { coordinates: [companyLat, companyLng] });
