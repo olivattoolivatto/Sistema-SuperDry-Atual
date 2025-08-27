@@ -426,16 +426,36 @@ export function Routes() {
         const lat = stop.address.latitude;
         const lng = stop.address.longitude;
         
-        console.log(`📍 Adding stop ${index + 1} at:`, { lat, lng, client: stop.client_name });
+        console.log(`📍 Adding stop for ${stop.client_name} at:`, { lat, lng, client: stop.client_name });
         logAction('ADDING_STOP_MARKER', { stopIndex: index + 1, coordinates: [lat, lng], clientName: stop.client_name });
         
         if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-          // Create numbered marker with better visibility
+          // Create client name marker with better visibility
+          // Get first name or first 8 characters for display
+          const displayName = stop.client_name.split(' ')[0] || stop.client_name.substring(0, 8);
+          
           const markerIcon = L.divIcon({
-            html: `<div style="background-color: #DC2626; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 3px 6px rgba(0,0,0,0.4); font-size: 14px;">${index + 1}</div>`,
+            html: `<div style="
+              background-color: #DC2626; 
+              color: white; 
+              border-radius: 8px; 
+              padding: 4px 8px;
+              display: flex; 
+              align-items: center; 
+              justify-content: center; 
+              font-weight: bold; 
+              border: 2px solid white; 
+              box-shadow: 0 3px 6px rgba(0,0,0,0.4); 
+              font-size: 11px;
+              min-width: 50px;
+              max-width: 80px;
+              white-space: nowrap;
+              text-overflow: ellipsis;
+              overflow: hidden;
+            ">${displayName}</div>`,
             className: 'custom-div-icon',
-            iconSize: [35, 35],
-            iconAnchor: [17, 17]
+            iconSize: [60, 25],
+            iconAnchor: [30, 12]
           });
 
           const marker = L.marker([lat, lng], { icon: markerIcon })
@@ -444,7 +464,8 @@ export function Routes() {
           // Create detailed popup content
           const popupContent = `
             <div style="min-width: 250px; font-size: 13px;">
-              <h4 style="margin: 0 0 8px 0; color: #DC2626; font-weight: bold;">Parada ${index + 1}: ${stop.client_name}</h4>
+              <h4 style="margin: 0 0 8px 0; color: #DC2626; font-weight: bold;">${stop.client_name}</h4>
+              <p style="margin: 4px 0;"><b>Ordem de Entrega:</b> ${index + 1}º parada</p>
               <p style="margin: 4px 0;"><b>Serviço:</b> ${stop.service_name}</p>
               <p style="margin: 4px 0;"><b>Valor:</b> R$ ${stop.service_value.toFixed(2)}</p>
               <p style="margin: 4px 0;"><b>Duração:</b> ${stop.estimated_duration} minutos</p>
@@ -458,11 +479,11 @@ export function Routes() {
           marker.bindPopup(popupContent);
           markers.push(marker);
           
-          console.log(`✅ Stop ${index + 1} marker added`);
-          logAction('STOP_MARKER_ADDED', { stopIndex: index + 1, clientName: stop.client_name });
+          console.log(`✅ Stop marker added for ${stop.client_name}`);
+          logAction('STOP_MARKER_ADDED', { clientName: stop.client_name, deliveryOrder: index + 1 });
         } else {
-          console.log(`❌ Invalid coordinates for stop ${index + 1}:`, { lat, lng });
-          logAction('INVALID_STOP_COORDINATES', { stopIndex: index + 1, coordinates: [lat, lng] });
+          console.log(`❌ Invalid coordinates for ${stop.client_name}:`, { lat, lng });
+          logAction('INVALID_STOP_COORDINATES', { clientName: stop.client_name, coordinates: [lat, lng] });
         }
       });
 
