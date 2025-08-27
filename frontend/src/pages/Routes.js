@@ -1291,6 +1291,19 @@ export function Routes() {
                 </div>
               </div>
             </div>
+
+            {/* Calcular Rota Otimizada Button - Moved to bottom */}
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={() => {
+                  handleCalculateOptimizedRoute(routeType);
+                }}
+                className="flex items-center px-8 py-3 bg-purple-600 text-white hover:bg-purple-700 rounded-lg transition-colors shadow-lg"
+              >
+                <Play className="w-5 h-5 mr-3" />
+                <span className="font-medium">Calcular Rota Otimizada</span>
+              </button>
+            </div>
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500">
