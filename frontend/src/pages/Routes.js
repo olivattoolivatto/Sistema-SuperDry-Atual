@@ -479,16 +479,33 @@ export function Routes() {
       // Add numbered markers for each stop
       const markers = [companyMarker]; // For bounds calculation
       
-      optimizedRoute.stops.forEach((stop, index) => {
+      // Sort stops by order_sequence to display in optimized order
+      const sortedStops = [...optimizedRoute.stops].sort((a, b) => (a.order_sequence || 0) - (b.order_sequence || 0));
+      
+      sortedStops.forEach((stop, arrayIndex) => {
         const lat = stop.address.latitude;
         const lng = stop.address.longitude;
         
-        console.log(`📍 Adding stop for ${stop.client_name} at:`, { lat, lng, client: stop.client_name, order: stop.order_sequence });
-        logAction('ADDING_STOP_MARKER', { stopIndex: index + 1, coordinates: [lat, lng], clientName: stop.client_name, orderSequence: stop.order_sequence });
+        // Use the OSRM-optimized order_sequence, not array index
+        const deliveryOrder = stop.order_sequence || (arrayIndex + 1);
+        
+        console.log(`📍 Adding stop for ${stop.client_name} at:`, { 
+          lat, lng, 
+          client: stop.client_name, 
+          order: deliveryOrder,
+          originalIndex: arrayIndex + 1,
+          osrmSequence: stop.order_sequence 
+        });
+        
+        logAction('ADDING_STOP_MARKER', { 
+          stopIndex: arrayIndex + 1, 
+          coordinates: [lat, lng], 
+          clientName: stop.client_name, 
+          orderSequence: deliveryOrder,
+          osrmOptimized: stop.order_sequence 
+        });
         
         if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-          // Use order_sequence from backend (proper delivery order)
-          const deliveryOrder = stop.order_sequence || (index + 1);
           const displayName = stop.client_name.split(' ')[0] || stop.client_name.substring(0, 8);
           
           const markerIcon = L.divIcon({
@@ -512,14 +529,15 @@ export function Routes() {
                 background: #FFF; 
                 color: #DC2626; 
                 border-radius: 50%; 
-                width: 20px; 
-                height: 20px; 
+                width: 22px; 
+                height: 22px; 
                 display: flex; 
                 align-items: center; 
                 justify-content: center; 
-                font-size: 10px; 
+                font-size: 11px; 
                 font-weight: bold;
                 margin-right: 6px;
+                border: 1px solid #DC2626;
               ">${deliveryOrder}</span>
               <span style="font-size: 11px;">${displayName}</span>
             </div>`,
@@ -531,14 +549,17 @@ export function Routes() {
           const marker = L.marker([lat, lng], { icon: markerIcon })
             .addTo(mapInstanceRef.current);
 
-          // Create detailed popup content with sequence information
+          // Create detailed popup content with correct sequence information
           const popupContent = `
             <div style="min-width: 280px; font-size: 13px;">
               <h4 style="margin: 0 0 8px 0; color: #DC2626; font-weight: bold;">
                 🎯 ${deliveryOrder}ª PARADA: ${stop.client_name}
               </h4>
-              <div style="background: #F3F4F6; padding: 6px; border-radius: 6px; margin: 6px 0;">
-                <strong>📍 Ordem de Entrega:</strong> ${deliveryOrder}º lugar na rota
+              <div style="background: #EFF6FF; padding: 8px; border-radius: 6px; margin: 6px 0; border-left: 4px solid #3B82F6;">
+                <strong>📍 Sequência OSRM:</strong> ${deliveryOrder}º lugar na rota otimizada
+                <div style="font-size: 11px; color: #6B7280; margin-top: 2px;">
+                  (Otimizado pela API OSRM para eficiência máxima)
+                </div>
               </div>
               <p style="margin: 4px 0;"><b>🛠️ Serviço:</b> ${stop.service_name}</p>
               <p style="margin: 4px 0;"><b>💰 Valor:</b> R$ ${stop.service_value.toFixed(2)}</p>
@@ -553,8 +574,13 @@ export function Routes() {
           marker.bindPopup(popupContent);
           markers.push(marker);
           
-          console.log(`✅ Stop marker added for ${stop.client_name} - Order: ${deliveryOrder}`);
-          logAction('STOP_MARKER_ADDED', { clientName: stop.client_name, deliveryOrder: deliveryOrder, orderSequence: stop.order_sequence });
+          console.log(`✅ Stop marker added for ${stop.client_name} - OSRM Order: ${deliveryOrder} (Original: ${arrayIndex + 1})`);
+          logAction('STOP_MARKER_ADDED', { 
+            clientName: stop.client_name, 
+            deliveryOrder: deliveryOrder, 
+            orderSequence: stop.order_sequence,
+            osrmOptimized: true
+          });
         } else {
           console.log(`❌ Invalid coordinates for ${stop.client_name}:`, { lat, lng });
           logAction('INVALID_STOP_COORDINATES', { clientName: stop.client_name, coordinates: [lat, lng] });
