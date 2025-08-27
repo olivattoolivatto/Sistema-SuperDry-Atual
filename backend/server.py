@@ -406,22 +406,30 @@ async def optimize_route_with_priorities(stops: List[RouteStop], company_coords:
                 
                 print(f"🗺️ OSRM returned {len(waypoints)} waypoints")
                 
-                # Skip first and last waypoints (company positions)
-                for i, waypoint in enumerate(waypoints[1:-1]):
-                    waypoint_index = waypoint.get('waypoint_index', i)
-                    print(f"📍 Waypoint {i+1}: index={waypoint_index}, hint={waypoint.get('hint', '')[:20]}...")
+                # Skip first and last waypoints (company positions) and process intermediate waypoints
+                intermediate_waypoints = waypoints[1:-1]  # Remove first and last (company)
+                
+                for i, waypoint in enumerate(intermediate_waypoints):
+                    waypoint_index = waypoint.get('waypoint_index', i + 1)  # +1 because we skipped first
+                    adjusted_index = waypoint_index - 1  # Adjust for 0-based array indexing (skip company at index 0)
                     
-                    if waypoint_index < len(automatica_stops):
-                        optimized_order.append(automatica_stops[waypoint_index])
-                        print(f"✅ Added stop: {automatica_stops[waypoint_index].client_name}")
+                    print(f"📍 Processing waypoint {i+1}: OSRM_index={waypoint_index}, adjusted_index={adjusted_index}")
+                    
+                    if 0 <= adjusted_index < len(automatica_stops):
+                        original_stop = automatica_stops[adjusted_index]
+                        optimized_order.append(original_stop)
+                        print(f"✅ Added stop: {original_stop.client_name} (was position {adjusted_index + 1}, now position {len(optimized_order)})")
+                    else:
+                        print(f"❌ Invalid waypoint index: {adjusted_index} (max: {len(automatica_stops) - 1})")
                 
                 if optimized_order:
                     optimized_automatica = optimized_order
                     print(f"🚀 OSRM optimization successful: {len(optimized_order)} stops reordered")
                     
-                    # Log the optimized sequence
+                    # Log the final optimized sequence
+                    print("📋 Final optimized sequence:")
                     for idx, stop in enumerate(optimized_automatica):
-                        print(f"  {idx+1}. {stop.client_name} (Priority: {stop.priority})")
+                        print(f"  Position {idx+1}: {stop.client_name} (Priority: {stop.priority})")
                 else:
                     print("❌ OSRM returned empty order, using original")
             else:
