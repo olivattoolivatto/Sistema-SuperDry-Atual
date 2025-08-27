@@ -298,6 +298,7 @@ class Route(BaseModel):
     route_geometry: Optional[dict] = None  # OSRM route data
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    last_edited_by: Optional[str] = "Sistema"  # Future: user who made last edit
 
 # OSRM Integration Functions
 OSRM_BASE_URL = "http://router.project-osrm.org"
