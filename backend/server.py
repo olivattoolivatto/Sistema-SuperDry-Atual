@@ -1795,7 +1795,8 @@ async def optimize_route(route_id: str, route_type: str = "CURTA"):
                     "total_duration": int(total_duration),
                     "total_distance": round(total_distance, 2),
                     "route_geometry": route_geometry,
-                    "updated_at": datetime.utcnow()
+                    "updated_at": datetime.utcnow(),
+                    "last_edited_by": "Sistema"  # Future: replace with actual user
                 }
             }
         )
