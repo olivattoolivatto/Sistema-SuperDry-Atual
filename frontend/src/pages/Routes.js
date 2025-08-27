@@ -1595,7 +1595,10 @@ export function Routes() {
                     <strong>Bairros:</strong> {getRouteNeighborhoods(route.stops)}
                   </div>
                   <div className="text-xs text-gray-400 mt-1">
-                    <strong>Última edição:</strong> {new Date(route.updated_at).toLocaleString('pt-BR')}
+                    <strong>Última edição:</strong> {formatCuiabaTime(route.updated_at)}
+                    {route.last_edited_by && (
+                      <span className="ml-2">por <strong>{route.last_edited_by}</strong></span>
+                    )}
                   </div>
                 </div>
               </div>
