@@ -6,7 +6,7 @@ const API_BASE = `${BACKEND_URL}/api`;
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 10000,
+  timeout: 60000, // Increased to 60 seconds for OSRM optimization
 });
 
 // Add request interceptor for debugging
