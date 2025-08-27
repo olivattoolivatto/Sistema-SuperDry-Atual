@@ -448,61 +448,78 @@ export function Routes() {
         const lat = stop.address.latitude;
         const lng = stop.address.longitude;
         
-        console.log(`📍 Adding stop for ${stop.client_name} at:`, { lat, lng, client: stop.client_name });
-        logAction('ADDING_STOP_MARKER', { stopIndex: index + 1, coordinates: [lat, lng], clientName: stop.client_name });
+        console.log(`📍 Adding stop for ${stop.client_name} at:`, { lat, lng, client: stop.client_name, order: stop.order_sequence });
+        logAction('ADDING_STOP_MARKER', { stopIndex: index + 1, coordinates: [lat, lng], clientName: stop.client_name, orderSequence: stop.order_sequence });
         
         if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-          // Create client name marker with better visibility
-          // Get first name or first 8 characters for display
+          // Use order_sequence from backend (proper delivery order)
+          const deliveryOrder = stop.order_sequence || (index + 1);
           const displayName = stop.client_name.split(' ')[0] || stop.client_name.substring(0, 8);
           
           const markerIcon = L.divIcon({
             html: `<div style="
-              background-color: #DC2626; 
+              background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); 
               color: white; 
-              border-radius: 8px; 
-              padding: 4px 8px;
+              border-radius: 12px; 
+              padding: 6px 12px;
               display: flex; 
               align-items: center; 
               justify-content: center; 
               font-weight: bold; 
-              border: 2px solid white; 
-              box-shadow: 0 3px 6px rgba(0,0,0,0.4); 
-              font-size: 11px;
-              min-width: 50px;
-              max-width: 80px;
-              white-space: nowrap;
-              text-overflow: ellipsis;
-              overflow: hidden;
-            ">${displayName}</div>`,
+              border: 3px solid white; 
+              box-shadow: 0 4px 8px rgba(0,0,0,0.3); 
+              font-size: 12px;
+              min-width: 60px;
+              max-width: 100px;
+              position: relative;
+            ">
+              <span style="
+                background: #FFF; 
+                color: #DC2626; 
+                border-radius: 50%; 
+                width: 20px; 
+                height: 20px; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+                font-size: 10px; 
+                font-weight: bold;
+                margin-right: 6px;
+              ">${deliveryOrder}</span>
+              <span style="font-size: 11px;">${displayName}</span>
+            </div>`,
             className: 'custom-div-icon',
-            iconSize: [60, 25],
-            iconAnchor: [30, 12]
+            iconSize: [80, 32],
+            iconAnchor: [40, 16]
           });
 
           const marker = L.marker([lat, lng], { icon: markerIcon })
             .addTo(mapInstanceRef.current);
 
-          // Create detailed popup content
+          // Create detailed popup content with sequence information
           const popupContent = `
-            <div style="min-width: 250px; font-size: 13px;">
-              <h4 style="margin: 0 0 8px 0; color: #DC2626; font-weight: bold;">${stop.client_name}</h4>
-              <p style="margin: 4px 0;"><b>Ordem de Entrega:</b> ${index + 1}º parada</p>
-              <p style="margin: 4px 0;"><b>Serviço:</b> ${stop.service_name}</p>
-              <p style="margin: 4px 0;"><b>Valor:</b> R$ ${stop.service_value.toFixed(2)}</p>
-              <p style="margin: 4px 0;"><b>Duração:</b> ${stop.estimated_duration} minutos</p>
-              <p style="margin: 4px 0;"><b>Prioridade:</b> <span style="color: #7C3AED;">${stop.priority}</span></p>
-              <p style="margin: 4px 0;"><b>Tipo:</b> ${stop.service_status}</p>
+            <div style="min-width: 280px; font-size: 13px;">
+              <h4 style="margin: 0 0 8px 0; color: #DC2626; font-weight: bold;">
+                🎯 ${deliveryOrder}ª PARADA: ${stop.client_name}
+              </h4>
+              <div style="background: #F3F4F6; padding: 6px; border-radius: 6px; margin: 6px 0;">
+                <strong>📍 Ordem de Entrega:</strong> ${deliveryOrder}º lugar na rota
+              </div>
+              <p style="margin: 4px 0;"><b>🛠️ Serviço:</b> ${stop.service_name}</p>
+              <p style="margin: 4px 0;"><b>💰 Valor:</b> R$ ${stop.service_value.toFixed(2)}</p>
+              <p style="margin: 4px 0;"><b>⏱️ Duração:</b> ${stop.estimated_duration} minutos</p>
+              <p style="margin: 4px 0;"><b>🎚️ Prioridade:</b> <span style="color: #7C3AED;">${stop.priority}</span></p>
+              <p style="margin: 4px 0;"><b>📋 Tipo:</b> ${stop.service_status}</p>
               <hr style="margin: 8px 0;">
-              <p style="margin: 0; font-size: 11px; color: #666;">${stop.address.full_address || stop.address.neighborhood}</p>
+              <p style="margin: 0; font-size: 11px; color: #666;">📍 ${stop.address.full_address || stop.address.neighborhood}</p>
             </div>
           `;
           
           marker.bindPopup(popupContent);
           markers.push(marker);
           
-          console.log(`✅ Stop marker added for ${stop.client_name}`);
-          logAction('STOP_MARKER_ADDED', { clientName: stop.client_name, deliveryOrder: index + 1 });
+          console.log(`✅ Stop marker added for ${stop.client_name} - Order: ${deliveryOrder}`);
+          logAction('STOP_MARKER_ADDED', { clientName: stop.client_name, deliveryOrder: deliveryOrder, orderSequence: stop.order_sequence });
         } else {
           console.log(`❌ Invalid coordinates for ${stop.client_name}:`, { lat, lng });
           logAction('INVALID_STOP_COORDINATES', { clientName: stop.client_name, coordinates: [lat, lng] });
