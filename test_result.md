@@ -348,8 +348,14 @@ metadata:
 
 test_plan:
   current_focus:
-    - "WhatsApp Message Generation API"
-    - "PDF Generation API"
+    - "Routes API - Available Items Endpoint"
+    - "Routes API - Create Route"
+    - "Routes API - Add Stops"
+    - "Routes API - Route Optimization CURTA"
+    - "Routes API - Route Optimization EFICIENTE"
+    - "Routes API - Get Route Details"
+    - "Routes API - List Routes"
+    - "Routes API - Delete Route"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
