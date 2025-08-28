@@ -475,23 +475,39 @@ class RoutesAPITester:
             self.log_test("Delete Route", False, f"Failed to delete route {route_id}", response['data'])
             return False
     
-    def test_budget_update_invalid_client(self, budget_id: str):
-        """Test budget update with invalid client - should fail"""
-        print("\n=== TESTING BUDGET UPDATE: INVALID CLIENT (SHOULD FAIL) ===")
+    def test_route_error_handling(self):
+        """Test error handling for routes API"""
+        print("\n=== TESTING ROUTE ERROR HANDLING ===")
         
-        update_data = {
-            "client_id": "CLI-9999",  # Non-existent client
-            "payment_method": "PIX_CNPJ_25995295000104",
-            "salesperson": "Gabriela Alcântara",
-            "items": []
+        # Test get non-existent route
+        response = self.make_request('GET', '/routes/RTE-9999999')
+        if not response['success'] and response['status_code'] == 404:
+            self.log_test("Route Error: Non-existent Route", True, "Correctly returned 404 for non-existent route")
+        else:
+            self.log_test("Route Error: Non-existent Route", False, "Should have returned 404 for non-existent route")
+        
+        # Test optimize route without stops
+        empty_route_data = {
+            "vehicle_type": "MOTO",
+            "planned_date": "2024-12-21",
+            "planned_start_time": "09:00"
         }
         
-        response = self.make_request('PUT', f'/budgets/{budget_id}', update_data)
-        if not response['success'] and (response['status_code'] == 404 or 'Client not found' in str(response['data'])):
-            self.log_test("Budget Update: Invalid Client", True, "Correctly rejected invalid client ID")
-            return True
+        create_response = self.make_request('POST', '/routes', empty_route_data)
+        if create_response['success']:
+            empty_route_id = create_response['data']['id']
+            self.created_resources['routes'].append(empty_route_id)
+            
+            # Try to optimize empty route
+            optimize_response = self.make_request('POST', f'/routes/{empty_route_id}/optimize')
+            if not optimize_response['success'] and 'no stops' in str(optimize_response['data']).lower():
+                self.log_test("Route Error: Empty Route Optimization", True, "Correctly rejected optimization of empty route")
+                return True
+            else:
+                self.log_test("Route Error: Empty Route Optimization", False, "Should have rejected empty route optimization")
+                return False
         else:
-            self.log_test("Budget Update: Invalid Client", False, "Should have failed with 404 for invalid client", response['data'])
+            self.log_test("Route Error: Empty Route Optimization", False, "Failed to create empty route for test")
             return False
     
     def test_whatsapp_message_generation(self, budget_id: str):
