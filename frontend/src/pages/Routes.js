@@ -990,6 +990,9 @@ export function Routes() {
         description: errorMessage,
         variant: "destructive",
       });
+      
+      // NOVO: Desativar loading em caso de erro
+      setIsCalculatingRoute(false);
     }
   };
 
