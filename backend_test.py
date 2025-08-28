@@ -557,8 +557,8 @@ class RoutesAPITester:
         print(f"ℹ️  System config updated: {self.created_resources['system_config']} (not reverted)")
     
     def run_all_tests(self):
-        """Run complete test suite"""
-        print("🚀 STARTING BUDGET SYSTEM COMPREHENSIVE TESTS")
+        """Run complete routes API test suite"""
+        print("🚀 STARTING ROUTES API COMPREHENSIVE TESTS")
         print(f"🔗 Testing against: {self.base_url}")
         print("=" * 60)
         
@@ -567,46 +567,41 @@ class RoutesAPITester:
             print("❌ CRITICAL: Failed to setup test data. Aborting tests.")
             return False
         
-        # Test budget creation
-        budget_id = self.test_budget_creation()
-        if not budget_id:
-            print("❌ CRITICAL: Failed to create test budget. Aborting remaining tests.")
+        # Test 1: GET /api/budget-items/available-for-routes (actual endpoint)
+        available_items = self.test_get_available_items_for_routes()
+        
+        # Test 2: Check if /api/routes/available-items exists (mentioned in review request)
+        self.test_available_items_endpoint_alias()
+        
+        # Test 3: POST /api/routes - Create new route
+        route_id = self.test_create_route()
+        if not route_id:
+            print("❌ CRITICAL: Failed to create test route. Aborting remaining tests.")
             return False
         
-        # Test budget listing
-        self.test_budget_listing()
+        # Test 4: PUT /api/routes/{route_id}/stops - Add stops to route
+        if available_items:
+            self.test_add_stops_to_route(route_id, available_items)
+        else:
+            print("⚠️  WARNING: No available items found, skipping stops addition test")
         
-        # Test budget retrieval
-        self.test_budget_retrieval(budget_id)
+        # Test 5: POST /api/routes/{route_id}/optimize - Optimize route (CURTA)
+        self.test_optimize_route_curta(route_id)
         
-        # Test various update scenarios
-        self.test_budget_update_client_change(budget_id)
-        self.test_budget_update_payment_method(budget_id)
-        self.test_budget_update_salesperson(budget_id)
-        self.test_budget_update_items(budget_id)
-        self.test_budget_update_observations(budget_id)
+        # Test 6: POST /api/routes/{route_id}/optimize - Optimize route (EFICIENTE)
+        self.test_optimize_route_eficiente(route_id)
         
-        # Test error handling
-        self.test_budget_update_invalid_client(budget_id)
+        # Test 7: GET /api/routes/{route_id} - Get route details
+        self.test_get_route_details(route_id)
         
-        # NEW: Test WhatsApp and PDF functionality
-        print("\n" + "=" * 60)
-        print("🆕 TESTING NEW WHATSAPP & PDF FEATURES")
-        print("=" * 60)
+        # Test 8: GET /api/routes - List routes
+        self.test_list_routes()
         
-        # Test WhatsApp message generation with created budget
-        self.test_whatsapp_message_generation(budget_id)
+        # Test 9: Error handling
+        self.test_route_error_handling()
         
-        # Test PDF generation with created budget
-        self.test_pdf_generation(budget_id)
-        
-        # Test with existing budgets if available
-        self.test_whatsapp_with_existing_budget()
-        self.test_pdf_with_existing_budget()
-        
-        # Test error handling for non-existent budgets
-        self.test_whatsapp_nonexistent_budget()
-        self.test_pdf_nonexistent_budget()
+        # Test 10: DELETE /api/routes/{route_id} - Delete route (test last)
+        self.test_delete_route(route_id)
         
         # Cleanup
         self.cleanup_test_data()
