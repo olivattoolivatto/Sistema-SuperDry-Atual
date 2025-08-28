@@ -185,6 +185,7 @@ class ServiceCreate(BaseModel):
     execution_location: ExecutionLocation
     cost_price: float
     sale_price: float
+    default_service_status: ServiceStatus = ServiceStatus.RETIRAR  # Status padrão quando adicionado a orçamento
 
 class BudgetItem(BaseModel):
     id: str = Field(default_factory=lambda: f"ITM-{str(uuid.uuid4().int)[:7].zfill(7)}")
