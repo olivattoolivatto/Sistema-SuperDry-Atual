@@ -68,53 +68,162 @@ class RoutesAPITester:
             }
     
     def setup_test_data(self):
-        """Create test clients and services for budget testing"""
-        print("\n=== SETTING UP TEST DATA ===")
+        """Create test data for routes testing"""
+        print("\n=== SETTING UP TEST DATA FOR ROUTES ===")
         
-        # Create test client
-        client_data = {
-            "name": "Maria Silva Santos",
-            "phone_primary": "11987654321",
-            "phone_alternative": "1134567890",
-            "email": "maria.santos@email.com",
-            "cpf_cnpj": "123.456.789-00",
-            "address": {
-                "full_address": "Rua das Flores, 123",
-                "complement": "Apto 45",
-                "neighborhood": "Vila Madalena",
-                "city": "São Paulo",
-                "state": "SP",
-                "latitude": -23.5505,
-                "longitude": -46.6333
+        # Setup system config with company GPS coordinates
+        system_config_data = {
+            "company_name": "SuperDry Lavanderia de Tapetes & Estofados",
+            "address_full": "Rua Exemplo, 100",
+            "neighborhood": "Centro",
+            "city": "São Paulo",
+            "state": "SP",
+            "latitude": -23.5505,
+            "longitude": -46.6333,
+            "phone": "11999999999",
+            "email": "contato@superdry.com"
+        }
+        
+        response = self.make_request('PUT', '/system-config', system_config_data)
+        if response['success']:
+            self.created_resources['system_config'] = True
+            self.log_test("Setup: System Config", True, "System config created with GPS coordinates")
+        else:
+            self.log_test("Setup: System Config", False, "Failed to create system config", response['data'])
+            return False
+        
+        # Create test clients with different addresses
+        clients_data = [
+            {
+                "name": "Ana Paula Costa",
+                "phone_primary": "11987654321",
+                "email": "ana.costa@email.com",
+                "address": {
+                    "full_address": "Rua das Palmeiras, 456",
+                    "neighborhood": "Vila Madalena",
+                    "city": "São Paulo",
+                    "state": "SP",
+                    "latitude": -23.5489,
+                    "longitude": -46.6388
+                }
+            },
+            {
+                "name": "Carlos Roberto Silva",
+                "phone_primary": "11876543210",
+                "email": "carlos.silva@email.com",
+                "address": {
+                    "full_address": "Av. Brigadeiro Faria Lima, 2000",
+                    "neighborhood": "Itaim Bibi",
+                    "city": "São Paulo",
+                    "state": "SP",
+                    "latitude": -23.5751,
+                    "longitude": -46.6896
+                }
+            },
+            {
+                "name": "Fernanda Oliveira Santos",
+                "phone_primary": "11765432109",
+                "email": "fernanda.santos@email.com",
+                "address": {
+                    "full_address": "Rua Augusta, 1500",
+                    "neighborhood": "Consolação",
+                    "city": "São Paulo",
+                    "state": "SP",
+                    "latitude": -23.5558,
+                    "longitude": -46.6396
+                }
             }
-        }
+        ]
         
-        response = self.make_request('POST', '/clients', client_data)
-        if response['success']:
-            self.created_resources['clients'].append(response['data']['id'])
-            self.log_test("Setup: Create Test Client", True, f"Client created: {response['data']['id']}")
-        else:
-            self.log_test("Setup: Create Test Client", False, "Failed to create test client", response['data'])
-            return False
+        for client_data in clients_data:
+            response = self.make_request('POST', '/clients', client_data)
+            if response['success']:
+                self.created_resources['clients'].append(response['data']['id'])
+                self.log_test("Setup: Create Test Client", True, f"Client created: {client_data['name']}")
+            else:
+                self.log_test("Setup: Create Test Client", False, f"Failed to create client: {client_data['name']}", response['data'])
+                return False
         
-        # Create test service
-        service_data = {
-            "name": "Limpeza de Sofá 3 Lugares",
-            "category": "ESTOFADOS",
-            "service_type": "Limpeza Profunda",
-            "measure_type": "UNITARIO",
-            "execution_location": "RETIRADA",
-            "cost_price": 80.0,
-            "sale_price": 150.0
-        }
+        # Create test services for different route types
+        services_data = [
+            {
+                "name": "Limpeza de Sofá 3 Lugares",
+                "category": "ESTOFADOS",
+                "service_type": "Limpeza Profunda",
+                "measure_type": "UNITARIO",
+                "execution_location": "RETIRADA",
+                "cost_price": 80.0,
+                "sale_price": 150.0
+            },
+            {
+                "name": "Limpeza de Tapete no Local",
+                "category": "CARPETES_E_TAPETES_NO_LOCAL",
+                "service_type": "Limpeza no Local",
+                "measure_type": "CARPETE_TAPETE_LOCAL",
+                "execution_location": "NO_LOCAL",
+                "cost_price": 30.0,
+                "sale_price": 50.0
+            },
+            {
+                "name": "Entrega de Cortina",
+                "category": "CORTINAS",
+                "service_type": "Entrega",
+                "measure_type": "UNITARIO",
+                "execution_location": "RETIRADA",
+                "cost_price": 0.0,
+                "sale_price": 0.0
+            }
+        ]
         
-        response = self.make_request('POST', '/services', service_data)
-        if response['success']:
-            self.created_resources['services'].append(response['data']['id'])
-            self.log_test("Setup: Create Test Service", True, f"Service created: {response['data']['id']}")
-        else:
-            self.log_test("Setup: Create Test Service", False, "Failed to create test service", response['data'])
-            return False
+        for service_data in services_data:
+            response = self.make_request('POST', '/services', service_data)
+            if response['success']:
+                self.created_resources['services'].append(response['data']['id'])
+                self.log_test("Setup: Create Test Service", True, f"Service created: {service_data['name']}")
+            else:
+                self.log_test("Setup: Create Test Service", False, f"Failed to create service: {service_data['name']}", response['data'])
+                return False
+        
+        # Create test budgets with items in route-eligible status
+        for i, client_id in enumerate(self.created_resources['clients']):
+            service_id = self.created_resources['services'][i % len(self.created_resources['services'])]
+            
+            # Determine status based on service type
+            if i == 1:  # Second client gets NO_LOCAL service
+                status = "EXECUTAR_NO_LOCAL"
+            elif i == 2:  # Third client gets delivery
+                status = "ENTREGAR"
+            else:
+                status = "RETIRAR"
+            
+            budget_data = {
+                "client_id": client_id,
+                "payment_method": "PIX_CNPJ_25995295000104",
+                "salesperson": "Gabriela Alcântara",
+                "internal_observations": f"Orçamento para teste de rotas - Cliente {i+1}",
+                "items": [
+                    {
+                        "id": f"ITM-TEST{i+1:03d}",
+                        "service_id": service_id,
+                        "service_name": services_data[i % len(services_data)]["name"],
+                        "service_code": service_id,
+                        "quantity": 1.0,
+                        "unit_price": services_data[i % len(services_data)]["sale_price"],
+                        "total_value": services_data[i % len(services_data)]["sale_price"],
+                        "status": status,
+                        "execution_location": services_data[i % len(services_data)]["execution_location"],
+                        "is_retoque": False
+                    }
+                ]
+            }
+            
+            response = self.make_request('POST', '/budgets', budget_data)
+            if response['success']:
+                self.created_resources['budgets'].append(response['data']['id'])
+                self.log_test("Setup: Create Test Budget", True, f"Budget created with {status} item")
+            else:
+                self.log_test("Setup: Create Test Budget", False, f"Failed to create budget for client {i+1}", response['data'])
+                return False
         
         return True
     
