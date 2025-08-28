@@ -308,7 +308,7 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
     const quantity = parseFloat(itemData.quantity) || 1;
     const area_m2 = parseFloat(itemData.area_m2) || 0;
     const linear_meters = parseFloat(itemData.linear_meters) || 0;
-    const unit_price = parseFloat(service.sale_price) || 0;
+    const unit_price = parseFloat(itemData.unit_price) || parseFloat(service.sale_price) || 0; // Usar preço editável ou preço do catálogo como fallback
     
     // Calculate total based on the measure type
     let finalQuantity = quantity;
