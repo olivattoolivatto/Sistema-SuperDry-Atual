@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Funcionalidade de preço editável em Orçamentos: Ao adicionar um item do catálogo no orçamento, o valor deve ser editável para permitir ajustes/descontos/incrementos. Implementações anteriores: colunas ordenáveis no Catálogo e refinamentos na tela de Rotas."
+user_problem_statement: "Melhoria de visibilidade da coluna STATUS no Catálogo de Serviços. Implementações anteriores: preço editável em Orçamentos, colunas ordenáveis no Catálogo, refinamentos na tela de Rotas."
 
 backend:
   - task: "Budget Update API Endpoint"
