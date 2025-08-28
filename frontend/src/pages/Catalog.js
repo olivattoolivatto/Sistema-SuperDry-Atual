@@ -189,6 +189,16 @@ const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, s
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {EXECUTION_LOCATIONS[service.execution_location]}
               </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className={`px-2 py-1 inline-flex text-xs font-medium rounded-full ${
+                  service.default_service_status === 'RETIRAR' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                  service.default_service_status === 'EXECUTAR_NO_LOCAL' ? 'bg-purple-100 text-purple-800 border border-purple-300' :
+                  service.default_service_status === 'ENTREGAR' ? 'bg-green-100 text-green-800 border border-green-300' :
+                  'bg-gray-100 text-gray-800 border border-gray-300'
+                }`}>
+                  {SERVICE_STATUSES[service.default_service_status] || service.default_service_status}
+                </span>
+              </td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-red-600">
                 R$ {service.cost_price.toFixed(2)}
               </td>
