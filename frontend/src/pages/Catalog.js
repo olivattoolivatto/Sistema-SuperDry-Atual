@@ -45,6 +45,18 @@ const EXECUTION_LOCATIONS = {
   CLIENTE_TROUXE: 'Cliente Trouxe'
 };
 
+const SERVICE_STATUSES = {
+  RETIRAR: 'Retirar',
+  EXECUTAR_NO_LOCAL: 'Executar no Local',
+  CLIENTE_TROUXE: 'Cliente Trouxe',
+  ENTREGAR: 'Entregar',
+  COLETADO: 'Coletado',
+  EM_LAVAGEM: 'Em Lavagem',
+  AGUARDANDO_ENTREGA: 'Aguardando Entrega',
+  ENTREGUE: 'Entregue',
+  EXECUTADO: 'Executado'
+};
+
 const SERVICE_TYPES = {
   ESTOFADOS: ['Sofá', 'Cadeira', 'Puff', 'Poltrona', 'Chaise/Namoradeira', 'Cabeceira', 'Almofada no Local', 'Almofada Retirada'],
   COLCHOES: ['Solteiro', 'Viúvo/Solteiro Especial', 'Casal Padrão', 'Casal Queen', 'Casal King', 'Casal Super King', 'Especial'],
