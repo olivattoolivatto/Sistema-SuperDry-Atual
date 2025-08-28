@@ -355,6 +355,26 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Status Padrão *
+            </label>
+            <select
+              name="default_service_status"
+              value={formData.default_service_status}
+              onChange={handleInputChange}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {Object.entries(SERVICE_STATUSES).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Define o status inicial que itens deste serviço terão quando adicionados a orçamentos
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
