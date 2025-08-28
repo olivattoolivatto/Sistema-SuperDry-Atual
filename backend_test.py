@@ -1046,6 +1046,14 @@ class ServiceStatusBugTester:
         print("\n" + "=" * 60)
 
 if __name__ == "__main__":
-    tester = RoutesAPITester()
-    success = tester.run_all_tests()
+    # Check if we should run service status bug tests or full routes tests
+    if len(sys.argv) > 1 and sys.argv[1] == "--status-bug":
+        print("🐛 Running SERVICE STATUS BUG TESTS only")
+        tester = ServiceStatusBugTester()
+        success = tester.run_service_status_bug_tests()
+    else:
+        print("🚀 Running FULL ROUTES API TESTS")
+        tester = ServiceStatusBugTester()
+        success = tester.run_all_tests()
+    
     sys.exit(0 if success else 1)
