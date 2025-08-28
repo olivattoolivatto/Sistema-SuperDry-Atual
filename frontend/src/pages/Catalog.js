@@ -120,6 +120,9 @@ const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, s
             <SortableHeader field="execution_location">
               Execução
             </SortableHeader>
+            <SortableHeader field="default_service_status">
+              Status Padrão
+            </SortableHeader>
             <SortableHeader field="cost_price" align="right">
               Custo
             </SortableHeader>
