@@ -771,7 +771,11 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
   const handleServiceSelect = (service) => {
     setSelectedService(service);
     setServiceSearchTerm(service.name);
-    setFormData(prev => ({ ...prev, service_id: service.id }));
+    setFormData(prev => ({ 
+      ...prev, 
+      service_id: service.id,
+      unit_price: service.sale_price // Definir preço padrão do catálogo
+    }));
     setShowServiceDropdown(false);
   };
 
