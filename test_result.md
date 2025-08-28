@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Refinamentos na tela de Rotas: 1. Focar na seção Priorização ao pressionar botões de Otimização, 2. Popup animado durante cálculo da rota, 3. Identificar origem da info 'Tipo: RETIRAR', 4. Remover duplicação do mapa"
+user_problem_statement: "Melhorias na tela Catálogo: 1. Tornar colunas ordenáveis, 2. Colocar coluna Ações como primeira. Refinamentos anteriores na tela de Rotas também implementados."
 
 backend:
   - task: "Budget Update API Endpoint"
