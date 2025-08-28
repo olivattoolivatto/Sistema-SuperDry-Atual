@@ -240,6 +240,18 @@ backend:
         -agent: "testing"
         -comment: "Minor: DELETE /api/routes/{route_id} endpoint has inconsistent error handling - returns 200 status with error in detail field instead of proper HTTP status codes. Core functionality works but error responses need improvement for better API standards."
 
+  - task: "Service Default Status Bug Fix"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "✅ CRITICAL BUG FIXED: Verified that services with different default_service_status generate budget items with correct status. Tested lines 1473-1479 fix: item_dict['status'] = service_obj.default_service_status. Created test services with RETIRAR, EXECUTAR_NO_LOCAL, and ENTREGAR statuses. All budget items correctly inherited their service's default_service_status. GET /api/budget-items/available-for-routes now shows items with variety of statuses (RETIRAR: 11, EXECUTAR_NO_LOCAL: 1, ENTREGAR: 1) instead of all items being RETIRAR. Bug 'todos aparecem como RETIRAR' is completely resolved. 100% test success rate (19/19 tests passed)."
+
 frontend:
   - task: "Auto-scroll to Prioritization Section"
     implemented: true
