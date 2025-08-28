@@ -115,34 +115,38 @@ class ServiceStatusBugTester:
             self.log_test("Setup: Create Test Client", False, f"Failed to create client: {client_data['name']}", response['data'])
             return False
         
-        # Create test services for different route types
+        # Create test services with DIFFERENT default_service_status values
+        # This is the key to testing the bug fix
         services_data = [
             {
-                "name": "Limpeza de Sofá 3 Lugares",
+                "name": "Limpeza de Sofá - Status RETIRAR",
                 "category": "ESTOFADOS",
                 "service_type": "Limpeza Profunda",
                 "measure_type": "UNITARIO",
                 "execution_location": "RETIRADA",
                 "cost_price": 80.0,
-                "sale_price": 150.0
+                "sale_price": 150.0,
+                "default_service_status": "RETIRAR"
             },
             {
-                "name": "Limpeza de Tapete no Local",
+                "name": "Limpeza de Tapete - Status EXECUTAR_NO_LOCAL",
                 "category": "CARPETES_E_TAPETES_NO_LOCAL",
                 "service_type": "Limpeza no Local",
                 "measure_type": "CARPETE_TAPETE_LOCAL",
                 "execution_location": "NO_LOCAL",
                 "cost_price": 30.0,
-                "sale_price": 50.0
+                "sale_price": 50.0,
+                "default_service_status": "EXECUTAR_NO_LOCAL"
             },
             {
-                "name": "Entrega de Cortina",
+                "name": "Entrega de Cortina - Status ENTREGAR",
                 "category": "CORTINAS",
                 "service_type": "Entrega",
                 "measure_type": "UNITARIO",
                 "execution_location": "RETIRADA",
                 "cost_price": 0.0,
-                "sale_price": 0.0
+                "sale_price": 25.0,
+                "default_service_status": "ENTREGAR"
             }
         ]
         
