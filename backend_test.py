@@ -67,9 +67,9 @@ class ServiceStatusBugTester:
                 'success': False
             }
     
-    def setup_test_data(self):
-        """Create test data for routes testing"""
-        print("\n=== SETTING UP TEST DATA FOR ROUTES ===")
+    def setup_test_data_for_status_bug(self):
+        """Create test data specifically for testing service status bug"""
+        print("\n=== SETTING UP TEST DATA FOR SERVICE STATUS BUG ===")
         
         # Setup system config with company GPS coordinates
         system_config_data = {
