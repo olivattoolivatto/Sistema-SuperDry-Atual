@@ -331,60 +331,37 @@ class RoutesAPITester:
             self.log_test("Add Route Stops", False, "Failed to add stops to route", response['data'])
             return False
     
-    def test_budget_update_client_change(self, budget_id: str):
-        """Test budget update - Change client"""
-        print("\n=== TESTING BUDGET UPDATE: CLIENT CHANGE ===")
+    def test_optimize_route_curta(self, route_id: str):
+        """Test POST /api/routes/{route_id}/optimize - Optimize route with CURTA type"""
+        print("\n=== TESTING ROUTE OPTIMIZATION: CURTA ===")
         
-        # Create another test client
-        new_client_data = {
-            "name": "João Pedro Oliveira",
-            "phone_primary": "11876543210",
-            "email": "joao.oliveira@email.com",
-            "address": {
-                "full_address": "Av. Paulista, 1000",
-                "neighborhood": "Bela Vista",
-                "city": "São Paulo",
-                "state": "SP"
-            }
-        }
-        
-        client_response = self.make_request('POST', '/clients', new_client_data)
-        if not client_response['success']:
-            self.log_test("Budget Update: Client Change", False, "Failed to create new client for test")
-            return False
-        
-        new_client_id = client_response['data']['id']
-        self.created_resources['clients'].append(new_client_id)
-        
-        # Update budget with new client
-        update_data = {
-            "client_id": new_client_id,
-            "payment_method": "PIX_CNPJ_25995295000104",
-            "salesperson": "Gabriela Alcântara",
-            "internal_observations": "Cliente alterado via teste",
-            "items": []
-        }
-        
-        response = self.make_request('PUT', f'/budgets/{budget_id}', update_data)
+        response = self.make_request('POST', f'/routes/{route_id}/optimize?route_type=CURTA')
         if response['success']:
-            updated_budget = response['data']
+            result = response['data']
+            
+            # Verify optimization results
             checks = [
-                (updated_budget.get('client_id') == new_client_id, "Client ID updated"),
-                (updated_budget.get('client_name') == 'João Pedro Oliveira', "Client name updated"),
-                (updated_budget.get('updated_at') != updated_budget.get('created_at'), "Updated timestamp changed")
+                (result.get('message') == 'Route optimized successfully', "Success message"),
+                (result.get('total_stops', 0) > 0, "Has stops"),
+                (result.get('total_duration_minutes', 0) > 0, "Duration calculated"),
+                (result.get('total_distance_km', 0) >= 0, "Distance calculated"),
+                (result.get('osrm_status') in ['success', 'fallback'], "OSRM status valid")
             ]
             
             all_passed = all(check[0] for check in checks)
             failed_checks = [check[1] for check in checks if not check[0]]
             
             if all_passed:
-                self.log_test("Budget Update: Client Change", True, "Client successfully updated")
+                self.log_test("Route Optimization CURTA", True, 
+                            f"Route optimized: {result.get('total_stops')} stops, "
+                            f"{result.get('total_duration_minutes')} min, "
+                            f"{result.get('total_distance_km')} km")
                 return True
             else:
-                self.log_test("Budget Update: Client Change", False, f"Validation failed: {failed_checks}")
+                self.log_test("Route Optimization CURTA", False, f"Validation failed: {failed_checks}")
                 return False
         else:
-            self.log_test("Budget Update: Client Change", False, "Failed to update budget client", response['data'])
+            self.log_test("Route Optimization CURTA", False, "Failed to optimize route", response['data'])
             return False
     
     def test_budget_update_payment_method(self, budget_id: str):
