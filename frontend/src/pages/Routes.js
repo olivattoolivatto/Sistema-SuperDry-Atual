@@ -761,6 +761,22 @@ export function Routes() {
       variant: "default",
     });
 
+    // NOVO: Scroll automático para a seção de priorização
+    setTimeout(() => {
+      const prioritizationElements = document.querySelectorAll('h2');
+      const prioritizationSection = Array.from(prioritizationElements).find(h2 => 
+        h2.textContent.includes('Priorização de Rota')
+      );
+      if (prioritizationSection) {
+        prioritizationSection.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'start' 
+        });
+        console.log('📍 Scrolled to prioritization section');
+        logAction('SCROLLED_TO_PRIORITIZATION', { vehicleType });
+      }
+    }, 500);
+
     console.log('✅ Items moved to prioritization successfully');
     logAction('MOVE_TO_PRIORITIZATION_COMPLETED', { vehicleType, totalPrioritizationItems: prioritizationItems.length + items.length });
   };
