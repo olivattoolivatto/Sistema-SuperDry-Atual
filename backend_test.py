@@ -364,29 +364,37 @@ class RoutesAPITester:
             self.log_test("Route Optimization CURTA", False, "Failed to optimize route", response['data'])
             return False
     
-    def test_budget_update_payment_method(self, budget_id: str):
-        """Test budget update - Change payment method"""
-        print("\n=== TESTING BUDGET UPDATE: PAYMENT METHOD CHANGE ===")
+    def test_optimize_route_eficiente(self, route_id: str):
+        """Test POST /api/routes/{route_id}/optimize - Optimize route with EFICIENTE type"""
+        print("\n=== TESTING ROUTE OPTIMIZATION: EFICIENTE ===")
         
-        update_data = {
-            "client_id": self.created_resources['clients'][0],
-            "payment_method": "CREDITO_3X",
-            "salesperson": "Gabriela Alcântara",
-            "internal_observations": "Método de pagamento alterado para cartão 3x",
-            "items": []
-        }
-        
-        response = self.make_request('PUT', f'/budgets/{budget_id}', update_data)
+        response = self.make_request('POST', f'/routes/{route_id}/optimize?route_type=EFICIENTE')
         if response['success']:
-            updated_budget = response['data']
-            if updated_budget.get('payment_method') == 'CREDITO_3X':
-                self.log_test("Budget Update: Payment Method", True, "Payment method successfully updated to CREDITO_3X")
+            result = response['data']
+            
+            # Verify optimization results
+            checks = [
+                (result.get('message') == 'Route optimized successfully', "Success message"),
+                (result.get('total_stops', 0) > 0, "Has stops"),
+                (result.get('total_duration_minutes', 0) > 0, "Duration calculated"),
+                (result.get('total_distance_km', 0) >= 0, "Distance calculated"),
+                (result.get('osrm_status') in ['success', 'fallback'], "OSRM status valid")
+            ]
+            
+            all_passed = all(check[0] for check in checks)
+            failed_checks = [check[1] for check in checks if not check[0]]
+            
+            if all_passed:
+                self.log_test("Route Optimization EFICIENTE", True, 
+                            f"Route optimized: {result.get('total_stops')} stops, "
+                            f"{result.get('total_duration_minutes')} min, "
+                            f"{result.get('total_distance_km')} km")
                 return True
             else:
-                self.log_test("Budget Update: Payment Method", False, f"Payment method not updated correctly: {updated_budget.get('payment_method')}")
+                self.log_test("Route Optimization EFICIENTE", False, f"Validation failed: {failed_checks}")
                 return False
         else:
-            self.log_test("Budget Update: Payment Method", False, "Failed to update payment method", response['data'])
+            self.log_test("Route Optimization EFICIENTE", False, "Failed to optimize route", response['data'])
             return False
     
     def test_budget_update_salesperson(self, budget_id: str):
