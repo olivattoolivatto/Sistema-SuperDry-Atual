@@ -529,7 +529,7 @@ export function Catalog() {
     });
   };
 
-  // Group services by category
+  // Group services by category and apply sorting
   const groupedServices = services.reduce((acc, service) => {
     const category = service.category;
     if (!acc[category]) {
@@ -538,6 +538,11 @@ export function Catalog() {
     acc[category].push(service);
     return acc;
   }, {});
+
+  // Apply sorting to each category
+  Object.keys(groupedServices).forEach(category => {
+    groupedServices[category] = sortServices(groupedServices[category]);
+  });
 
   const activeCount = services.filter(s => s.is_active).length;
   const inactiveCount = services.filter(s => !s.is_active).length;
