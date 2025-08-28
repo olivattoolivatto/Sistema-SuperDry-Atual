@@ -59,40 +59,63 @@ const SERVICE_TYPES = {
   OUTROS_ITENS: ['Itens Diversos']
 };
 
-const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete }) => (
-  <div className="overflow-x-auto">
-    <table className="min-w-full bg-white">
-      <thead className="bg-gray-50">
-        <tr>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Código
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Nome do Serviço
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Tipo
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Medida
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Execução
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Custo
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Venda
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Status
-          </th>
-          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Ações
-          </th>
-        </tr>
-      </thead>
+const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, sortDirection, onSort }) => {
+  const SortableHeader = ({ field, children, align = "left" }) => (
+    <th 
+      className={`px-6 py-3 text-${align} text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors select-none`}
+      onClick={() => onSort(field)}
+    >
+      <div className={`flex items-center ${align === 'right' ? 'justify-end' : ''} gap-1`}>
+        {children}
+        <div className="ml-1">
+          {sortField === field ? (
+            sortDirection === 'asc' ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )
+          ) : (
+            <ChevronsUpDown className="w-4 h-4 opacity-50" />
+          )}
+        </div>
+      </div>
+    </th>
+  );
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full bg-white">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Ações
+            </th>
+            <SortableHeader field="id">
+              Código
+            </SortableHeader>
+            <SortableHeader field="name">
+              Nome do Serviço
+            </SortableHeader>
+            <SortableHeader field="service_type">
+              Tipo
+            </SortableHeader>
+            <SortableHeader field="measure_type">
+              Medida
+            </SortableHeader>
+            <SortableHeader field="execution_location">
+              Execução
+            </SortableHeader>
+            <SortableHeader field="cost_price" align="right">
+              Custo
+            </SortableHeader>
+            <SortableHeader field="sale_price" align="right">
+              Venda
+            </SortableHeader>
+            <SortableHeader field="is_active">
+              Status
+            </SortableHeader>
+          </tr>
+        </thead>
       <tbody className="bg-white divide-y divide-gray-200">
         {services.map((service, index) => (
           <tr key={service.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${!service.is_active ? 'opacity-60' : ''}`}>
