@@ -227,65 +227,34 @@ class RoutesAPITester:
         
         return True
     
-    def test_budget_creation(self):
-        """Test POST /api/budgets - Create new budget"""
-        print("\n=== TESTING BUDGET CREATION ===")
+    def test_get_available_items_for_routes(self):
+        """Test GET /api/budget-items/available-for-routes - Get items available for routes"""
+        print("\n=== TESTING GET AVAILABLE ITEMS FOR ROUTES ===")
         
-        if not self.created_resources['clients'] or not self.created_resources['services']:
-            self.log_test("Budget Creation", False, "Missing test data (clients/services)")
-            return None
-        
-        budget_data = {
-            "client_id": self.created_resources['clients'][0],
-            "payment_method": "PIX_CNPJ_25995295000104",
-            "salesperson": "Gabriela Alcântara",
-            "internal_observations": "Cliente preferencial - desconto aplicado",
-            "budget_observations": "Serviço agendado para próxima semana",
-            "items": [
-                {
-                    "id": "ITM-0000001",
-                    "service_id": self.created_resources['services'][0],
-                    "service_name": "Limpeza de Sofá 3 Lugares",
-                    "service_code": self.created_resources['services'][0],
-                    "quantity": 1.0,
-                    "unit_price": 150.0,
-                    "total_value": 150.0,
-                    "observations": "Sofá em bom estado",
-                    "status": "RETIRAR",
-                    "execution_location": "RETIRADA",
-                    "is_retoque": False
-                }
-            ]
-        }
-        
-        response = self.make_request('POST', '/budgets', budget_data)
+        response = self.make_request('GET', '/budget-items/available-for-routes')
         if response['success']:
-            budget_id = response['data']['id']
-            self.created_resources['budgets'].append(budget_id)
+            data = response['data']
+            available_items = data.get('available_items', [])
             
-            # Verify budget data
-            budget = response['data']
-            checks = [
-                (budget.get('client_name') == 'Maria Silva Santos', "Client name populated"),
-                (budget.get('payment_method') == 'PIX_CNPJ_25995295000104', "Payment method set"),
-                (budget.get('salesperson') == 'Gabriela Alcântara', "Salesperson set"),
-                (budget.get('total_value') == 150.0, "Total value calculated"),
-                (len(budget.get('items', [])) == 1, "Items added"),
-                (budget.get('updated_at') is not None, "Updated timestamp set")
-            ]
-            
-            all_passed = all(check[0] for check in checks)
-            failed_checks = [check[1] for check in checks if not check[0]]
-            
-            if all_passed:
-                self.log_test("Budget Creation", True, f"Budget created successfully: {budget_id}")
-                return budget_id
+            if len(available_items) > 0:
+                # Verify structure of returned items
+                first_item = available_items[0]
+                required_fields = ['budget_item_id', 'budget_id', 'client_id', 'client_name', 
+                                 'service_name', 'service_value', 'status', 'address']
+                missing_fields = [field for field in required_fields if field not in first_item]
+                
+                if not missing_fields:
+                    self.log_test("Get Available Items", True, f"Retrieved {len(available_items)} available items with correct structure")
+                    return available_items
+                else:
+                    self.log_test("Get Available Items", False, f"Missing required fields: {missing_fields}")
+                    return available_items
             else:
-                self.log_test("Budget Creation", False, f"Data validation failed: {failed_checks}")
-                return budget_id
+                self.log_test("Get Available Items", False, "No available items found - check if budgets have route-eligible items")
+                return []
         else:
-            self.log_test("Budget Creation", False, "Failed to create budget", response['data'])
-            return None
+            self.log_test("Get Available Items", False, "Failed to retrieve available items", response['data'])
+            return []
     
     def test_budget_listing(self):
         """Test GET /api/budgets - List budgets"""
