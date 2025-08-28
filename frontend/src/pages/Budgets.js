@@ -757,7 +757,8 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
         diameter: '',
         fabric_folds: '',
         fabric_per_fold: 18,
-        linear_meters: editingItem.linear_meters || ''
+        linear_meters: editingItem.linear_meters || '',
+        unit_price: editingItem.unit_price || 0 // Carregar preço do item sendo editado
       });
       const service = services.find(s => s.id === editingItem.service_id);
       if (service) {
