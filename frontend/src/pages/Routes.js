@@ -810,6 +810,8 @@ export function Routes() {
     console.log('Route type:', routeType);
     console.log('Vehicle type:', currentVehicleType);
     
+    // NOVO: Ativar popup de loading ao invés do debug discreto
+    setIsCalculatingRoute(true);
     setDebugInfo(`Iniciando otimização ${routeType.toLowerCase()}...`);
     
     if (prioritizationItems.length === 0) {
