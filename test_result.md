@@ -312,6 +312,18 @@ frontend:
         -working: true
         -agent: "main"
         -comment: "✅ IMPLEMENTADO: Campo de preço editável ao adicionar itens no orçamento. Modificações: 1) Adicionado unit_price ao formData do ItemFormModal, 2) Preço do catálogo carregado automaticamente ao selecionar serviço, 3) Campo visual editável para ajustar preço com validação, 4) handleAddItem usa preço editável ou catálogo como fallback. Interface melhorada com distinção entre 'Preço do Catálogo' (informativo) e 'Preço Unitário' (editável)."
+        
+  - task: "Visible Status Column in Catalog"
+    implemented: true
+    working: true
+    file: "pages/Catalog.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "✅ IMPLEMENTADO: Coluna STATUS do catálogo tornada mais visível. Movida da última posição para segunda posição (após Ações). Badges melhorados: texto '● Ativo/Inativo' maior, bordas para contraste, padding aumentado. Status agora é facilmente identificável na tabela."
 
   - task: "Budget API Update Function"
     implemented: true
