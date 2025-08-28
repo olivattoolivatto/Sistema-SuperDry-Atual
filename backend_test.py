@@ -297,25 +297,39 @@ class RoutesAPITester:
             self.log_test("Create Route", False, "Failed to create route", response['data'])
             return None
     
-    def test_budget_retrieval(self, budget_id: str):
-        """Test GET /api/budgets/{budget_id} - Get specific budget"""
-        print("\n=== TESTING BUDGET RETRIEVAL ===")
+    def test_add_stops_to_route(self, route_id: str, available_items: List[Dict]):
+        """Test PUT /api/routes/{route_id}/stops - Add stops to route"""
+        print("\n=== TESTING ADD STOPS TO ROUTE ===")
         
-        response = self.make_request('GET', f'/budgets/{budget_id}')
+        if not available_items:
+            self.log_test("Add Route Stops", False, "No available items to add as stops")
+            return False
+        
+        # Prepare stops data with different priorities
+        stops_data = []
+        priorities = ["PRIMEIRA", "AUTOMATICA", "ULTIMA"]
+        
+        for i, item in enumerate(available_items[:3]):  # Use first 3 items
+            priority = priorities[i % len(priorities)]
+            stops_data.append({
+                "budget_item_id": item["budget_item_id"],
+                "priority": priority
+            })
+        
+        response = self.make_request('PUT', f'/routes/{route_id}/stops', stops_data)
         if response['success']:
-            budget = response['data']
-            required_fields = ['id', 'client_id', 'client_name', 'payment_method', 'salesperson', 'items', 'total_value']
-            missing_fields = [field for field in required_fields if field not in budget]
+            result = response['data']
+            stops_count = result.get('stops_count', 0)
             
-            if not missing_fields:
-                self.log_test("Budget Retrieval", True, f"Budget {budget_id} retrieved with all required fields")
-                return budget
+            if stops_count == len(stops_data):
+                self.log_test("Add Route Stops", True, f"Successfully added {stops_count} stops to route")
+                return True
             else:
-                self.log_test("Budget Retrieval", False, f"Missing fields: {missing_fields}")
-                return budget
+                self.log_test("Add Route Stops", False, f"Expected {len(stops_data)} stops, got {stops_count}")
+                return False
         else:
-            self.log_test("Budget Retrieval", False, f"Failed to retrieve budget {budget_id}", response['data'])
-            return None
+            self.log_test("Add Route Stops", False, "Failed to add stops to route", response['data'])
+            return False
     
     def test_budget_update_client_change(self, budget_id: str):
         """Test budget update - Change client"""
