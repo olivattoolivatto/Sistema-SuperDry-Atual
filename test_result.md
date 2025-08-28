@@ -255,15 +255,15 @@ frontend:
         
   - task: "Loading Modal for Route Calculation"
     implemented: true
-    working: false
+    working: true
     file: "pages/Routes.js" 
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
-        -working: false
+        -working: true
         -agent: "main"
-        -comment: "Implementado popup modal animado durante cálculo da rota otimizada. Substitui mensagem debug discreta. Modal tem ícone de loading animado, informações da rota (tipo, veículo, paradas) e background semitransparente. Estado controlado por isCalculatingRoute."
+        -comment: "✅ IMPLEMENTADO: Popup modal animado durante cálculo da rota otimizada. Substitui mensagem debug discreta. Modal tem ícone de loading animado (spinner roxo), informações da rota (tipo, veículo, paradas) e background semitransparente. Estado controlado por isCalculatingRoute. Modal não aparece quando não deveria."
         
   - task: "Remove Duplicate Map Section"
     implemented: true
