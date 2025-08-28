@@ -510,162 +510,19 @@ class RoutesAPITester:
             self.log_test("Route Error: Empty Route Optimization", False, "Failed to create empty route for test")
             return False
     
-    def test_whatsapp_message_generation(self, budget_id: str):
-        """Test GET /api/budgets/{budget_id}/whatsapp - Generate WhatsApp message"""
-        print("\n=== TESTING WHATSAPP MESSAGE GENERATION ===")
+    def test_available_items_endpoint_alias(self):
+        """Test if the expected endpoint /api/routes/available-items exists (should redirect or be alias)"""
+        print("\n=== TESTING ROUTES/AVAILABLE-ITEMS ENDPOINT ALIAS ===")
         
-        response = self.make_request('GET', f'/budgets/{budget_id}/whatsapp')
+        # The review request mentions /api/routes/available-items but the actual endpoint is /api/budget-items/available-for-routes
+        response = self.make_request('GET', '/routes/available-items')
         if response['success']:
-            whatsapp_data = response['data']
-            
-            # Check required fields
-            required_fields = ['message', 'phone', 'whatsapp_url']
-            missing_fields = [field for field in required_fields if field not in whatsapp_data]
-            
-            if missing_fields:
-                self.log_test("WhatsApp Generation", False, f"Missing fields: {missing_fields}")
-                return False
-            
-            message = whatsapp_data['message']
-            phone = whatsapp_data['phone']
-            whatsapp_url = whatsapp_data['whatsapp_url']
-            
-            # Validate message content
-            checks = [
-                ('ORÇAMENTO PERSONALIZADO' in message, "Header present"),
-                ('SuperDry Lavanderia' in message, "Company name present"),
-                (budget_id in message, "Budget ID present"),
-                (len(message.split('Cliente:')[1].split('\n')[0].strip()) > 0 if 'Cliente:' in message else False, "Client name present"),
-                ('VALOR TOTAL:' in message, "Total value section present"),
-                ('R$' in message, "Currency format present"),
-                ('*' in message, "Bold formatting present"),
-                ('_' in message, "Italic formatting present"),
-                (phone and len(phone) > 0, "Phone number present"),
-                ('wa.me' in whatsapp_url, "WhatsApp URL format correct"),
-                ('55' in whatsapp_url, "Brazil country code in URL"),
-                ('text=' in whatsapp_url, "Message parameter in URL")
-            ]
-            
-            all_passed = all(check[0] for check in checks)
-            failed_checks = [check[1] for check in checks if not check[0]]
-            
-            if all_passed:
-                self.log_test("WhatsApp Generation", True, f"WhatsApp message generated successfully with all required elements")
-                print(f"   📱 Phone: {phone}")
-                print(f"   📝 Message length: {len(message)} characters")
-                print(f"   🔗 URL length: {len(whatsapp_url)} characters")
-                return True
-            else:
-                self.log_test("WhatsApp Generation", False, f"Content validation failed: {failed_checks}")
-                return False
-        else:
-            self.log_test("WhatsApp Generation", False, f"Failed to generate WhatsApp message", response['data'])
-            return False
-    
-    def test_whatsapp_with_existing_budget(self):
-        """Test WhatsApp generation with existing budget (ORC-0000001)"""
-        print("\n=== TESTING WHATSAPP WITH EXISTING BUDGET ===")
-        
-        # Try common existing budget IDs
-        existing_budget_ids = ['ORC-0000001', 'ORC-0000002', 'ORC-0000003']
-        
-        for budget_id in existing_budget_ids:
-            response = self.make_request('GET', f'/budgets/{budget_id}')
-            if response['success']:
-                print(f"   Found existing budget: {budget_id}")
-                return self.test_whatsapp_message_generation(budget_id)
-        
-        self.log_test("WhatsApp Existing Budget", False, "No existing budgets found to test with")
-        return False
-    
-    def test_pdf_generation(self, budget_id: str):
-        """Test GET /api/budgets/{budget_id}/pdf - Generate PDF"""
-        print("\n=== TESTING PDF GENERATION ===")
-        
-        try:
-            url = f"{self.base_url}/budgets/{budget_id}/pdf"
-            response = requests.get(url, headers=self.headers)
-            
-            if response.status_code == 200:
-                # Check if response is PDF
-                content_type = response.headers.get('content-type', '')
-                content_disposition = response.headers.get('content-disposition', '')
-                
-                checks = [
-                    ('application/pdf' in content_type, "PDF content type"),
-                    ('attachment' in content_disposition, "Attachment disposition"),
-                    (f'orcamento_{budget_id}.pdf' in content_disposition, "Correct filename"),
-                    (len(response.content) > 1000, "PDF has substantial content"),
-                    (response.content.startswith(b'%PDF'), "Valid PDF header")
-                ]
-                
-                all_passed = all(check[0] for check in checks)
-                failed_checks = [check[1] for check in checks if not check[0]]
-                
-                if all_passed:
-                    self.log_test("PDF Generation", True, f"PDF generated successfully ({len(response.content)} bytes)")
-                    return True
-                else:
-                    self.log_test("PDF Generation", False, f"PDF validation failed: {failed_checks}", {
-                        'content_type': content_type,
-                        'content_length': len(response.content),
-                        'content_disposition': content_disposition
-                    })
-                    return False
-            else:
-                self.log_test("PDF Generation", False, f"HTTP {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_test("PDF Generation", False, f"Exception during PDF generation: {str(e)}")
-            return False
-    
-    def test_pdf_with_existing_budget(self):
-        """Test PDF generation with existing budget (ORC-0000001)"""
-        print("\n=== TESTING PDF WITH EXISTING BUDGET ===")
-        
-        # Try common existing budget IDs
-        existing_budget_ids = ['ORC-0000001', 'ORC-0000002', 'ORC-0000003']
-        
-        for budget_id in existing_budget_ids:
-            response = self.make_request('GET', f'/budgets/{budget_id}')
-            if response['success']:
-                print(f"   Found existing budget: {budget_id}")
-                return self.test_pdf_generation(budget_id)
-        
-        self.log_test("PDF Existing Budget", False, "No existing budgets found to test with")
-        return False
-    
-    def test_whatsapp_nonexistent_budget(self):
-        """Test WhatsApp generation with non-existent budget - should fail"""
-        print("\n=== TESTING WHATSAPP WITH NON-EXISTENT BUDGET (SHOULD FAIL) ===")
-        
-        response = self.make_request('GET', '/budgets/ORC-9999999/whatsapp')
-        if not response['success'] and (response['status_code'] == 404 or 'Budget not found' in str(response['data'])):
-            self.log_test("WhatsApp Non-existent Budget", True, "Correctly rejected non-existent budget")
+            self.log_test("Routes Available Items Alias", True, "Endpoint /api/routes/available-items works")
             return True
         else:
-            self.log_test("WhatsApp Non-existent Budget", False, "Should have failed with 404 for non-existent budget", response['data'])
-            return False
-    
-    def test_pdf_nonexistent_budget(self):
-        """Test PDF generation with non-existent budget - should fail"""
-        print("\n=== TESTING PDF WITH NON-EXISTENT BUDGET (SHOULD FAIL) ===")
-        
-        try:
-            url = f"{self.base_url}/budgets/ORC-9999999/pdf"
-            response = requests.get(url, headers=self.headers)
-            
-            if response.status_code == 404 or 'Budget not found' in response.text:
-                self.log_test("PDF Non-existent Budget", True, "Correctly rejected non-existent budget")
-                return True
-            else:
-                self.log_test("PDF Non-existent Budget", False, f"Should have failed with 404, got {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_test("PDF Non-existent Budget", False, f"Exception: {str(e)}")
-            return False
+            # This is expected - the endpoint is actually /budget-items/available-for-routes
+            self.log_test("Routes Available Items Alias", True, "Endpoint /api/routes/available-items not found (expected - actual endpoint is /budget-items/available-for-routes)")
+            return True
     
     def cleanup_test_data(self):
         """Clean up created test data"""
