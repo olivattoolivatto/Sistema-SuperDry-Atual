@@ -256,22 +256,46 @@ class RoutesAPITester:
             self.log_test("Get Available Items", False, "Failed to retrieve available items", response['data'])
             return []
     
-    def test_budget_listing(self):
-        """Test GET /api/budgets - List budgets"""
-        print("\n=== TESTING BUDGET LISTING ===")
+    def test_create_route(self):
+        """Test POST /api/routes - Create new route"""
+        print("\n=== TESTING CREATE ROUTE ===")
         
-        response = self.make_request('GET', '/budgets')
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2024-12-20",
+            "planned_start_time": "08:00",
+            "stops": []
+        }
+        
+        response = self.make_request('POST', '/routes', route_data)
         if response['success']:
-            budgets = response['data']
-            if isinstance(budgets, list) and len(budgets) > 0:
-                self.log_test("Budget Listing", True, f"Retrieved {len(budgets)} budgets")
-                return True
+            route = response['data']
+            route_id = route.get('id')
+            
+            # Verify route data
+            checks = [
+                (route_id is not None and route_id.startswith('RTE-'), "Route ID generated"),
+                (route.get('vehicle_type') == 'CARRO', "Vehicle type set"),
+                (route.get('planned_date') == '2024-12-20', "Planned date set"),
+                (route.get('planned_start_time') == '08:00', "Planned start time set"),
+                (route.get('status') == 'PLANNED', "Status set to PLANNED"),
+                (route.get('company_address') is not None, "Company address populated"),
+                (isinstance(route.get('stops', []), list), "Stops initialized as list")
+            ]
+            
+            all_passed = all(check[0] for check in checks)
+            failed_checks = [check[1] for check in checks if not check[0]]
+            
+            if all_passed:
+                self.created_resources['routes'].append(route_id)
+                self.log_test("Create Route", True, f"Route created successfully: {route_id}")
+                return route_id
             else:
-                self.log_test("Budget Listing", False, "No budgets found or invalid response format")
-                return False
+                self.log_test("Create Route", False, f"Data validation failed: {failed_checks}")
+                return route_id
         else:
-            self.log_test("Budget Listing", False, "Failed to retrieve budgets", response['data'])
-            return False
+            self.log_test("Create Route", False, "Failed to create route", response['data'])
+            return None
     
     def test_budget_retrieval(self, budget_id: str):
         """Test GET /api/budgets/{budget_id} - Get specific budget"""
