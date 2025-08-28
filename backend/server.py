@@ -812,6 +812,32 @@ async def deactivate_service(service_id: str):
         raise HTTPException(status_code=404, detail="Service not found")
     return {"message": "Service deactivated successfully"}
 
+@api_router.post("/services/migrate-default-status")
+async def migrate_services_default_status():
+    """Migrate existing services to add default_service_status field"""
+    try:
+        # Find services without default_service_status field
+        services_to_update = await db.services.find({"default_service_status": {"$exists": False}}).to_list(None)
+        
+        updated_count = 0
+        for service in services_to_update:
+            # Apply same logic as before: RETIRADA -> RETIRAR, others -> EXECUTAR_NO_LOCAL
+            default_status = ServiceStatus.RETIRAR if service.get("execution_location") == ExecutionLocation.RETIRADA else ServiceStatus.EXECUTAR_NO_LOCAL
+            
+            await db.services.update_one(
+                {"id": service["id"]},
+                {"$set": {"default_service_status": default_status, "updated_at": datetime.utcnow()}}
+            )
+            updated_count += 1
+        
+        return {
+            "message": f"Migration completed successfully", 
+            "updated_services": updated_count
+        }
+    except Exception as e:
+        logger.error(f"Error migrating services: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Budget endpoints
 @api_router.post("/budgets", response_model=Budget)
 async def create_budget(budget_data: BudgetCreate):
