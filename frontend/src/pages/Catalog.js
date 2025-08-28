@@ -481,6 +481,54 @@ export function Catalog() {
     }
   };
 
+  // Função para lidar com ordenação
+  const handleSort = (field) => {
+    if (sortField === field) {
+      // Se já está ordenando por este campo, inverte a direção
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Se é um campo novo, define como ascendente
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Função para ordenar serviços
+  const sortServices = (servicesArray) => {
+    return [...servicesArray].sort((a, b) => {
+      let aValue = a[sortField];
+      let bValue = b[sortField];
+
+      // Tratamento especial para diferentes tipos de dados
+      if (sortField === 'cost_price' || sortField === 'sale_price') {
+        aValue = parseFloat(aValue) || 0;
+        bValue = parseFloat(bValue) || 0;
+      } else if (sortField === 'is_active') {
+        // Ativos primeiro quando asc, inativos primeiro quando desc
+        aValue = a[sortField] ? 1 : 0;
+        bValue = b[sortField] ? 1 : 0;
+      } else if (sortField === 'measure_type') {
+        aValue = MEASURE_TYPES[a[sortField]] || '';
+        bValue = MEASURE_TYPES[b[sortField]] || '';
+      } else if (sortField === 'execution_location') {
+        aValue = EXECUTION_LOCATIONS[a[sortField]] || '';
+        bValue = EXECUTION_LOCATIONS[b[sortField]] || '';
+      } else {
+        // Para strings, converte para lowercase
+        aValue = (aValue || '').toString().toLowerCase();
+        bValue = (bValue || '').toString().toLowerCase();
+      }
+
+      if (aValue < bValue) {
+        return sortDirection === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortDirection === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
   // Group services by category
   const groupedServices = services.reduce((acc, service) => {
     const category = service.category;
