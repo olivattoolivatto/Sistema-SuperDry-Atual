@@ -107,14 +107,13 @@ class ServiceStatusBugTester:
             }
         }
         
-        for client_data in clients_data:
-            response = self.make_request('POST', '/clients', client_data)
-            if response['success']:
-                self.created_resources['clients'].append(response['data']['id'])
-                self.log_test("Setup: Create Test Client", True, f"Client created: {client_data['name']}")
-            else:
-                self.log_test("Setup: Create Test Client", False, f"Failed to create client: {client_data['name']}", response['data'])
-                return False
+        response = self.make_request('POST', '/clients', client_data)
+        if response['success']:
+            self.created_resources['clients'].append(response['data']['id'])
+            self.log_test("Setup: Create Test Client", True, f"Client created: {client_data['name']}")
+        else:
+            self.log_test("Setup: Create Test Client", False, f"Failed to create client: {client_data['name']}", response['data'])
+            return False
         
         # Create test services for different route types
         services_data = [
