@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend Test Suite for SuperDry Lavanderia Budget System
-Focus: Complete budget system testing with emphasis on update functionality
+Backend Test Suite for SuperDry Lavanderia Management System
+Focus: Routes API testing after frontend modifications
 """
 
 import requests
