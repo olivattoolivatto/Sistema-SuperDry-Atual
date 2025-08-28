@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Melhorias na tela Catálogo: 1. Tornar colunas ordenáveis, 2. Colocar coluna Ações como primeira. Refinamentos anteriores na tela de Rotas também implementados."
+user_problem_statement: "Funcionalidade de preço editável em Orçamentos: Ao adicionar um item do catálogo no orçamento, o valor deve ser editável para permitir ajustes/descontos/incrementos. Implementações anteriores: colunas ordenáveis no Catálogo e refinamentos na tela de Rotas."
 
 backend:
   - task: "Budget Update API Endpoint"
