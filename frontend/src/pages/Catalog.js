@@ -647,6 +647,9 @@ export function Catalog() {
             }}
             onToggleStatus={handleToggleStatus}
             onDelete={handleDeleteService}
+            sortField={sortField}
+            sortDirection={sortDirection}
+            onSort={handleSort}
           />
         </div>
       ))}
