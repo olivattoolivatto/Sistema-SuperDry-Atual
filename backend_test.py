@@ -92,48 +92,20 @@ class ServiceStatusBugTester:
             self.log_test("Setup: System Config", False, "Failed to create system config", response['data'])
             return False
         
-        # Create test clients with different addresses
-        clients_data = [
-            {
-                "name": "Ana Paula Costa",
-                "phone_primary": "11987654321",
-                "email": "ana.costa@email.com",
-                "address": {
-                    "full_address": "Rua das Palmeiras, 456",
-                    "neighborhood": "Vila Madalena",
-                    "city": "São Paulo",
-                    "state": "SP",
-                    "latitude": -23.5489,
-                    "longitude": -46.6388
-                }
-            },
-            {
-                "name": "Carlos Roberto Silva",
-                "phone_primary": "11876543210",
-                "email": "carlos.silva@email.com",
-                "address": {
-                    "full_address": "Av. Brigadeiro Faria Lima, 2000",
-                    "neighborhood": "Itaim Bibi",
-                    "city": "São Paulo",
-                    "state": "SP",
-                    "latitude": -23.5751,
-                    "longitude": -46.6896
-                }
-            },
-            {
-                "name": "Fernanda Oliveira Santos",
-                "phone_primary": "11765432109",
-                "email": "fernanda.santos@email.com",
-                "address": {
-                    "full_address": "Rua Augusta, 1500",
-                    "neighborhood": "Consolação",
-                    "city": "São Paulo",
-                    "state": "SP",
-                    "latitude": -23.5558,
-                    "longitude": -46.6396
-                }
+        # Create test client for status bug testing
+        client_data = {
+            "name": "Maria Silva Santos",
+            "phone_primary": "11987654321",
+            "email": "maria.santos@email.com",
+            "address": {
+                "full_address": "Rua das Flores, 123",
+                "neighborhood": "Vila Madalena",
+                "city": "São Paulo",
+                "state": "SP",
+                "latitude": -23.5489,
+                "longitude": -46.6388
             }
-        ]
+        }
         
         for client_data in clients_data:
             response = self.make_request('POST', '/clients', client_data)
