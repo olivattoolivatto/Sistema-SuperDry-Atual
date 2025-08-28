@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Backend Test Suite for SuperDry Lavanderia Management System
-Focus: Routes API testing after frontend modifications
+Focus: Testing default service status bug fix and Routes API
 """
 
 import requests
