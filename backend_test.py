@@ -14,7 +14,7 @@ from typing import Dict, List, Any
 BASE_URL = "https://route-optimizer-19.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
-class BudgetSystemTester:
+class RoutesAPITester:
     def __init__(self):
         self.base_url = BASE_URL
         self.headers = HEADERS
@@ -22,7 +22,9 @@ class BudgetSystemTester:
         self.created_resources = {
             'clients': [],
             'services': [],
-            'budgets': []
+            'budgets': [],
+            'routes': [],
+            'system_config': False
         }
     
     def log_test(self, test_name: str, success: bool, message: str, details: Any = None):
