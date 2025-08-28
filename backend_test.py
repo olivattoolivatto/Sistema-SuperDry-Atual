@@ -528,6 +528,14 @@ class RoutesAPITester:
         """Clean up created test data"""
         print("\n=== CLEANING UP TEST DATA ===")
         
+        # Delete routes (except those already deleted in tests)
+        for route_id in self.created_resources['routes']:
+            response = self.make_request('DELETE', f'/routes/{route_id}')
+            if response['success']:
+                print(f"✅ Deleted route: {route_id}")
+            else:
+                print(f"ℹ️  Route {route_id} already deleted or not found")
+        
         # Delete budgets
         for budget_id in self.created_resources['budgets']:
             response = self.make_request('DELETE', f'/budgets/{budget_id}')
@@ -544,8 +552,9 @@ class RoutesAPITester:
             else:
                 print(f"❌ Failed to delete client: {client_id}")
         
-        # Note: Services are not deleted as they might be used by other budgets
+        # Note: Services and system config are not deleted as they might be used by other parts
         print(f"ℹ️  Services created: {len(self.created_resources['services'])} (not deleted)")
+        print(f"ℹ️  System config updated: {self.created_resources['system_config']} (not reverted)")
     
     def run_all_tests(self):
         """Run complete test suite"""
