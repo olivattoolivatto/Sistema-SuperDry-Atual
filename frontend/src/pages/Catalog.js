@@ -116,76 +116,77 @@ const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, s
             </SortableHeader>
           </tr>
         </thead>
-      <tbody className="bg-white divide-y divide-gray-200">
-        {services.map((service, index) => (
-          <tr key={service.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${!service.is_active ? 'opacity-60' : ''}`}>
-            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-              {service.id}
-            </td>
-            <td className="px-6 py-4 whitespace-nowrap">
-              <div className="text-sm font-medium text-gray-900">{service.name}</div>
-            </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {service.service_type}
-            </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {MEASURE_TYPES[service.measure_type]}
-            </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {EXECUTION_LOCATIONS[service.execution_location]}
-            </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
-              R$ {service.cost_price.toFixed(2)}
-            </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-              R$ {service.sale_price.toFixed(2)}
-            </td>
-            <td className="px-6 py-4 whitespace-nowrap">
-              {service.is_active ? (
-                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                  Ativo
-                </span>
-              ) : (
-                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                  Inativo
-                </span>
-              )}
-            </td>
-            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-              <div className="flex items-center justify-end space-x-2">
-                <button
-                  onClick={() => onToggleStatus(service)}
-                  className={`p-2 rounded-lg transition-colors ${
-                    service.is_active 
-                      ? 'text-yellow-600 hover:bg-yellow-50' 
-                      : 'text-green-600 hover:bg-green-50'
-                  }`}
-                  title={service.is_active ? 'Inativar' : 'Ativar'}
-                >
-                  {service.is_active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={() => onEdit(service)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Editar"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onDelete(service)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Excluir"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+        <tbody className="bg-white divide-y divide-gray-200">
+          {services.map((service, index) => (
+            <tr key={service.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${!service.is_active ? 'opacity-60' : ''}`}>
+              <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => onToggleStatus(service)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      service.is_active 
+                        ? 'text-yellow-600 hover:bg-yellow-50' 
+                        : 'text-green-600 hover:bg-green-50'
+                    }`}
+                    title={service.is_active ? 'Inativar' : 'Ativar'}
+                  >
+                    {service.is_active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={() => onEdit(service)}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Editar"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => onDelete(service)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Excluir"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                {service.id}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="text-sm font-medium text-gray-900">{service.name}</div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {service.service_type}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {MEASURE_TYPES[service.measure_type]}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {EXECUTION_LOCATIONS[service.execution_location]}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-red-600">
+                R$ {service.cost_price.toFixed(2)}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-green-600">
+                R$ {service.sale_price.toFixed(2)}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                {service.is_active ? (
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                    Ativo
+                  </span>
+                ) : (
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                    Inativo
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 const ServiceForm = ({ service, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
