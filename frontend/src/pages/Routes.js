@@ -1592,7 +1592,7 @@ export function Routes() {
               </div>
             </div>
 
-            {/* Interactive Map */}
+            {/* COMENTADO TEMPORARIAMENTE: Seção de mapa duplicada que estava causando problemas
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Mapa da Rota Otimizada</h3>
               <div className="border border-gray-300 rounded-lg overflow-hidden">
@@ -1607,6 +1607,7 @@ export function Routes() {
                 Mapa centralizado em Cuiabá • 🏢 = Empresa (início/fim) • Números = Paradas ordenadas
               </div>
             </div>
+            */}
 
             {/* Route Details Summary */}
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
