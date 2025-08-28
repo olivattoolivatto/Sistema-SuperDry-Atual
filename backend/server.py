@@ -173,6 +173,7 @@ class Service(BaseModel):
     cost_price: float
     sale_price: float
     is_active: bool = True
+    default_service_status: ServiceStatus = ServiceStatus.RETIRAR  # Status padrão quando adicionado a orçamento
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
