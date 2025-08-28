@@ -145,6 +145,42 @@ backend:
         -comment: "✅ TESTED: GET /api/budgets/{budget_id}/pdf endpoint working perfectly. PDF generated correctly in binary format with proper headers (application/pdf, attachment disposition). Filename format correct (orcamento_{budget_id}.pdf). PDF contains all budget data: client info, services table with measurements, totals, signature section. Tested with existing budgets (ORC-0000001) and budgets with/without items. Error handling for non-existent budgets working (404 response). PDF size appropriate (2000+ bytes for typical budgets)."
 
 frontend:
+  - task: "Auto-scroll to Prioritization Section"
+    implemented: true
+    working: false
+    file: "pages/Routes.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "Implementado scroll automático para seção Priorização de Rota ao pressionar botões 'Otimizar Rota de Moto/Carro'. Usa setTimeout de 500ms e scrollIntoView com behavior smooth."
+        
+  - task: "Loading Modal for Route Calculation"
+    implemented: true
+    working: false
+    file: "pages/Routes.js" 
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "Implementado popup modal animado durante cálculo da rota otimizada. Substitui mensagem debug discreta. Modal tem ícone de loading animado, informações da rota (tipo, veículo, paradas) e background semitransparente. Estado controlado por isCalculatingRoute."
+        
+  - task: "Remove Duplicate Map Section"
+    implemented: true
+    working: false
+    file: "pages/Routes.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "Comentado (reversível) seção duplicada do mapa nas linhas 1570-1584. Mantida apenas a seção principal sempre visível. Duplicação estava causando confusão - segunda seção não renderizava corretamente."
+
   - task: "Budget API Update Function"
     implemented: true
     working: true
