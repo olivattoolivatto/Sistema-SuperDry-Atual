@@ -1061,8 +1061,31 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
                 <p><strong>Categoria:</strong> {selectedService.category}</p>
                 <p><strong>Tipo de Medida:</strong> {selectedService.measure_type}</p>
                 <p><strong>Local de Execução:</strong> {selectedService.execution_location}</p>
-                <p><strong>Preço Unitário:</strong> R$ {selectedService.sale_price.toFixed(2)}</p>
+                <p><strong>Preço do Catálogo:</strong> R$ {selectedService.sale_price.toFixed(2)}</p>
               </div>
+            </div>
+          )}
+
+          {/* Campo para editar preço unitário */}
+          {selectedService && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Preço Unitário (R$) *
+              </label>
+              <input
+                type="number"
+                name="unit_price"
+                value={formData.unit_price}
+                onChange={handleInputChange}
+                min="0"
+                step="0.01"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="0.00"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Você pode ajustar o preço para aplicar descontos ou incrementos em relação ao valor do catálogo
+              </p>
             </div>
           )}
 
