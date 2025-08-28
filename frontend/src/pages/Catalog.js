@@ -7,7 +7,10 @@ import {
   EyeOff,
   Trash2,
   Filter,
-  Package
+  Package,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown
 } from 'lucide-react';
 import { servicesApi } from '../services/api';
 
