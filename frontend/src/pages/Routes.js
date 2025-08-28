@@ -146,6 +146,7 @@ export function Routes() {
 
   // Debug state
   const [debugInfo, setDebugInfo] = useState(''); // Debug info state
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false); // Loading state for route calculation
   
   // Enhanced logging system
   const logAction = (action, data) => {
