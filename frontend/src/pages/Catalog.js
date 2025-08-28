@@ -393,6 +393,10 @@ export function Catalog() {
   const [showInactive, setShowInactive] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingService, setEditingService] = useState(null);
+  
+  // Estados para ordenação
+  const [sortField, setSortField] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
 
   useEffect(() => {
     loadServices();
