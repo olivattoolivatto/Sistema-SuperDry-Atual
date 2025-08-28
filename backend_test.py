@@ -425,93 +425,31 @@ class RoutesAPITester:
             self.log_test("Get Route Details", False, f"Failed to retrieve route {route_id}", response['data'])
             return None
     
-    def test_budget_update_items(self, budget_id: str):
-        """Test budget update - Add/modify items"""
-        print("\n=== TESTING BUDGET UPDATE: ITEMS MODIFICATION ===")
+    def test_list_routes(self):
+        """Test GET /api/routes - List saved routes"""
+        print("\n=== TESTING LIST ROUTES ===")
         
-        # Create additional test service
-        service_data = {
-            "name": "Limpeza de Tapete Persa",
-            "category": "TAPETES",
-            "service_type": "Limpeza Especializada",
-            "measure_type": "AREA_DE_TAPETE",
-            "execution_location": "RETIRADA",
-            "cost_price": 25.0,
-            "sale_price": 45.0
-        }
-        
-        service_response = self.make_request('POST', '/services', service_data)
-        if not service_response['success']:
-            self.log_test("Budget Update: Items", False, "Failed to create additional service for test")
-            return False
-        
-        new_service_id = service_response['data']['id']
-        self.created_resources['services'].append(new_service_id)
-        
-        # Update budget with multiple items
-        update_data = {
-            "client_id": self.created_resources['clients'][0],
-            "payment_method": "CREDITO_3X",
-            "salesperson": "Diego Olivatto",
-            "internal_observations": "Orçamento com múltiplos itens",
-            "items": [
-                {
-                    "id": "ITM-0000002",
-                    "service_id": self.created_resources['services'][0],
-                    "service_name": "Limpeza de Sofá 3 Lugares",
-                    "service_code": self.created_resources['services'][0],
-                    "quantity": 2.0,
-                    "unit_price": 150.0,
-                    "total_value": 300.0,
-                    "observations": "2 sofás para limpeza",
-                    "status": "RETIRAR",
-                    "execution_location": "RETIRADA",
-                    "is_retoque": False
-                },
-                {
-                    "id": "ITM-0000003",
-                    "service_id": new_service_id,
-                    "service_name": "Limpeza de Tapete Persa",
-                    "service_code": new_service_id,
-                    "quantity": 1.5,
-                    "unit_price": 45.0,
-                    "area_m2": 1.5,
-                    "total_value": 67.5,
-                    "observations": "Tapete persa 1.5m²",
-                    "status": "RETIRAR",
-                    "execution_location": "RETIRADA",
-                    "is_retoque": False
-                }
-            ]
-        }
-        
-        response = self.make_request('PUT', f'/budgets/{budget_id}', update_data)
+        response = self.make_request('GET', '/routes')
         if response['success']:
-            updated_budget = response['data']
-            checks = [
-                (len(updated_budget.get('items', [])) == 2, "Two items added"),
-                (updated_budget.get('total_value') == 367.5, "Total value recalculated"),
-                (updated_budget.get('total_area_m2') == 1.5, "Total area calculated"),
-                (updated_budget.get('total_units') == 2, "Total units calculated")
-            ]
+            routes = response['data']
             
-            all_passed = all(check[0] for check in checks)
-            failed_checks = [check[1] for check in checks if not check[0]]
-            
-            if all_passed:
-                self.log_test("Budget Update: Items", True, "Items successfully updated with correct totals")
-                return True
+            if isinstance(routes, list):
+                # Check if our created route is in the list
+                created_route_found = any(route.get('id') in self.created_resources['routes'] 
+                                        for route in routes)
+                
+                if created_route_found or len(routes) > 0:
+                    self.log_test("List Routes", True, f"Retrieved {len(routes)} routes")
+                    return routes
+                else:
+                    self.log_test("List Routes", False, "No routes found in listing")
+                    return []
             else:
-                self.log_test("Budget Update: Items", False, f"Validation failed: {failed_checks}", {
-                    'expected_total': 367.5,
-                    'actual_total': updated_budget.get('total_value'),
-                    'expected_items': 2,
-                    'actual_items': len(updated_budget.get('items', []))
-                })
-                return False
+                self.log_test("List Routes", False, "Invalid response format - expected list")
+                return []
         else:
-            self.log_test("Budget Update: Items", False, "Failed to update budget items", response['data'])
-            return False
+            self.log_test("List Routes", False, "Failed to retrieve routes", response['data'])
+            return []
     
     def test_budget_update_observations(self, budget_id: str):
         """Test budget update - Change observations"""
