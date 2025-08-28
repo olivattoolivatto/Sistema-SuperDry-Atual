@@ -102,12 +102,6 @@ const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, s
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Ações
             </th>
-            <SortableHeader field="is_active">
-              Situação
-            </SortableHeader>
-            <SortableHeader field="id">
-              Código
-            </SortableHeader>
             <SortableHeader field="name">
               Nome do Serviço
             </SortableHeader>
@@ -128,6 +122,12 @@ const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, s
             </SortableHeader>
             <SortableHeader field="sale_price" align="right">
               Venda
+            </SortableHeader>
+            <SortableHeader field="is_active">
+              Situação
+            </SortableHeader>
+            <SortableHeader field="id">
+              Código
             </SortableHeader>
           </tr>
         </thead>
