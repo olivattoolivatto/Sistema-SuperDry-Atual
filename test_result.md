@@ -408,14 +408,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Routes API - Available Items Endpoint"
-    - "Routes API - Create Route"
-    - "Routes API - Add Stops"
-    - "Routes API - Route Optimization CURTA"
-    - "Routes API - Route Optimization EFICIENTE"
-    - "Routes API - Get Route Details"
-    - "Routes API - List Routes"
-    - "Routes API - Delete Route"
+    - "Service Default Status Bug Fix"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
