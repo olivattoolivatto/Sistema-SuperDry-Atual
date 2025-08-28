@@ -196,7 +196,8 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
     measure_type: 'UNITARIO',
     execution_location: 'RETIRADA',
     cost_price: 0,
-    sale_price: 0
+    sale_price: 0,
+    default_service_status: 'RETIRAR'
   });
   const [loading, setLoading] = useState(false);
 
