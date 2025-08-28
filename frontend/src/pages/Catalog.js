@@ -164,20 +164,6 @@ const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, s
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                {service.is_active ? (
-                  <span className="px-3 py-1 inline-flex text-sm font-medium rounded-full bg-green-100 text-green-800 border border-green-300">
-                    ● Ativo
-                  </span>
-                ) : (
-                  <span className="px-3 py-1 inline-flex text-sm font-medium rounded-full bg-red-100 text-red-800 border border-red-300">
-                    ● Inativo
-                  </span>
-                )}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                {service.id}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap">
                 <div className="text-sm font-medium text-gray-900">{service.name}</div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -204,6 +190,20 @@ const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, s
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-green-600">
                 R$ {service.sale_price.toFixed(2)}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                {service.is_active ? (
+                  <span className="px-3 py-1 inline-flex text-sm font-medium rounded-full bg-green-100 text-green-800 border border-green-300">
+                    ● Ativo
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 inline-flex text-sm font-medium rounded-full bg-red-100 text-red-800 border border-red-300">
+                    ● Inativo
+                  </span>
+                )}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                {service.id}
               </td>
             </tr>
           ))}
