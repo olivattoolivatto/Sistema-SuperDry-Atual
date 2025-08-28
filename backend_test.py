@@ -14,7 +14,7 @@ from typing import Dict, List, Any
 BASE_URL = "https://route-optimizer-19.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
-class RoutesAPITester:
+class ServiceStatusBugTester:
     def __init__(self):
         self.base_url = BASE_URL
         self.headers = HEADERS
