@@ -1201,6 +1201,54 @@ export function Routes() {
 
   return (
     <div className="space-y-6">
+      {/* Loading Modal/Popup para cálculo de rota */}
+      {isCalculatingRoute && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="text-center">
+              {/* Ícone animado */}
+              <div className="relative mx-auto mb-6">
+                <div className="w-16 h-16 border-4 border-purple-200 rounded-full animate-spin border-t-purple-600"></div>
+                <RouteIcon className="w-8 h-8 text-purple-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+              </div>
+              
+              {/* Título */}
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                Calculando Rota Otimizada
+              </h3>
+              
+              {/* Descrição */}
+              <p className="text-gray-600 mb-6">
+                Estamos processando sua rota usando algoritmos avançados de otimização OSRM...
+              </p>
+              
+              {/* Detalhes */}
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700">Tipo de Rota:</span>
+                  <span className="font-semibold text-purple-700">
+                    {routeType === 'CURTA' ? 'Rota Curta' : 'Rota Eficiente'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm mt-2">
+                  <span className="text-gray-700">Veículo:</span>
+                  <span className="font-semibold text-purple-700">{currentVehicleType}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm mt-2">
+                  <span className="text-gray-700">Paradas:</span>
+                  <span className="font-semibold text-purple-700">{prioritizationItems.length}</span>
+                </div>
+              </div>
+              
+              {/* Nota de tempo */}
+              <p className="text-xs text-gray-500 mt-4">
+                Isso pode levar alguns segundos...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Rotas</h1>
