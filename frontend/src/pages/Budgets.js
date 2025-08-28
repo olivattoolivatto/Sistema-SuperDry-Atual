@@ -710,7 +710,8 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
     diameter: '',
     fabric_folds: '',
     fabric_per_fold: 18,
-    linear_meters: ''
+    linear_meters: '',
+    unit_price: 0 // Novo campo para preço editável
   });
 
   // Function to normalize text (remove accents, case insensitive, whitespace insensitive)
