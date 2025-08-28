@@ -451,38 +451,28 @@ class RoutesAPITester:
             self.log_test("List Routes", False, "Failed to retrieve routes", response['data'])
             return []
     
-    def test_budget_update_observations(self, budget_id: str):
-        """Test budget update - Change observations"""
-        print("\n=== TESTING BUDGET UPDATE: OBSERVATIONS CHANGE ===")
+    def test_delete_route(self, route_id: str):
+        """Test DELETE /api/routes/{route_id} - Delete route"""
+        print("\n=== TESTING DELETE ROUTE ===")
         
-        update_data = {
-            "client_id": self.created_resources['clients'][0],
-            "payment_method": "CREDITO_3X",
-            "salesperson": "Diego Olivatto",
-            "internal_observations": "Observações internas atualizadas - cliente VIP",
-            "budget_observations": "Observações do orçamento atualizadas - entrega expressa",
-            "items": []
-        }
-        
-        response = self.make_request('PUT', f'/budgets/{budget_id}', update_data)
+        response = self.make_request('DELETE', f'/routes/{route_id}')
         if response['success']:
-            updated_budget = response['data']
-            checks = [
-                (updated_budget.get('internal_observations') == "Observações internas atualizadas - cliente VIP", "Internal observations updated"),
-                (updated_budget.get('budget_observations') == "Observações do orçamento atualizadas - entrega expressa", "Budget observations updated")
-            ]
+            result = response['data']
             
-            all_passed = all(check[0] for check in checks)
-            failed_checks = [check[1] for check in checks if not check[0]]
-            
-            if all_passed:
-                self.log_test("Budget Update: Observations", True, "Observations successfully updated")
-                return True
+            if result.get('message') == 'Route deleted successfully':
+                # Verify route is actually deleted
+                verify_response = self.make_request('GET', f'/routes/{route_id}')
+                if not verify_response['success'] and verify_response['status_code'] == 404:
+                    self.log_test("Delete Route", True, f"Route {route_id} successfully deleted")
+                    return True
+                else:
+                    self.log_test("Delete Route", False, "Route still exists after deletion")
+                    return False
             else:
-                self.log_test("Budget Update: Observations", False, f"Validation failed: {failed_checks}")
+                self.log_test("Delete Route", False, f"Unexpected response message: {result.get('message')}")
                 return False
         else:
-            self.log_test("Budget Update: Observations", False, "Failed to update observations", response['data'])
+            self.log_test("Delete Route", False, f"Failed to delete route {route_id}", response['data'])
             return False
     
     def test_budget_update_invalid_client(self, budget_id: str):
