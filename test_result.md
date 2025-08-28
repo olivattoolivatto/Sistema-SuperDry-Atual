@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Teste completo das novas funcionalidades de WhatsApp e PDF para orçamentos. CONTEXTO: Implementamos duas novas APIs: 1. GET /api/budgets/{budget_id}/whatsapp - Gerar mensagem WhatsApp formatada, 2. GET /api/budgets/{budget_id}/pdf - Gerar PDF do orçamento"
+user_problem_statement: "Refinamentos na tela de Rotas: 1. Focar na seção Priorização ao pressionar botões de Otimização, 2. Popup animado durante cálculo da rota, 3. Identificar origem da info 'Tipo: RETIRAR', 4. Remover duplicação do mapa"
 
 backend:
   - task: "Budget Update API Endpoint"
