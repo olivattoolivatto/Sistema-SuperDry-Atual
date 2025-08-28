@@ -103,7 +103,7 @@ const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, s
               Ações
             </th>
             <SortableHeader field="is_active">
-              Status
+              Situação
             </SortableHeader>
             <SortableHeader field="id">
               Código
