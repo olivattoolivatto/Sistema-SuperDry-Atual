@@ -202,6 +202,442 @@ class ServiceStatusBugTester:
         
         return True
     
+    def test_service_catalog_default_status(self):
+        """CRITICAL TEST: Verify services have different default_service_status values"""
+        print("\n=== TESTING SERVICE CATALOG DEFAULT STATUS ===")
+        
+        response = self.make_request('GET', '/services')
+        if not response['success']:
+            self.log_test("Service Catalog Status", False, "Failed to retrieve services", response['data'])
+            return []
+        
+        services = response['data']
+        if not services:
+            self.log_test("Service Catalog Status", False, "No services found in catalog")
+            return []
+        
+        # Find our test services and verify their default_service_status
+        test_services = []
+        expected_statuses = {
+            "RETIRAR": False,
+            "EXECUTAR_NO_LOCAL": False,
+            "ENTREGAR": False
+        }
+        
+        for service in services:
+            service_name = service.get('name', '')
+            default_status = service.get('default_service_status')
+            
+            if 'Status RETIRAR' in service_name:
+                test_services.append(service)
+                if default_status == 'RETIRAR':
+                    expected_statuses['RETIRAR'] = True
+                    self.log_test("Service Status Check", True, f"Service '{service_name}' has correct default_service_status: {default_status}")
+                else:
+                    self.log_test("Service Status Check", False, f"Service '{service_name}' has wrong default_service_status: {default_status} (expected RETIRAR)")
+            
+            elif 'Status EXECUTAR_NO_LOCAL' in service_name:
+                test_services.append(service)
+                if default_status == 'EXECUTAR_NO_LOCAL':
+                    expected_statuses['EXECUTAR_NO_LOCAL'] = True
+                    self.log_test("Service Status Check", True, f"Service '{service_name}' has correct default_service_status: {default_status}")
+                else:
+                    self.log_test("Service Status Check", False, f"Service '{service_name}' has wrong default_service_status: {default_status} (expected EXECUTAR_NO_LOCAL)")
+            
+            elif 'Status ENTREGAR' in service_name:
+                test_services.append(service)
+                if default_status == 'ENTREGAR':
+                    expected_statuses['ENTREGAR'] = True
+                    self.log_test("Service Status Check", True, f"Service '{service_name}' has correct default_service_status: {default_status}")
+                else:
+                    self.log_test("Service Status Check", False, f"Service '{service_name}' has wrong default_service_status: {default_status} (expected ENTREGAR)")
+        
+        # Verify we found all expected services with different statuses
+        all_statuses_found = all(expected_statuses.values())
+        if all_statuses_found:
+            self.log_test("Service Catalog Status", True, f"Found services with different default_service_status: {list(expected_statuses.keys())}")
+        else:
+            missing_statuses = [status for status, found in expected_statuses.items() if not found]
+            self.log_test("Service Catalog Status", False, f"Missing services with statuses: {missing_statuses}")
+        
+        return test_services
+    
+    def test_budget_item_status_inheritance(self, test_services):
+        """CRITICAL TEST: Verify budget items inherit correct status from service default_service_status"""
+        print("\n=== TESTING BUDGET ITEM STATUS INHERITANCE ===")
+        
+        if not test_services:
+            self.log_test("Budget Item Status", False, "No test services available for testing")
+            return None
+        
+        if not self.created_resources['clients']:
+            self.log_test("Budget Item Status", False, "No test client available")
+            return None
+        
+        client_id = self.created_resources['clients'][0]
+        
+        # Create a budget
+        budget_data = {
+            "client_id": client_id,
+            "payment_method": "PIX_CNPJ_25995295000104",
+            "salesperson": "Gabriela Alcântara",
+            "internal_observations": "Teste do bug de status padrão dos serviços"
+        }
+        
+        response = self.make_request('POST', '/budgets', budget_data)
+        if not response['success']:
+            self.log_test("Budget Item Status", False, "Failed to create test budget", response['data'])
+            return None
+        
+        budget = response['data']
+        budget_id = budget['id']
+        self.created_resources['budgets'].append(budget_id)
+        
+        # Add items from each test service to the budget
+        status_results = {}
+        
+        for service in test_services:
+            service_id = service['id']
+            service_name = service['name']
+            expected_status = service['default_service_status']
+            
+            # Add item to budget
+            item_data = {
+                "service_id": service_id,
+                "quantity": 1.0,
+                "observations": f"Teste de status para {service_name}"
+            }
+            
+            response = self.make_request('POST', f'/budgets/{budget_id}/items', item_data)
+            if response['success']:
+                item = response['data']
+                actual_status = item.get('status')
+                
+                if actual_status == expected_status:
+                    self.log_test("Item Status Inheritance", True, f"✅ Service '{service_name}' → Item status '{actual_status}' (correct)")
+                    status_results[expected_status] = True
+                else:
+                    self.log_test("Item Status Inheritance", False, f"❌ Service '{service_name}' → Item status '{actual_status}' (expected '{expected_status}')")
+                    status_results[expected_status] = False
+            else:
+                self.log_test("Item Status Inheritance", False, f"Failed to add item for service '{service_name}'", response['data'])
+                status_results[expected_status] = False
+        
+        # Summary of status inheritance test
+        correct_statuses = sum(1 for result in status_results.values() if result)
+        total_statuses = len(status_results)
+        
+        if correct_statuses == total_statuses:
+            self.log_test("Budget Item Status", True, f"✅ ALL {total_statuses} services correctly inherited their default_service_status")
+        else:
+            self.log_test("Budget Item Status", False, f"❌ Only {correct_statuses}/{total_statuses} services correctly inherited their default_service_status")
+        
+        return budget_id
+    
+    def test_available_for_routes_status_variety(self):
+        """CRITICAL TEST: Verify /api/budget-items/available-for-routes shows items with different statuses"""
+        print("\n=== TESTING AVAILABLE FOR ROUTES STATUS VARIETY ===")
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Available Items Status Variety", False, "Failed to retrieve available items", response['data'])
+            return False
+        
+        data = response['data']
+        available_items = data.get('available_items', [])
+        
+        if not available_items:
+            self.log_test("Available Items Status Variety", False, "No available items found for routes")
+            return False
+        
+        # Collect all statuses found
+        statuses_found = set()
+        status_counts = {}
+        
+        for item in available_items:
+            status = item.get('status')
+            if status:
+                statuses_found.add(status)
+                status_counts[status] = status_counts.get(status, 0) + 1
+        
+        # Check if we have variety in statuses (not all RETIRAR)
+        expected_statuses = {'RETIRAR', 'EXECUTAR_NO_LOCAL', 'ENTREGAR'}
+        found_expected = statuses_found.intersection(expected_statuses)
+        
+        if len(found_expected) >= 2:  # At least 2 different statuses
+            self.log_test("Available Items Status Variety", True, 
+                         f"✅ Found items with different statuses: {dict(status_counts)} - Bug FIXED!")
+        elif len(found_expected) == 1 and 'RETIRAR' in found_expected:
+            self.log_test("Available Items Status Variety", False, 
+                         f"❌ All items have status RETIRAR only: {dict(status_counts)} - Bug NOT FIXED!")
+        else:
+            self.log_test("Available Items Status Variety", True, 
+                         f"Found items with statuses: {dict(status_counts)}")
+        
+        # Log details of items found
+        print(f"   📊 Status distribution: {dict(status_counts)}")
+        print(f"   📋 Total items available for routes: {len(available_items)}")
+        
+        return len(found_expected) >= 2
+    
+    def test_lines_1473_1479_fix(self, test_services):
+        """FOCUS TEST: Verify the specific fix in lines 1473-1479 of server.py"""
+        print("\n=== TESTING LINES 1473-1479 FIX: item_dict['status'] = service_obj.default_service_status ===")
+        
+        if not test_services or not self.created_resources['clients']:
+            self.log_test("Lines 1473-1479 Fix", False, "Missing test data")
+            return False
+        
+        client_id = self.created_resources['clients'][0]
+        
+        # Test each service individually to verify the fix
+        fix_working = True
+        
+        for service in test_services:
+            service_id = service['id']
+            service_name = service['name']
+            expected_status = service['default_service_status']
+            
+            # Create a new budget for each test
+            budget_data = {
+                "client_id": client_id,
+                "payment_method": "PIX_CNPJ_25995295000104",
+                "salesperson": "Diego Olivatto",
+                "internal_observations": f"Teste específico da correção linha 1473-1479 para {service_name}"
+            }
+            
+            response = self.make_request('POST', '/budgets', budget_data)
+            if not response['success']:
+                self.log_test("Lines 1473-1479 Fix", False, f"Failed to create budget for {service_name}")
+                fix_working = False
+                continue
+            
+            budget_id = response['data']['id']
+            self.created_resources['budgets'].append(budget_id)
+            
+            # Add item and verify status assignment
+            item_data = {
+                "service_id": service_id,
+                "quantity": 1.0,
+                "observations": f"Teste da linha 1473: item_dict['status'] = service_obj.default_service_status"
+            }
+            
+            response = self.make_request('POST', f'/budgets/{budget_id}/items', item_data)
+            if response['success']:
+                item = response['data']
+                actual_status = item.get('status')
+                
+                if actual_status == expected_status:
+                    self.log_test("Line 1473 Fix Verification", True, 
+                                f"✅ {service_name}: item_dict['status'] = '{actual_status}' (correct)")
+                else:
+                    self.log_test("Line 1473 Fix Verification", False, 
+                                f"❌ {service_name}: item_dict['status'] = '{actual_status}' (expected '{expected_status}')")
+                    fix_working = False
+            else:
+                self.log_test("Line 1473 Fix Verification", False, 
+                            f"Failed to add item for {service_name}", response['data'])
+                fix_working = False
+        
+        if fix_working:
+            self.log_test("Lines 1473-1479 Fix", True, "✅ Fix working correctly: item_dict['status'] = service_obj.default_service_status")
+        else:
+            self.log_test("Lines 1473-1479 Fix", False, "❌ Fix not working: items not inheriting correct default_service_status")
+        
+        return fix_working
+    
+    def run_service_status_bug_tests(self):
+        """Run the specific tests for the service status bug"""
+        print("🐛 STARTING SERVICE STATUS BUG TESTS")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Focus: Verify services with different default_service_status generate items with correct status")
+        print("=" * 80)
+        
+        # Setup test data
+        if not self.setup_test_data_for_status_bug():
+            print("❌ CRITICAL: Failed to setup test data. Aborting tests.")
+            return False
+        
+        # Test 1: Verify services in catalog have different default_service_status
+        test_services = self.test_service_catalog_default_status()
+        
+        # Test 2: Verify budget items inherit correct status from service
+        self.test_budget_item_status_inheritance(test_services)
+        
+        # Test 3: Verify /api/budget-items/available-for-routes shows variety of statuses
+        self.test_available_for_routes_status_variety()
+        
+        # Test 4: Verify the specific fix in lines 1473-1479
+        self.test_lines_1473_1479_fix(test_services)
+        
+        # Cleanup
+        self.cleanup_test_data()
+        
+        # Summary
+        self.print_summary()
+        
+        return True
+    
+    def setup_test_data(self):
+        """Create test data for routes testing"""
+        print("\n=== SETTING UP TEST DATA FOR ROUTES ===")
+        
+        # Setup system config with company GPS coordinates
+        system_config_data = {
+            "company_name": "SuperDry Lavanderia de Tapetes & Estofados",
+            "address_full": "Rua Exemplo, 100",
+            "neighborhood": "Centro",
+            "city": "São Paulo",
+            "state": "SP",
+            "latitude": -23.5505,
+            "longitude": -46.6333,
+            "phone": "11999999999",
+            "email": "contato@superdry.com"
+        }
+        
+        response = self.make_request('PUT', '/system-config', system_config_data)
+        if response['success']:
+            self.created_resources['system_config'] = True
+            self.log_test("Setup: System Config", True, "System config created with GPS coordinates")
+        else:
+            self.log_test("Setup: System Config", False, "Failed to create system config", response['data'])
+            return False
+        
+        # Create test clients with different addresses
+        clients_data = [
+            {
+                "name": "Ana Paula Costa",
+                "phone_primary": "11987654321",
+                "email": "ana.costa@email.com",
+                "address": {
+                    "full_address": "Rua das Palmeiras, 456",
+                    "neighborhood": "Vila Madalena",
+                    "city": "São Paulo",
+                    "state": "SP",
+                    "latitude": -23.5489,
+                    "longitude": -46.6388
+                }
+            },
+            {
+                "name": "Carlos Roberto Silva",
+                "phone_primary": "11876543210",
+                "email": "carlos.silva@email.com",
+                "address": {
+                    "full_address": "Av. Brigadeiro Faria Lima, 2000",
+                    "neighborhood": "Itaim Bibi",
+                    "city": "São Paulo",
+                    "state": "SP",
+                    "latitude": -23.5751,
+                    "longitude": -46.6896
+                }
+            },
+            {
+                "name": "Fernanda Oliveira Santos",
+                "phone_primary": "11765432109",
+                "email": "fernanda.santos@email.com",
+                "address": {
+                    "full_address": "Rua Augusta, 1500",
+                    "neighborhood": "Consolação",
+                    "city": "São Paulo",
+                    "state": "SP",
+                    "latitude": -23.5558,
+                    "longitude": -46.6396
+                }
+            }
+        ]
+        
+        for client_data in clients_data:
+            response = self.make_request('POST', '/clients', client_data)
+            if response['success']:
+                self.created_resources['clients'].append(response['data']['id'])
+                self.log_test("Setup: Create Test Client", True, f"Client created: {client_data['name']}")
+            else:
+                self.log_test("Setup: Create Test Client", False, f"Failed to create client: {client_data['name']}", response['data'])
+                return False
+        
+        # Create test services for different route types
+        services_data = [
+            {
+                "name": "Limpeza de Sofá 3 Lugares",
+                "category": "ESTOFADOS",
+                "service_type": "Limpeza Profunda",
+                "measure_type": "UNITARIO",
+                "execution_location": "RETIRADA",
+                "cost_price": 80.0,
+                "sale_price": 150.0
+            },
+            {
+                "name": "Limpeza de Tapete no Local",
+                "category": "CARPETES_E_TAPETES_NO_LOCAL",
+                "service_type": "Limpeza no Local",
+                "measure_type": "CARPETE_TAPETE_LOCAL",
+                "execution_location": "NO_LOCAL",
+                "cost_price": 30.0,
+                "sale_price": 50.0
+            },
+            {
+                "name": "Entrega de Cortina",
+                "category": "CORTINAS",
+                "service_type": "Entrega",
+                "measure_type": "UNITARIO",
+                "execution_location": "RETIRADA",
+                "cost_price": 0.0,
+                "sale_price": 0.0
+            }
+        ]
+        
+        for service_data in services_data:
+            response = self.make_request('POST', '/services', service_data)
+            if response['success']:
+                self.created_resources['services'].append(response['data']['id'])
+                self.log_test("Setup: Create Test Service", True, f"Service created: {service_data['name']}")
+            else:
+                self.log_test("Setup: Create Test Service", False, f"Failed to create service: {service_data['name']}", response['data'])
+                return False
+        
+        # Create test budgets with items in route-eligible status
+        for i, client_id in enumerate(self.created_resources['clients']):
+            service_id = self.created_resources['services'][i % len(self.created_resources['services'])]
+            
+            # Determine status based on service type
+            if i == 1:  # Second client gets NO_LOCAL service
+                status = "EXECUTAR_NO_LOCAL"
+            elif i == 2:  # Third client gets delivery
+                status = "ENTREGAR"
+            else:
+                status = "RETIRAR"
+            
+            budget_data = {
+                "client_id": client_id,
+                "payment_method": "PIX_CNPJ_25995295000104",
+                "salesperson": "Gabriela Alcântara",
+                "internal_observations": f"Orçamento para teste de rotas - Cliente {i+1}",
+                "items": [
+                    {
+                        "id": f"ITM-TEST{i+1:03d}",
+                        "service_id": service_id,
+                        "service_name": services_data[i % len(services_data)]["name"],
+                        "service_code": service_id,
+                        "quantity": 1.0,
+                        "unit_price": services_data[i % len(services_data)]["sale_price"],
+                        "total_value": services_data[i % len(services_data)]["sale_price"],
+                        "status": status,
+                        "execution_location": services_data[i % len(services_data)]["execution_location"],
+                        "is_retoque": False
+                    }
+                ]
+            }
+            
+            response = self.make_request('POST', '/budgets', budget_data)
+            if response['success']:
+                self.created_resources['budgets'].append(response['data']['id'])
+                self.log_test("Setup: Create Test Budget", True, f"Budget created with {status} item")
+            else:
+                self.log_test("Setup: Create Test Budget", False, f"Failed to create budget for client {i+1}", response['data'])
+                return False
+        
+        return True
+    
     def test_get_available_items_for_routes(self):
         """Test GET /api/budget-items/available-for-routes - Get items available for routes"""
         print("\n=== TESTING GET AVAILABLE ITEMS FOR ROUTES ===")
