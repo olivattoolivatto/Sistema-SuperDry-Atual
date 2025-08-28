@@ -276,6 +276,30 @@ frontend:
         -working: true
         -agent: "main"
         -comment: "✅ IMPLEMENTADO: Comentado (reversível) seção duplicada do mapa nas linhas 1570-1584. Mantida apenas a seção principal sempre visível (linhas 1516-1535). Agora há apenas um mapa funcional. Duplicação removida - evita confusão futura."
+        
+  - task: "Catalog Table Sortable Columns"
+    implemented: true
+    working: true
+    file: "pages/Catalog.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "✅ IMPLEMENTADO: Colunas da tabela do Catálogo são agora ordenáveis. Adicionados ícones de ordenação (ChevronUp/Down/UpDown) em todas as colunas. Função handleSort permite ordenação ascendente/descendente. Tratamento especial para preços, status e tipos de medida."
+        
+  - task: "Catalog Actions Column First"
+    implemented: true
+    working: true
+    file: "pages/Catalog.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "✅ IMPLEMENTADO: Coluna 'Ações' movida para primeira posição na tabela do Catálogo. Botões de ativar/inativar, editar e excluir agora aparecem como primeira coluna, facilitando acesso rápido às ações."
 
   - task: "Budget API Update Function"
     implemented: true
