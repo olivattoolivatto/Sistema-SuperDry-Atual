@@ -397,30 +397,33 @@ class RoutesAPITester:
             self.log_test("Route Optimization EFICIENTE", False, "Failed to optimize route", response['data'])
             return False
     
-    def test_budget_update_salesperson(self, budget_id: str):
-        """Test budget update - Change salesperson"""
-        print("\n=== TESTING BUDGET UPDATE: SALESPERSON CHANGE ===")
+    def test_get_route_details(self, route_id: str):
+        """Test GET /api/routes/{route_id} - Get route details"""
+        print("\n=== TESTING GET ROUTE DETAILS ===")
         
-        update_data = {
-            "client_id": self.created_resources['clients'][0],
-            "payment_method": "CREDITO_3X",
-            "salesperson": "Diego Olivatto",
-            "internal_observations": "Vendedor alterado para Diego",
-            "items": []
-        }
-        
-        response = self.make_request('PUT', f'/budgets/{budget_id}', update_data)
+        response = self.make_request('GET', f'/routes/{route_id}')
         if response['success']:
-            updated_budget = response['data']
-            if updated_budget.get('salesperson') == 'Diego Olivatto':
-                self.log_test("Budget Update: Salesperson", True, "Salesperson successfully updated to Diego Olivatto")
-                return True
+            route = response['data']
+            
+            # Verify route structure
+            required_fields = ['id', 'vehicle_type', 'planned_date', 'planned_start_time', 
+                             'status', 'stops', 'company_address']
+            missing_fields = [field for field in required_fields if field not in route]
+            
+            if not missing_fields:
+                stops_count = len(route.get('stops', []))
+                has_optimization_data = route.get('total_duration', 0) > 0 or route.get('total_distance', 0) > 0
+                
+                self.log_test("Get Route Details", True, 
+                            f"Route details retrieved: {stops_count} stops, "
+                            f"optimized: {has_optimization_data}")
+                return route
             else:
-                self.log_test("Budget Update: Salesperson", False, f"Salesperson not updated correctly: {updated_budget.get('salesperson')}")
-                return False
+                self.log_test("Get Route Details", False, f"Missing required fields: {missing_fields}")
+                return route
         else:
-            self.log_test("Budget Update: Salesperson", False, "Failed to update salesperson", response['data'])
-            return False
+            self.log_test("Get Route Details", False, f"Failed to retrieve route {route_id}", response['data'])
+            return None
     
     def test_budget_update_items(self, budget_id: str):
         """Test budget update - Add/modify items"""
