@@ -1497,8 +1497,11 @@ async def add_budget_item(budget_id: str, item_data: BudgetItemCreate):
         item_dict["total_value"] = item_dict["quantity"] * service_obj.sale_price
         item_dict["execution_location"] = service_obj.execution_location
         # Usar status padrão do serviço ou fallback para lógica anterior se não existir
-        if hasattr(service_obj, 'default_service_status') and service_obj.default_service_status:
-            item_dict["status"] = service_obj.default_service_status
+        service_dict = service_obj.dict() if hasattr(service_obj, 'dict') else service_obj
+        default_status = service_dict.get('default_service_status')
+        
+        if default_status:
+            item_dict["status"] = default_status
         else:
             # Fallback para lógica anterior (serviços antigos sem o campo)
             item_dict["status"] = ServiceStatus.RETIRAR if service_obj.execution_location == ExecutionLocation.RETIRADA else ServiceStatus.EXECUTAR_NO_LOCAL
