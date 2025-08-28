@@ -961,6 +961,9 @@ export function Routes() {
         variant: "default",
       });
       
+      // NOVO: Desativar loading
+      setIsCalculatingRoute(false);
+      
     } catch (error) {
       console.error('❌ ERRO NA OTIMIZAÇÃO:', error);
       console.error('Error details:', error.response?.data || error.message);
