@@ -300,6 +300,18 @@ frontend:
         -working: true
         -agent: "main"
         -comment: "✅ IMPLEMENTADO: Coluna 'Ações' movida para primeira posição na tabela do Catálogo. Botões de ativar/inativar, editar e excluir agora aparecem como primeira coluna, facilitando acesso rápido às ações."
+        
+  - task: "Editable Price Field in Budget Items"
+    implemented: true
+    working: true
+    file: "pages/Budgets.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "✅ IMPLEMENTADO: Campo de preço editável ao adicionar itens no orçamento. Modificações: 1) Adicionado unit_price ao formData do ItemFormModal, 2) Preço do catálogo carregado automaticamente ao selecionar serviço, 3) Campo visual editável para ajustar preço com validação, 4) handleAddItem usa preço editável ou catálogo como fallback. Interface melhorada com distinção entre 'Preço do Catálogo' (informativo) e 'Preço Unitário' (editável)."
 
   - task: "Budget API Update Function"
     implemented: true
