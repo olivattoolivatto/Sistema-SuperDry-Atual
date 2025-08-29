@@ -502,6 +502,62 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
     setShowItemForm(true);
   };
 
+  // Funções para Lançamento em Lote
+  const handleAddToBatch = (batchItem) => {
+    setBatchItems(prev => [...prev, batchItem]);
+    setShowBatchItemForm(false);
+  };
+
+  const handleRemoveFromBatch = (index) => {
+    setBatchItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleProcessBatch = async () => {
+    try {
+      // Processar cada item do lote
+      for (const batchItem of batchItems) {
+        const { service, quantity } = batchItem;
+        
+        // Criar múltiplas instâncias do mesmo serviço
+        for (let i = 0; i < quantity; i++) {
+          const itemData = {
+            service_id: service.id,
+            quantity: 1,
+            // Todas as medidas com valor "1"
+            area_m2: 1,
+            linear_meters: 1,
+            width: 1,
+            height: 1,
+            diameter: 1,
+            fabric_folds: 1,
+            fabric_per_fold: 18, // Manter padrão existente
+            observations: ''
+          };
+          
+          await handleAddItem(itemData);
+        }
+      }
+      
+      // Limpar lote após processamento
+      setBatchItems([]);
+      setBatchMode(false);
+      
+      toast({
+        title: "Lote processado!",
+        description: `${batchItems.reduce((sum, item) => sum + item.quantity, 0)} itens adicionados ao orçamento.`,
+        variant: "default",
+      });
+      
+    } catch (error) {
+      console.error('Erro ao processar lote:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao processar lote. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDeleteItem = (itemId) => {
     if (window.confirm('Tem certeza que deseja excluir este item?')) {
       setFormData(prev => ({
