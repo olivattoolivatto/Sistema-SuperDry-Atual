@@ -10,7 +10,8 @@ import {
   Package,
   ChevronUp,
   ChevronDown,
-  ChevronsUpDown
+  ChevronsUpDown,
+  Copy
 } from 'lucide-react';
 import { servicesApi } from '../services/api';
 
