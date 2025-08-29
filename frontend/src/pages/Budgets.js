@@ -44,7 +44,31 @@ const SALESPERSONS = {
   'Marcos Anthonio': 'Marcos Anthonio'
 };
 
-const BudgetCard = ({ budget, onEdit, onDelete, onWhatsApp, onPDF }) => (
+const BudgetCard = ({ budget, onEdit, onDelete, onWhatsApp, onPDF }) => {
+  // Função para agrupar itens iguais
+  const groupItems = (items) => {
+    const grouped = {};
+    
+    items.forEach(item => {
+      const key = item.service_name;
+      if (grouped[key]) {
+        grouped[key].count += 1;
+        grouped[key].totalValue += parseFloat(item.total_value || 0);
+      } else {
+        grouped[key] = {
+          name: item.service_name,
+          count: 1,
+          totalValue: parseFloat(item.total_value || 0)
+        };
+      }
+    });
+    
+    return Object.values(grouped);
+  };
+
+  const groupedItems = budget.items ? groupItems(budget.items) : [];
+
+  return (
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
     <div className="flex items-start justify-between mb-4">
       <div>
