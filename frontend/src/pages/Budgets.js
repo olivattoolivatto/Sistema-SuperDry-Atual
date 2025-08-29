@@ -959,6 +959,15 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
           </div>
         </form>
 
+        {/* Batch Item Form Modal */}
+        {showBatchItemForm && (
+          <BatchItemForm
+            services={services}
+            onAdd={handleAddToBatch}
+            onCancel={() => setShowBatchItemForm(false)}
+          />
+        )}
+
         {/* Item Form Modal */}
         {showItemForm && (
           <ItemFormModal
