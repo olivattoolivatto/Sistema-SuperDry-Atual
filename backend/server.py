@@ -838,6 +838,58 @@ async def migrate_services_default_status():
         logger.error(f"Error migrating services: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/budget-items/fix-status")
+async def fix_budget_items_status():
+    """Fix status of existing budget items based on service default_service_status"""
+    try:
+        # Get all budgets with items
+        budgets = await db.budgets.find({}).to_list(None)
+        
+        total_items_fixed = 0
+        budgets_updated = 0
+        
+        for budget in budgets:
+            items = budget.get('items', [])
+            items_updated = False
+            
+            for item in items:
+                service_id = item.get('service_id')
+                if not service_id:
+                    continue
+                
+                # Get the service to check its default_service_status
+                service = await db.services.find_one({"id": service_id})
+                if not service:
+                    logger.warning(f"Service {service_id} not found for item {item.get('id')}")
+                    continue
+                
+                service_default_status = service.get('default_service_status')
+                current_item_status = item.get('status')
+                
+                # Only update if status is different and service has default_service_status
+                if service_default_status and current_item_status != service_default_status:
+                    item['status'] = service_default_status
+                    items_updated = True
+                    total_items_fixed += 1
+                    logger.info(f"Fixed item {item.get('id')} status: {current_item_status} -> {service_default_status}")
+            
+            # Update budget if any items were changed
+            if items_updated:
+                await db.budgets.update_one(
+                    {"id": budget["id"]},
+                    {"$set": {"items": items, "updated_at": datetime.utcnow()}}
+                )
+                budgets_updated += 1
+        
+        return {
+            "message": f"Status fix completed successfully",
+            "items_fixed": total_items_fixed,
+            "budgets_updated": budgets_updated
+        }
+    except Exception as e:
+        logger.error(f"Error fixing budget items status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Budget endpoints
 @api_router.post("/budgets", response_model=Budget)
 async def create_budget(budget_data: BudgetCreate):
