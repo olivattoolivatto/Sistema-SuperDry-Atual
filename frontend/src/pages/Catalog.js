@@ -72,7 +72,7 @@ const SERVICE_TYPES = {
   OUTROS_ITENS: ['Itens Diversos']
 };
 
-const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, sortDirection, onSort }) => {
+const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, onDuplicate, sortField, sortDirection, onSort }) => {
   const SortableHeader = ({ field, children, align = "left" }) => (
     <th 
       className={`px-6 py-3 text-${align} text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors select-none`}
