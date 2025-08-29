@@ -727,15 +727,41 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
           {/* Seção de Itens */}
           <div className="border-t border-gray-200 pt-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Itens do Orçamento</h3>
-              <button
-                type="button"
-                onClick={() => setShowItemForm(true)}
-                className="flex items-center px-3 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors text-sm"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Adicionar Item
-              </button>
+              <h3 className="text-lg font-medium text-gray-900">
+                {batchMode ? 'Lançamento em Lote - Itens Selecionados' : 'Itens do Orçamento'}
+              </h3>
+              
+              {batchMode ? (
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchItemForm(true)}
+                    className="flex items-center px-3 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-lg transition-colors text-sm"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Adicionar ao Lote
+                  </button>
+                  {batchItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleProcessBatch}
+                      className="flex items-center px-3 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors text-sm"
+                    >
+                      <Package className="w-4 h-4 mr-1" />
+                      Processar Lote ({batchItems.reduce((sum, item) => sum + item.quantity, 0)} itens)
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowItemForm(true)}
+                  className="flex items-center px-3 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors text-sm"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Adicionar Item
+                </button>
+              )}
             </div>
 
             {formData.items.length > 0 ? (
