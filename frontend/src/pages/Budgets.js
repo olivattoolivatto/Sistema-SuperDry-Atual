@@ -477,23 +477,37 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
             {selectedClient && (
               <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex-1">
                     <div className="font-medium text-blue-900">{selectedClient.name}</div>
                     <div className="text-sm text-blue-700">
                       {selectedClient.id} • {selectedClient.phone_primary}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedClient(null);
-                      setClientSearch('');
-                      setFormData(prev => ({ ...prev, client_id: '' }));
-                    }}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    ✕
-                  </button>
+                  <div className="flex items-center space-x-3">
+                    {/* Checkbox Lançamento em Lote */}
+                    <label className="flex items-center space-x-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={batchMode}
+                        onChange={(e) => setBatchMode(e.target.checked)}
+                        className="rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="font-medium text-blue-900">Lançamento em Lote</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedClient(null);
+                        setClientSearch('');
+                        setFormData(prev => ({ ...prev, client_id: '' }));
+                        setBatchMode(false);
+                        setBatchItems([]);
+                      }}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
