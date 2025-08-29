@@ -163,6 +163,11 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
   const [editingItem, setEditingItem] = useState(null);
   const [showQuickAddClient, setShowQuickAddClient] = useState(false);
   const [creatingClient, setCreatingClient] = useState(false);
+  
+  // Estados para Lançamento em Lote
+  const [batchMode, setBatchMode] = useState(false);
+  const [showBatchItemForm, setShowBatchItemForm] = useState(false);
+  const [batchItems, setBatchItems] = useState([]);
 
   useEffect(() => {
     loadClients();
