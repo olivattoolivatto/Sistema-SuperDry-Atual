@@ -156,6 +156,13 @@ const ServiceTable = ({ services, onEdit, onToggleStatus, onDelete, sortField, s
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
+                    onClick={() => onDuplicate(service)}
+                    className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                    title="Duplicar e Editar"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => onDelete(service)}
                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     title="Excluir"
