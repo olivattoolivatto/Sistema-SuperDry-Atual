@@ -420,7 +420,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Service Default Status Bug Fix"
+    - "Service Duplication API Testing"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
