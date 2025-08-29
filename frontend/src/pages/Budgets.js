@@ -820,6 +820,38 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
               )}
             </div>
 
+            {/* Lista de Itens do Lote */}
+            {batchMode && batchItems.length > 0 && (
+              <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                <h4 className="text-sm font-medium text-purple-900 mb-3">Itens no Lote:</h4>
+                <div className="space-y-2">
+                  {batchItems.map((batchItem, index) => (
+                    <div key={index} className="flex items-center justify-between bg-white p-3 rounded border">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{batchItem.service.name}</div>
+                        <div className="text-sm text-gray-600">
+                          R$ {batchItem.service.sale_price.toFixed(2)} × {batchItem.quantity} = 
+                          R$ {(batchItem.service.sale_price * batchItem.quantity).toFixed(2)}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFromBatch(index)}
+                        className="ml-3 text-red-600 hover:text-red-800"
+                        title="Remover do lote"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 text-sm text-purple-700 font-medium">
+                  Total do Lote: {batchItems.reduce((sum, item) => sum + item.quantity, 0)} itens • 
+                  R$ {batchItems.reduce((sum, item) => sum + (item.service.sale_price * item.quantity), 0).toFixed(2)}
+                </div>
+              </div>
+            )}
+
             {formData.items.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg">
