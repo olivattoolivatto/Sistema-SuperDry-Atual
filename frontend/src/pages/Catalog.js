@@ -272,7 +272,9 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
-            {service ? 'Editar Serviço' : 'Novo Serviço'}
+            {service && service.id ? 'Editar Serviço' : 
+             service && !service.id ? 'Duplicar Serviço' : 
+             'Novo Serviço'}
           </h2>
         </div>
 
