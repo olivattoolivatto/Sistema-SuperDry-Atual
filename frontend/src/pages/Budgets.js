@@ -144,6 +144,153 @@ const BudgetCard = ({ budget, onEdit, onDelete, onWhatsApp, onPDF }) => (
   </div>
 );
 
+const BatchItemForm = ({ services, onAdd, onCancel }) => {
+  const [serviceSearchTerm, setServiceSearchTerm] = useState('');
+  const [selectedService, setSelectedService] = useState(null);
+  const [quantity, setQuantity] = useState(1);
+  const [showServiceDropdown, setShowServiceDropdown] = useState(false);
+
+  // Função para normalizar texto para pesquisa
+  const normalizeText = (text) => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/\s+/g, ' ') // Normaliza espaços
+      .trim();
+  };
+
+  // Filtrar e ordenar serviços baseado na pesquisa
+  const filteredServices = serviceSearchTerm.trim() 
+    ? services.filter(service => {
+        const searchNormalized = normalizeText(serviceSearchTerm);
+        const serviceNameNormalized = normalizeText(service.name);
+        const serviceCategoryNormalized = normalizeText(service.category);
+        const serviceTypeNormalized = normalizeText(service.service_type || '');
+        
+        return serviceNameNormalized.includes(searchNormalized) ||
+               serviceCategoryNormalized.includes(searchNormalized) ||
+               serviceTypeNormalized.includes(searchNormalized);
+      }).slice(0, 10)
+    : [];
+
+  const handleServiceSelect = (service) => {
+    setSelectedService(service);
+    setServiceSearchTerm(service.name);
+    setShowServiceDropdown(false);
+  };
+
+  const handleAdd = () => {
+    if (!selectedService || quantity < 1) return;
+    
+    const batchItem = {
+      service: selectedService,
+      quantity: parseInt(quantity)
+    };
+    
+    onAdd(batchItem);
+    
+    // Reset form
+    setSelectedService(null);
+    setServiceSearchTerm('');
+    setQuantity(1);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div className="p-6 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Adicionar Item ao Lote</h3>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* Pesquisa de Serviço */}
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Buscar Serviço *
+            </label>
+            <input
+              type="text"
+              value={serviceSearchTerm}
+              onChange={(e) => {
+                setServiceSearchTerm(e.target.value);
+                setShowServiceDropdown(true);
+                setSelectedService(null);
+              }}
+              onFocus={() => setShowServiceDropdown(true)}
+              placeholder="Digite para buscar serviços..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            
+            {showServiceDropdown && filteredServices.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {filteredServices.map((service) => (
+                  <button
+                    key={service.id}
+                    type="button"
+                    onClick={() => handleServiceSelect(service)}
+                    className="w-full px-3 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
+                  >
+                    <div className="font-medium text-gray-900">{service.name}</div>
+                    <div className="text-sm text-gray-600">
+                      {service.category} • R$ {service.sale_price.toFixed(2)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Serviço Selecionado */}
+          {selectedService && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="font-medium text-green-900">{selectedService.name}</div>
+              <div className="text-sm text-green-700">
+                R$ {selectedService.sale_price.toFixed(2)} • {selectedService.category}
+              </div>
+            </div>
+          )}
+
+          {/* Quantidade */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Quantidade (repetições) *
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Número de vezes que este item será adicionado ao orçamento
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-3 px-6 py-4 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={!selectedService || quantity < 1}
+            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
+          >
+            Adicionar ao Lote
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     client_id: preSelectedClient?.id || '',
