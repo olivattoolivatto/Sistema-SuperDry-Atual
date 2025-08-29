@@ -494,7 +494,8 @@ export function Catalog() {
 
   const handleSaveService = async (serviceData) => {
     try {
-      if (editingService) {
+      // Verifica se é edição (tem ID) ou criação/duplicação (sem ID)
+      if (editingService && editingService.id) {
         await servicesApi.update(editingService.id, serviceData);
       } else {
         await servicesApi.create(serviceData);
