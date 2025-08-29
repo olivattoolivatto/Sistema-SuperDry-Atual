@@ -717,6 +717,7 @@ export function Catalog() {
             }}
             onToggleStatus={handleToggleStatus}
             onDelete={handleDeleteService}
+            onDuplicate={handleDuplicateService}
             sortField={sortField}
             sortDirection={sortDirection}
             onSort={handleSort}
