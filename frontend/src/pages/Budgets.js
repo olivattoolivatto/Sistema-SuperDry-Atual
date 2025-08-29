@@ -152,14 +152,19 @@ const BudgetCard = ({ budget, onEdit, onDelete, onWhatsApp, onPDF }) => {
       )}
     </div>
 
-    {budget.items && budget.items.length > 0 && (
+    {groupedItems.length > 0 && (
       <div className="mt-4 border-t pt-4">
         <h4 className="text-sm font-medium text-gray-900 mb-2">Itens:</h4>
         <div className="space-y-1">
-          {budget.items.map((item, index) => (
+          {groupedItems.map((groupedItem, index) => (
             <div key={index} className="text-xs text-gray-600 flex justify-between">
-              <span className="truncate pr-2">{item.service_name}</span>
-              <span className="font-medium">R$ {item.total_value.toFixed(2)}</span>
+              <span className="truncate pr-2">
+                {groupedItem.name}
+                {groupedItem.count > 1 && (
+                  <span className="font-semibold text-blue-600"> ({groupedItem.count}un)</span>
+                )}
+              </span>
+              <span className="font-medium">R$ {groupedItem.totalValue.toFixed(2)}</span>
             </div>
           ))}
         </div>
