@@ -236,7 +236,17 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
 
   useEffect(() => {
     if (service) {
-      setFormData(service);
+      // Extrair apenas os campos necessários para o formulário
+      setFormData({
+        name: service.name || '',
+        category: service.category || 'ESTOFADOS',
+        service_type: service.service_type || '',
+        measure_type: service.measure_type || 'UNITARIO',
+        execution_location: service.execution_location || 'RETIRADA',
+        cost_price: service.cost_price || 0,
+        sale_price: service.sale_price || 0,
+        default_service_status: service.default_service_status || 'RETIRAR'
+      });
     }
   }, [service]);
 
