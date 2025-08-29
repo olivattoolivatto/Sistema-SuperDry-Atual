@@ -1045,12 +1045,276 @@ class ServiceStatusBugTester:
         
         print("\n" + "=" * 60)
 
+    def test_service_creation_with_valid_data(self):
+        """TESTE DE CRIAÇÃO: Test POST /api/services with valid data"""
+        print("\n=== TESTE DE CRIAÇÃO: POST /api/services com dados válidos ===")
+        
+        # Test data with all required fields including default_service_status
+        service_data = {
+            "name": "Teste Original",
+            "category": "ESTOFADOS",
+            "service_type": "Limpeza Profunda",
+            "measure_type": "UNITARIO",
+            "execution_location": "RETIRADA",
+            "cost_price": 100.0,
+            "sale_price": 180.0,
+            "default_service_status": "RETIRAR"
+        }
+        
+        response = self.make_request('POST', '/services', service_data)
+        if response['success']:
+            service = response['data']
+            
+            # Verify all required fields are accepted
+            checks = [
+                (service.get('name') == service_data['name'], "Nome aceito"),
+                (service.get('category') == service_data['category'], "Categoria aceita"),
+                (service.get('service_type') == service_data['service_type'], "Tipo de serviço aceito"),
+                (service.get('measure_type') == service_data['measure_type'], "Tipo de medida aceito"),
+                (service.get('execution_location') == service_data['execution_location'], "Local de execução aceito"),
+                (service.get('cost_price') == service_data['cost_price'], "Preço de custo aceito"),
+                (service.get('sale_price') == service_data['sale_price'], "Preço de venda aceito"),
+                (service.get('default_service_status') == service_data['default_service_status'], "default_service_status aceito"),
+                (service.get('id') is not None and service.get('id').startswith('SRV-'), "ID gerado corretamente"),
+                (service.get('is_active') == True, "Status ativo por padrão"),
+                (service.get('created_at') is not None, "Data de criação definida"),
+                (service.get('updated_at') is not None, "Data de atualização definida")
+            ]
+            
+            all_passed = all(check[0] for check in checks)
+            failed_checks = [check[1] for check in checks if not check[0]]
+            
+            if all_passed:
+                self.created_resources['services'].append(service['id'])
+                self.log_test("Criação de Serviço - Dados Válidos", True, 
+                            f"✅ Serviço criado com sucesso: {service['id']} - Todos os campos aceitos")
+                return service
+            else:
+                self.log_test("Criação de Serviço - Dados Válidos", False, 
+                            f"❌ Falha na validação dos campos: {failed_checks}")
+                return service
+        else:
+            self.log_test("Criação de Serviço - Dados Válidos", False, 
+                        "❌ Falha ao criar serviço", response['data'])
+            return None
+    
+    def test_service_duplication_scenario(self):
+        """TESTE DE DADOS DUPLICADOS: Simulate frontend duplication scenario"""
+        print("\n=== TESTE DE DADOS DUPLICADOS: Simulação de duplicação do frontend ===")
+        
+        # First, create original service
+        original_service_data = {
+            "name": "Teste Original",
+            "category": "TAPETES",
+            "service_type": "Limpeza Especializada",
+            "measure_type": "AREA_DE_TAPETE",
+            "execution_location": "RETIRADA",
+            "cost_price": 80.0,
+            "sale_price": 150.0,
+            "default_service_status": "RETIRAR"
+        }
+        
+        response = self.make_request('POST', '/services', original_service_data)
+        if not response['success']:
+            self.log_test("Duplicação - Serviço Original", False, 
+                        "❌ Falha ao criar serviço original", response['data'])
+            return False
+        
+        original_service = response['data']
+        self.created_resources['services'].append(original_service['id'])
+        self.log_test("Duplicação - Serviço Original", True, 
+                    f"✅ Serviço original criado: {original_service['name']}")
+        
+        # Now create duplicate with "(Cópia)" suffix - simulating frontend duplication
+        duplicate_service_data = {
+            "name": "Teste Original (Cópia)",
+            "category": "TAPETES",
+            "service_type": "Limpeza Especializada",
+            "measure_type": "AREA_DE_TAPETE",
+            "execution_location": "RETIRADA",
+            "cost_price": 80.0,
+            "sale_price": 150.0,
+            "default_service_status": "RETIRAR"
+        }
+        
+        response = self.make_request('POST', '/services', duplicate_service_data)
+        if response['success']:
+            duplicate_service = response['data']
+            self.created_resources['services'].append(duplicate_service['id'])
+            
+            # Verify no conflicts occurred
+            checks = [
+                (duplicate_service.get('id') != original_service.get('id'), "IDs diferentes"),
+                (duplicate_service.get('name') == "Teste Original (Cópia)", "Nome com (Cópia) aceito"),
+                (duplicate_service.get('default_service_status') == "RETIRAR", "default_service_status preservado"),
+                (duplicate_service.get('is_active') == True, "Status ativo mantido"),
+                (duplicate_service.get('category') == original_service_data['category'], "Categoria preservada")
+            ]
+            
+            all_passed = all(check[0] for check in checks)
+            failed_checks = [check[1] for check in checks if not check[0]]
+            
+            if all_passed:
+                self.log_test("Duplicação - Serviço Cópia", True, 
+                            f"✅ Serviço duplicado criado sem conflitos: {duplicate_service['id']}")
+                return True
+            else:
+                self.log_test("Duplicação - Serviço Cópia", False, 
+                            f"❌ Conflitos detectados na duplicação: {failed_checks}")
+                return False
+        else:
+            self.log_test("Duplicação - Serviço Cópia", False, 
+                        "❌ Falha ao criar serviço duplicado", response['data'])
+            return False
+    
+    def test_service_validation_requirements(self):
+        """VERIFICAR VALIDAÇÕES: Test required fields and validation"""
+        print("\n=== VERIFICAR VALIDAÇÕES: Campos obrigatórios e validações ===")
+        
+        # Test 1: Missing required fields
+        incomplete_service_data = {
+            "name": "Serviço Incompleto",
+            # Missing required fields intentionally
+        }
+        
+        response = self.make_request('POST', '/services', incomplete_service_data)
+        if not response['success']:
+            self.log_test("Validação - Campos Obrigatórios", True, 
+                        "✅ API corretamente rejeitou dados incompletos")
+        else:
+            self.log_test("Validação - Campos Obrigatórios", False, 
+                        "❌ API deveria ter rejeitado dados incompletos")
+        
+        # Test 2: Invalid enum values
+        invalid_enum_service_data = {
+            "name": "Serviço com Enum Inválido",
+            "category": "CATEGORIA_INEXISTENTE",
+            "service_type": "Teste",
+            "measure_type": "MEDIDA_INEXISTENTE",
+            "execution_location": "LOCAL_INEXISTENTE",
+            "cost_price": 50.0,
+            "sale_price": 100.0,
+            "default_service_status": "STATUS_INEXISTENTE"
+        }
+        
+        response = self.make_request('POST', '/services', invalid_enum_service_data)
+        if not response['success']:
+            self.log_test("Validação - Enums Inválidos", True, 
+                        "✅ API corretamente rejeitou valores de enum inválidos")
+        else:
+            self.log_test("Validação - Enums Inválidos", False, 
+                        "❌ API deveria ter rejeitado valores de enum inválidos")
+        
+        # Test 3: Valid service with all correct enums
+        valid_service_data = {
+            "name": "Serviço Válido para Teste",
+            "category": "CORTINAS",
+            "service_type": "Limpeza e Manutenção",
+            "measure_type": "METRAGEM_LINEAR_CORTINA_SIMPLES",
+            "execution_location": "NO_LOCAL",
+            "cost_price": 25.0,
+            "sale_price": 45.0,
+            "default_service_status": "EXECUTAR_NO_LOCAL"
+        }
+        
+        response = self.make_request('POST', '/services', valid_service_data)
+        if response['success']:
+            service = response['data']
+            self.created_resources['services'].append(service['id'])
+            
+            # Verify default_service_status is processed correctly
+            if service.get('default_service_status') == "EXECUTAR_NO_LOCAL":
+                self.log_test("Validação - default_service_status", True, 
+                            "✅ default_service_status processado corretamente")
+            else:
+                self.log_test("Validação - default_service_status", False, 
+                            f"❌ default_service_status incorreto: {service.get('default_service_status')}")
+            
+            self.log_test("Validação - Dados Válidos", True, 
+                        f"✅ Serviço válido criado com sucesso: {service['id']}")
+            return True
+        else:
+            self.log_test("Validação - Dados Válidos", False, 
+                        "❌ Falha ao criar serviço com dados válidos", response['data'])
+            return False
+    
+    def test_service_creation_error_responses(self):
+        """Test detailed error responses for service creation problems"""
+        print("\n=== TESTE DE RESPOSTAS DE ERRO DETALHADAS ===")
+        
+        # Test with invalid data types
+        invalid_type_service_data = {
+            "name": "Teste Tipos Inválidos",
+            "category": "ESTOFADOS",
+            "service_type": "Teste",
+            "measure_type": "UNITARIO",
+            "execution_location": "RETIRADA",
+            "cost_price": "não_é_número",  # Invalid type
+            "sale_price": 100.0,
+            "default_service_status": "RETIRAR"
+        }
+        
+        response = self.make_request('POST', '/services', invalid_type_service_data)
+        if not response['success']:
+            error_detail = response['data'].get('detail', '')
+            if 'cost_price' in str(error_detail).lower() or 'validation' in str(error_detail).lower():
+                self.log_test("Erro - Tipo de Dados Inválido", True, 
+                            f"✅ Erro detalhado retornado para tipo inválido: {error_detail}")
+            else:
+                self.log_test("Erro - Tipo de Dados Inválido", True, 
+                            f"✅ Erro retornado (detalhes podem variar): {error_detail}")
+        else:
+            self.log_test("Erro - Tipo de Dados Inválido", False, 
+                        "❌ API deveria ter rejeitado tipo de dados inválido")
+        
+        return True
+    
+    def run_service_duplication_tests(self):
+        """Run specific tests for service duplication functionality"""
+        print("🔄 INICIANDO TESTES ESPECÍFICOS DE DUPLICAÇÃO DE SERVIÇOS")
+        print(f"🔗 Testando contra: {self.base_url}")
+        print("🎯 Foco: Descobrir se o erro é no frontend (lógica de save) ou backend (API create)")
+        print("=" * 80)
+        
+        # Test 1: TESTE DE CRIAÇÃO - POST /api/services with valid data
+        print("\n1️⃣ TESTE DE CRIAÇÃO:")
+        self.test_service_creation_with_valid_data()
+        
+        # Test 2: TESTE DE DADOS DUPLICADOS - Simulate frontend duplication
+        print("\n2️⃣ TESTE DE DADOS DUPLICADOS:")
+        self.test_service_duplication_scenario()
+        
+        # Test 3: VERIFICAR VALIDAÇÕES - Required fields and validation
+        print("\n3️⃣ VERIFICAR VALIDAÇÕES:")
+        self.test_service_validation_requirements()
+        
+        # Test 4: Test error responses
+        print("\n4️⃣ TESTE DE RESPOSTAS DE ERRO:")
+        self.test_service_creation_error_responses()
+        
+        # Cleanup
+        self.cleanup_test_data()
+        
+        # Summary
+        self.print_summary()
+        
+        return True
+
 if __name__ == "__main__":
-    # Check if we should run service status bug tests or full routes tests
-    if len(sys.argv) > 1 and sys.argv[1] == "--status-bug":
-        print("🐛 Running SERVICE STATUS BUG TESTS only")
-        tester = ServiceStatusBugTester()
-        success = tester.run_service_status_bug_tests()
+    # Check which tests to run based on command line arguments
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--status-bug":
+            print("🐛 Running SERVICE STATUS BUG TESTS only")
+            tester = ServiceStatusBugTester()
+            success = tester.run_service_status_bug_tests()
+        elif sys.argv[1] == "--duplication":
+            print("🔄 Running SERVICE DUPLICATION TESTS only")
+            tester = ServiceStatusBugTester()
+            success = tester.run_service_duplication_tests()
+        else:
+            print("🚀 Running FULL ROUTES API TESTS")
+            tester = ServiceStatusBugTester()
+            success = tester.run_all_tests()
     else:
         print("🚀 Running FULL ROUTES API TESTS")
         tester = ServiceStatusBugTester()
