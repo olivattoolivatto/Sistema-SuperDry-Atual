@@ -171,7 +171,8 @@ const BudgetCard = ({ budget, onEdit, onDelete, onWhatsApp, onPDF }) => {
       </div>
     )}
   </div>
-);
+  );
+};
 
 const BatchItemForm = ({ services, onAdd, onCancel }) => {
   const [serviceSearchTerm, setServiceSearchTerm] = useState('');
