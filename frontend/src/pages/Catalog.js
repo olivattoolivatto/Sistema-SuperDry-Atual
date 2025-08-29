@@ -535,6 +535,22 @@ export function Catalog() {
     }
   };
 
+  const handleDuplicateService = (service) => {
+    // Criar uma cópia do serviço para duplicação
+    const duplicatedService = {
+      ...service,
+      id: undefined, // Remove o ID para criar novo serviço
+      name: `${service.name} (Cópia)`, // Adiciona indicação de cópia
+      is_active: true, // Novo serviço sempre ativo
+    };
+    
+    // Abrir formulário de edição com os dados duplicados
+    setEditingService(duplicatedService);
+    setShowForm(true);
+    
+    console.log('Duplicando serviço:', service.name);
+  };
+
   // Função para lidar com ordenação
   const handleSort = (field) => {
     if (sortField === field) {
