@@ -62,6 +62,36 @@ def format_html_text(text: str) -> str:
     text = re.sub(r'_(.*?)_', r'<i>\1</i>', text)
     return text
 
+# Google Calendar configuration
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
+SCOPES = ['https://www.googleapis.com/auth/calendar']
+REDIRECT_URI = os.getenv('REDIRECT_URI', 'https://route-optimizer-19.preview.emergentagent.com/agenda/callback')
+
+# Google Calendar helper functions
+def get_google_auth_flow():
+    """Create Google OAuth flow"""
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [REDIRECT_URI]
+            }
+        },
+        scopes=SCOPES
+    )
+    flow.redirect_uri = REDIRECT_URI
+    return flow
+
+def get_calendar_service(credentials_dict):
+    """Create Google Calendar service from credentials"""
+    credentials = Credentials.from_authorized_user_info(credentials_dict, SCOPES)
+    service = build('calendar', 'v3', credentials=credentials)
+    return service
+
 # Create the main app without a prefix
 app = FastAPI(title="SuperDry Lavanderia Management System")
 
