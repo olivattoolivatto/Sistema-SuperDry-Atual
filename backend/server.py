@@ -28,6 +28,10 @@ import os
 from reportlab.lib.units import cm
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib import colors
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
