@@ -52,9 +52,17 @@ export function Agenda() {
 
   const checkGoogleAuth = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/calendar/events/test`);
-      setIsGoogleAuthenticated(response.ok);
+      const response = await fetch(`${BACKEND_URL}/api/calendar/status`);
+      const data = await response.json();
+      setIsGoogleAuthenticated(data.authenticated || false);
+      
+      if (data.authenticated) {
+        console.log('✅ Google Calendar conectado:', data.message);
+      } else {
+        console.log('❌ Google Calendar não conectado:', data.message);
+      }
     } catch (error) {
+      console.error('Erro ao verificar autenticação:', error);
       setIsGoogleAuthenticated(false);
     }
   };
