@@ -953,6 +953,150 @@ async def fix_budget_items_status():
         logger.error(f"Error fixing budget items status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Google Calendar endpoints
+@api_router.get("/calendar/auth-url")
+async def get_google_auth_url():
+    """Get Google OAuth authorization URL"""
+    try:
+        flow = get_google_auth_flow()
+        authorization_url, _ = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'
+        )
+        return {"auth_url": authorization_url}
+    except Exception as e:
+        logger.error(f"Error generating auth URL: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/calendar/auth")
+async def authenticate_google_calendar(auth_request: GoogleAuthRequest):
+    """Exchange authorization code for credentials"""
+    try:
+        flow = get_google_auth_flow()
+        flow.redirect_uri = auth_request.redirect_uri
+        
+        # Exchange authorization code for credentials
+        flow.fetch_token(code=auth_request.code)
+        credentials = flow.credentials
+        
+        # Store credentials in database (in a real app, you'd want to encrypt these)
+        credentials_dict = {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        }
+        
+        # For simplicity, storing in a simple collection - in production, associate with user
+        await db.calendar_credentials.delete_many({})  # Remove old credentials
+        await db.calendar_credentials.insert_one({
+            "credentials": credentials_dict,
+            "created_at": datetime.utcnow()
+        })
+        
+        return {"message": "Calendar authentication successful"}
+    except Exception as e:
+        logger.error(f"Error authenticating calendar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/calendar/events")
+async def create_calendar_events(event_request: CalendarEventCreate):
+    """Create calendar events from route stops"""
+    try:
+        # Get credentials from database
+        creds_doc = await db.calendar_credentials.find_one({})
+        if not creds_doc:
+            raise HTTPException(status_code=400, detail="Google Calendar not authenticated")
+        
+        # Get route details
+        route = await db.routes.find_one({"id": event_request.route_id})
+        if not route:
+            raise HTTPException(status_code=404, detail="Route not found")
+        
+        # Create calendar service
+        service = get_calendar_service(creds_doc["credentials"])
+        
+        # Parse start date and time
+        start_date = datetime.strptime(event_request.start_date, "%Y-%m-%d").date()
+        start_time = datetime.strptime(event_request.start_time, "%H:%M").time()
+        current_datetime = datetime.combine(start_date, start_time)
+        
+        created_events = []
+        
+        # Create events for selected stops
+        for stop_id in event_request.stop_ids:
+            # Find the stop in route
+            stop = next((s for s in route.get("stops", []) if s["id"] == stop_id), None)
+            if not stop:
+                continue
+            
+            # Calculate event duration based on service type
+            if stop["service_status"] == "EXECUTAR_NO_LOCAL":
+                duration_minutes = 120  # 2 hours for on-site execution
+            else:
+                duration_minutes = 30   # 30 minutes for pickup/delivery
+            
+            end_datetime = current_datetime + timedelta(minutes=duration_minutes)
+            
+            # Create Google Calendar event
+            event = {
+                'summary': f'{stop["service_status"]} - {stop["client_name"]}',
+                'description': f'Serviço: {stop["service_name"]}\nValor: R$ {stop["service_value"]:.2f}\nVeículo: {route.get("vehicle_type", "N/A")}',
+                'location': stop.get("address", {}).get("full_address", ""),
+                'start': {
+                    'dateTime': current_datetime.isoformat(),
+                    'timeZone': 'America/Cuiaba',
+                },
+                'end': {
+                    'dateTime': end_datetime.isoformat(),
+                    'timeZone': 'America/Cuiaba',
+                },
+            }
+            
+            # Create event in Google Calendar
+            google_event = service.events().insert(calendarId='primary', body=event).execute()
+            
+            # Store event in database
+            calendar_event = CalendarEvent(
+                id=f"CAL-{str(uuid.uuid4().int)[:7].zfill(7)}",
+                route_id=event_request.route_id,
+                stop_id=stop_id,
+                summary=event['summary'],
+                description=event['description'],
+                location=event.get('location'),
+                start_datetime=current_datetime,
+                end_datetime=end_datetime,
+                google_event_id=google_event['id']
+            )
+            
+            await db.calendar_events.insert_one(calendar_event.dict())
+            created_events.append(calendar_event.dict())
+            
+            # Update current time for next event (add travel time)
+            current_datetime = end_datetime + timedelta(minutes=15)  # 15 min travel time
+        
+        return {
+            "message": f"Created {len(created_events)} calendar events",
+            "events": created_events
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating calendar events: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/calendar/events/{route_id}")
+async def get_calendar_events_by_route(route_id: str):
+    """Get calendar events for a specific route"""
+    try:
+        events = await db.calendar_events.find({"route_id": route_id}).to_list(None)
+        return {"events": events}
+    except Exception as e:
+        logger.error(f"Error fetching calendar events: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Budget endpoints
 @api_router.post("/budgets", response_model=Budget)
 async def create_budget(budget_data: BudgetCreate):
