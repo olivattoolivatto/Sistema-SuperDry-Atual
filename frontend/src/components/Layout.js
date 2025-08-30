@@ -18,6 +18,7 @@ const menuItems = [
   { path: '/catalog', label: 'Catálogo', icon: Package },
   { path: '/budgets', label: 'Orçamentos', icon: FileText },
   { path: '/routes', label: 'Rotas', icon: Route },
+  { path: '/agenda', label: 'Agenda', icon: FileText },
   { path: '/budget-config', label: 'Config. Orçamento', icon: Settings },
   { path: '/system-config', label: 'Config. Sistema', icon: Cog }
 ];
