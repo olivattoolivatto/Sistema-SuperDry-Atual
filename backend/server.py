@@ -1097,6 +1097,29 @@ async def get_calendar_events_by_route(route_id: str):
         logger.error(f"Error fetching calendar events: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/calendar/status")
+async def check_calendar_auth_status():
+    """Check if Google Calendar is authenticated"""
+    try:
+        # Check if we have valid credentials in database
+        creds_doc = await db.calendar_credentials.find_one({})
+        if not creds_doc:
+            return {"authenticated": False, "message": "No credentials found"}
+        
+        # Try to create a calendar service to test credentials
+        try:
+            service = get_calendar_service(creds_doc["credentials"])
+            # Test with a simple API call
+            calendars = service.calendarList().list(maxResults=1).execute()
+            return {"authenticated": True, "message": "Google Calendar connected"}
+        except Exception as cred_error:
+            logger.error(f"Invalid credentials: {cred_error}")
+            return {"authenticated": False, "message": "Invalid credentials"}
+            
+    except Exception as e:
+        logger.error(f"Error checking calendar status: {e}")
+        return {"authenticated": False, "message": "Error checking status"}
+
 # Budget endpoints
 @api_router.post("/budgets", response_model=Budget)
 async def create_budget(budget_data: BudgetCreate):
