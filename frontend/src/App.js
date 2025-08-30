@@ -24,6 +24,7 @@ function App() {
             <Route path="/routes" element={<RoutesPage />} />
             <Route path="/budget-config" element={<BudgetConfig />} />
             <Route path="/system-config" element={<SystemConfig />} />
+            <Route path="/agenda" element={<Agenda />} />
           </Routes>
         </Layout>
       </BrowserRouter>
