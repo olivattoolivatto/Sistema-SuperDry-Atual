@@ -86,14 +86,25 @@ export const systemConfigApi = {
 // Routes API
 export const routesApi = {
   getAvailableItems: () => api.get('/budget-items/available-for-routes'),
-  createRoute: (data) => api.post('/routes', data),
-  getRoutes: (limit = 20) => api.get('/routes', { params: { limit } }),
-  getRoute: (routeId) => api.get(`/routes/${routeId}`),
-  updateRouteStops: (routeId, stopsData) => api.put(`/routes/${routeId}/stops`, stopsData),
-  optimizeRoute: (routeId, options = {}) => api.post(`/routes/${routeId}/optimize`, null, { 
-    params: { route_type: options.route_type || 'CURTA' } 
-  }),
-  deleteRoute: (routeId) => api.delete(`/routes/${routeId}`),
+  create: (routeData) => api.post('/routes', routeData),
+  addStops: (routeId, stops) => api.put(`/routes/${routeId}/stops`, { stops }),
+  optimize: (routeId, routeType) => api.put(`/routes/${routeId}/optimize`, { route_type: routeType }),
+  get: (routeId) => api.get(`/routes/${routeId}`),
+  getSavedRoutes: () => api.get('/routes'),
+  delete: (routeId) => api.delete(`/routes/${routeId}`)
+};
+
+export const agendaApi = {
+  getGoogleAuthUrl: () => api.get('/calendar/auth-url'),
+  authenticateGoogle: (code, redirectUri) => api.post('/calendar/auth', { code, redirect_uri: redirectUri }),
+  createEvents: (routeId, stopIds, startDate, startTime) => 
+    api.post('/calendar/events', { 
+      route_id: routeId, 
+      stop_ids: stopIds, 
+      start_date: startDate, 
+      start_time: startTime 
+    }),
+  getEventsByRoute: (routeId) => api.get(`/calendar/events/${routeId}`)
 };
 
 export default api;
