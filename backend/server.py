@@ -470,6 +470,35 @@ class RouteCreate(BaseModel):
     planned_start_time: str
     stops: List[dict] = []  # Will contain budget_item_ids and priorities
 
+class RouteStopUpdate(BaseModel):
+    waypoint_index: int
+    order_sequence: int
+
+# Google Calendar Models
+class CalendarEvent(BaseModel):
+    id: Optional[str] = None
+    route_id: str
+    stop_id: str
+    summary: str
+    description: Optional[str] = None
+    location: Optional[str] = None
+    start_datetime: datetime
+    end_datetime: datetime
+    attendees: Optional[List[str]] = []
+    google_event_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class CalendarEventCreate(BaseModel):
+    route_id: str
+    stop_ids: List[str]  # IDs dos stops selecionados
+    start_date: str  # Data no formato YYYY-MM-DD
+    start_time: str  # Horário inicial no formato HH:MM
+
+class GoogleAuthRequest(BaseModel):
+    code: str
+    redirect_uri: str
+
 # SystemConfig class definition starts here
 class SystemConfig(BaseModel):
     # Company data
