@@ -560,9 +560,24 @@ export function Agenda() {
 
                     <div className="flex items-center space-x-2">
                       <Clock className="w-4 h-4 text-orange-600" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{event.estimated_start_time}</p>
-                        <p className="text-xs text-gray-600">{event.duration} min</p>
+                      <div className="space-y-1">
+                        <input
+                          type="time"
+                          value={event.estimated_start_time}
+                          onChange={(e) => updateEventTime(event.id, e.target.value)}
+                          className="text-sm font-medium text-gray-900 border border-gray-300 rounded px-2 py-1 w-20"
+                        />
+                        <div className="flex items-center space-x-1">
+                          <input
+                            type="number"
+                            value={event.duration}
+                            onChange={(e) => updateEventDuration(event.id, e.target.value)}
+                            className="text-xs text-gray-600 border border-gray-300 rounded px-1 py-0.5 w-12"
+                            min="1"
+                            max="480"
+                          />
+                          <span className="text-xs text-gray-600">min</span>
+                        </div>
                       </div>
                     </div>
                   </div>
