@@ -30,8 +30,18 @@ export function Agenda() {
   const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false);
 
   useEffect(() => {
-    loadSavedRoutes();
-    checkGoogleAuth();
+    // Check if this is a redirect from Google OAuth
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    
+    if (code) {
+      // Process OAuth callback
+      handleOAuthCallback(code);
+    } else {
+      // Normal page load
+      loadSavedRoutes();
+      checkGoogleAuth();
+    }
   }, []);
 
   const loadSavedRoutes = async () => {
