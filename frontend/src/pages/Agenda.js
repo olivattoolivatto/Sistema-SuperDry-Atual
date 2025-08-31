@@ -244,12 +244,19 @@ export function Agenda() {
   };
 
   const toggleStopSelection = (stopId) => {
+    console.log('🔄 Toggle selection para ID:', stopId);
+    console.log('📊 Estado atual selectedStops:', Array.from(selectedStops));
+    
     const newSelection = new Set(selectedStops);
     if (newSelection.has(stopId)) {
       newSelection.delete(stopId);
+      console.log('➖ Removido:', stopId);
     } else {
       newSelection.add(stopId);
+      console.log('➕ Adicionado:', stopId);
     }
+    
+    console.log('📊 Nova seleção:', Array.from(newSelection));
     setSelectedStops(newSelection);
   };
 
