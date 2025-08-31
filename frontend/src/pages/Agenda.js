@@ -251,6 +251,58 @@ export function Agenda() {
     return currentTime.toTimeString().slice(0, 5);
   };
 
+  const updateEventTime = (eventId, newTime) => {
+    setRouteEvents(prevEvents => {
+      return prevEvents.map(event => {
+        if (event.id === eventId) {
+          return { ...event, estimated_start_time: newTime };
+        }
+        return event;
+      });
+    });
+  };
+
+  const updateEventDuration = (eventId, newDuration) => {
+    setRouteEvents(prevEvents => {
+      return prevEvents.map(event => {
+        if (event.id === eventId) {
+          return { ...event, duration: parseInt(newDuration) };
+        }
+        return event;
+      });
+    });
+  };
+
+  const loadCalendarEvents = async () => {
+    if (!isGoogleAuthenticated) return;
+    
+    try {
+      // Para simplificar, vamos mostrar eventos das rotas selecionadas
+      if (selectedRoute) {
+        const response = await fetch(`${BACKEND_URL}/api/calendar/events/${selectedRoute.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setCalendarEvents(data.events || []);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar eventos do calendário:', error);
+    }
+  };
+
+  const navigateDate = (direction) => {
+    const newDate = new Date(currentDate);
+    const daysToMove = calendarView === 'week' ? 7 : calendarView === '3days' ? 3 : 1;
+    
+    if (direction === 'prev') {
+      newDate.setDate(newDate.getDate() - daysToMove);
+    } else {
+      newDate.setDate(newDate.getDate() + daysToMove);
+    }
+    
+    setCurrentDate(newDate);
+  };
+
   const createCalendarEvents = async () => {
     if (!selectedRoute || selectedStops.size === 0) {
       toast({
