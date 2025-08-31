@@ -750,22 +750,26 @@ export function Agenda() {
                     
                     return (
                       <div key={day} className="p-2 border-r border-gray-100 last:border-r-0 min-h-[40px]">
-                        {cellEvents.map(event => (
-                          <div 
-                            key={event.id} 
-                            className={`text-xs p-1 rounded mb-1 truncate ${
-                              event.is_system_event === false 
-                                ? 'bg-green-100 text-green-800 border border-green-300' 
-                                : 'bg-blue-100 text-blue-800 border border-blue-300'
-                            }`}
-                            title={`${event.summary}${event.location ? ' - ' + event.location : ''}`}
-                          >
-                            <div className="font-medium">{event.summary}</div>
-                            {event.location && (
-                              <div className="text-xs opacity-75 truncate">{event.location}</div>
-                            )}
-                          </div>
-                        ))}
+                        {cellEvents.map(event => {
+                          const eventColor = getGoogleCalendarColor(event);
+                          return (
+                            <div 
+                              key={event.id} 
+                              className={`text-xs p-1.5 rounded-md mb-1 truncate shadow-sm border-l-2 ${eventColor.classes}`}
+                              style={{
+                                backgroundColor: eventColor.background,
+                                borderLeftColor: eventColor.border,
+                                color: eventColor.text
+                              }}
+                              title={`${event.summary}${event.location ? ' - ' + event.location : ''}`}
+                            >
+                              <div className="font-medium text-xs leading-tight">{event.summary}</div>
+                              {event.location && (
+                                <div className="text-xs opacity-80 truncate mt-0.5">{event.location}</div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })}
