@@ -746,7 +746,6 @@ export function Agenda() {
           <div className="space-y-3">
             {routeEvents.map((event, index) => {
               const isSelected = selectedStops.has(event.id);
-              console.log(`🔍 Renderizando evento ${event.id} (${event.client_name}): selecionado=${isSelected}`);
               
               return (
                 <div
