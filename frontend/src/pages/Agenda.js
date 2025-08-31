@@ -858,7 +858,8 @@ export function Agenda() {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {routeEvents.length === 0 && (
