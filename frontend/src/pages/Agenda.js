@@ -220,16 +220,18 @@ export function Agenda() {
     const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
     if (newIndex < 0 || newIndex >= routeEvents.length) return;
     
-    const newEvents = [...routeEvents];
-    [newEvents[currentIndex], newEvents[newIndex]] = [newEvents[newIndex], newEvents[currentIndex]];
-    
-    // Update order_sequence
-    newEvents.forEach((event, index) => {
-      event.order_sequence = index + 1;
-      event.estimated_start_time = calculateEstimatedTimeByIndex(index);
+    setRouteEvents(prevEvents => {
+      const newEvents = [...prevEvents];
+      // Swap elements
+      [newEvents[currentIndex], newEvents[newIndex]] = [newEvents[newIndex], newEvents[currentIndex]];
+      
+      // Update order_sequence and recalculate times for all events
+      return newEvents.map((event, index) => ({
+        ...event,
+        order_sequence: index + 1,
+        estimated_start_time: calculateEstimatedTimeByIndex(index, newEvents)
+      }));
     });
-    
-    setRouteEvents(newEvents);
   };
 
   const calculateEstimatedTimeByIndex = (index) => {
