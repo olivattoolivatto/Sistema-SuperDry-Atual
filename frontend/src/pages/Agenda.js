@@ -31,6 +31,17 @@ export function Agenda() {
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [calendarView, setCalendarView] = useState('week'); // 'week', '3days', 'day'
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [eventFormData, setEventFormData] = useState({
+    summary: '',
+    description: '',
+    location: '',
+    start_date: '',
+    start_time: '',
+    end_date: '',
+    end_time: ''
+  });
 
   useEffect(() => {
     // Check if this is a redirect from Google OAuth
