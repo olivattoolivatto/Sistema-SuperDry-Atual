@@ -1097,6 +1097,64 @@ async def get_calendar_events_by_route(route_id: str):
         logger.error(f"Error fetching calendar events: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/calendar/events")
+async def get_all_calendar_events(start_date: str, end_date: str):
+    """Get all events from Google Calendar in a date range"""
+    try:
+        # Get credentials from database
+        creds_doc = await db.calendar_credentials.find_one({})
+        if not creds_doc:
+            raise HTTPException(status_code=400, detail="Google Calendar not authenticated")
+        
+        # Create calendar service
+        service = get_calendar_service(creds_doc["credentials"])
+        
+        # Format dates for Google Calendar API (RFC3339)
+        start_datetime = f"{start_date}T00:00:00-04:00"  # GMT-4 Cuiabá
+        end_datetime = f"{end_date}T23:59:59-04:00"
+        
+        # Get events from Google Calendar
+        events_result = service.events().list(
+            calendarId='primary',
+            timeMin=start_datetime,
+            timeMax=end_datetime,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        
+        google_events = events_result.get('items', [])
+        
+        # Format events for frontend
+        formatted_events = []
+        for event in google_events:
+            start = event['start'].get('dateTime', event['start'].get('date'))
+            end = event['end'].get('dateTime', event['end'].get('date'))
+            
+            # Parse datetime strings
+            if 'T' in start:  # DateTime format
+                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+            else:  # Date format (all-day event)
+                start_dt = datetime.strptime(start, '%Y-%m-%d')
+                end_dt = datetime.strptime(end, '%Y-%m-%d')
+            
+            formatted_events.append({
+                'id': event.get('id'),
+                'summary': event.get('summary', 'Sem título'),
+                'description': event.get('description', ''),
+                'location': event.get('location', ''),
+                'start_datetime': start_dt.isoformat(),
+                'end_datetime': end_dt.isoformat(),
+                'is_system_event': False,  # Evento externo (não criado pelo sistema)
+                'google_event_id': event.get('id')
+            })
+        
+        return {"events": formatted_events}
+        
+    except Exception as e:
+        logger.error(f"Error fetching Google Calendar events: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/calendar/status")
 async def check_calendar_auth_status():
     """Check if Google Calendar is authenticated"""
