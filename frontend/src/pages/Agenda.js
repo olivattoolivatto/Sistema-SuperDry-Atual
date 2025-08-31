@@ -234,16 +234,18 @@ export function Agenda() {
     });
   };
 
-  const calculateEstimatedTimeByIndex = (index) => {
+  const calculateEstimatedTimeByIndex = (index, eventsArray = routeEvents) => {
     if (!selectedRoute) return '08:00';
     
     const baseTime = new Date(`${selectedRoute.planned_date}T${selectedRoute.planned_start_time}`);
     let currentTime = new Date(baseTime);
     
     for (let i = 0; i < index; i++) {
-      const event = routeEvents[i];
-      currentTime = new Date(currentTime.getTime() + event.duration * 60000);
-      currentTime = new Date(currentTime.getTime() + 15 * 60000); // Travel time
+      const event = eventsArray[i];
+      if (event) {
+        currentTime = new Date(currentTime.getTime() + event.duration * 60000);
+        currentTime = new Date(currentTime.getTime() + 15 * 60000); // Travel time
+      }
     }
     
     return currentTime.toTimeString().slice(0, 5);
