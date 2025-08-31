@@ -107,7 +107,10 @@ export const agendaApi = {
   getEventsByRoute: (routeId) => api.get(`/calendar/events/${routeId}`),
   getAllEvents: (startDate, endDate) => api.get('/calendar/events', {
     params: { start_date: startDate, end_date: endDate }
-  })
+  }),
+  getEventDetail: (eventId) => api.get(`/calendar/events/detail/${eventId}`),
+  updateEvent: (eventId, eventData) => api.put(`/calendar/events/${eventId}`, eventData),
+  deleteEvent: (eventId) => api.delete(`/calendar/events/${eventId}`)
 };
 
 export default api;
