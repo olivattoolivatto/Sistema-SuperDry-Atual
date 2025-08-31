@@ -721,9 +721,11 @@ export function Agenda() {
               </div>
             </div>
             
-            {/* Grade de horários */}
+            {/* Grade de horários - das 07:00 às 00:00 */}
             <div className="max-h-96 overflow-y-auto">
-              {Array.from({ length: 24 }, (_, hour) => (
+              {Array.from({ length: 18 }, (_, index) => {
+                const hour = (7 + index) % 24; // Inicia às 07:00 e vai até 00:00
+                return (
                 <div key={hour} className={`grid ${
                   calendarView === 'week' ? 'grid-cols-8' : 
                   calendarView === '3days' ? 'grid-cols-4' : 
