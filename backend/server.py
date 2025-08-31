@@ -525,6 +525,13 @@ class CalendarEventCreate(BaseModel):
     start_date: str  # Data no formato YYYY-MM-DD
     start_time: str  # Horário inicial no formato HH:MM
 
+class CalendarEventUpdate(BaseModel):
+    summary: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    start_datetime: Optional[str] = None
+    end_datetime: Optional[str] = None
+
 class GoogleAuthRequest(BaseModel):
     code: str
     redirect_uri: str
