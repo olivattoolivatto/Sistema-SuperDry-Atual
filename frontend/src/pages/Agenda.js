@@ -846,6 +846,45 @@ export function Agenda() {
             </div>
           </div>
           
+          {/* Legenda de cores */}
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Legenda de Cores</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#1a73e8' }}></div>
+                <span className="text-gray-700">SuperDry (Sistema)</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#33b679' }}></div>
+                <span className="text-gray-700">Eventos Gerais</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#0d7377' }}></div>
+                <span className="text-gray-700">Reuniões</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f57c00' }}></div>
+                <span className="text-gray-700">Refeições</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#d50000' }}></div>
+                <span className="text-gray-700">Médico/Saúde</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#8e24aa' }}></div>
+                <span className="text-gray-700">Pessoal/Família</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#039be5' }}></div>
+                <span className="text-gray-700">Viagens</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded bg-gradient-to-r from-blue-500 to-green-500"></div>
+                <span className="text-gray-700">Outros</span>
+              </div>
+            </div>
+          </div>
+
           {calendarEvents.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
