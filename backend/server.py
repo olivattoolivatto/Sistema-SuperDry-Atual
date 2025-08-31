@@ -1185,6 +1185,120 @@ async def check_calendar_auth_status():
         logger.error(f"Error checking calendar status: {e}")
         return {"authenticated": False, "message": "Error checking status"}
 
+@api_router.get("/calendar/events/detail/{event_id}")
+async def get_calendar_event_detail(event_id: str):
+    """Get detailed information of a specific calendar event"""
+    try:
+        # Get credentials from database
+        creds_doc = await db.calendar_credentials.find_one({})
+        if not creds_doc:
+            raise HTTPException(status_code=400, detail="Google Calendar not authenticated")
+        
+        # Create calendar service
+        service = get_calendar_service(creds_doc["credentials"])
+        
+        # Get event from Google Calendar
+        event = service.events().get(calendarId='primary', eventId=event_id).execute()
+        
+        start = event['start'].get('dateTime', event['start'].get('date'))
+        end = event['end'].get('dateTime', event['end'].get('date'))
+        
+        # Parse datetime strings
+        if 'T' in start:  # DateTime format
+            start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+            end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+        else:  # Date format (all-day event)
+            start_dt = datetime.strptime(start, '%Y-%m-%d')
+            end_dt = datetime.strptime(end, '%Y-%m-%d')
+        
+        return {
+            "id": event.get('id'),
+            "summary": event.get('summary', ''),
+            "description": event.get('description', ''),
+            "location": event.get('location', ''),
+            "start_datetime": start_dt.isoformat(),
+            "end_datetime": end_dt.isoformat(),
+            "google_event_id": event.get('id')
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching event detail: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/calendar/events/{event_id}")
+async def update_calendar_event(event_id: str, event_update: CalendarEventUpdate):
+    """Update an existing calendar event"""
+    try:
+        # Get credentials from database
+        creds_doc = await db.calendar_credentials.find_one({})
+        if not creds_doc:
+            raise HTTPException(status_code=400, detail="Google Calendar not authenticated")
+        
+        # Create calendar service
+        service = get_calendar_service(creds_doc["credentials"])
+        
+        # Get current event
+        current_event = service.events().get(calendarId='primary', eventId=event_id).execute()
+        
+        # Update only provided fields
+        if event_update.summary is not None:
+            current_event['summary'] = event_update.summary
+        if event_update.description is not None:
+            current_event['description'] = event_update.description
+        if event_update.location is not None:
+            current_event['location'] = event_update.location
+        
+        if event_update.start_datetime and event_update.end_datetime:
+            # Parse new datetime
+            start_dt = datetime.fromisoformat(event_update.start_datetime)
+            end_dt = datetime.fromisoformat(event_update.end_datetime)
+            
+            current_event['start'] = {
+                'dateTime': start_dt.isoformat(),
+                'timeZone': 'America/Cuiaba',
+            }
+            current_event['end'] = {
+                'dateTime': end_dt.isoformat(),
+                'timeZone': 'America/Cuiaba',
+            }
+        
+        # Update event in Google Calendar
+        updated_event = service.events().update(
+            calendarId='primary', 
+            eventId=event_id, 
+            body=current_event
+        ).execute()
+        
+        return {"message": "Event updated successfully", "event": updated_event}
+        
+    except Exception as e:
+        logger.error(f"Error updating calendar event: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/calendar/events/{event_id}")
+async def delete_calendar_event(event_id: str):
+    """Delete a calendar event"""
+    try:
+        # Get credentials from database
+        creds_doc = await db.calendar_credentials.find_one({})
+        if not creds_doc:
+            raise HTTPException(status_code=400, detail="Google Calendar not authenticated")
+        
+        # Create calendar service
+        service = get_calendar_service(creds_doc["credentials"])
+        
+        # Delete event from Google Calendar
+        service.events().delete(calendarId='primary', eventId=event_id).execute()
+        
+        # Also remove from our database if it exists
+        await db.calendar_events.delete_many({"google_event_id": event_id})
+        
+        return {"message": "Event deleted successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error deleting calendar event: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Budget endpoints
 @api_router.post("/budgets", response_model=Budget)
 async def create_budget(budget_data: BudgetCreate):
