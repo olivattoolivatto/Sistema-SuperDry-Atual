@@ -343,6 +343,73 @@ export function Agenda() {
     setCurrentDate(newDate);
   };
 
+  const getGoogleCalendarColor = (event) => {
+    // Sistema de cores similar ao Google Calendar
+    
+    if (event.is_system_event !== false) {
+      // Eventos criados pelo sistema SuperDry - Azul (padrão Google)
+      return {
+        background: '#1a73e8',
+        border: '#1557b0',
+        text: '#ffffff',
+        classes: 'border-l-blue-600'
+      };
+    }
+    
+    // Eventos externos - usar cores baseadas no conteúdo ou tipo
+    const summary = event.summary?.toLowerCase() || '';
+    
+    if (summary.includes('reunião') || summary.includes('meeting')) {
+      // Verde para reuniões
+      return {
+        background: '#0d7377',
+        border: '#0a5d61',
+        text: '#ffffff',
+        classes: 'border-l-green-700'
+      };
+    } else if (summary.includes('almoço') || summary.includes('lunch') || summary.includes('jantar')) {
+      // Laranja para refeições
+      return {
+        background: '#f57c00',
+        border: '#e65100',
+        text: '#ffffff',
+        classes: 'border-l-orange-600'
+      };
+    } else if (summary.includes('médico') || summary.includes('doctor') || summary.includes('consulta')) {
+      // Vermelho para médico/saúde
+      return {
+        background: '#d50000',
+        border: '#b71c1c',
+        text: '#ffffff',
+        classes: 'border-l-red-600'
+      };
+    } else if (summary.includes('pessoal') || summary.includes('family') || summary.includes('família')) {
+      // Roxo para pessoal/família
+      return {
+        background: '#8e24aa',
+        border: '#6a1b9a',
+        text: '#ffffff',
+        classes: 'border-l-purple-600'
+      };
+    } else if (summary.includes('viagem') || summary.includes('travel') || summary.includes('férias')) {
+      // Azul claro para viagens
+      return {
+        background: '#039be5',
+        border: '#0277bd',
+        text: '#ffffff',
+        classes: 'border-l-cyan-600'
+      };
+    } else {
+      // Padrão para outros eventos externos - Verde suave
+      return {
+        background: '#33b679',
+        border: '#2e7d32',
+        text: '#ffffff',
+        classes: 'border-l-green-600'
+      };
+    }
+  };
+
   const createCalendarEvents = async () => {
     if (!selectedRoute || selectedStops.size === 0) {
       toast({
