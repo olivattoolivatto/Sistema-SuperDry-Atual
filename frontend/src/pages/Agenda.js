@@ -246,33 +246,23 @@ export function Agenda() {
   };
 
   const moveStop = (stopId, direction) => {
-    console.log('🔄 Movendo evento:', stopId, 'direção:', direction);
-    
     const currentIndex = routeEvents.findIndex(event => event.id === stopId);
-    if (currentIndex === -1) {
-      console.error('❌ Evento não encontrado:', stopId);
-      return;
-    }
+    if (currentIndex === -1) return;
     
     const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
     if (newIndex < 0 || newIndex >= routeEvents.length) return;
     
     setRouteEvents(prevEvents => {
       const newEvents = [...prevEvents];
-      // Swap elements - preservando os objetos originais
+      // Swap elements preservando objetos originais
       [newEvents[currentIndex], newEvents[newIndex]] = [newEvents[newIndex], newEvents[currentIndex]];
       
       // Update order_sequence and recalculate times preservando IDs originais
-      const updatedEvents = newEvents.map((event, index) => {
-        return {
-          ...event, // Preservar todas as propriedades originais, incluindo ID
-          order_sequence: index + 1,
-          estimated_start_time: calculateEstimatedTimeByIndex(index, newEvents)
-        };
-      });
-      
-      console.log('📊 Eventos após movimento:', updatedEvents.map(e => ({id: e.id, client: e.client_name})));
-      return updatedEvents;
+      return newEvents.map((event, index) => ({
+        ...event, // Preservar todas as propriedades, especialmente o ID
+        order_sequence: index + 1,
+        estimated_start_time: calculateEstimatedTimeByIndex(index, newEvents)
+      }));
     });
   };
 
