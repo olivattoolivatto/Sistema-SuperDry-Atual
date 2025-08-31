@@ -1027,6 +1027,147 @@ export function Agenda() {
           )}
         </div>
       )}
+
+      {/* Modal de Edição de Evento */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Editar Evento</h3>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Título */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Título *
+                </label>
+                <input
+                  type="text"
+                  value={eventFormData.summary}
+                  onChange={(e) => setEventFormData(prev => ({ ...prev, summary: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              {/* Descrição */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição
+                </label>
+                <textarea
+                  value={eventFormData.description}
+                  onChange={(e) => setEventFormData(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              {/* Local */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Local
+                </label>
+                <input
+                  type="text"
+                  value={eventFormData.location}
+                  onChange={(e) => setEventFormData(prev => ({ ...prev, location: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              {/* Data e Hora de Início */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data Início *
+                  </label>
+                  <input
+                    type="date"
+                    value={eventFormData.start_date}
+                    onChange={(e) => setEventFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Hora Início *
+                  </label>
+                  <input
+                    type="time"
+                    value={eventFormData.start_time}
+                    onChange={(e) => setEventFormData(prev => ({ ...prev, start_time: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Data e Hora de Fim */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data Fim *
+                  </label>
+                  <input
+                    type="date"
+                    value={eventFormData.end_date}
+                    onChange={(e) => setEventFormData(prev => ({ ...prev, end_date: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Hora Fim *
+                  </label>
+                  <input
+                    type="time"
+                    value={eventFormData.end_time}
+                    onChange={(e) => setEventFormData(prev => ({ ...prev, end_time: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between px-6 py-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={handleEventDelete}
+                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors flex items-center"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Excluir
+              </button>
+              
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingEvent(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEventUpdate}
+                  disabled={!eventFormData.summary || !eventFormData.start_date || !eventFormData.start_time}
+                  className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
