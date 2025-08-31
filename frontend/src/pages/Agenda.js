@@ -28,6 +28,9 @@ export function Agenda() {
   const [loading, setLoading] = useState(true);
   const [creatingEvents, setCreatingEvents] = useState(false);
   const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [calendarView, setCalendarView] = useState('week'); // 'week', '3days', 'day'
+  const [currentDate, setCurrentDate] = useState(new Date());
 
   useEffect(() => {
     // Check if this is a redirect from Google OAuth
