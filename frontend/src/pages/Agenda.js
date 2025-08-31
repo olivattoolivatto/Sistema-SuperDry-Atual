@@ -173,7 +173,6 @@ export function Agenda() {
   };
 
   const handleRouteSelect = async (route) => {
-    console.log('🔄 Selecionando rota:', route.id);
     setSelectedRoute(route);
     
     // IMPORTANTE: Limpar seleções antes de criar novos eventos
@@ -181,8 +180,8 @@ export function Agenda() {
     
     // Transform route stops into event format
     const events = route.stops?.map((stop, index) => {
-      const eventId = stop.id || `stop-${index}-${Date.now()}`; // Garantir ID único
-      console.log('📋 Criando evento com ID:', eventId, 'para stop:', stop.client_name);
+      // Garantir ID único e válido
+      const eventId = stop.id || `${route.id}-stop-${index}`;
       
       return {
         id: eventId,
@@ -199,17 +198,8 @@ export function Agenda() {
       };
     }) || [];
     
-    // Verificar se há IDs duplicados
-    const ids = events.map(e => e.id);
-    const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
-    if (duplicateIds.length > 0) {
-      console.error('❌ IDs duplicados encontrados:', duplicateIds);
-    }
-    
     // Sort by order_sequence
     events.sort((a, b) => a.order_sequence - b.order_sequence);
-    console.log('📊 Eventos criados:', events.length, 'IDs:', events.map(e => e.id));
-    
     setRouteEvents(events);
     
     // Load calendar events for this route
