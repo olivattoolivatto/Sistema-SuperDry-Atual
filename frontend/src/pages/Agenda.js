@@ -421,6 +421,127 @@ export function Agenda() {
     }
   };
 
+  const handleEventDoubleClick = async (event) => {
+    try {
+      console.log('🖱️ Clique duplo no evento:', event.id);
+      
+      // Get detailed event information
+      const response = await fetch(`${BACKEND_URL}/api/calendar/events/detail/${event.google_event_id || event.id}`);
+      if (!response.ok) {
+        throw new Error('Erro ao carregar detalhes do evento');
+      }
+      
+      const eventDetails = await response.json();
+      
+      // Parse datetime for form
+      const startDate = new Date(eventDetails.start_datetime);
+      const endDate = new Date(eventDetails.end_datetime);
+      
+      setEditingEvent(eventDetails);
+      setEventFormData({
+        summary: eventDetails.summary || '',
+        description: eventDetails.description || '',
+        location: eventDetails.location || '',
+        start_date: startDate.toISOString().split('T')[0],
+        start_time: startDate.toTimeString().slice(0, 5),
+        end_date: endDate.toISOString().split('T')[0],
+        end_time: endDate.toTimeString().slice(0, 5)
+      });
+      setShowEditModal(true);
+      
+    } catch (error) {
+      console.error('Erro ao abrir evento para edição:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao carregar detalhes do evento.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEventUpdate = async () => {
+    try {
+      const startDateTime = new Date(`${eventFormData.start_date}T${eventFormData.start_time}`);
+      const endDateTime = new Date(`${eventFormData.end_date}T${eventFormData.end_time}`);
+      
+      const updateData = {
+        summary: eventFormData.summary,
+        description: eventFormData.description,
+        location: eventFormData.location,
+        start_datetime: startDateTime.toISOString(),
+        end_datetime: endDateTime.toISOString()
+      };
+      
+      const response = await fetch(`${BACKEND_URL}/api/calendar/events/${editingEvent.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Erro ao atualizar evento');
+      }
+      
+      // Reload calendar events
+      await loadCalendarEvents();
+      
+      setShowEditModal(false);
+      setEditingEvent(null);
+      
+      toast({
+        title: "Sucesso!",
+        description: "Evento atualizado com sucesso!",
+        variant: "default",
+      });
+      
+    } catch (error) {
+      console.error('Erro ao atualizar evento:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao atualizar evento. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEventDelete = async () => {
+    if (!window.confirm('Tem certeza que deseja excluir este evento?')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/calendar/events/${editingEvent.id}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Erro ao excluir evento');
+      }
+      
+      // Reload calendar events
+      await loadCalendarEvents();
+      
+      setShowEditModal(false);
+      setEditingEvent(null);
+      
+      toast({
+        title: "Sucesso!",
+        description: "Evento excluído com sucesso!",
+        variant: "default",
+      });
+      
+    } catch (error) {
+      console.error('Erro ao excluir evento:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao excluir evento. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const createCalendarEvents = async () => {
     if (!selectedRoute || selectedStops.size === 0) {
       toast({
