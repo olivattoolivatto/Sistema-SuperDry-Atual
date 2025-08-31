@@ -104,7 +104,10 @@ export const agendaApi = {
       start_date: startDate, 
       start_time: startTime 
     }),
-  getEventsByRoute: (routeId) => api.get(`/calendar/events/${routeId}`)
+  getEventsByRoute: (routeId) => api.get(`/calendar/events/${routeId}`),
+  getAllEvents: (startDate, endDate) => api.get('/calendar/events', {
+    params: { start_date: startDate, end_date: endDate }
+  })
 };
 
 export default api;
