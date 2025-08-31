@@ -173,26 +173,43 @@ export function Agenda() {
   };
 
   const handleRouteSelect = async (route) => {
+    console.log('🔄 Selecionando rota:', route.id);
     setSelectedRoute(route);
+    
+    // IMPORTANTE: Limpar seleções antes de criar novos eventos
     setSelectedStops(new Set());
     
     // Transform route stops into event format
-    const events = route.stops?.map((stop, index) => ({
-      id: stop.id,
-      order_sequence: stop.order_sequence || index + 1,
-      client_name: stop.client_name,
-      service_name: stop.service_name,
-      service_value: stop.service_value,
-      neighborhood: stop.neighborhood,
-      vehicle_type: route.vehicle_type,
-      service_status: stop.service_status,
-      estimated_start_time: calculateEstimatedTime(route, index),
-      duration: calculateDuration(stop.service_status),
-      address: stop.address
-    })) || [];
+    const events = route.stops?.map((stop, index) => {
+      const eventId = stop.id || `stop-${index}-${Date.now()}`; // Garantir ID único
+      console.log('📋 Criando evento com ID:', eventId, 'para stop:', stop.client_name);
+      
+      return {
+        id: eventId,
+        order_sequence: stop.order_sequence || index + 1,
+        client_name: stop.client_name,
+        service_name: stop.service_name,
+        service_value: stop.service_value,
+        neighborhood: stop.neighborhood,
+        vehicle_type: route.vehicle_type,
+        service_status: stop.service_status,
+        estimated_start_time: calculateEstimatedTime(route, index),
+        duration: calculateDuration(stop.service_status),
+        address: stop.address
+      };
+    }) || [];
+    
+    // Verificar se há IDs duplicados
+    const ids = events.map(e => e.id);
+    const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+    if (duplicateIds.length > 0) {
+      console.error('❌ IDs duplicados encontrados:', duplicateIds);
+    }
     
     // Sort by order_sequence
     events.sort((a, b) => a.order_sequence - b.order_sequence);
+    console.log('📊 Eventos criados:', events.length, 'IDs:', events.map(e => e.id));
+    
     setRouteEvents(events);
     
     // Load calendar events for this route
