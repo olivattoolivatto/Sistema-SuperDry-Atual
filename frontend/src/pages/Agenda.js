@@ -276,21 +276,50 @@ export function Agenda() {
     });
   };
 
-  const loadCalendarEvents = async () => {
+  const loadCalendarEvents = async (startDate = null, endDate = null) => {
     if (!isGoogleAuthenticated) return;
     
     try {
-      // Para simplificar, vamos mostrar eventos das rotas selecionadas
-      if (selectedRoute) {
-        const response = await fetch(`${BACKEND_URL}/api/calendar/events/${selectedRoute.id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setCalendarEvents(data.events || []);
-        }
+      // Calculate date range if not provided
+      const start = startDate || getCurrentDateRange().start;
+      const end = endDate || getCurrentDateRange().end;
+      
+      console.log('🔄 Carregando eventos do Google Calendar:', start, 'até', end);
+      
+      const response = await fetch(`${BACKEND_URL}/api/calendar/events?start_date=${start}&end_date=${end}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Eventos carregados:', data.events.length);
+        setCalendarEvents(data.events || []);
+      } else {
+        console.error('Erro na resposta da API:', response.status);
       }
     } catch (error) {
       console.error('Erro ao carregar eventos do calendário:', error);
     }
+  };
+
+  const getCurrentDateRange = () => {
+    const start = new Date(currentDate);
+    let end = new Date(currentDate);
+    
+    if (calendarView === 'week') {
+      // Início da semana (domingo)
+      start.setDate(start.getDate() - start.getDay());
+      // Final da semana (sábado)
+      end.setDate(start.getDate() + 6);
+    } else if (calendarView === '3days') {
+      // 3 dias a partir da data atual
+      end.setDate(start.getDate() + 2);
+    } else {
+      // Apenas o dia atual
+      end = new Date(start);
+    }
+    
+    return {
+      start: start.toISOString().split('T')[0], // Format: YYYY-MM-DD
+      end: end.toISOString().split('T')[0]
+    };
   };
 
   const navigateDate = (direction) => {
