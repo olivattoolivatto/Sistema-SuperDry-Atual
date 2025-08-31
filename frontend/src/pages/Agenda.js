@@ -134,8 +134,9 @@ export function Agenda() {
       // Update authentication status
       setIsGoogleAuthenticated(true);
       
-      // Load routes
+      // Load routes and calendar events
       await loadSavedRoutes();
+      await loadCalendarEvents();
       
       toast({
         title: "Sucesso!",
