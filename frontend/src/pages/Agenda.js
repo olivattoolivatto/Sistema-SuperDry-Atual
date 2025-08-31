@@ -593,6 +593,145 @@ export function Agenda() {
           )}
         </div>
       )}
+
+      {/* Visualização do Calendário */}
+      {isGoogleAuthenticated && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-900">Visualização da Agenda</h2>
+            
+            {/* Controles de visualização */}
+            <div className="flex items-center space-x-4">
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setCalendarView('day')}
+                  className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                    calendarView === 'day' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  1 Dia
+                </button>
+                <button
+                  onClick={() => setCalendarView('3days')}
+                  className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                    calendarView === '3days' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  3 Dias
+                </button>
+                <button
+                  onClick={() => setCalendarView('week')}
+                  className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                    calendarView === 'week' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Semana
+                </button>
+              </div>
+              
+              {/* Navegação de datas */}
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => navigateDate('prev')}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <ArrowUp className="w-4 h-4 rotate-[-90deg]" />
+                </button>
+                <span className="text-sm font-medium text-gray-900 min-w-[120px] text-center">
+                  {currentDate.toLocaleDateString('pt-BR', { 
+                    weekday: calendarView === 'day' ? 'long' : undefined,
+                    day: 'numeric', 
+                    month: 'long', 
+                    year: 'numeric' 
+                  })}
+                </span>
+                <button
+                  onClick={() => navigateDate('next')}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <ArrowDown className="w-4 h-4 rotate-[90deg]" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Grade do calendário */}
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-gray-50 border-b border-gray-200">
+              <div className={`grid ${
+                calendarView === 'week' ? 'grid-cols-8' : 
+                calendarView === '3days' ? 'grid-cols-4' : 
+                'grid-cols-2'
+              }`}>
+                <div className="p-3 text-sm font-medium text-gray-900 border-r border-gray-200">
+                  Horário
+                </div>
+                {Array.from({ length: calendarView === 'week' ? 7 : calendarView === '3days' ? 3 : 1 }, (_, i) => {
+                  const date = new Date(currentDate);
+                  date.setDate(date.getDate() + i);
+                  return (
+                    <div key={i} className="p-3 text-sm font-medium text-gray-900 text-center border-r border-gray-200 last:border-r-0">
+                      {date.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric' })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            {/* Grade de horários */}
+            <div className="max-h-96 overflow-y-auto">
+              {Array.from({ length: 24 }, (_, hour) => (
+                <div key={hour} className={`grid ${
+                  calendarView === 'week' ? 'grid-cols-8' : 
+                  calendarView === '3days' ? 'grid-cols-4' : 
+                  'grid-cols-2'
+                } border-b border-gray-100 last:border-b-0`}>
+                  <div className="p-2 text-xs text-gray-600 border-r border-gray-100 bg-gray-50">
+                    {hour.toString().padStart(2, '0')}:00
+                  </div>
+                  {Array.from({ length: calendarView === 'week' ? 7 : calendarView === '3days' ? 3 : 1 }, (_, day) => {
+                    const cellDate = new Date(currentDate);
+                    cellDate.setDate(cellDate.getDate() + day);
+                    cellDate.setHours(hour, 0, 0, 0);
+                    
+                    // Find events for this hour
+                    const cellEvents = calendarEvents.filter(event => {
+                      const eventStart = new Date(event.start_datetime);
+                      return eventStart.getDate() === cellDate.getDate() &&
+                             eventStart.getMonth() === cellDate.getMonth() &&
+                             eventStart.getHours() === hour;
+                    });
+                    
+                    return (
+                      <div key={day} className="p-2 border-r border-gray-100 last:border-r-0 min-h-[40px]">
+                        {cellEvents.map(event => (
+                          <div key={event.id} className="text-xs bg-blue-100 text-blue-800 p-1 rounded mb-1 truncate">
+                            {event.summary}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {calendarEvents.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p>Nenhum evento encontrado.</p>
+              <p className="text-sm">Crie eventos selecionando uma rota e enviando itens para a agenda.</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
