@@ -742,14 +742,26 @@ export function Agenda() {
                       const eventStart = new Date(event.start_datetime);
                       return eventStart.getDate() === cellDate.getDate() &&
                              eventStart.getMonth() === cellDate.getMonth() &&
+                             eventStart.getYear() === cellDate.getYear() &&
                              eventStart.getHours() === hour;
                     });
                     
                     return (
                       <div key={day} className="p-2 border-r border-gray-100 last:border-r-0 min-h-[40px]">
                         {cellEvents.map(event => (
-                          <div key={event.id} className="text-xs bg-blue-100 text-blue-800 p-1 rounded mb-1 truncate">
-                            {event.summary}
+                          <div 
+                            key={event.id} 
+                            className={`text-xs p-1 rounded mb-1 truncate ${
+                              event.is_system_event === false 
+                                ? 'bg-green-100 text-green-800 border border-green-300' 
+                                : 'bg-blue-100 text-blue-800 border border-blue-300'
+                            }`}
+                            title={`${event.summary}${event.location ? ' - ' + event.location : ''}`}
+                          >
+                            <div className="font-medium">{event.summary}</div>
+                            {event.location && (
+                              <div className="text-xs opacity-75 truncate">{event.location}</div>
+                            )}
                           </div>
                         ))}
                       </div>
