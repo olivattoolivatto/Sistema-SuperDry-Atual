@@ -954,13 +954,14 @@ export function Agenda() {
                           return (
                             <div 
                               key={event.id} 
-                              className={`text-xs p-1.5 rounded-md mb-1 truncate shadow-sm border-l-2 ${eventColor.classes}`}
+                              className={`text-xs p-1.5 rounded-md mb-1 truncate shadow-sm border-l-2 cursor-pointer hover:opacity-80 transition-opacity ${eventColor.classes}`}
                               style={{
                                 backgroundColor: eventColor.background,
                                 borderLeftColor: eventColor.border,
                                 color: eventColor.text
                               }}
-                              title={`${event.summary}${event.location ? ' - ' + event.location : ''}`}
+                              title={`${event.summary}${event.location ? ' - ' + event.location : ''} (Clique duplo para editar)`}
+                              onDoubleClick={() => handleEventDoubleClick(event)}
                             >
                               <div className="font-medium text-xs leading-tight">{event.summary}</div>
                               {event.location && (
