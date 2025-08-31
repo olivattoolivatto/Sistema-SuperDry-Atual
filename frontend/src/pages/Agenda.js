@@ -174,6 +174,9 @@ export function Agenda() {
     // Sort by order_sequence
     events.sort((a, b) => a.order_sequence - b.order_sequence);
     setRouteEvents(events);
+    
+    // Load calendar events for this route
+    loadCalendarEvents();
   };
 
   const calculateEstimatedTime = (route, stopIndex) => {
