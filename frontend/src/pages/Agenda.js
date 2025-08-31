@@ -13,7 +13,8 @@ import {
   Send,
   RefreshCw,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
 import { routesApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
