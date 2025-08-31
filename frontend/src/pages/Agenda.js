@@ -778,7 +778,7 @@ export function Agenda() {
                     onClick={() => toggleStopSelection(event.id)}
                     className="flex-shrink-0"
                   >
-                    {selectedStops.has(event.id) ? (
+                    {isSelected ? (
                       <CheckSquare className="w-5 h-5 text-green-600" />
                     ) : (
                       <Square className="w-5 h-5 text-gray-400 hover:text-gray-600" />
