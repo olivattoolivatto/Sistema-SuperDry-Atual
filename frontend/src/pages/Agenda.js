@@ -759,15 +759,19 @@ export function Agenda() {
           </div>
 
           <div className="space-y-3">
-            {routeEvents.map((event, index) => (
-              <div
-                key={event.id}
-                className={`p-4 border rounded-lg transition-colors ${
-                  selectedStops.has(event.id) 
-                    ? 'border-green-500 bg-green-50' 
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
+            {routeEvents.map((event, index) => {
+              const isSelected = selectedStops.has(event.id);
+              console.log(`🔍 Renderizando evento ${event.id} (${event.client_name}): selecionado=${isSelected}`);
+              
+              return (
+                <div
+                  key={event.id}
+                  className={`p-4 border rounded-lg transition-colors ${
+                    isSelected
+                      ? 'border-green-500 bg-green-50' 
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
                 <div className="flex items-center space-x-4">
                   {/* Checkbox */}
                   <button
