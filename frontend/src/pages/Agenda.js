@@ -94,6 +94,61 @@ export function Agenda() {
     }
   };
 
+  const handleOAuthCallback = async (code) => {
+    setLoading(true);
+    
+    try {
+      console.log('🔄 Processando callback OAuth com código:', code);
+      
+      const response = await fetch(`${BACKEND_URL}/api/calendar/auth`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: code,
+          redirect_uri: 'https://route-optimizer-19.preview.emergentagent.com/agenda'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro na autenticação');
+      }
+
+      const data = await response.json();
+      console.log('✅ Autenticação bem-sucedida:', data);
+
+      // Clean URL (remove query parameters)
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Update authentication status
+      setIsGoogleAuthenticated(true);
+      
+      // Load routes
+      await loadSavedRoutes();
+      
+      toast({
+        title: "Sucesso!",
+        description: "Google Calendar conectado com sucesso!",
+        variant: "default",
+      });
+      
+    } catch (error) {
+      console.error('Erro no callback OAuth:', error);
+      
+      // Clean URL even on error
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      toast({
+        title: "Erro!",
+        description: "Erro ao conectar com Google Calendar. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRouteSelect = async (route) => {
     setSelectedRoute(route);
     setSelectedStops(new Set());
