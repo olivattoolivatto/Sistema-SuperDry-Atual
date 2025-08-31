@@ -47,6 +47,13 @@ export function Agenda() {
     }
   }, []);
 
+  // Load calendar events when view or date changes
+  useEffect(() => {
+    if (isGoogleAuthenticated) {
+      loadCalendarEvents();
+    }
+  }, [currentDate, calendarView, isGoogleAuthenticated]);
+
   const loadSavedRoutes = async () => {
     try {
       const response = await routesApi.getSavedRoutes();
