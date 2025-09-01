@@ -906,15 +906,24 @@ export function Routes() {
       logAction('ROUTE_CREATED', { routeId, response: createResponse.data });
       
       // Add stops with priorities from prioritization list
+      console.log('🔨 ETAPA 2: Adicionando paradas...');
+      setDebugInfo(`Adicionando ${prioritizationItems.length} paradas...`);
+      
       const stopsData = prioritizationItems.map(item => ({
         budget_item_id: item.budget_item_id,
-        priority: item.priority
+        priority: item.priority || 'AUTOMATICA'
       }));
       
-      console.log('📍 Adicionando paradas:', stopsData);
+      console.log('📍 Dados das paradas:', stopsData);
       logAction('ADDING_STOPS', { routeId, stopsCount: stopsData.length, stops: stopsData });
+      
       const stopsResponse = await routesApi.addStops(routeId, stopsData);
       console.log('✅ Paradas adicionadas:', stopsResponse.data);
+      
+      if (!stopsResponse.data) {
+        throw new Error('Resposta inválida ao adicionar paradas');
+      }
+      
       logAction('STOPS_ADDED', { routeId, response: stopsResponse.data });
       
       // Optimize route based on selected type
