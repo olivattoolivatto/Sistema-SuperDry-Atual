@@ -290,23 +290,43 @@ export function Agenda() {
   };
 
   const moveStop = (stopId, direction) => {
-    const currentIndex = routeEvents.findIndex(event => event.id === stopId);
-    if (currentIndex === -1) return;
-    
-    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (newIndex < 0 || newIndex >= routeEvents.length) return;
+    console.log('🔄 Movendo stop:', stopId, 'direção:', direction);
     
     setRouteEvents(prevEvents => {
-      const newEvents = [...prevEvents];
-      // Swap elements preservando objetos originais
-      [newEvents[currentIndex], newEvents[newIndex]] = [newEvents[newIndex], newEvents[currentIndex]];
+      const currentIndex = prevEvents.findIndex(event => event.id === stopId);
       
-      // Update order_sequence and recalculate times preservando IDs originais
-      return newEvents.map((event, index) => ({
-        ...event, // Preservar todas as propriedades, especialmente o ID
+      if (currentIndex === -1) {
+        console.error('❌ Stop não encontrado:', stopId);
+        return prevEvents;
+      }
+      
+      const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      
+      if (newIndex < 0 || newIndex >= prevEvents.length) {
+        console.log('🚫 Movimento inválido. Índice fora dos limites:', newIndex);
+        return prevEvents;
+      }
+      
+      console.log(`📊 Movendo de posição ${currentIndex} para ${newIndex}`);
+      
+      // Criar cópia profunda do array
+      const newEvents = prevEvents.map(event => ({...event}));
+      
+      // Fazer swap dos elementos
+      const temp = newEvents[currentIndex];
+      newEvents[currentIndex] = newEvents[newIndex];
+      newEvents[newIndex] = temp;
+      
+      // Recalcular order_sequence e horários para TODOS os eventos
+      const updatedEvents = newEvents.map((event, index) => ({
+        ...event,
         order_sequence: index + 1,
         estimated_start_time: calculateEstimatedTimeByIndex(index, newEvents)
       }));
+      
+      console.log('✅ Eventos após movimento:', updatedEvents.map((e, i) => `${i}: ${e.client_name} (${e.id})`));
+      
+      return updatedEvents;
     });
   };
 
