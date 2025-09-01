@@ -373,7 +373,7 @@ export function Agenda() {
         const previousEvent = newEvents[i - 1];
         const previousEndTime = addMinutesToTime(
           previousEvent.estimated_start_time, 
-          previousEvent.duration + 15
+          previousEvent.duration
         );
         newEvents[i].estimated_start_time = previousEndTime;
       }
