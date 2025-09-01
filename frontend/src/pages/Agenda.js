@@ -426,7 +426,7 @@ export function Agenda() {
           const previousEvent = newEvents[i - 1];
           const previousEndTime = addMinutesToTime(
             previousEvent.estimated_start_time, 
-            previousEvent.duration + 15 // duração + 15min de deslocamento
+            previousEvent.duration
           );
           newEvents[i].estimated_start_time = previousEndTime;
         }
