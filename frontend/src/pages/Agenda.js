@@ -1282,10 +1282,18 @@ export function Agenda() {
 
                   return (
                     <div key={dayIndex} className="relative border-r border-gray-100 last:border-r-0">
-                      {/* Hour grid lines */}
-                      {Array.from({ length: 18 }, (_, index) => (
-                        <div key={index} className="h-10 border-b border-gray-100 last:border-b-0"></div>
-                      ))}
+                      {/* Half-hour grid lines with zebra effect */}
+                      {Array.from({ length: 36 }, (_, index) => {
+                        const isEven = index % 2 === 0;
+                        return (
+                          <div 
+                            key={index} 
+                            className={`h-8 border-b border-gray-100 last:border-b-0 ${
+                              isEven ? 'bg-gray-50' : 'bg-white'
+                            }`}
+                          ></div>
+                        );
+                      })}
 
                       {/* Events positioned absolutely */}
                       {positionedEvents.map((event, index) => {
@@ -1299,14 +1307,13 @@ export function Agenda() {
                         const endHour = eventEnd.getHours();
                         const endMinutes = eventEnd.getMinutes();
                         
-                        // Convert to grid position (relative to 07:00)
-                        const startPosition = ((startHour - 7 + (startHour < 7 ? 24 : 0)) * 60 + startMinutes) / 60;
-                        const endPosition = ((endHour - 7 + (endHour < 7 ? 24 : 0)) * 60 + endMinutes) / 60;
-                        const duration = endPosition - startPosition;
+                        // Convert to grid position (relative to 07:00, now in 30-minute intervals)
+                        const startTotalMinutes = (startHour - 7 + (startHour < 7 ? 24 : 0)) * 60 + startMinutes;
+                        const endTotalMinutes = (endHour - 7 + (endHour < 7 ? 24 : 0)) * 60 + endMinutes;
                         
-                        // Position in pixels (40px per hour)
-                        const top = startPosition * 40;
-                        const height = duration * 40;
+                        // Position in pixels (32px per 30 minutes = 64px per hour)
+                        const top = (startTotalMinutes / 30) * 32;
+                        const height = ((endTotalMinutes - startTotalMinutes) / 30) * 32;
                         
                         // Handle overlapping events
                         const leftPercent = (event.column / event.totalColumns) * 100;
