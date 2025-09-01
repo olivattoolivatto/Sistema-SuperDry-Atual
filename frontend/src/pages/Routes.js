@@ -1,17 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  MapPin, 
-  Truck, 
-  Bike, 
-  Play, 
-  Save, 
-  Edit3, 
-  Trash2,
-  Clock,
-  Route as RouteIcon,
+  Plus, 
+  Search, 
+  Edit2, 
+  Trash2, 
+  FileText,
+  Calculator,
+  User,
+  DollarSign,
+  Calendar,
+  Package,
+  MessageSquare,
+  MessageCircle,
+  Download,
   ChevronUp,
   ChevronDown,
-  RotateCcw
+  ArrowUpDown,
+  Truck,
+  Bike,
+  RouteIcon,
+  Play,
+  Clock
 } from 'lucide-react';
 import { toast } from '../hooks/use-toast';
 import { routesApi } from '../services/api';
