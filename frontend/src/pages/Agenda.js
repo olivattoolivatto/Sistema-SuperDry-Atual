@@ -268,13 +268,23 @@ export function Agenda() {
   };
 
   const toggleStopSelection = (stopId) => {
+    console.log('🔄 Toggle selection para ID:', stopId);
+    
     setSelectedStops(prevSelection => {
+      console.log('📊 Estado anterior:', Array.from(prevSelection));
+      
       const newSelection = new Set(prevSelection);
-      if (newSelection.has(stopId)) {
+      const isCurrentlySelected = newSelection.has(stopId);
+      
+      if (isCurrentlySelected) {
         newSelection.delete(stopId);
+        console.log('➖ Removendo seleção de:', stopId);
       } else {
         newSelection.add(stopId);
+        console.log('➕ Adicionando seleção de:', stopId);
       }
+      
+      console.log('📊 Nova seleção:', Array.from(newSelection));
       return newSelection;
     });
   };
