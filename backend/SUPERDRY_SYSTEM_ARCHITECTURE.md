@@ -19,7 +19,7 @@
 1. **✅ Painel Inicial** - Dashboard com resumos e estatísticas
 2. **✅ Clientes** - CRUD completo + busca híbrida + mini mapas + adição rápida
 3. **✅ Catálogo** - Serviços organizados por 11 categorias + tipos de medição + colunas ordenáveis + status padrão + duplicar e editar
-4. **✅ Orçamentos** - Core completo + itens + cálculos + medidas específicas + edição + preços editáveis + lançamento em lote
+4. **✅ Orçamentos** - Core completo + itens + cálculos + medidas específicas + edição + preços editáveis + lançamento em lote + agrupamento de itens
 5. **✅ WhatsApp** - Mensagens formatadas + deeplinks + medidas detalhadas
 6. **✅ PDF** - Geração com logo + textos de risco + seções numeradas
 7. **✅ Config. Orçamento** - 13 seções editáveis + formatação *negrito* _itálico_
