@@ -348,9 +348,12 @@ export function Agenda() {
   };
 
   const updateEventTime = (eventId, newTime) => {
+    console.log('🕒 Atualizando horário do evento:', eventId, 'para:', newTime);
+    
     setRouteEvents(prevEvents => {
       return prevEvents.map(event => {
         if (event.id === eventId) {
+          console.log('✅ Horário atualizado para evento:', event.client_name);
           return { ...event, estimated_start_time: newTime };
         }
         return event;
@@ -359,10 +362,13 @@ export function Agenda() {
   };
 
   const updateEventDuration = (eventId, newDuration) => {
+    console.log('⏱️ Atualizando duração do evento:', eventId, 'para:', newDuration);
+    
     setRouteEvents(prevEvents => {
       return prevEvents.map(event => {
         if (event.id === eventId) {
-          return { ...event, duration: parseInt(newDuration) };
+          console.log('✅ Duração atualizada para evento:', event.client_name, 'de', event.duration, 'para', newDuration);
+          return { ...event, duration: parseInt(newDuration) || 30 };
         }
         return event;
       });
