@@ -806,10 +806,11 @@ export function Agenda() {
           <div className="space-y-3">
             {routeEvents.map((event, index) => {
               const isSelected = selectedStops.has(event.id);
+              console.log(`🔍 Renderizando evento ${index}: ${event.id} (${event.client_name}) - Selecionado: ${isSelected} - Duração: ${event.duration}min`);
               
               return (
                 <div
-                  key={event.id}
+                  key={`event-${event.id}-${index}`} // Chave mais única
                   className={`p-4 border rounded-lg transition-colors ${
                     isSelected
                       ? 'border-green-500 bg-green-50' 
