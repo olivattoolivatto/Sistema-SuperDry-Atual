@@ -291,6 +291,7 @@ QUALQUER STATUS → CANCELADO PELO CLIENTE
 ```javascript
 {
   id: "RTE-000001",
+  alias: "string", // Descrição inteligente com bairros + timestamp
   vehicle_type: "CARRO" | "MOTO",
   start_datetime: datetime,
   items: ["ITM-0000001", "ITM-0000002"],
@@ -298,6 +299,7 @@ QUALQUER STATUS → CANCELADO PELO CLIENTE
   total_duration: int, // minutos
   total_distance: float, // km
   optimized: boolean,
+  route_type: "ROTA_CURTA" | "ROTA_EFICIENTE",
   created_at: datetime,
   updated_at: datetime
 }
