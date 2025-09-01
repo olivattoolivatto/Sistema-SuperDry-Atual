@@ -1236,7 +1236,7 @@ export function Agenda() {
               </div>
             </div>
             
-            {/* Grade de horários - das 07:00 às 00:00 */}
+            {/* Grade de horários - das 07:00 às 00:00 com intervalos de 30min */}
             <div className="max-h-96 overflow-y-auto relative">
               <div className={`grid ${
                 calendarView === 'week' ? 'grid-cols-8' : 
@@ -1245,11 +1245,20 @@ export function Agenda() {
               } relative`}>
                 {/* Coluna de horários */}
                 <div className="bg-gray-50 border-r border-gray-100">
-                  {Array.from({ length: 18 }, (_, index) => {
-                    const hour = (7 + index) % 24;
+                  {Array.from({ length: 36 }, (_, index) => {
+                    const totalMinutes = (7 * 60) + (index * 30); // Start at 07:00, increment by 30min
+                    const hour = Math.floor(totalMinutes / 60) % 24;
+                    const minute = totalMinutes % 60;
+                    const isEven = index % 2 === 0;
+                    
                     return (
-                      <div key={hour} className="p-2 text-xs text-gray-600 border-b border-gray-100 last:border-b-0 h-10 flex items-center">
-                        {hour.toString().padStart(2, '0')}:00
+                      <div 
+                        key={index} 
+                        className={`p-2 text-xs text-gray-600 border-b border-gray-100 last:border-b-0 h-8 flex items-center ${
+                          isEven ? 'bg-gray-50' : 'bg-white'
+                        }`}
+                      >
+                        {hour.toString().padStart(2, '0')}:{minute.toString().padStart(2, '0')}
                       </div>
                     );
                   })}
