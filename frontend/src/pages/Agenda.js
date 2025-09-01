@@ -966,12 +966,21 @@ export function Agenda() {
                     <div className="flex items-center space-x-2">
                       <Clock className="w-4 h-4 text-orange-600" />
                       <div className="space-y-1">
-                        <input
-                          type="time"
-                          value={event.estimated_start_time}
-                          onChange={(e) => updateEventTime(event.id, e.target.value)}
-                          className="text-sm font-medium text-gray-900 border border-gray-300 rounded px-2 py-1 w-20"
-                        />
+                        <div className="flex items-center space-x-1">
+                          <input
+                            type="time"
+                            value={event.estimated_start_time}
+                            onChange={(e) => updateEventTime(event.id, e.target.value)}
+                            className="text-sm font-medium text-gray-900 border border-gray-300 rounded px-2 py-1 w-20"
+                          />
+                          <button
+                            onClick={() => recalculateFromTimeChange(event.id)}
+                            className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors"
+                            title="Aplicar mudança de horário aos eventos seguintes"
+                          >
+                            Aplicar
+                          </button>
+                        </div>
                         <div className="flex items-center space-x-1">
                           <input
                             type="number"
