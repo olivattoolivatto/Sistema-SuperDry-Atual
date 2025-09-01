@@ -1817,6 +1817,8 @@ export function Budgets() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(!!preSelectedClient);
   const [editingBudget, setEditingBudget] = useState(null);
+  const [sortColumn, setSortColumn] = useState('created_at');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   useEffect(() => {
     loadBudgets();
