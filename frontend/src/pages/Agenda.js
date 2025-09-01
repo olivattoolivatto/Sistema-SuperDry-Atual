@@ -460,6 +460,47 @@ export function Agenda() {
     return `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}`;
   };
 
+  const resetAllTimes = () => {
+    console.log('🔄 Resetando todos os horários para sequência original');
+    
+    if (!selectedRoute || !routeEvents.length) {
+      toast({
+        title: "Aviso!",
+        description: "Selecione uma rota primeiro.",
+        variant: "default",
+      });
+      return;
+    }
+
+    setRouteEvents(prevEvents => {
+      console.log('📊 Resetando eventos:', prevEvents.length);
+      
+      // Recriar eventos com valores originais da rota
+      return prevEvents.map((event, index) => {
+        // Recalcular horário baseado na posição original
+        const originalStartTime = calculateEstimatedTimeByIndex(index, prevEvents);
+        
+        // Recalcular duração padrão baseada no service_status
+        const originalDuration = calculateDuration(event.service_status);
+        
+        console.log(`🔄 Resetando evento ${index + 1}: ${event.client_name} - Horário: ${originalStartTime}, Duração: ${originalDuration}min`);
+        
+        return {
+          ...event,
+          estimated_start_time: originalStartTime,
+          duration: originalDuration,
+          order_sequence: index + 1
+        };
+      });
+    });
+
+    toast({
+      title: "Reset Completo!",
+      description: "Todos os horários e durações foram restaurados para os valores originais da rota.",
+      variant: "default",
+    });
+  };
+
   const loadCalendarEvents = async (startDate = null, endDate = null) => {
     if (!isGoogleAuthenticated) return;
     
