@@ -887,7 +887,7 @@ export function Routes() {
       };
 
       console.log('📤 Enviando dados para criar rota:', routeData);
-      const createResponse = await routesApi.createRoute(routeData);
+      const createResponse = await routesApi.create(routeData);
       console.log('✅ Rota criada:', createResponse.data);
       const routeId = createResponse.data.id;
       logAction('ROUTE_CREATED', { routeId, response: createResponse.data });
@@ -900,20 +900,20 @@ export function Routes() {
       
       console.log('📍 Adicionando paradas:', stopsData);
       logAction('ADDING_STOPS', { routeId, stopsCount: stopsData.length, stops: stopsData });
-      const stopsResponse = await routesApi.updateRouteStops(routeId, stopsData);
+      const stopsResponse = await routesApi.addStops(routeId, stopsData);
       console.log('✅ Paradas adicionadas:', stopsResponse.data);
       logAction('STOPS_ADDED', { routeId, response: stopsResponse.data });
       
       // Optimize route based on selected type
       console.log(`⚡ Otimizando rota ${routeType}...`);
       logAction('OPTIMIZING_ROUTE', { routeId, routeType });
-      const optimizeResponse = await routesApi.optimizeRoute(routeId, { route_type: routeType });
+      const optimizeResponse = await routesApi.optimize(routeId, routeType);
       console.log('⚡ Resposta da otimização:', optimizeResponse.data);
       logAction('ROUTE_OPTIMIZED', { routeId, response: optimizeResponse.data });
       
       // Get optimized route details
       console.log('📋 Buscando detalhes da rota...');
-      const routeDetails = await routesApi.getRoute(routeId);
+      const routeDetails = await routesApi.get(routeId);
       console.log('📋 Detalhes da rota:', routeDetails.data);
       logAction('ROUTE_DETAILS_FETCHED', { routeId, details: routeDetails.data });
       
