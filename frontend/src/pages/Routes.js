@@ -975,6 +975,15 @@ export function Routes() {
       console.error('❌ ERRO NA OTIMIZAÇÃO:', error);
       console.error('Error details:', error.response?.data || error.message);
       console.error('Error code:', error.code);
+      console.error('Error stack:', error.stack);
+      
+      // Log detalhado do erro para debugging
+      console.log('🔍 DEBUG - Estado atual:');
+      console.log('- prioritizationItems:', prioritizationItems);
+      console.log('- currentVehicleType:', currentVehicleType);
+      console.log('- routeDate:', routeDate);
+      console.log('- routeTime:', routeTime);
+      console.log('- routeType:', routeType);
       
       let errorMessage = "Erro ao otimizar rota. Verifique o console para detalhes.";
       
@@ -983,14 +992,25 @@ export function Routes() {
         console.error('🕒 TIMEOUT ERROR: OSRM optimization took too long');
       } else if (error.response?.status === 500) {
         errorMessage = "Erro interno no servidor durante a otimização. Verifique se todos os endereços são válidos.";
+      } else if (error.response?.status === 400) {
+        errorMessage = `Erro de validação: ${error.response?.data?.detail || 'Dados inválidos'}`;
+      } else if (error.response?.status === 404) {
+        errorMessage = "Recurso não encontrado. Verifique se o item ainda existe.";
       }
       
+      // Log mais detalhado
       logAction('CALCULATE_ROUTE_ERROR', { 
         error: error.message, 
         routeType, 
         errorCode: error.code,
-        isTimeout: error.code === 'ECONNABORTED'
+        status: error.response?.status,
+        responseData: error.response?.data,
+        isTimeout: error.code === 'ECONNABORTED',
+        step: 'unknown' // Será atualizado conforme necessário
       });
+      
+      // Manter estado de erro visível por mais tempo
+      setDebugInfo(`ERRO: ${errorMessage} - ${new Date().toLocaleTimeString()}`);
       
       toast({
         title: "Erro!",
