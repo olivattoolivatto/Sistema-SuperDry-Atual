@@ -559,70 +559,88 @@ export function Agenda() {
   };
 
   const getGoogleCalendarColor = (event) => {
-    // Sistema de cores similar ao Google Calendar
-    
-    if (event.is_system_event !== false) {
-      // Eventos criados pelo sistema SuperDry - Azul (padrão Google)
-      return {
-        background: '#1a73e8',
-        border: '#1557b0',
+    // Mapeamento oficial das cores do Google Calendar
+    const googleCalendarColors = {
+      '1': { // Azul lavanda (padrão)
+        background: '#a4bdfc',
+        border: '#7986cb',
+        text: '#000000',
+        classes: 'border-l-blue-400'
+      },
+      '2': { // Verde sage
+        background: '#7ae7bf',
+        border: '#4caf50',
+        text: '#000000',
+        classes: 'border-l-green-400'
+      },
+      '3': { // Roxo uva
+        background: '#dbadff',
+        border: '#9c27b0',
+        text: '#000000',
+        classes: 'border-l-purple-400'
+      },
+      '4': { // Rosa flamingo
+        background: '#ff887c',
+        border: '#f44336',
+        text: '#000000',
+        classes: 'border-l-red-400'
+      },
+      '5': { // Amarelo banana
+        background: '#ffd8b1',
+        border: '#ff9800',
+        text: '#000000',
+        classes: 'border-l-yellow-400'
+      },
+      '6': { // Laranja tangerina
+        background: '#ffb74d',
+        border: '#ff5722',
+        text: '#000000',
+        classes: 'border-l-orange-400'
+      },
+      '7': { // Azul pavão
+        background: '#46d6db',
+        border: '#00bcd4',
+        text: '#000000',
+        classes: 'border-l-cyan-400'
+      },
+      '8': { // Cinza grafite
+        background: '#e1e1e1',
+        border: '#9e9e9e',
+        text: '#000000',
+        classes: 'border-l-gray-400'
+      },
+      '9': { // Azul cobalto
+        background: '#5484ed',
+        border: '#3f51b5',
         text: '#ffffff',
-        classes: 'border-l-blue-600'
-      };
-    }
-    
-    // Eventos externos - usar cores baseadas no conteúdo ou tipo
-    const summary = event.summary?.toLowerCase() || '';
-    
-    if (summary.includes('reunião') || summary.includes('meeting')) {
-      // Verde para reuniões
-      return {
-        background: '#0d7377',
-        border: '#0a5d61',
-        text: '#ffffff',
-        classes: 'border-l-green-700'
-      };
-    } else if (summary.includes('almoço') || summary.includes('lunch') || summary.includes('jantar')) {
-      // Laranja para refeições
-      return {
-        background: '#f57c00',
-        border: '#e65100',
-        text: '#ffffff',
-        classes: 'border-l-orange-600'
-      };
-    } else if (summary.includes('médico') || summary.includes('doctor') || summary.includes('consulta')) {
-      // Vermelho para médico/saúde
-      return {
-        background: '#d50000',
-        border: '#b71c1c',
-        text: '#ffffff',
-        classes: 'border-l-red-600'
-      };
-    } else if (summary.includes('pessoal') || summary.includes('family') || summary.includes('família')) {
-      // Roxo para pessoal/família
-      return {
-        background: '#8e24aa',
-        border: '#6a1b9a',
-        text: '#ffffff',
-        classes: 'border-l-purple-600'
-      };
-    } else if (summary.includes('viagem') || summary.includes('travel') || summary.includes('férias')) {
-      // Azul claro para viagens
-      return {
-        background: '#039be5',
-        border: '#0277bd',
-        text: '#ffffff',
-        classes: 'border-l-cyan-600'
-      };
-    } else {
-      // Padrão para outros eventos externos - Verde suave
-      return {
-        background: '#33b679',
-        border: '#2e7d32',
+        classes: 'border-l-indigo-500'
+      },
+      '10': { // Verde basil
+        background: '#51b749',
+        border: '#4caf50',
         text: '#ffffff',
         classes: 'border-l-green-600'
-      };
+      },
+      '11': { // Vermelho tomate
+        background: '#dc2127',
+        border: '#f44336',
+        text: '#ffffff',
+        classes: 'border-l-red-600'
+      }
+    };
+
+    // Usar cor da API do Google Calendar se disponível
+    if (event.color_id && googleCalendarColors[event.color_id]) {
+      return googleCalendarColors[event.color_id];
     }
+
+    // Fallback: eventos do sistema SuperDry (azul)
+    if (event.is_system_event !== false) {
+      return googleCalendarColors['1']; // Azul lavanda
+    }
+
+    // Fallback padrão para eventos sem cor definida
+    return googleCalendarColors['2']; // Verde sage
   };
 
   const handleEventDoubleClick = async (event) => {
