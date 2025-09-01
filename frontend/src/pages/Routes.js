@@ -1024,15 +1024,54 @@ export function Routes() {
     }
 
     try {
-      await loadSavedRoutes(); // Refresh saved routes
-      setOptimizedRoute(null); // Clear current optimization
+      console.log('💾 Salvando rota otimizada...');
+      
+      // Determine the alias to use: custom or default
+      const finalAlias = routeAlias.trim() || generateRouteAlias(routeDate, routeTime, currentVehicleType, optimizedRoute.stops?.length || 0);
+      
+      // Create route data with alias
+      const routeData = {
+        vehicle_type: currentVehicleType,
+        planned_date: routeDate,
+        planned_start_time: routeTime,
+        alias: finalAlias,
+        stops: []
+      };
+
+      console.log('📤 Enviando dados para salvar rota:', routeData);
+      const createResponse = await routesApi.create(routeData);
+      console.log('✅ Rota criada:', createResponse.data);
+      const routeId = createResponse.data.id;
+      
+      // Add stops from optimized route
+      const stopsData = optimizedRoute.stops.map(stop => ({
+        budget_item_id: stop.budget_item_id,
+        priority: stop.priority || 'AUTOMATICA'
+      }));
+      
+      console.log('📍 Adicionando paradas:', stopsData);
+      await routesApi.addStops(routeId, stopsData);
+      
+      // Optimize the route
+      console.log('⚡ Otimizando rota salva...');
+      await routesApi.optimize(routeId, routeType);
+      
+      // Refresh saved routes list
+      await loadSavedRoutes();
+      
+      // Clear form
+      setOptimizedRoute(null);
       setStopPriorities({});
+      setRouteAlias(''); // Clear alias field
       
       toast({
         title: "Sucesso!",
-        description: "Rota salva com sucesso!",
+        description: `Rota "${finalAlias}" salva com sucesso!`,
         variant: "default",
       });
+
+      console.log('✅ Rota salva e adicionada à lista');
+      
     } catch (error) {
       console.error('Erro ao salvar rota:', error);
       toast({
