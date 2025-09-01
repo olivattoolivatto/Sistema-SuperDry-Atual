@@ -280,6 +280,7 @@ QUALQUER STATUS → CANCELADO PELO CLIENTE
   execution_location: enum,
   cost_price: float,
   sale_price: float,
+  default_service_status: enum, // Status inicial para novos itens
   is_active: boolean,
   created_at: datetime,
   updated_at: datetime
