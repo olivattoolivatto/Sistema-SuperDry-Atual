@@ -375,6 +375,62 @@ export function Agenda() {
     });
   };
 
+  const recalculateSubsequentTimes = (eventId) => {
+    console.log('🔄 Recalculando horários subsequentes a partir do evento:', eventId);
+    
+    setRouteEvents(prevEvents => {
+      const eventIndex = prevEvents.findIndex(event => event.id === eventId);
+      if (eventIndex === -1) {
+        console.error('❌ Evento não encontrado para recálculo:', eventId);
+        return prevEvents;
+      }
+
+      const newEvents = [...prevEvents];
+      
+      // Recalcular horários de todos os eventos a partir do modificado
+      for (let i = eventIndex; i < newEvents.length; i++) {
+        if (i === 0) {
+          // Primeiro evento mantém horário base da rota
+          if (selectedRoute) {
+            newEvents[i].estimated_start_time = selectedRoute.planned_start_time || '08:00';
+          }
+        } else {
+          // Eventos subsequentes calculam baseado no anterior
+          const previousEvent = newEvents[i - 1];
+          const previousEndTime = addMinutesToTime(
+            previousEvent.estimated_start_time, 
+            previousEvent.duration + 15 // duração + 15min de deslocamento
+          );
+          newEvents[i].estimated_start_time = previousEndTime;
+        }
+      }
+
+      console.log('✅ Horários recalculados:', newEvents.map(e => ({
+        client: e.client_name,
+        start: e.estimated_start_time,
+        duration: e.duration
+      })));
+
+      return newEvents;
+    });
+
+    toast({
+      title: "Horários Atualizados!",
+      description: "Os horários dos eventos subsequentes foram ajustados automaticamente.",
+      variant: "default",
+    });
+  };
+
+  const addMinutesToTime = (timeString, minutes) => {
+    const [hours, mins] = timeString.split(':').map(Number);
+    const totalMinutes = hours * 60 + mins + minutes;
+    
+    const newHours = Math.floor(totalMinutes / 60) % 24;
+    const newMins = totalMinutes % 60;
+    
+    return `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}`;
+  };
+
   const loadCalendarEvents = async (startDate = null, endDate = null) => {
     if (!isGoogleAuthenticated) return;
     
