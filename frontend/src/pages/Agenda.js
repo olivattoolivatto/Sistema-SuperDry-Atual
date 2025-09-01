@@ -250,7 +250,6 @@ export function Agenda() {
       const stop = route.stops[i];
       const duration = calculateDuration(stop.service_status);
       currentTime = new Date(currentTime.getTime() + duration * 60000); // Convert to milliseconds
-      currentTime = new Date(currentTime.getTime() + 15 * 60000); // Add 15 min travel time
     }
     
     return currentTime.toTimeString().slice(0, 5); // Return HH:MM format
