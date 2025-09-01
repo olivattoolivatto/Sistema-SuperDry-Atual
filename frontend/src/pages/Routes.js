@@ -172,6 +172,7 @@ export function Routes() {
   const [routeDate, setRouteDate] = useState(suggestedDate);
   const [routeTime, setRouteTime] = useState(suggestedTime);
   const [currentVehicleType, setCurrentVehicleType] = useState('CARRO');
+  const [routeAlias, setRouteAlias] = useState('');
   const [routeType, setRouteType] = useState('CURTA'); // New: CURTA or EFICIENTE
   
   // Map state
