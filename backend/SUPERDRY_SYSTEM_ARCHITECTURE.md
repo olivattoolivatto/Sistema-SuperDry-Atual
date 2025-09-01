@@ -315,10 +315,32 @@ QUALQUER STATUS → CANCELADO PELO CLIENTE
   address: "string",
   latitude: float,
   longitude: float,
-  priority: "PRIMEIRA" | "AUTOMATICA" | "ULTIMA",
+  priority: "PRIMEIRA" | "AUTOMATICA" | "ULTIMA",  
   estimated_duration: int, // minutos
+  estimated_start_time: "HH:MM", // Horário estimado de chegada
   order_sequence: int,
   status: enum,
+  created_at: datetime
+}
+```
+
+### Evento Google Calendar
+```javascript
+{
+  id: "google-calendar-event-id",
+  summary: "string", // Título do evento
+  description: "string", // Detalhes do cliente + serviços
+  location: "string", // Endereço completo
+  start: {
+    dateTime: "2025-06-XX T10:00:00-03:00", // ISO format
+    timeZone: "America/Cuiaba"
+  },
+  end: {
+    dateTime: "2025-06-XX T11:00:00-03:00", // ISO format  
+    timeZone: "America/Cuiaba"
+  },
+  colorId: "1", // 1=azul (sistema), 2=verde (externo)
+  route_id: "RTE-000001", // Referência à rota (eventos do sistema)
   created_at: datetime
 }
 ```
