@@ -1233,43 +1233,58 @@ export function Agenda() {
             </div>
           </div>
           
-          {/* Legenda de cores */}
+          {/* Legenda de cores do Google Calendar */}
           <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
-            <h4 className="text-sm font-medium text-gray-900 mb-3">Legenda de Cores</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Cores do Google Calendar</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 text-xs">
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#1a73e8' }}></div>
-                <span className="text-gray-700">SuperDry (Sistema)</span>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#a4bdfc' }}></div>
+                <span className="text-gray-700">SuperDry (Azul)</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#33b679' }}></div>
-                <span className="text-gray-700">Eventos Gerais</span>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#7ae7bf' }}></div>
+                <span className="text-gray-700">Verde Sage</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#0d7377' }}></div>
-                <span className="text-gray-700">Reuniões</span>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#dbadff' }}></div>
+                <span className="text-gray-700">Roxo Uva</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f57c00' }}></div>
-                <span className="text-gray-700">Refeições</span>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ff887c' }}></div>
+                <span className="text-gray-700">Rosa Flamingo</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#d50000' }}></div>
-                <span className="text-gray-700">Médico/Saúde</span>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffd8b1' }}></div>
+                <span className="text-gray-700">Amarelo Banana</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#8e24aa' }}></div>
-                <span className="text-gray-700">Pessoal/Família</span>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffb74d' }}></div>
+                <span className="text-gray-700">Laranja</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#039be5' }}></div>
-                <span className="text-gray-700">Viagens</span>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#46d6db' }}></div>
+                <span className="text-gray-700">Azul Pavão</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded bg-gradient-to-r from-blue-500 to-green-500"></div>
-                <span className="text-gray-700">Outros</span>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#e1e1e1' }}></div>
+                <span className="text-gray-700">Cinza</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#5484ed' }}></div>
+                <span className="text-gray-700">Azul Cobalto</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#51b749' }}></div>
+                <span className="text-gray-700">Verde Basil</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#dc2127' }}></div>
+                <span className="text-gray-700">Vermelho</span>
               </div>
             </div>
+            <p className="text-xs text-gray-500 mt-2">
+              * As cores dos eventos correspondem às configurações definidas no seu Google Calendar
+            </p>
           </div>
 
           {calendarEvents.length === 0 && (
