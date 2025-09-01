@@ -435,12 +435,18 @@ Marcos Anthonio (10% comissão)
 ## 📱 APIS E INTEGRAÇÕES EXTERNAS
 
 ### Google Cloud APIs Habilitadas
-- **Maps JavaScript API** - Exibição de mapas
-- **Places API** - Busca de endereços  
+- **Maps JavaScript API** - Exibição de mapas interativos
+- **Places API** - Busca de endereços com autocomplete
 - **Geocoding API** - Conversão endereço ↔ coordenadas
-- **Directions API** - Cálculo de rotas otimizadas
-- **Distance Matrix API** - Cálculo de distâncias
-- **Google Calendar API** - Integração com agenda
+- **Google Calendar API** - Integração OAuth2 completa + CRUD eventos
+- **OSRM API** - Open Source Routing Machine para otimização de rotas
+
+### Configurações OAuth2 Google Calendar
+- **Client ID**: Configurado em GOOGLE_CLIENT_ID (.env)
+- **Client Secret**: Configurado em GOOGLE_CLIENT_SECRET (.env)  
+- **Redirect URI**: http://localhost:3000/agenda (desenvolvimento)
+- **Scopes**: https://www.googleapis.com/auth/calendar
+- **Tokens**: Armazenados de forma segura no backend
 
 ### Chaves API
 - **Principal:** AIzaSyBQPia_xVeD9jqnP9kWyi-w66qsLDqy_8U
