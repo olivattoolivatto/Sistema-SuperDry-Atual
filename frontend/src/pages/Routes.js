@@ -1268,8 +1268,9 @@ export function Routes() {
           <table className="min-w-full table-auto">
             <thead>
               <tr className="bg-gray-50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Selecionar Veículo
+                <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20 sm:w-auto">
+                  <span className="hidden sm:inline">Selecionar Veículo</span>
+                  <span className="sm:hidden">Veículo</span>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden">
                   Selecionar
