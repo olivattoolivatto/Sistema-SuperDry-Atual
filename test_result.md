@@ -179,6 +179,9 @@ backend:
         -working: true
         -agent: "testing"
         -comment: "✅ TESTED: PUT /api/routes/{route_id}/stops endpoint working perfectly. Successfully added 3 stops to route with different priorities (PRIMEIRA, AUTOMATICA, ULTIMA). Stop data properly populated with client info, service details, and estimated durations."
+        -working: true
+        -agent: "testing"
+        -comment: "🔍 422 ERROR INVESTIGATION COMPLETED: Identified exact causes of 422 Unprocessable Entity error. ✅ BACKEND WORKING CORRECTLY: The endpoint expects List[dict] format: [{budget_item_id: 'ITM-XXX', priority: 'AUTOMATICA'}]. ❌ 422 ERROR CAUSES: 1) Frontend sending object instead of array: {budget_item_id: 'ITM-XXX'} → 422 'Input should be a valid list', 2) Invalid priority values (not PRIMEIRA/AUTOMATICA/ULTIMA) → 400 error, 3) Wrong data types. ✅ CORRECT FORMAT: Frontend must send array: [{budget_item_id: 'ITM-0000001', priority: 'AUTOMATICA'}]. The backend API is fully functional - issue is in frontend data formatting."
 
   - task: "Routes API - Route Optimization CURTA"
     implemented: true
