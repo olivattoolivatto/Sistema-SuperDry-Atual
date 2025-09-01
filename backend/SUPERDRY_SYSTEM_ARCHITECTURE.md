@@ -38,6 +38,82 @@
 
 ---
 
+## 🚀 IMPLEMENTAÇÕES RECENTES - DETALHAMENTO FASE 2
+
+### 📍 MÓDULO ROTAS - FUNCIONALIDADES IMPLEMENTADAS
+
+#### Interface de 5 Seções
+1. **Serviços Disponíveis** - Lista itens com status RETIRAR/EXECUTAR NO LOCAL/CLIENTE_TROUXE
+2. **Rota Carro** - Seleção de itens para veículo tipo CARRO
+3. **Rota Moto** - Seleção de itens para veículo tipo MOTO  
+4. **Priorização de Rota** - Controle de sequência (PRIMEIRA/AUTOMÁTICA/ÚLTIMA)
+5. **Visualizar e Salvar** - Mapa otimizado + resumo + persistência
+
+#### Funcionalidades Técnicas
+- ✅ **Validação de Cliente Completo** - Verifica dados obrigatórios antes da rota
+- ✅ **Otimização OSRM** - Cálculo de rota mais eficiente com timeout de 60s
+- ✅ **Loading Modal** - Feedback visual durante otimização 
+- ✅ **Mapa Interativo** - Leaflet + markers personalizados por tipo
+- ✅ **IDs Sequenciais** - RTE-000000 para rotas, STP-000000 para paradas
+- ✅ **Alias Inteligente** - Descrições com bairros + timestamps
+- ✅ **Durações Padrão** - 30min (RETIRAR/ENTREGAR), 120min (EXECUTAR NO LOCAL)
+- ✅ **Merge de Paradas** - +60min para múltiplos itens no mesmo endereço
+- ✅ **Persistência Completa** - Salvamento de rotas otimizadas no MongoDB
+
+### 📅 MÓDULO AGENDA - INTEGRAÇÃO GOOGLE CALENDAR
+
+#### OAuth2 Flow Completo
+- ✅ **Autenticação Google** - Flow OAuth2 com redirect para /agenda  
+- ✅ **Gerenciamento de Tokens** - Refresh automático + persistência segura
+- ✅ **Status de Conexão** - Verificação visual do estado da integração
+
+#### Gestão de Eventos
+- ✅ **Criação Automática** - Eventos baseados em rotas salvas
+- ✅ **Visualização Completa** - Lista de rotas salvas + eventos associados
+- ✅ **Edição Individual** - Horário e duração de cada evento independente
+- ✅ **Reordenação Manual** - Botões up/down para qualquer posição na lista
+- ✅ **Ajuste Proporcional** - Cascata de horários ao alterar duração/tempo
+- ✅ **Reset de Horários** - Volta à sequência original da rota
+
+#### Calendar Grid
+- ✅ **Múltiplas Visualizações** - Dia, 3 dias, semana
+- ✅ **Navegação de Datas** - Controles anteriores/próximos
+- ✅ **Horário Comercial** - Grade de 07:00 às 00:00  
+- ✅ **Todos os Eventos** - Exibe eventos do sistema + externos do Google
+- ✅ **Tema Google-like** - Cores diferenciadas (azul=sistema, verde=externo)
+- ✅ **Edição Completa** - Double-click para editar título, descrição, local, datas
+- ✅ **Exclusão Confirmada** - Modal de confirmação para delete
+
+#### Correções de Bugs Críticos
+- ✅ **IDs Únicos** - Timestamps + route IDs para evitar conflitos
+- ✅ **Deep Copies** - JSON parse/stringify para evitar referências compartilhadas  
+- ✅ **Seleção Individual** - Fix no toggle de seleção de eventos
+- ✅ **Reordenação Universal** - Permite mover qualquer evento para qualquer posição
+- ✅ **Edição Independente** - Cada evento mantém duração/horário próprio
+
+### 🛒 MELHORIAS CATÁLOGO + ORÇAMENTOS
+
+#### Catálogo - Novas Funcionalidades
+- ✅ **Colunas Ordenáveis** - Sort por nome, categoria, preço, status
+- ✅ **Reordenação de Colunas** - "Ações" na primeira posição
+- ✅ **Status Padrão** - Campo `default_service_status` para novos itens
+- ✅ **Duplicar e Editar** - Copia serviço + "(Cópia)" no nome + abre edição
+- ✅ **Status "Situação"** - Renomeação da coluna is_active
+
+#### Orçamentos - Funcionalidades Avançadas  
+- ✅ **Preços Editáveis** - unit_price modificável na adição/edição de itens
+- ✅ **Lançamento em Lote** - Seleção múltipla de serviços com quantidades
+- ✅ **Medidas Padrão** - area_m2=1 para itens em lote
+- ✅ **Agrupamento de Itens** - Exibição "Tapete (3un) R$108,00" nos cards
+- ✅ **Fix service_status** - Correção de status baseado no default_service_status
+
+#### Migrações de Dados
+- ✅ **Migração Serviços** - Endpoint para adicionar default_service_status em serviços existentes
+- ✅ **Correção Itens** - Fix de status em itens baseado no serviço correspondente
+- ✅ **Fallback Logic** - Tratamento para serviços sem default_service_status
+
+---
+
 ## 🔗 FLUXO PRINCIPAL DE DADOS
 
 ```
