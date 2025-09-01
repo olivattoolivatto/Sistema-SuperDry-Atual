@@ -558,6 +558,68 @@ export function Agenda() {
     setCurrentDate(newDate);
   };
 
+  const calculateEventPositions = (events) => {
+    if (!events.length) return [];
+
+    // Sort events by start time
+    const sortedEvents = [...events].sort((a, b) => {
+      return new Date(a.start_datetime) - new Date(b.start_datetime);
+    });
+
+    // Calculate overlaps and assign columns
+    const positionedEvents = [];
+    
+    for (let i = 0; i < sortedEvents.length; i++) {
+      const currentEvent = sortedEvents[i];
+      const currentStart = new Date(currentEvent.start_datetime);
+      const currentEnd = new Date(currentEvent.end_datetime);
+      
+      // Find overlapping events that were already positioned
+      const overlappingEvents = positionedEvents.filter(positioned => {
+        const positionedStart = new Date(positioned.start_datetime);
+        const positionedEnd = new Date(positioned.end_datetime);
+        
+        // Check if events overlap
+        return (currentStart < positionedEnd && currentEnd > positionedStart);
+      });
+
+      // Find the first available column
+      const usedColumns = overlappingEvents.map(e => e.column);
+      let column = 0;
+      while (usedColumns.includes(column)) {
+        column++;
+      }
+
+      // Add positioned event
+      const positionedEvent = {
+        ...currentEvent,
+        column: column,
+        totalColumns: Math.max(column + 1, ...overlappingEvents.map(e => e.totalColumns || 1))
+      };
+
+      positionedEvents.push(positionedEvent);
+
+      // Update totalColumns for all overlapping events
+      overlappingEvents.forEach(overlapping => {
+        overlapping.totalColumns = Math.max(overlapping.totalColumns || 1, column + 1);
+      });
+
+      // Update totalColumns for current event group
+      const groupEvents = positionedEvents.filter(positioned => {
+        const positionedStart = new Date(positioned.start_datetime);
+        const positionedEnd = new Date(positioned.end_datetime);
+        return (currentStart < positionedEnd && currentEnd > positionedStart);
+      });
+
+      const maxColumns = Math.max(...groupEvents.map(e => e.totalColumns || 1));
+      groupEvents.forEach(event => {
+        event.totalColumns = maxColumns;
+      });
+    }
+
+    return positionedEvents;
+  };
+
   const getGoogleCalendarColor = (event) => {
     // Mapeamento oficial das cores do Google Calendar
     const googleCalendarColors = {
