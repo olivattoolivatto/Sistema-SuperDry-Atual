@@ -18,7 +18,7 @@
 ### ✅ FASE 1 COMPLETA (8 módulos)
 1. **✅ Painel Inicial** - Dashboard com resumos e estatísticas
 2. **✅ Clientes** - CRUD completo + busca híbrida + mini mapas + adição rápida
-3. **✅ Catálogo** - Serviços organizados por 11 categorias + tipos de medição + colunas ordenáveis + status padrão
+3. **✅ Catálogo** - Serviços organizados por 11 categorias + tipos de medição + colunas ordenáveis + status padrão + duplicar e editar
 4. **✅ Orçamentos** - Core completo + itens + cálculos + medidas específicas + edição + preços editáveis + lançamento em lote
 5. **✅ WhatsApp** - Mensagens formatadas + deeplinks + medidas detalhadas
 6. **✅ PDF** - Geração com logo + textos de risco + seções numeradas
