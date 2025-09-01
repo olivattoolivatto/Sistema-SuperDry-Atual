@@ -1300,6 +1300,126 @@ class ServiceStatusBugTester:
         
         return True
 
+    def investigate_route_bug(self):
+        """Investigate the specific route bug reported by user"""
+        print("🔍 INVESTIGATING ROUTE BUG - USER REPORT")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Focus: Routes screen empty, no available items for routes")
+        print("=" * 80)
+        
+        # Test 1: Check /api/budget-items/available-for-routes endpoint
+        print("\n1️⃣ TESTING /api/budget-items/available-for-routes ENDPOINT:")
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            data = response['data']
+            available_items = data.get('available_items', [])
+            
+            print(f"   📊 Status Code: {response['status_code']}")
+            print(f"   📋 Available Items Count: {len(available_items)}")
+            
+            if len(available_items) == 0:
+                self.log_test("Route Bug Investigation", False, 
+                            "❌ CONFIRMED BUG: No available items found - this explains empty Routes screen")
+                
+                # Investigate why no items are available
+                print("\n🔍 INVESTIGATING WHY NO ITEMS ARE AVAILABLE:")
+                
+                # Check if there are any budgets at all
+                budgets_response = self.make_request('GET', '/budgets')
+                if budgets_response['success']:
+                    budgets = budgets_response['data']
+                    print(f"   📋 Total Budgets in System: {len(budgets)}")
+                    
+                    if len(budgets) == 0:
+                        self.log_test("Route Bug Root Cause", True, 
+                                    "🎯 ROOT CAUSE: No budgets exist in system")
+                        return "NO_BUDGETS"
+                    else:
+                        # Check budget items and their statuses
+                        items_with_route_status = 0
+                        items_without_address = 0
+                        total_items = 0
+                        
+                        for budget in budgets:
+                            items = budget.get('items', [])
+                            total_items += len(items)
+                            
+                            for item in items:
+                                status = item.get('status')
+                                if status in ['RETIRAR', 'EXECUTAR_NO_LOCAL', 'ENTREGAR']:
+                                    items_with_route_status += 1
+                        
+                        print(f"   📊 Total Budget Items: {total_items}")
+                        print(f"   📊 Items with Route-eligible Status: {items_with_route_status}")
+                        
+                        if items_with_route_status == 0:
+                            self.log_test("Route Bug Root Cause", True, 
+                                        "🎯 ROOT CAUSE: No budget items have route-eligible status (RETIRAR, EXECUTAR_NO_LOCAL, ENTREGAR)")
+                            return "NO_ROUTE_STATUS_ITEMS"
+                        else:
+                            # Check clients with addresses
+                            clients_response = self.make_request('GET', '/clients')
+                            if clients_response['success']:
+                                clients = clients_response['data']
+                                clients_with_coords = 0
+                                
+                                for client in clients:
+                                    address = client.get('address', {})
+                                    if address.get('latitude') and address.get('longitude'):
+                                        clients_with_coords += 1
+                                
+                                print(f"   📊 Total Clients: {len(clients)}")
+                                print(f"   📊 Clients with GPS Coordinates: {clients_with_coords}")
+                                
+                                if clients_with_coords == 0:
+                                    self.log_test("Route Bug Root Cause", True, 
+                                                "🎯 ROOT CAUSE: No clients have GPS coordinates in their addresses")
+                                    return "NO_CLIENT_COORDINATES"
+                                else:
+                                    self.log_test("Route Bug Root Cause", False, 
+                                                "❓ UNKNOWN: Items exist with route status and clients have coordinates, but endpoint returns empty")
+                                    return "UNKNOWN_ISSUE"
+            else:
+                self.log_test("Route Bug Investigation", True, 
+                            f"✅ Available items found: {len(available_items)} - Bug may be frontend-related")
+                
+                # Show sample of available items
+                print("\n📋 SAMPLE AVAILABLE ITEMS:")
+                for i, item in enumerate(available_items[:3]):
+                    print(f"   {i+1}. Client: {item.get('client_name')} | Status: {item.get('status')} | Service: {item.get('service_name')}")
+                
+                return "ITEMS_AVAILABLE"
+        else:
+            self.log_test("Route Bug Investigation", False, 
+                        f"❌ ENDPOINT ERROR: {response['status_code']} - {response['data']}")
+            return "ENDPOINT_ERROR"
+        
+        # Test 2: Try creating a simple route to verify API functionality
+        print("\n2️⃣ TESTING ROUTE CREATION API:")
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2024-12-20",
+            "planned_start_time": "08:00"
+        }
+        
+        route_response = self.make_request('POST', '/routes', route_data)
+        if route_response['success']:
+            route_id = route_response['data']['id']
+            self.created_resources['routes'].append(route_id)
+            self.log_test("Route Creation Test", True, 
+                        f"✅ Route creation API working: {route_id}")
+        else:
+            self.log_test("Route Creation Test", False, 
+                        f"❌ Route creation failed: {route_response['data']}")
+        
+        # Cleanup
+        self.cleanup_test_data()
+        
+        # Summary
+        self.print_summary()
+        
+        return True
+
 if __name__ == "__main__":
     # Check which tests to run based on command line arguments
     if len(sys.argv) > 1:
@@ -1311,6 +1431,10 @@ if __name__ == "__main__":
             print("🔄 Running SERVICE DUPLICATION TESTS only")
             tester = ServiceStatusBugTester()
             success = tester.run_service_duplication_tests()
+        elif sys.argv[1] == "--route-bug":
+            print("🔍 Running ROUTE BUG INVESTIGATION only")
+            tester = ServiceStatusBugTester()
+            success = tester.investigate_route_bug()
         else:
             print("🚀 Running FULL ROUTES API TESTS")
             tester = ServiceStatusBugTester()
