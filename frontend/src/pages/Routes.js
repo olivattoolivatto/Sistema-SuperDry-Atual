@@ -1292,21 +1292,21 @@ export function Routes() {
             <tbody className="bg-white divide-y divide-gray-200">
               {availableItems.map((item, index) => (
                 <tr key={`available-${item.budget_item_id}-${index}`} className="hover:bg-gray-50">
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="flex space-x-2">
+                  <td className="px-2 py-4 whitespace-nowrap w-20 sm:w-auto">
+                    <div className="flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-2">
                       <button
                         onClick={() => handleVehicleAssignment(item, 'CARRO')}
-                        className="inline-flex items-center px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200"
+                        className="inline-flex items-center justify-center px-2 sm:px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200 min-w-0"
                       >
-                        <Truck className="w-3 h-3 mr-1" />
-                        Carro
+                        <Truck className="w-3 h-3 sm:mr-1" />
+                        <span className="hidden sm:inline ml-1">Carro</span>
                       </button>
                       <button
                         onClick={() => handleVehicleAssignment(item, 'MOTO')}
-                        className="inline-flex items-center px-3 py-1 text-xs bg-green-100 text-green-800 rounded-full hover:bg-green-200"
+                        className="inline-flex items-center justify-center px-2 sm:px-3 py-1 text-xs bg-green-100 text-green-800 rounded-full hover:bg-green-200 min-w-0"
                       >
-                        <Bike className="w-3 h-3 mr-1" />
-                        Moto
+                        <Bike className="w-3 h-3 sm:mr-1" />
+                        <span className="hidden sm:inline ml-1">Moto</span>
                       </button>
                     </div>
                   </td>
