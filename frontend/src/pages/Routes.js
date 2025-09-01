@@ -943,17 +943,37 @@ export function Routes() {
       logAction('ROUTE_OPTIMIZED', { routeId, response: optimizeResponse.data });
       
       // Get optimized route details
-      console.log('📋 Buscando detalhes da rota...');
+      console.log('🔨 ETAPA 4: Buscando detalhes da rota otimizada...');
+      setDebugInfo(`Carregando detalhes da rota otimizada...`);
+      
+      console.log('📋 Buscando detalhes da rota:', routeId);
       const routeDetails = await routesApi.get(routeId);
-      console.log('📋 Detalhes da rota:', routeDetails.data);
+      console.log('📋 Detalhes recebidos:', routeDetails.data);
+      
+      if (!routeDetails.data) {
+        throw new Error('Detalhes da rota não encontrados');
+      }
+      
       logAction('ROUTE_DETAILS_FETCHED', { routeId, details: routeDetails.data });
       
       // CRITICAL: Set the optimized route data
-      console.log('💾 Definindo optimizedRoute state...');
-      console.log('💾 Dados recebidos:', routeDetails.data);
+      console.log('💾 ETAPA 5: Definindo optimizedRoute state...');
+      console.log('💾 Dados que serão definidos:', routeDetails.data);
+      console.log('💾 Número de paradas:', routeDetails.data.stops?.length || 0);
+      
+      // Verificar se os dados são válidos antes de definir
+      if (!routeDetails.data.stops || routeDetails.data.stops.length === 0) {
+        console.warn('⚠️ AVISO: Rota sem paradas ou paradas inválidas');
+      }
+      
       setOptimizedRoute(routeDetails.data);
-      setDebugInfo(`Rota ${routeId} otimizada às ${new Date().toLocaleTimeString()} - ${routeDetails.data.stops?.length || 0} paradas - ${routeDetails.data.total_distance || '0'} km - ${routeDetails.data.total_duration || '0'} min`);
-      console.log('💾 optimizedRoute definido!');
+      
+      const successInfo = `Rota ${routeId} otimizada às ${new Date().toLocaleTimeString()} - ${routeDetails.data.stops?.length || 0} paradas - ${routeDetails.data.total_distance || '0'} km - ${routeDetails.data.total_duration || '0'} min`;
+      setDebugInfo(successInfo);
+      
+      console.log('💾 optimizedRoute definido com sucesso!');
+      console.log('💾 Estado atual optimizedRoute:', routeDetails.data);
+      
       logAction('OPTIMIZED_ROUTE_STATE_SET', { 
         routeId, 
         stopsCount: routeDetails.data.stops?.length || 0,
