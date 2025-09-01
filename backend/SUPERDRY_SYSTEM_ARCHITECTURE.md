@@ -519,11 +519,20 @@ const validateClientForRoute = (client) => {
 2. **Status redundantes:** Esclarecido uso de ENTREGUE/BUSCOU e COLETADO/CLIENTE TROUXE
 3. **WhatsApp sem API:** Solução por deeplinks aprovada
 
+### Correções Críticas de Bugs - Agenda
+1. **Bug de Seleção de Eventos** - IDs únicos com timestamps resolveram conflitos
+2. **Bug de Reordenação** - Lógica moveStop reescrita para qualquer posição  
+3. **Bug de Edição Simultânea** - Deep copies previnem referências compartilhadas
+4. **Bug de Estado React** - Callback em setState para reatividade correta
+5. **Bug de Conversão** - Number() explícito para valores de duração
+
 ### Performance e Escalabilidade
 - Paginação em listas (10 itens por scroll)
 - Índices em campos de busca frequente
 - Cache de cálculos complexos de rota
 - Otimização de queries MongoDB
+- Timeout de 60s para otimização OSRM
+- Loading modals para feedback visual
 
 ---
 
