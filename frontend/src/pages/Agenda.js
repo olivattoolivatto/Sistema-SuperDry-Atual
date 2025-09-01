@@ -173,34 +173,68 @@ export function Agenda() {
   };
 
   const handleRouteSelect = async (route) => {
+    console.log('🔄 Selecionando rota:', route.id, 'com', route.stops?.length, 'stops');
     setSelectedRoute(route);
     
-    // IMPORTANTE: Limpar seleções antes de criar novos eventos
+    // CRÍTICO: Limpar seleções e eventos anteriores
     setSelectedStops(new Set());
+    setRouteEvents([]);
     
-    // Transform route stops into event format
-    const events = route.stops?.map((stop, index) => {
-      // Garantir ID único e válido
-      const eventId = stop.id || `${route.id}-stop-${index}`;
+    if (!route.stops || route.stops.length === 0) {
+      console.log('❌ Nenhum stop encontrado na rota');
+      return;
+    }
+    
+    // Transform route stops into event format com cópia profunda
+    const events = route.stops.map((stop, index) => {
+      // Garantir ID único usando múltiplas fontes
+      const eventId = stop.id || stop.budget_item_id || `${route.id}-stop-${index}-${Date.now()}`;
       
-      return {
+      console.log(`📋 Criando evento ${index + 1}:`, {
         id: eventId,
-        order_sequence: stop.order_sequence || index + 1,
-        client_name: stop.client_name,
-        service_name: stop.service_name,
-        service_value: stop.service_value,
-        neighborhood: stop.neighborhood,
-        vehicle_type: route.vehicle_type,
-        service_status: stop.service_status,
+        client: stop.client_name,
+        status: stop.service_status,
+        originalStop: stop
+      });
+      
+      // Criar objeto completamente novo (deep copy)
+      const newEvent = {
+        id: String(eventId), // Garantir que é string
+        order_sequence: Number(stop.order_sequence || index + 1),
+        client_name: String(stop.client_name || ''),
+        service_name: String(stop.service_name || ''),
+        service_value: Number(stop.service_value || 0),
+        neighborhood: String(stop.neighborhood || ''),
+        vehicle_type: String(route.vehicle_type || ''),
+        service_status: String(stop.service_status || ''),
         estimated_start_time: calculateEstimatedTime(route, index),
-        duration: calculateDuration(stop.service_status),
-        address: stop.address
+        duration: Number(calculateDuration(stop.service_status)),
+        address: stop.address ? { ...stop.address } : null
       };
-    }) || [];
+      
+      return newEvent;
+    });
+    
+    // Verificar IDs únicos
+    const ids = events.map(e => e.id);
+    const uniqueIds = [...new Set(ids)];
+    if (ids.length !== uniqueIds.length) {
+      console.error('❌ IDs duplicados detectados!', ids);
+      // Force unique IDs
+      events.forEach((event, index) => {
+        event.id = `${route.id}-event-${index}-${Date.now()}`;
+      });
+    }
+    
+    console.log('✅ Eventos finais criados:', events.map(e => ({
+      id: e.id,
+      client: e.client_name,
+      duration: e.duration
+    })));
     
     // Sort by order_sequence
     events.sort((a, b) => a.order_sequence - b.order_sequence);
-    setRouteEvents(events);
+    setRouteEvents([...events]); // Force new array
     
     // Load calendar events for this route
     loadCalendarEvents();
