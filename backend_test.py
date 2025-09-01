@@ -1300,6 +1300,171 @@ class ServiceStatusBugTester:
         
         return True
 
+    def investigate_422_error_adding_stops(self):
+        """Investigate the specific 422 error when adding stops to routes"""
+        print("🔍 INVESTIGATING 422 ERROR - ADDING STOPS TO ROUTES")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Focus: PUT /api/routes/{id}/stops returns 422 Unprocessable Entity")
+        print("📋 Frontend data format: [{budget_item_id: 'ITM-0000001', priority: 'AUTOMATICA'}]")
+        print("=" * 80)
+        
+        # Step 1: Setup test data if needed
+        if not self.setup_test_data():
+            print("❌ CRITICAL: Failed to setup test data. Aborting investigation.")
+            return False
+        
+        # Step 2: Get available items
+        print("\n1️⃣ GETTING AVAILABLE ITEMS FOR ROUTES:")
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("422 Investigation - Get Available Items", False, 
+                        "❌ Failed to get available items", response['data'])
+            return False
+        
+        data = response['data']
+        available_items = data.get('available_items', [])
+        
+        if len(available_items) == 0:
+            self.log_test("422 Investigation - Get Available Items", False, 
+                        "❌ No available items found for testing")
+            return False
+        
+        self.log_test("422 Investigation - Get Available Items", True, 
+                    f"✅ Found {len(available_items)} available items")
+        
+        # Step 3: Create a route
+        print("\n2️⃣ CREATING TEST ROUTE:")
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2024-12-20",
+            "planned_start_time": "08:00",
+            "stops": []
+        }
+        
+        response = self.make_request('POST', '/routes', route_data)
+        if not response['success']:
+            self.log_test("422 Investigation - Create Route", False, 
+                        "❌ Failed to create route", response['data'])
+            return False
+        
+        route = response['data']
+        route_id = route.get('id')
+        self.created_resources['routes'].append(route_id)
+        
+        self.log_test("422 Investigation - Create Route", True, 
+                    f"✅ Route created successfully: {route_id}")
+        
+        # Step 4: Test adding stops with exact frontend format
+        print("\n3️⃣ TESTING ADD STOPS WITH FRONTEND FORMAT:")
+        
+        # Use first available item
+        first_item = available_items[0]
+        budget_item_id = first_item.get('budget_item_id')
+        
+        # Test with exact frontend format
+        frontend_stops_data = [{
+            "budget_item_id": budget_item_id,
+            "priority": "AUTOMATICA"
+        }]
+        
+        print(f"   📤 Sending data: {json.dumps(frontend_stops_data, indent=2)}")
+        
+        response = self.make_request('PUT', f'/routes/{route_id}/stops', frontend_stops_data)
+        
+        print(f"   📥 Response Status: {response['status_code']}")
+        print(f"   📥 Response Data: {json.dumps(response['data'], indent=2)}")
+        
+        if response['status_code'] == 422:
+            self.log_test("422 Investigation - Add Stops (Frontend Format)", False, 
+                        f"❌ CONFIRMED 422 ERROR: {response['data']}")
+            
+            # Step 5: Analyze the 422 error details
+            print("\n4️⃣ ANALYZING 422 ERROR DETAILS:")
+            error_detail = response['data'].get('detail', 'No detail provided')
+            
+            if isinstance(error_detail, list):
+                print("   🔍 Validation Errors:")
+                for error in error_detail:
+                    print(f"     - Field: {error.get('loc', 'unknown')}")
+                    print(f"       Message: {error.get('msg', 'no message')}")
+                    print(f"       Type: {error.get('type', 'unknown')}")
+            else:
+                print(f"   🔍 Error Detail: {error_detail}")
+            
+            # Step 6: Try different data formats to find what works
+            print("\n5️⃣ TESTING ALTERNATIVE DATA FORMATS:")
+            
+            # Test format 1: Add missing fields
+            test_format_1 = [{
+                "budget_item_id": budget_item_id,
+                "priority": "AUTOMATICA",
+                "client_id": first_item.get('client_id'),
+                "service_name": first_item.get('service_name'),
+                "service_value": first_item.get('service_value'),
+                "address": first_item.get('address')
+            }]
+            
+            print(f"   🧪 Testing Format 1 (with additional fields):")
+            response1 = self.make_request('PUT', f'/routes/{route_id}/stops', test_format_1)
+            print(f"      Status: {response1['status_code']}")
+            
+            if response1['success']:
+                self.log_test("422 Investigation - Alternative Format 1", True, 
+                            "✅ SUCCESS: Format with additional fields works")
+                return True
+            else:
+                print(f"      Error: {response1['data']}")
+            
+            # Test format 2: Check if it expects different field names
+            test_format_2 = [{
+                "budget_item_id": budget_item_id,
+                "priority": "AUTOMATICA",
+                "route_id": route_id
+            }]
+            
+            print(f"   🧪 Testing Format 2 (with route_id):")
+            response2 = self.make_request('PUT', f'/routes/{route_id}/stops', test_format_2)
+            print(f"      Status: {response2['status_code']}")
+            
+            if response2['success']:
+                self.log_test("422 Investigation - Alternative Format 2", True, 
+                            "✅ SUCCESS: Format with route_id works")
+                return True
+            else:
+                print(f"      Error: {response2['data']}")
+            
+            # Test format 3: Check server.py for expected format
+            print(f"   🧪 Testing Format 3 (minimal required fields):")
+            test_format_3 = {
+                "stops": [{
+                    "budget_item_id": budget_item_id,
+                    "priority": "AUTOMATICA"
+                }]
+            }
+            
+            response3 = self.make_request('PUT', f'/routes/{route_id}/stops', test_format_3)
+            print(f"      Status: {response3['status_code']}")
+            
+            if response3['success']:
+                self.log_test("422 Investigation - Alternative Format 3", True, 
+                            "✅ SUCCESS: Format wrapped in 'stops' object works")
+                return True
+            else:
+                print(f"      Error: {response3['data']}")
+            
+            self.log_test("422 Investigation - All Formats Failed", False, 
+                        "❌ All tested formats failed - need to check server.py implementation")
+            
+        elif response['success']:
+            self.log_test("422 Investigation - Add Stops (Frontend Format)", True, 
+                        "✅ SUCCESS: Frontend format works correctly")
+            return True
+        else:
+            self.log_test("422 Investigation - Add Stops (Frontend Format)", False, 
+                        f"❌ Unexpected error (not 422): {response['status_code']} - {response['data']}")
+        
+        return False
+
     def investigate_route_bug(self):
         """Investigate the specific route bug reported by user"""
         print("🔍 INVESTIGATING ROUTE BUG - USER REPORT")
