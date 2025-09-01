@@ -1,5 +1,5 @@
 # SUPERDRY LAVANDERIA - ARQUITETURA TÉCNICA DO SISTEMA
-## Documento de Referência Completa - Versão 2.0
+## Documento de Referência Completa - Versão 3.0
 
 ---
 
@@ -7,26 +7,28 @@
 
 **Empresa:** SuperDry Lavanderia de Tapetes & Estofados  
 **Tecnologia:** React + FastAPI + MongoDB  
-**Módulos:** 8/15 módulos implementados (53% concluído)  
-**APIs:** Google Places, Geocoding, OpenStreetMap (Leaflet)  
+**Módulos:** 10/15 módulos implementados (67% concluído)  
+**APIs:** Google Places, Geocoding, Google Calendar, OSRM, OpenStreetMap (Leaflet)  
 
 ---
 
 ## 🏗️ ESTRUTURA DE MÓDULOS
 
-### ✅ IMPLEMENTADOS (8 módulos)
+### ✅ FASE 1 COMPLETA (8 módulos)
 1. **✅ Painel Inicial** - Dashboard com resumos e estatísticas
 2. **✅ Clientes** - CRUD completo + busca híbrida + mini mapas + adição rápida
-3. **✅ Catálogo** - Serviços organizados por 11 categorias + tipos de medição
-4. **✅ Orçamentos** - Core completo + itens + cálculos + medidas específicas + edição
+3. **✅ Catálogo** - Serviços organizados por 11 categorias + tipos de medição + colunas ordenáveis + status padrão
+4. **✅ Orçamentos** - Core completo + itens + cálculos + medidas específicas + edição + preços editáveis + lançamento em lote
 5. **✅ WhatsApp** - Mensagens formatadas + deeplinks + medidas detalhadas
 6. **✅ PDF** - Geração com logo + textos de risco + seções numeradas
 7. **✅ Config. Orçamento** - 13 seções editáveis + formatação *negrito* _itálico_
 8. **✅ Config. Sistema** - Dados empresa + LGPD + busca híbrida + mini mapa
 
-### 🔄 EM PLANEJAMENTO (7 módulos)
-9. **Rotas** - Otimização GPS + Google Directions + veículos
-10. **Agenda** - Google Calendar + agendamentos
+### ✅ FASE 2 IMPLEMENTADA (2 módulos)
+9. **✅ Rotas** - Sistema completo de otimização com OSRM + mapa interativo + priorização + salvamento
+10. **✅ Agenda** - Integração Google Calendar + visualização + edição completa + horários proporcionais
+
+### 🔄 FASE 3 PLANEJADA (5 módulos)
 11. **Lavagem/Execução** - Controle produtivo + status flow
 12. **Modo Técnico** - Interface técnicos + fotos + assinaturas
 13. **Financeiro** - Controle recebimentos + pagamentos
