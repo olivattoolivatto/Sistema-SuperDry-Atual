@@ -1219,6 +1219,7 @@ async def get_calendar_event_detail(event_id: str):
             "location": event.get('location', ''),
             "start_datetime": start_dt.isoformat(),
             "end_datetime": end_dt.isoformat(),
+            "color_id": event.get('colorId'),  # Cor do evento no Google Calendar
             "google_event_id": event.get('id')
         }
         
