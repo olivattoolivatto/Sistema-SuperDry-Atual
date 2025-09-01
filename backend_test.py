@@ -1600,6 +1600,10 @@ if __name__ == "__main__":
             print("🔍 Running ROUTE BUG INVESTIGATION only")
             tester = ServiceStatusBugTester()
             success = tester.investigate_route_bug()
+        elif sys.argv[1] == "--422":
+            print("🔍 Running 422 ERROR INVESTIGATION only")
+            tester = ServiceStatusBugTester()
+            success = tester.investigate_422_error_adding_stops()
         else:
             print("🚀 Running FULL ROUTES API TESTS")
             tester = ServiceStatusBugTester()
