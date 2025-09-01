@@ -1687,6 +1687,26 @@ export function Routes() {
               </div>
             </div>
 
+            {/* Route Alias Input */}
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                <FileText className="w-4 h-4 mr-2 text-blue-600" />
+                Nome da Rota (Opcional)
+              </h4>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={routeAlias}
+                  onChange={(e) => setRouteAlias(e.target.value)}
+                  placeholder="Digite um nome personalizado para esta rota..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+                <p className="text-xs text-gray-500">
+                  <strong>Padrão:</strong> {generateRouteAlias(routeDate, routeTime, currentVehicleType, optimizedRoute?.stops?.length || 0)}
+                </p>
+              </div>
+            </div>
+
             {/* Action Buttons */}
             <div className="flex justify-end space-x-4">
               <button
