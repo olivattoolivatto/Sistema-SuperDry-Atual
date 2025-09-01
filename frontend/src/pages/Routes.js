@@ -1049,7 +1049,7 @@ export function Routes() {
       console.log('✏️ Loading route for editing:', routeId);
       
       // Get route details
-      const routeDetails = await routesApi.getRoute(routeId);
+      const routeDetails = await routesApi.get(routeId);
       const route = routeDetails.data;
       
       console.log('📋 Route details loaded:', route);
