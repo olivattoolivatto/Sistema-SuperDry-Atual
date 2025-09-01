@@ -13,7 +13,10 @@ import {
   Package,
   MessageSquare,
   MessageCircle,
-  Download
+  Download,
+  ChevronUp,
+  ChevronDown,
+  ArrowUpDown
 } from 'lucide-react';
 import { budgetsApi, clientsApi, servicesApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
