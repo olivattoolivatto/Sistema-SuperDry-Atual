@@ -1152,7 +1152,7 @@ export function Routes() {
       }
 
       console.log('Chamando API para excluir rota...');
-      await routesApi.deleteRoute(routeId);
+      await routesApi.delete(routeId);
       
       console.log('Rota excluída com sucesso, atualizando lista...');
       // Refresh saved routes list
