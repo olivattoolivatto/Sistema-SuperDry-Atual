@@ -1853,6 +1853,69 @@ export function Budgets() {
     return () => clearTimeout(debounced);
   }, [searchTerm]);
 
+  // Função de ordenação
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Função para ordenar os orçamentos
+  const sortedBudgets = [...budgets].sort((a, b) => {
+    let aValue, bValue;
+
+    switch (sortColumn) {
+      case 'id':
+        aValue = a.id;
+        bValue = b.id;
+        break;
+      case 'client_name':
+        aValue = a.client_name.toLowerCase();
+        bValue = b.client_name.toLowerCase();
+        break;
+      case 'total_value':
+        aValue = parseFloat(a.total_value);
+        bValue = parseFloat(b.total_value);
+        break;
+      case 'total_units':
+        aValue = parseInt(a.total_units);
+        bValue = parseInt(b.total_units);
+        break;
+      case 'payment_method':
+        aValue = PAYMENT_METHODS[a.payment_method];
+        bValue = PAYMENT_METHODS[b.payment_method];
+        break;
+      case 'salesperson':
+        aValue = a.salesperson;
+        bValue = b.salesperson;
+        break;
+      case 'created_at':
+      default:
+        aValue = new Date(a.created_at);
+        bValue = new Date(b.created_at);
+        break;
+    }
+
+    if (sortDirection === 'asc') {
+      return aValue > bValue ? 1 : -1;
+    } else {
+      return aValue < bValue ? 1 : -1;
+    }
+  });
+
+  // Função para renderizar ícone de ordenação
+  const renderSortIcon = (column) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="w-4 h-4" />;
+    }
+    return sortDirection === 'asc' ? 
+      <ChevronUp className="w-4 h-4" /> : 
+      <ChevronDown className="w-4 h-4" />;
+  };
+
   const handleSaveBudget = async (budgetData) => {
     try {
       if (editingBudget) {
