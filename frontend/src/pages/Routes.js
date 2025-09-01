@@ -1108,6 +1108,7 @@ export function Routes() {
       setRouteDate(route.planned_date);
       setRouteTime(route.planned_start_time);
       setCurrentVehicleType(route.vehicle_type);
+      setRouteAlias(route.alias || ''); // Load existing alias
       
       // Load route stops into prioritization for editing
       if (route.stops && route.stops.length > 0) {
