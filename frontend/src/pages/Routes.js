@@ -151,14 +151,38 @@ export function Routes() {
   
   // Enhanced logging system
   const logAction = (action, data) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logEntry = `[${timestamp}] ${action}: ${JSON.stringify(data, null, 2)}`;
-    console.log(`🔍 USER ACTION: ${logEntry}`);
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+      timestamp,
+      action,
+      data,
+      url: window.location.href,
+      userAgent: navigator.userAgent.substring(0, 100) // Truncate for brevity
+    };
     
-    // Also store in localStorage for persistence
-    const existingLogs = localStorage.getItem('routesDebugLogs') || '';
-    const newLogs = existingLogs + '\n' + logEntry;
-    localStorage.setItem('routesDebugLogs', newLogs);
+    console.log(`🔍 LOG: ${action}`, logEntry);
+    
+    // Add to detailed logs state for real-time display
+    setDetailedLogs(prev => {
+      const newLogs = [...prev, {
+        time: new Date().toLocaleTimeString(), 
+        action, 
+        details: JSON.stringify(data, null, 2).substring(0, 200)
+      }];
+      // Keep only last 10 entries for display
+      return newLogs.slice(-10);
+    });
+    
+    // Store in localStorage for debugging (keep last 100 entries)
+    const existingLogs = JSON.parse(localStorage.getItem('routesDebugLogs') || '[]');
+    existingLogs.push(logEntry);
+    
+    // Keep only last 100 entries
+    if (existingLogs.length > 100) {
+      existingLogs.splice(0, existingLogs.length - 100);
+    }
+    
+    localStorage.setItem('routesDebugLogs', JSON.stringify(existingLogs));
   };
 
   // Clear logs on component mount
