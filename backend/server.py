@@ -1152,6 +1152,7 @@ async def get_all_calendar_events(start_date: str, end_date: str):
                 'location': event.get('location', ''),
                 'start_datetime': start_dt.isoformat(),
                 'end_datetime': end_dt.isoformat(),
+                'color_id': event.get('colorId'),  # Cor do evento no Google Calendar
                 'is_system_event': False,  # Evento externo (não criado pelo sistema)
                 'google_event_id': event.get('id')
             })
