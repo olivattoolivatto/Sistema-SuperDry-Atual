@@ -2084,21 +2084,161 @@ export function Budgets() {
         {budgets.length} orçamento{budgets.length !== 1 ? 's' : ''} encontrado{budgets.length !== 1 ? 's' : ''}
       </div>
 
-      {/* Budgets Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {budgets.map((budget) => (
-          <BudgetCard
-            key={budget.id}
-            budget={budget}
-            onEdit={(budget) => {
-              setEditingBudget(budget);
-              setShowForm(true);
-            }}
-            onDelete={handleDeleteBudget}
-            onWhatsApp={handleWhatsAppBudget}
-            onPDF={handlePDFBudget}
-          />
-        ))}
+      {/* Budgets Table */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full table-auto">
+            <thead className="bg-gray-50">
+              <tr>
+                <th 
+                  className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('id')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>ID</span>
+                    {renderSortIcon('id')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('client_name')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Cliente</span>
+                    {renderSortIcon('client_name')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 hidden sm:table-cell"
+                  onClick={() => handleSort('total_units')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Itens</span>
+                    {renderSortIcon('total_units')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('total_value')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Total</span>
+                    {renderSortIcon('total_value')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 hidden md:table-cell"
+                  onClick={() => handleSort('payment_method')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Pagamento</span>
+                    {renderSortIcon('payment_method')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 hidden lg:table-cell"
+                  onClick={() => handleSort('salesperson')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Vendedor</span>
+                    {renderSortIcon('salesperson')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('created_at')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Data</span>
+                    {renderSortIcon('created_at')}
+                  </div>
+                </th>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ações
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {sortedBudgets.map((budget) => (
+                <tr key={budget.id} className="hover:bg-gray-50">
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{budget.id}</div>
+                  </td>
+                  <td className="px-3 sm:px-6 py-4">
+                    <div className="text-sm font-medium text-blue-600">{budget.client_name}</div>
+                    <div className="text-xs text-gray-500 sm:hidden">
+                      {budget.total_units} itens • {PAYMENT_METHODS[budget.payment_method]}
+                    </div>
+                    <div className="text-xs text-gray-500 md:hidden lg:inline lg:hidden">
+                      {budget.salesperson}
+                    </div>
+                  </td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
+                    <div className="flex items-center">
+                      <Package className="w-4 h-4 text-blue-600 mr-1" />
+                      {budget.total_units}
+                    </div>
+                  </td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-semibold text-green-900">R$ {budget.total_value.toFixed(2)}</div>
+                    <div className="text-xs text-gray-500">
+                      {budget.total_area_m2.toFixed(1)}m² • {budget.total_linear_meters.toFixed(1)}m lin.
+                    </div>
+                  </td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {PAYMENT_METHODS[budget.payment_method]}
+                    </span>
+                  </td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden lg:table-cell">
+                    {budget.salesperson}
+                  </td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <div>{new Date(budget.created_at).toLocaleDateString('pt-BR')}</div>
+                    <div className="text-xs text-gray-500">
+                      {new Date(budget.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={() => handleWhatsAppBudget(budget)}
+                        className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Enviar WhatsApp"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handlePDFBudget(budget)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Gerar PDF"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingBudget(budget);
+                          setShowForm(true);
+                        }}
+                        className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBudget(budget)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {budgets.length === 0 && (
