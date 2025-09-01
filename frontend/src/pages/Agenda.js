@@ -1175,61 +1175,105 @@ export function Agenda() {
             </div>
             
             {/* Grade de horários - das 07:00 às 00:00 */}
-            <div className="max-h-96 overflow-y-auto">
-              {Array.from({ length: 18 }, (_, index) => {
-                const hour = (7 + index) % 24; // Inicia às 07:00 e vai até 00:00
-                return (
-                <div key={hour} className={`grid ${
-                  calendarView === 'week' ? 'grid-cols-8' : 
-                  calendarView === '3days' ? 'grid-cols-4' : 
-                  'grid-cols-2'
-                } border-b border-gray-100 last:border-b-0`}>
-                  <div className="p-2 text-xs text-gray-600 border-r border-gray-100 bg-gray-50">
-                    {hour.toString().padStart(2, '0')}:00
-                  </div>
-                  {Array.from({ length: calendarView === 'week' ? 7 : calendarView === '3days' ? 3 : 1 }, (_, day) => {
-                    const cellDate = new Date(currentDate);
-                    cellDate.setDate(cellDate.getDate() + day);
-                    cellDate.setHours(hour, 0, 0, 0);
-                    
-                    // Find events for this hour
-                    const cellEvents = calendarEvents.filter(event => {
-                      const eventStart = new Date(event.start_datetime);
-                      return eventStart.getDate() === cellDate.getDate() &&
-                             eventStart.getMonth() === cellDate.getMonth() &&
-                             eventStart.getYear() === cellDate.getYear() &&
-                             eventStart.getHours() === hour;
-                    });
-                    
+            <div className="max-h-96 overflow-y-auto relative">
+              <div className={`grid ${
+                calendarView === 'week' ? 'grid-cols-8' : 
+                calendarView === '3days' ? 'grid-cols-4' : 
+                'grid-cols-2'
+              } relative`}>
+                {/* Coluna de horários */}
+                <div className="bg-gray-50 border-r border-gray-100">
+                  {Array.from({ length: 18 }, (_, index) => {
+                    const hour = (7 + index) % 24;
                     return (
-                      <div key={day} className="p-2 border-r border-gray-100 last:border-r-0 min-h-[40px]">
-                        {cellEvents.map(event => {
-                          const eventColor = getGoogleCalendarColor(event);
-                          return (
-                            <div 
-                              key={event.id} 
-                              className={`text-xs p-1.5 rounded-md mb-1 truncate shadow-sm border-l-2 cursor-pointer hover:opacity-80 transition-opacity ${eventColor.classes}`}
-                              style={{
-                                backgroundColor: eventColor.background,
-                                borderLeftColor: eventColor.border,
-                                color: eventColor.text
-                              }}
-                              title={`${event.summary}${event.location ? ' - ' + event.location : ''} (Clique duplo para editar)`}
-                              onDoubleClick={() => handleEventDoubleClick(event)}
-                            >
-                              <div className="font-medium text-xs leading-tight">{event.summary}</div>
-                              {event.location && (
-                                <div className="text-xs opacity-80 truncate mt-0.5">{event.location}</div>
-                              )}
-                            </div>
-                          );
-                        })}
+                      <div key={hour} className="p-2 text-xs text-gray-600 border-b border-gray-100 last:border-b-0 h-10 flex items-center">
+                        {hour.toString().padStart(2, '0')}:00
                       </div>
                     );
                   })}
                 </div>
-                );
-              })}
+
+                {/* Colunas dos dias */}
+                {Array.from({ length: calendarView === 'week' ? 7 : calendarView === '3days' ? 3 : 1 }, (_, dayIndex) => {
+                  const currentDayDate = new Date(currentDate);
+                  currentDayDate.setDate(currentDayDate.getDate() + dayIndex);
+                  
+                  // Get all events for this day
+                  const dayEvents = calendarEvents.filter(event => {
+                    const eventStart = new Date(event.start_datetime);
+                    return eventStart.getDate() === currentDayDate.getDate() &&
+                           eventStart.getMonth() === currentDayDate.getMonth() &&
+                           eventStart.getYear() === currentDayDate.getYear();
+                  });
+
+                  // Calculate overlaps and positions for events
+                  const positionedEvents = calculateEventPositions(dayEvents);
+
+                  return (
+                    <div key={dayIndex} className="relative border-r border-gray-100 last:border-r-0">
+                      {/* Hour grid lines */}
+                      {Array.from({ length: 18 }, (_, index) => (
+                        <div key={index} className="h-10 border-b border-gray-100 last:border-b-0"></div>
+                      ))}
+
+                      {/* Events positioned absolutely */}
+                      {positionedEvents.map((event, index) => {
+                        const eventColor = getGoogleCalendarColor(event);
+                        const eventStart = new Date(event.start_datetime);
+                        const eventEnd = new Date(event.end_datetime);
+                        
+                        // Calculate position and dimensions
+                        const startHour = eventStart.getHours();
+                        const startMinutes = eventStart.getMinutes();
+                        const endHour = eventEnd.getHours();
+                        const endMinutes = eventEnd.getMinutes();
+                        
+                        // Convert to grid position (relative to 07:00)
+                        const startPosition = ((startHour - 7 + (startHour < 7 ? 24 : 0)) * 60 + startMinutes) / 60;
+                        const endPosition = ((endHour - 7 + (endHour < 7 ? 24 : 0)) * 60 + endMinutes) / 60;
+                        const duration = endPosition - startPosition;
+                        
+                        // Position in pixels (40px per hour)
+                        const top = startPosition * 40;
+                        const height = duration * 40;
+                        
+                        // Handle overlapping events
+                        const leftPercent = (event.column / event.totalColumns) * 100;
+                        const widthPercent = (1 / event.totalColumns) * 100;
+
+                        return (
+                          <div 
+                            key={event.id}
+                            className={`absolute text-xs p-1 rounded-sm shadow-sm border-l-2 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${eventColor.classes}`}
+                            style={{
+                              top: `${top}px`,
+                              height: `${Math.max(height, 20)}px`, // Minimum 20px height
+                              left: `${leftPercent}%`,
+                              width: `${widthPercent - 1}%`, // -1% for spacing
+                              backgroundColor: eventColor.background,
+                              borderLeftColor: eventColor.border,
+                              color: eventColor.text,
+                              zIndex: 10 + index
+                            }}
+                            title={`${event.summary}${event.location ? ' - ' + event.location : ''}\n${eventStart.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})} - ${eventEnd.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})} (Clique duplo para editar)`}
+                            onDoubleClick={() => handleEventDoubleClick(event)}
+                          >
+                            <div className="font-medium text-xs leading-tight truncate">{event.summary}</div>
+                            {height > 30 && event.location && (
+                              <div className="text-xs opacity-80 truncate">{event.location}</div>
+                            )}
+                            {height > 50 && (
+                              <div className="text-xs opacity-60">
+                                {eventStart.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})} - {eventEnd.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
           
