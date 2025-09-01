@@ -66,7 +66,7 @@ def format_html_text(text: str) -> str:
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-REDIRECT_URI = os.getenv('REDIRECT_URI', 'https://route-optimizer-19.preview.emergentagent.com/agenda')
+REDIRECT_URI = os.getenv('REDIRECT_URI', 'https://laundry-manager-6.preview.emergentagent.com/agenda')
 
 # Google Calendar helper functions
 def get_google_auth_flow():
