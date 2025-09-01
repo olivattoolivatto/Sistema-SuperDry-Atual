@@ -927,10 +927,19 @@ export function Routes() {
       logAction('STOPS_ADDED', { routeId, response: stopsResponse.data });
       
       // Optimize route based on selected type
-      console.log(`⚡ Otimizando rota ${routeType}...`);
+      console.log('🔨 ETAPA 3: Otimizando rota...');
+      setDebugInfo(`Otimizando rota ${routeType.toLowerCase()}...`);
+      
+      console.log(`⚡ Chamando otimização ${routeType}...`);
       logAction('OPTIMIZING_ROUTE', { routeId, routeType });
+      
       const optimizeResponse = await routesApi.optimize(routeId, routeType);
       console.log('⚡ Resposta da otimização:', optimizeResponse.data);
+      
+      if (!optimizeResponse.data) {
+        throw new Error('Resposta inválida da otimização');
+      }
+      
       logAction('ROUTE_OPTIMIZED', { routeId, response: optimizeResponse.data });
       
       // Get optimized route details
