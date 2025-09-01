@@ -1726,6 +1726,21 @@ export function Routes() {
             </div>
           </div>
         )}
+        {/* Detailed Debug Logs */}
+        {detailedLogs.length > 0 && (
+          <div className="mt-4 p-3 bg-gray-800 text-green-400 rounded-lg text-xs font-mono">
+            <div className="font-bold mb-2">🔍 Live Debug Logs:</div>
+            <div className="max-h-32 overflow-y-auto space-y-1">
+              {detailedLogs.map((log, index) => (
+                <div key={index} className="flex space-x-2">
+                  <span className="text-gray-400">[{log.time}]</span>
+                  <span className="text-yellow-400">{log.action}:</span>
+                  <span className="text-green-400 truncate">{log.details}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Interactive Map - ALWAYS VISIBLE */}
         <div className="mb-6">
