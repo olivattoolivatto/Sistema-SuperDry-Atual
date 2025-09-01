@@ -871,20 +871,31 @@ export function Agenda() {
                 {selectedStops.size} de {routeEvents.length} selecionados
               </span>
               
-              {selectedStops.size > 0 && (
+              <div className="flex space-x-2">
                 <button
-                  onClick={createCalendarEvents}
-                  disabled={creatingEvents || !isGoogleAuthenticated}
-                  className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
+                  onClick={resetAllTimes}
+                  className="flex items-center px-3 py-2 bg-gray-600 text-white hover:bg-gray-700 rounded-lg transition-colors text-sm"
+                  title="Resetar todos os horários para sequência original"
                 >
-                  {creatingEvents ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4 mr-2" />
-                  )}
-                  {creatingEvents ? 'Criando...' : 'Lançar na Agenda'}
+                  <RefreshCw className="w-4 h-4 mr-1" />
+                  Reset Horários
                 </button>
-              )}
+                
+                {selectedStops.size > 0 && (
+                  <button
+                    onClick={createCalendarEvents}
+                    disabled={creatingEvents || !isGoogleAuthenticated}
+                    className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
+                  >
+                    {creatingEvents ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4 mr-2" />
+                    )}
+                    {creatingEvents ? 'Criando...' : 'Lançar na Agenda'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
