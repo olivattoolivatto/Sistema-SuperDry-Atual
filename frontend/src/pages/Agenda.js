@@ -339,7 +339,6 @@ export function Agenda() {
       const event = eventsArray[i];
       if (event) {
         currentTime = new Date(currentTime.getTime() + event.duration * 60000);
-        currentTime = new Date(currentTime.getTime() + 15 * 60000); // Travel time
       }
     }
     
