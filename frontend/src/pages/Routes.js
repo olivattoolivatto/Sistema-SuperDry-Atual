@@ -881,7 +881,8 @@ export function Routes() {
     }
 
     try {
-      console.log('🔨 Criando rota...');
+      console.log('🔨 ETAPA 1: Criando rota...');
+      setDebugInfo(`Criando rota ${routeType.toLowerCase()}...`);
       logAction('CREATING_ROUTE', { vehicleType: currentVehicleType, date: routeDate, time: routeTime });
       
       // Create route
@@ -895,7 +896,13 @@ export function Routes() {
       console.log('📤 Enviando dados para criar rota:', routeData);
       const createResponse = await routesApi.create(routeData);
       console.log('✅ Rota criada:', createResponse.data);
+      
+      if (!createResponse.data || !createResponse.data.id) {
+        throw new Error('Resposta inválida ao criar rota: ID não encontrado');
+      }
+      
       const routeId = createResponse.data.id;
+      console.log('🆔 Route ID obtido:', routeId);
       logAction('ROUTE_CREATED', { routeId, response: createResponse.data });
       
       // Add stops with priorities from prioritization list
