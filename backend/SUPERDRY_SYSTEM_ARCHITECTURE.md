@@ -25,9 +25,9 @@
 7. **✅ Config. Orçamento** - 13 seções editáveis + formatação *negrito* _itálico_
 8. **✅ Config. Sistema** - Dados empresa + LGPD + busca híbrida + mini mapa
 
-### ✅ FASE 2 IMPLEMENTADA (2 módulos)
-9. **✅ Rotas** - Sistema completo de otimização com OSRM + mapa interativo + priorização + salvamento
-10. **✅ Agenda** - Integração Google Calendar + visualização + edição completa + horários proporcionais
+### ✅ FASE 2 COMPLETA (2 módulos)
+9. **✅ Rotas** - Sistema completo de otimização com OSRM + mapa interativo + priorização + salvamento completo
+10. **✅ Agenda** - Integração Google Calendar OAuth2 + visualização completa + edição individual + reordenação + horários proporcionais
 
 ### 🔄 FASE 3 PLANEJADA (5 módulos)
 11. **Lavagem/Execução** - Controle produtivo + status flow
