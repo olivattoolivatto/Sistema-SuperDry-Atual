@@ -1754,6 +1754,7 @@ export function Routes() {
                   setOptimizedRoute(null);
                   setStopPriorities({});
                   setDebugInfo('');
+                  setRouteAlias(''); // Clear alias field
                   
                   // Reinitialize empty map
                   if (mapInstanceRef.current) {
