@@ -1318,17 +1318,20 @@ export function Routes() {
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="px-2 sm:px-4 py-4">
                     <div className="text-sm font-medium text-gray-900">{item.service_name}</div>
                     <div className="text-sm text-gray-500">{item.service_code}</div>
+                    <div className="text-xs text-gray-500 sm:hidden mt-1">
+                      {item.neighborhood} • R$ {item.service_value.toFixed(2)}
+                    </div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-2 sm:px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                     {item.client_name}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-2 sm:px-4 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
                     {item.neighborhood}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-2 sm:px-4 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
                     R$ {item.service_value.toFixed(2)}
                   </td>
                 </tr>
