@@ -953,6 +953,13 @@ export function Agenda() {
                             max="480"
                           />
                           <span className="text-xs text-gray-600">min</span>
+                          <button
+                            onClick={() => recalculateSubsequentTimes(event.id)}
+                            className="ml-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
+                            title="Aplicar mudança de duração aos horários subsequentes"
+                          >
+                            Aplicar
+                          </button>
                         </div>
                       </div>
                     </div>
