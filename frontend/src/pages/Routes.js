@@ -232,8 +232,14 @@ export function Routes() {
 
   const loadAvailableItems = async () => {
     try {
+      console.log('📋 Carregando itens disponíveis...');
       const response = await routesApi.getAvailableItems();
-      setAvailableItems(response.data.available_items);
+      console.log('📋 Resposta da API:', response.data);
+      
+      // The backend returns data directly, not nested in available_items
+      const items = Array.isArray(response.data) ? response.data : response.data.available_items || [];
+      setAvailableItems(items);
+      console.log('✅ Itens carregados:', items.length);
     } catch (error) {
       console.error('Erro ao carregar itens disponíveis:', error);
       toast({
