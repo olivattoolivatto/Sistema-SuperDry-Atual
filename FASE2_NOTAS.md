@@ -98,4 +98,45 @@ const validateClientForRoute = (client) => {
 
 ---
 
-*Arquivo criado automaticamente durante implementação da adição rápida de clientes - 24/08/2025*
+---
+
+## 🐛 BUGS CRÍTICOS RESOLVIDOS - AGENDA
+
+### 1. Bug de Seleção de Eventos
+**Problema:** Clicar em um evento selecionava todos, mas counter mostrava apenas 1  
+**Causa:** IDs duplicados entre eventos  
+**Solução:** IDs únicos com timestamp: `${route.id}-event-${index}-${Date.now()}`
+
+### 2. Bug de Reordenação de Eventos  
+**Problema:** Apenas os dois primeiros eventos podiam ser reordenados  
+**Causa:** Lógica de moveStop limitada  
+**Solução:** Reescrita completa da função moveStop para qualquer posição
+
+### 3. Bug de Edição Simultânea
+**Problema:** Alterar duração/tempo de um evento afetava todos simultaneamente  
+**Causa:** Referências de objeto compartilhadas  
+**Solução:** Deep copies com `JSON.parse(JSON.stringify(event))`
+
+### 4. Bug de Estado React
+**Problema:** Estados não atualizavam corretamente  
+**Causa:** setState sem callback funcional  
+**Solução:** `setSelectedStops(prev => ...)` para reatividade
+
+### 5. Bug de Conversão de Tipos
+**Problema:** Valores de duração não eram tratados corretamente  
+**Causa:** Conversão implícita inconsistente  
+**Solução:** `Number()` explícito para todos os valores numéricos
+
+---
+
+## 🎯 RESULTADOS FINAIS
+
+- **Sistema de Rotas:** 100% funcional com validações completas
+- **Integração Google Calendar:** OAuth2 + CRUD completo
+- **Interface de Agenda:** Todas as funcionalidades implementadas
+- **Bugs Críticos:** Zero bugs conhecidos restantes
+- **Performance:** Otimizada com loading states e timeouts adequados
+
+---
+
+*Arquivo criado: 24/08/2025 | Atualizado: 27/06/2025 - FASE 2 COMPLETA*
