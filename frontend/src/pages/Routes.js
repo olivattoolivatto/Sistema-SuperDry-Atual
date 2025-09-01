@@ -247,8 +247,8 @@ export function Routes() {
 
   const loadSavedRoutes = async () => {
     try {
-      const response = await routesApi.getRoutes();
-      setSavedRoutes(response.data);
+      const response = await routesApi.getSavedRoutes();
+      setSavedRoutes(response.data || []);
     } catch (error) {
       console.error('Erro ao carregar rotas salvas:', error);
     }
