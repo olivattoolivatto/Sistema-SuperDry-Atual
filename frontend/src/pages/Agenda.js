@@ -361,6 +361,35 @@ export function Agenda() {
     });
   };
 
+  const recalculateFromTimeChange = (eventId) => {
+    console.log('🕒 Recalculando a partir de mudança de horário:', eventId);
+    
+    setRouteEvents(prevEvents => {
+      const eventIndex = prevEvents.findIndex(event => event.id === eventId);
+      if (eventIndex === -1) return prevEvents;
+
+      const newEvents = [...prevEvents];
+      
+      // Recalcular apenas os eventos APÓS o modificado
+      for (let i = eventIndex + 1; i < newEvents.length; i++) {
+        const previousEvent = newEvents[i - 1];
+        const previousEndTime = addMinutesToTime(
+          previousEvent.estimated_start_time, 
+          previousEvent.duration + 15
+        );
+        newEvents[i].estimated_start_time = previousEndTime;
+      }
+
+      return newEvents;
+    });
+
+    toast({
+      title: "Sequência Atualizada!",
+      description: "Os horários dos próximos eventos foram ajustados.",
+      variant: "default",
+    });
+  };
+
   const updateEventDuration = (eventId, newDuration) => {
     console.log('⏱️ Atualizando duração do evento:', eventId, 'para:', newDuration);
     
