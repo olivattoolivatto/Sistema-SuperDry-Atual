@@ -86,11 +86,12 @@ export const systemConfigApi = {
 // Routes API
 export const routesApi = {
   getAvailableItems: () => api.get('/budget-items/available-for-routes'),
+  getSavedRoutes: () => api.get('/routes'),
   create: (routeData) => api.post('/routes', routeData),
+  get: (routeId) => api.get(`/routes/${routeId}`),
+  update: (routeId, updateData) => api.put(`/routes/${routeId}`, updateData),
   addStops: (routeId, stops) => api.put(`/routes/${routeId}/stops`, stops),
   optimize: (routeId, routeType) => api.post(`/routes/${routeId}/optimize`, { route_type: routeType }),
-  get: (routeId) => api.get(`/routes/${routeId}`),
-  getSavedRoutes: () => api.get('/routes'),
   delete: (routeId) => api.delete(`/routes/${routeId}`)
 };
 
