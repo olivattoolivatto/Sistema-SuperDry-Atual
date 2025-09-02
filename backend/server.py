@@ -2165,6 +2165,44 @@ async def get_route(route_id: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error fetching route: {str(e)}")
 
+@api_router.put("/routes/{route_id}", response_model=Route)
+async def update_route(route_id: str, route_update: RouteUpdate):
+    """Update route information"""
+    try:
+        # Check if route exists
+        existing_route = await db.routes.find_one({"id": route_id})
+        if not existing_route:
+            raise HTTPException(status_code=404, detail="Route not found")
+        
+        # Prepare update data
+        update_data = {}
+        if route_update.vehicle_type is not None:
+            update_data["vehicle_type"] = route_update.vehicle_type
+        if route_update.planned_date is not None:
+            update_data["planned_date"] = route_update.planned_date
+        if route_update.planned_start_time is not None:
+            update_data["planned_start_time"] = route_update.planned_start_time
+        if route_update.alias is not None:
+            update_data["alias"] = route_update.alias
+        
+        # Add updated timestamp
+        update_data["updated_at"] = datetime.utcnow()
+        
+        # Update route
+        await db.routes.update_one(
+            {"id": route_id},
+            {"$set": update_data}
+        )
+        
+        # Return updated route
+        updated_route = await db.routes.find_one({"id": route_id})
+        return Route(**updated_route)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error updating route: {str(e)}")
+
 @api_router.put("/routes/{route_id}/stops")
 async def update_route_stops(route_id: str, stops_data: List[dict]):
     """Update route stops with priorities"""
