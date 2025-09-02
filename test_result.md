@@ -267,6 +267,18 @@ backend:
         -agent: "testing"
         -comment: "✅ SERVICE DUPLICATION TESTING COMPLETED: Comprehensive testing of service creation and duplication functionality completed with 100% success rate (8/8 tests passed). ✅ TESTE DE CRIAÇÃO: POST /api/services accepts all required fields including default_service_status correctly. Service creation generates proper IDs (SRV-XXXX), sets default values, and validates all fields. ✅ TESTE DE DADOS DUPLICADOS: Successfully created 'Teste Original' and 'Teste Original (Cópia)' services without conflicts. Backend allows duplicate names and handles special characters properly. ✅ VERIFICAR VALIDAÇÕES: Required fields validation working correctly - API rejects incomplete data and invalid enum values. default_service_status is processed and stored correctly. ✅ ERROR HANDLING: Detailed error responses provided for invalid data types with proper Pydantic validation messages. CONCLUSION: The error is NOT in the backend API create functionality - all service creation and duplication scenarios work perfectly. If there are issues with service duplication, they are in the frontend save logic, not the backend."
 
+  - task: "Route Optimization Critical Issues Fix"
+    implemented: false
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "testing"
+        -comment: "🔍 CRITICAL ISSUES IDENTIFIED: Comprehensive investigation revealed multiple critical backend issues: 1) deliveryOrder field MISSING from RouteStop model (line 321) - user expects separate delivery logic from route optimization, 2) alias field MISSING from Route model (lines 324-338) - users cannot save custom route names, 3) PUT /api/routes/{id} endpoint MISSING - cannot update routes after creation, 4) Geographic optimization bug: Route RTE-0000001 has Daiana (closest to company at distance 0.000150) in position 2 instead of last position for efficient return, 5) OSRM returns unrealistic distances (3085km for local routes). Backend model design needs major updates to support user requirements."
+
 frontend:
   - task: "Auto-scroll to Prioritization Section"
     implemented: true
