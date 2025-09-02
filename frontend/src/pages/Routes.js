@@ -1908,7 +1908,9 @@ export function Routes() {
                   <Bike className="w-5 h-5 text-green-600 mr-3" />
                 )}
                 <div>
-                  <div className="text-sm font-medium text-gray-900">{generateRouteAlias(route.planned_date, route.planned_start_time)}</div>
+                  <div className="text-sm font-medium text-gray-900">
+                    {route.alias || generateRouteAlias(route.planned_date, route.planned_start_time, route.vehicle_type, route.stops?.length || 0)}
+                  </div>
                   <div className="text-xs text-gray-500 font-mono">{route.id}</div>
                   <div className="text-xs text-gray-500">
                     {new Date(route.planned_date).toLocaleDateString('pt-BR')} às {route.planned_start_time}
