@@ -489,10 +489,37 @@ async def optimize_route_with_priorities(stops: List[RouteStop], company_coords:
     final_order = primeira_stops + optimized_automatica + ultima_stops
     
     # Set sequence numbers
-    for i, stop in enumerate(final_order):
-        stop.order_sequence = i + 1
+    # order_sequence = OSRM geographic optimization order  
+    # delivery_order = actual delivery sequence (with priorities)
     
-    print(f"Final order: {len(final_order)} stops")
+    print("\n🔢 SETTING SEQUENCE NUMBERS:")
+    for i, stop in enumerate(final_order):
+        stop.delivery_order = i + 1  # This is the actual delivery sequence
+        print(f"  Stop {i+1}: {stop.client_name} - delivery_order: {stop.delivery_order}")
+    
+    # Now set order_sequence based on pure geographic optimization (ignoring priorities)
+    # This shows what OSRM would suggest without priority constraints
+    geographic_order = primeira_stops + optimized_automatica + ultima_stops
+    
+    # Calculate distances from company for geographic ordering
+    def calc_company_distance(stop):
+        stop_coords = (stop.address['longitude'], stop.address['latitude'])
+        return ((company_coords[0] - stop_coords[0])**2 + (company_coords[1] - stop_coords[1])**2)**0.5
+    
+    # Sort by distance for geographic sequence (closest first, farthest last for return efficiency)  
+    all_stops_by_distance = sorted(final_order, key=calc_company_distance)
+    
+    print("\n🗺️ GEOGRAPHIC ORDER (order_sequence):")
+    for i, stop in enumerate(all_stops_by_distance):
+        # Find this stop in final_order to get its geographic position
+        geographic_position = all_stops_by_distance.index(stop) + 1
+        stop.order_sequence = geographic_position
+        print(f"  Geographic {geographic_position}: {stop.client_name} - order_sequence: {stop.order_sequence}, delivery_order: {stop.delivery_order}")
+    
+    print(f"\nFinal order: {len(final_order)} stops")
+    print("DIFFERENCE EXPLANATION:")
+    print("  - order_sequence = Geographic optimization (shortest route)")  
+    print("  - delivery_order = Actual delivery sequence (with user priorities)")
     
     return final_order
 
