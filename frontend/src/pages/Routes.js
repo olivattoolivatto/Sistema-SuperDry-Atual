@@ -75,9 +75,30 @@ export function Routes() {
   };
 
   // Generate route alias based on date and time with future suggestions
-  const generateRouteAlias = (planned_date, planned_start_time) => {
+  const generateRouteAlias = (planned_date, planned_start_time, vehicle_type = 'CARRO', stops_count = 0) => {
     try {
-      const date = new Date(planned_date);
+      // Handle different date formats
+      let date;
+      if (typeof planned_date === 'string') {
+        // Handle both YYYY-MM-DD and DD/MM/YYYY formats
+        if (planned_date.includes('-')) {
+          date = new Date(planned_date);
+        } else if (planned_date.includes('/')) {
+          const [day, month, year] = planned_date.split('/');
+          date = new Date(`${year}-${month}-${day}`);
+        } else {
+          date = new Date(planned_date);
+        }
+      } else {
+        date = new Date(planned_date);
+      }
+      
+      // Validate date
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date in generateRouteAlias:', planned_date);
+        return `Rota ${planned_date}`;
+      }
+      
       const [hours] = planned_start_time.split(':');
       const hour = parseInt(hours);
       
@@ -97,6 +118,7 @@ export function Routes() {
       
       return `Rota ${period} da ${dayName} ${formattedDate}`;
     } catch (error) {
+      console.error('Error in generateRouteAlias:', error, 'planned_date:', planned_date, 'planned_start_time:', planned_start_time);
       return `Rota ${planned_date}`;
     }
   };
