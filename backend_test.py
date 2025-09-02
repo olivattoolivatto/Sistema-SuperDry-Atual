@@ -1300,6 +1300,419 @@ class ServiceStatusBugTester:
         
         return True
 
+    def test_route_corrections_implementation(self):
+        """Test the specific route corrections mentioned in the review request"""
+        print("🔧 TESTANDO CORREÇÕES IMPLEMENTADAS NAS ROTAS")
+        print(f"🔗 Testando contra: {self.base_url}")
+        print("🎯 Foco: Verificar correções específicas implementadas")
+        print("=" * 80)
+        
+        # Setup test data
+        if not self.setup_test_data():
+            print("❌ CRITICAL: Failed to setup test data. Aborting tests.")
+            return False
+        
+        # Test 1: Verify alias field in Route model
+        print("\n1️⃣ TESTANDO CAMPO ALIAS NO MODELO ROUTE:")
+        route_id = self.test_route_alias_field()
+        
+        if not route_id:
+            print("❌ CRITICAL: Failed to create route for testing. Aborting remaining tests.")
+            return False
+        
+        # Test 2: Verify delivery_order field in RouteStop model
+        print("\n2️⃣ TESTANDO CAMPO DELIVERY_ORDER NO MODELO ROUTESTOP:")
+        self.test_delivery_order_field(route_id)
+        
+        # Test 3: Test PUT /routes/{id} endpoint
+        print("\n3️⃣ TESTANDO ENDPOINT PUT /routes/{id}:")
+        self.test_put_route_endpoint(route_id)
+        
+        # Test 4: Verify logic separation between order_sequence and delivery_order
+        print("\n4️⃣ TESTANDO LÓGICA SEPARADA ENTRE ORDER_SEQUENCE E DELIVERY_ORDER:")
+        self.test_sequence_logic_separation(route_id)
+        
+        # Test 5: Analyze recent route (RTE-0000002 or similar)
+        print("\n5️⃣ ANALISANDO ROTA RECENTE:")
+        self.test_recent_route_analysis()
+        
+        # Cleanup
+        self.cleanup_test_data()
+        
+        # Summary
+        self.print_summary()
+        
+        return True
+    
+    def test_route_alias_field(self):
+        """Test if Route model has alias field and it works correctly"""
+        print("\n=== TESTANDO CAMPO ALIAS NO MODELO ROUTE ===")
+        
+        # Create route with alias
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2024-12-20",
+            "planned_start_time": "08:00",
+            "alias": "Rota Teste com Alias Personalizado",
+            "stops": []
+        }
+        
+        response = self.make_request('POST', '/routes', route_data)
+        if response['success']:
+            route = response['data']
+            route_id = route.get('id')
+            
+            # Verify alias field exists and is set correctly
+            if route.get('alias') == route_data['alias']:
+                self.created_resources['routes'].append(route_id)
+                self.log_test("Route Alias Field", True, 
+                            f"✅ Campo alias funcionando: '{route.get('alias')}'")
+                return route_id
+            else:
+                self.log_test("Route Alias Field", False, 
+                            f"❌ Campo alias não funcionou corretamente: esperado '{route_data['alias']}', obtido '{route.get('alias')}'")
+                return route_id
+        else:
+            self.log_test("Route Alias Field", False, 
+                        "❌ Falha ao criar rota com alias", response['data'])
+            return None
+    
+    def test_delivery_order_field(self, route_id: str):
+        """Test if RouteStop model has delivery_order field"""
+        print("\n=== TESTANDO CAMPO DELIVERY_ORDER NO MODELO ROUTESTOP ===")
+        
+        # Get available items
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Delivery Order Field", False, 
+                        "❌ Falha ao obter itens disponíveis", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        if not available_items:
+            self.log_test("Delivery Order Field", False, 
+                        "❌ Nenhum item disponível para teste")
+            return False
+        
+        # Add stops to route
+        stops_data = []
+        priorities = ["PRIMEIRA", "AUTOMATICA", "ULTIMA"]
+        
+        for i, item in enumerate(available_items[:3]):
+            priority = priorities[i % len(priorities)]
+            stops_data.append({
+                "budget_item_id": item["budget_item_id"],
+                "priority": priority
+            })
+        
+        response = self.make_request('PUT', f'/routes/{route_id}/stops', stops_data)
+        if not response['success']:
+            self.log_test("Delivery Order Field", False, 
+                        "❌ Falha ao adicionar paradas à rota", response['data'])
+            return False
+        
+        # Get route details to check delivery_order field
+        response = self.make_request('GET', f'/routes/{route_id}')
+        if response['success']:
+            route = response['data']
+            stops = route.get('stops', [])
+            
+            if stops:
+                first_stop = stops[0]
+                has_delivery_order = 'delivery_order' in first_stop
+                has_order_sequence = 'order_sequence' in first_stop
+                
+                if has_delivery_order and has_order_sequence:
+                    self.log_test("Delivery Order Field", True, 
+                                f"✅ Campos delivery_order e order_sequence presentes nas paradas")
+                    
+                    # Log the values for analysis
+                    print("   📊 Análise dos campos nas paradas:")
+                    for i, stop in enumerate(stops):
+                        delivery_order = stop.get('delivery_order', 'N/A')
+                        order_sequence = stop.get('order_sequence', 'N/A')
+                        client_name = stop.get('client_name', 'N/A')
+                        print(f"     Parada {i+1}: {client_name} - delivery_order: {delivery_order}, order_sequence: {order_sequence}")
+                    
+                    return True
+                else:
+                    missing_fields = []
+                    if not has_delivery_order:
+                        missing_fields.append('delivery_order')
+                    if not has_order_sequence:
+                        missing_fields.append('order_sequence')
+                    
+                    self.log_test("Delivery Order Field", False, 
+                                f"❌ Campos ausentes nas paradas: {missing_fields}")
+                    return False
+            else:
+                self.log_test("Delivery Order Field", False, 
+                            "❌ Nenhuma parada encontrada na rota")
+                return False
+        else:
+            self.log_test("Delivery Order Field", False, 
+                        "❌ Falha ao obter detalhes da rota", response['data'])
+            return False
+    
+    def test_put_route_endpoint(self, route_id: str):
+        """Test PUT /routes/{id} endpoint for updating routes"""
+        print("\n=== TESTANDO ENDPOINT PUT /routes/{id} ===")
+        
+        # Test updating alias
+        update_data = {
+            "alias": "Alias Atualizado via PUT"
+        }
+        
+        response = self.make_request('PUT', f'/routes/{route_id}', update_data)
+        if response['success']:
+            updated_route = response['data']
+            
+            if updated_route.get('alias') == update_data['alias']:
+                self.log_test("PUT Route Endpoint", True, 
+                            f"✅ Endpoint PUT /routes/{{id}} funcionando: alias atualizado para '{updated_route.get('alias')}'")
+                
+                # Test updating other fields
+                update_data_2 = {
+                    "vehicle_type": "MOTO",
+                    "planned_start_time": "09:30"
+                }
+                
+                response_2 = self.make_request('PUT', f'/routes/{route_id}', update_data_2)
+                if response_2['success']:
+                    updated_route_2 = response_2['data']
+                    
+                    checks = [
+                        (updated_route_2.get('vehicle_type') == 'MOTO', "vehicle_type atualizado"),
+                        (updated_route_2.get('planned_start_time') == '09:30', "planned_start_time atualizado"),
+                        (updated_route_2.get('alias') == update_data['alias'], "alias preservado")
+                    ]
+                    
+                    all_passed = all(check[0] for check in checks)
+                    failed_checks = [check[1] for check in checks if not check[0]]
+                    
+                    if all_passed:
+                        self.log_test("PUT Route Multiple Fields", True, 
+                                    "✅ Múltiplos campos atualizados corretamente")
+                    else:
+                        self.log_test("PUT Route Multiple Fields", False, 
+                                    f"❌ Falha na atualização: {failed_checks}")
+                else:
+                    self.log_test("PUT Route Multiple Fields", False, 
+                                "❌ Falha ao atualizar múltiplos campos", response_2['data'])
+                
+                return True
+            else:
+                self.log_test("PUT Route Endpoint", False, 
+                            f"❌ Alias não foi atualizado corretamente: esperado '{update_data['alias']}', obtido '{updated_route.get('alias')}'")
+                return False
+        else:
+            self.log_test("PUT Route Endpoint", False, 
+                        "❌ Falha ao atualizar rota via PUT", response['data'])
+            return False
+    
+    def test_sequence_logic_separation(self, route_id: str):
+        """Test the separation between order_sequence (geographic) and delivery_order (with priorities)"""
+        print("\n=== TESTANDO LÓGICA SEPARADA ENTRE ORDER_SEQUENCE E DELIVERY_ORDER ===")
+        
+        # Optimize the route to trigger the logic
+        response = self.make_request('POST', f'/routes/{route_id}/optimize?route_type=CURTA')
+        if not response['success']:
+            self.log_test("Sequence Logic Separation", False, 
+                        "❌ Falha ao otimizar rota", response['data'])
+            return False
+        
+        # Get route details after optimization
+        response = self.make_request('GET', f'/routes/{route_id}')
+        if response['success']:
+            route = response['data']
+            stops = route.get('stops', [])
+            
+            if len(stops) >= 2:
+                # Analyze the differences between order_sequence and delivery_order
+                differences_found = False
+                geographic_analysis = []
+                delivery_analysis = []
+                
+                for stop in stops:
+                    delivery_order = stop.get('delivery_order', 0)
+                    order_sequence = stop.get('order_sequence', 0)
+                    client_name = stop.get('client_name', 'N/A')
+                    priority = stop.get('priority', 'N/A')
+                    
+                    geographic_analysis.append({
+                        'client': client_name,
+                        'order_sequence': order_sequence,
+                        'priority': priority
+                    })
+                    
+                    delivery_analysis.append({
+                        'client': client_name,
+                        'delivery_order': delivery_order,
+                        'priority': priority
+                    })
+                    
+                    if delivery_order != order_sequence:
+                        differences_found = True
+                
+                # Sort by each sequence to analyze
+                geographic_sorted = sorted(geographic_analysis, key=lambda x: x['order_sequence'])
+                delivery_sorted = sorted(delivery_analysis, key=lambda x: x['delivery_order'])
+                
+                print("   📊 ANÁLISE DA LÓGICA DE SEQUENCIAMENTO:")
+                print("   🗺️  ORDER_SEQUENCE (Otimização Geográfica):")
+                for item in geographic_sorted:
+                    print(f"     Posição {item['order_sequence']}: {item['client']} (Prioridade: {item['priority']})")
+                
+                print("   🚚 DELIVERY_ORDER (Sequência de Entrega com Prioridades):")
+                for item in delivery_sorted:
+                    print(f"     Posição {item['delivery_order']}: {item['client']} (Prioridade: {item['priority']})")
+                
+                if differences_found:
+                    self.log_test("Sequence Logic Separation", True, 
+                                "✅ Lógica separada funcionando: order_sequence ≠ delivery_order encontradas")
+                    
+                    # Verify priority logic
+                    primeira_stops = [s for s in stops if s.get('priority') == 'PRIMEIRA']
+                    ultima_stops = [s for s in stops if s.get('priority') == 'ULTIMA']
+                    
+                    priority_logic_correct = True
+                    if primeira_stops:
+                        min_delivery_order = min(s.get('delivery_order', 999) for s in primeira_stops)
+                        if min_delivery_order != 1:
+                            priority_logic_correct = False
+                    
+                    if ultima_stops:
+                        max_delivery_order = max(s.get('delivery_order', 0) for s in ultima_stops)
+                        total_stops = len(stops)
+                        if max_delivery_order != total_stops:
+                            priority_logic_correct = False
+                    
+                    if priority_logic_correct:
+                        self.log_test("Priority Logic", True, 
+                                    "✅ Lógica de prioridades funcionando corretamente")
+                    else:
+                        self.log_test("Priority Logic", False, 
+                                    "❌ Lógica de prioridades não está funcionando corretamente")
+                    
+                    return True
+                else:
+                    self.log_test("Sequence Logic Separation", False, 
+                                "❌ Não foram encontradas diferenças entre order_sequence e delivery_order")
+                    return False
+            else:
+                self.log_test("Sequence Logic Separation", False, 
+                            f"❌ Número insuficiente de paradas para análise: {len(stops)}")
+                return False
+        else:
+            self.log_test("Sequence Logic Separation", False, 
+                        "❌ Falha ao obter detalhes da rota otimizada", response['data'])
+            return False
+    
+    def test_recent_route_analysis(self):
+        """Analyze recent routes to verify the corrections"""
+        print("\n=== ANALISANDO ROTAS RECENTES ===")
+        
+        # Get list of routes
+        response = self.make_request('GET', '/routes')
+        if not response['success']:
+            self.log_test("Recent Route Analysis", False, 
+                        "❌ Falha ao obter lista de rotas", response['data'])
+            return False
+        
+        routes = response['data']
+        if not routes:
+            self.log_test("Recent Route Analysis", False, 
+                        "❌ Nenhuma rota encontrada no sistema")
+            return False
+        
+        # Sort routes by ID to get most recent (assuming sequential IDs)
+        routes_sorted = sorted(routes, key=lambda x: x.get('id', ''), reverse=True)
+        
+        # Analyze the most recent route
+        recent_route = routes_sorted[0]
+        route_id = recent_route.get('id')
+        
+        print(f"   🔍 Analisando rota mais recente: {route_id}")
+        
+        # Get detailed route information
+        response = self.make_request('GET', f'/routes/{route_id}')
+        if response['success']:
+            route_details = response['data']
+            
+            # Check for alias field
+            has_alias = 'alias' in route_details
+            alias_value = route_details.get('alias')
+            
+            # Check stops for delivery_order and order_sequence
+            stops = route_details.get('stops', [])
+            
+            analysis_results = {
+                'route_id': route_id,
+                'has_alias_field': has_alias,
+                'alias_value': alias_value,
+                'total_stops': len(stops),
+                'stops_with_delivery_order': 0,
+                'stops_with_order_sequence': 0,
+                'sequence_differences': 0
+            }
+            
+            for stop in stops:
+                if 'delivery_order' in stop:
+                    analysis_results['stops_with_delivery_order'] += 1
+                if 'order_sequence' in stop:
+                    analysis_results['stops_with_order_sequence'] += 1
+                
+                delivery_order = stop.get('delivery_order', 0)
+                order_sequence = stop.get('order_sequence', 0)
+                if delivery_order != order_sequence:
+                    analysis_results['sequence_differences'] += 1
+            
+            # Log analysis results
+            print(f"   📊 RESULTADOS DA ANÁLISE:")
+            print(f"     Rota ID: {analysis_results['route_id']}")
+            print(f"     Campo alias presente: {analysis_results['has_alias_field']}")
+            print(f"     Valor do alias: {analysis_results['alias_value']}")
+            print(f"     Total de paradas: {analysis_results['total_stops']}")
+            print(f"     Paradas com delivery_order: {analysis_results['stops_with_delivery_order']}")
+            print(f"     Paradas com order_sequence: {analysis_results['stops_with_order_sequence']}")
+            print(f"     Diferenças entre sequências: {analysis_results['sequence_differences']}")
+            
+            # Evaluate if corrections are working
+            corrections_working = (
+                analysis_results['has_alias_field'] and
+                analysis_results['stops_with_delivery_order'] == analysis_results['total_stops'] and
+                analysis_results['stops_with_order_sequence'] == analysis_results['total_stops']
+            )
+            
+            if corrections_working:
+                self.log_test("Recent Route Analysis", True, 
+                            f"✅ Correções implementadas funcionando na rota {route_id}")
+                
+                if analysis_results['sequence_differences'] > 0:
+                    self.log_test("Sequence Differences", True, 
+                                f"✅ Diferenças entre order_sequence e delivery_order encontradas: {analysis_results['sequence_differences']} paradas")
+                else:
+                    self.log_test("Sequence Differences", True, 
+                                "ℹ️  Nenhuma diferença entre sequências (pode ser normal dependendo das prioridades)")
+                
+                return True
+            else:
+                missing_corrections = []
+                if not analysis_results['has_alias_field']:
+                    missing_corrections.append('campo alias')
+                if analysis_results['stops_with_delivery_order'] != analysis_results['total_stops']:
+                    missing_corrections.append('campo delivery_order')
+                if analysis_results['stops_with_order_sequence'] != analysis_results['total_stops']:
+                    missing_corrections.append('campo order_sequence')
+                
+                self.log_test("Recent Route Analysis", False, 
+                            f"❌ Correções não implementadas completamente: {missing_corrections}")
+                return False
+        else:
+            self.log_test("Recent Route Analysis", False, 
+                        f"❌ Falha ao obter detalhes da rota {route_id}", response['data'])
+            return False
+
     def investigate_422_error_adding_stops(self):
         """Investigate the specific 422 error when adding stops to routes"""
         print("🔍 INVESTIGATING 422 ERROR - ADDING STOPS TO ROUTES")
