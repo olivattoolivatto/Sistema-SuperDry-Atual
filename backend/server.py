@@ -327,6 +327,7 @@ class Route(BaseModel):
     vehicle_type: VehicleType
     planned_date: str  # Format: "YYYY-MM-DD"
     planned_start_time: str  # Format: "HH:MM"
+    alias: Optional[str] = None  # Custom route name
     status: RouteStatus = RouteStatus.PLANNED
     stops: List[RouteStop] = []
     total_duration: int = 0  # minutes
