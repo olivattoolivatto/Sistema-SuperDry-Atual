@@ -2130,6 +2130,7 @@ async def create_route(route_data: RouteCreate):
             vehicle_type=route_data.vehicle_type,
             planned_date=route_data.planned_date,
             planned_start_time=route_data.planned_start_time,
+            alias=route_data.alias,  # Custom route name
             company_address=company_address,
             stops=[]
         )
