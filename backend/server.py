@@ -318,7 +318,8 @@ class RouteStop(BaseModel):
     priority: Priority = Priority.AUTOMATICA
     estimated_duration: int = 30  # minutes (30 for Retirar/Entregar, 120 for Executar)
     service_status: ServiceStatus
-    order_sequence: int = 0
+    order_sequence: int = 0  # Optimized route order from OSRM
+    delivery_order: int = 0  # Actual delivery sequence (may differ from route order)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Route(BaseModel):
