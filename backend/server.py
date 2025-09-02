@@ -500,7 +500,14 @@ class RouteCreate(BaseModel):
     vehicle_type: VehicleType
     planned_date: str  # Format: "YYYY-MM-DD"
     planned_start_time: str
+    alias: Optional[str] = None  # Custom route name
     stops: List[dict] = []  # Will contain budget_item_ids and priorities
+
+class RouteUpdate(BaseModel):
+    vehicle_type: Optional[VehicleType] = None
+    planned_date: Optional[str] = None
+    planned_start_time: Optional[str] = None
+    alias: Optional[str] = None  # Custom route name
 
 class RouteStopUpdate(BaseModel):
     waypoint_index: int
