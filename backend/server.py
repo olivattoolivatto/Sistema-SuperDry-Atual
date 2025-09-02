@@ -2264,7 +2264,9 @@ async def update_route_stops(route_id: str, stops_data: List[dict]):
                 address=client["address"],
                 priority=Priority(stop_data.get("priority", "AUTOMATICA")),
                 estimated_duration=estimated_duration,
-                service_status=ServiceStatus(budget_item["status"])
+                service_status=ServiceStatus(budget_item["status"]),
+                order_sequence=len(stops) + 1,  # Initial sequence
+                delivery_order=len(stops) + 1   # Will be updated after optimization
             )
             stops.append(stop)
         
