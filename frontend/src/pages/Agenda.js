@@ -1538,6 +1538,180 @@ export function Agenda() {
         </div>
       )}
 
+      {/* Modal de Criação de Evento */}
+      {showCreateEventModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Criar Novo Evento</h3>
+              <p className="text-sm text-gray-600 mt-1">Duração padrão: 2 horas</p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Título */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Título *
+                </label>
+                <input
+                  type="text"
+                  value={newEvent.title}
+                  onChange={(e) => setNewEvent(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Digite o título do evento"
+                  required
+                />
+              </div>
+
+              {/* Descrição */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição
+                </label>
+                <textarea
+                  value={newEvent.description}
+                  onChange={(e) => setNewEvent(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Descrição opcional do evento"
+                />
+              </div>
+
+              {/* Local */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Local
+                </label>
+                <input
+                  type="text"
+                  value={newEvent.location}
+                  onChange={(e) => setNewEvent(prev => ({ ...prev, location: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Endereço ou local do evento"
+                />
+              </div>
+
+              {/* Data e Hora de Início */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data Início *
+                  </label>
+                  <input
+                    type="date"
+                    value={newEvent.start_date}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, start_date: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Hora Início *
+                  </label>
+                  <input
+                    type="time"
+                    value={newEvent.start_time}
+                    onChange={(e) => {
+                      setNewEvent(prev => {
+                        // Automaticamente ajustar o horário de fim para 2 horas depois
+                        const startTime = e.target.value;
+                        const [hours, minutes] = startTime.split(':');
+                        const startDate = new Date();
+                        startDate.setHours(parseInt(hours), parseInt(minutes));
+                        const endDate = new Date(startDate.getTime() + 120 * 60000); // Adicionar 2 horas
+                        const endTime = endDate.toTimeString().slice(0, 5);
+                        
+                        return { 
+                          ...prev, 
+                          start_time: startTime,
+                          end_time: endTime 
+                        };
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Data e Hora de Fim */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data Fim *
+                  </label>
+                  <input
+                    type="date"
+                    value={newEvent.end_date}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, end_date: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Hora Fim *
+                  </label>
+                  <input
+                    type="time"
+                    value={newEvent.end_time}
+                    onChange={(e) => setNewEvent(prev => ({ ...prev, end_time: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded">
+                💡 Dica: O horário de fim é ajustado automaticamente para 2 horas após o início
+              </div>
+            </div>
+
+            <div className="flex justify-end px-6 py-4 border-t border-gray-200 space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateEventModal(false);
+                  setNewEvent({
+                    title: '',
+                    description: '',
+                    location: '',
+                    start_date: '',
+                    start_time: '',
+                    end_date: '',
+                    end_time: '',
+                    duration: 120
+                  });
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                disabled={creatingEvents}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCreateEvent}
+                disabled={!newEvent.title || !newEvent.start_date || !newEvent.start_time || creatingEvents}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center"
+              >
+                {creatingEvents ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Criar Evento
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Edição de Evento */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
