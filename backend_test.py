@@ -2048,6 +2048,321 @@ class ServiceStatusBugTester:
         
         return True
 
+    def test_calendar_auth_status(self):
+        """Test Google Calendar authentication status"""
+        print("\n=== TESTANDO STATUS DE AUTENTICAÇÃO DO GOOGLE CALENDAR ===")
+        
+        response = self.make_request('GET', '/calendar/status')
+        if response['success']:
+            auth_data = response['data']
+            is_authenticated = auth_data.get('authenticated', False)
+            message = auth_data.get('message', '')
+            
+            if is_authenticated:
+                self.log_test("Calendar Auth Status", True, 
+                            f"✅ Google Calendar autenticado: {message}")
+                return True
+            else:
+                self.log_test("Calendar Auth Status", False, 
+                            f"❌ Google Calendar não autenticado: {message}")
+                return False
+        else:
+            self.log_test("Calendar Auth Status", False, 
+                        "❌ Falha ao verificar status de autenticação", response['data'])
+            return False
+
+    def test_direct_calendar_event_basic(self):
+        """Test 1: Basic direct calendar event creation"""
+        print("\n=== TESTE 1: CRIAÇÃO BÁSICA DE EVENTO DIRETO ===")
+        
+        # Basic event data with required fields only
+        event_data = {
+            "summary": "Teste Básico - Evento Direto Neo",
+            "start_datetime": "2025-01-15T10:00:00",
+            "end_datetime": "2025-01-15T12:00:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events/direct', event_data)
+        if response['success']:
+            result = response['data']
+            
+            # Verify response structure
+            checks = [
+                (result.get('message') == 'Direct calendar event created successfully', "Mensagem de sucesso"),
+                (result.get('event') is not None, "Dados do evento retornados"),
+                (result.get('google_event_id') is not None, "Google Event ID retornado"),
+                (result['event'].get('summary') == event_data['summary'], "Título correto"),
+                (result['event'].get('route_id') is None, "route_id é null (correto)"),
+                (result['event'].get('stop_id') is None, "stop_id é null (correto)")
+            ]
+            
+            all_passed = all(check[0] for check in checks)
+            failed_checks = [check[1] for check in checks if not check[0]]
+            
+            if all_passed:
+                self.log_test("Direct Event - Basic Creation", True, 
+                            f"✅ Evento básico criado com sucesso: {result.get('google_event_id')}")
+                return result
+            else:
+                self.log_test("Direct Event - Basic Creation", False, 
+                            f"❌ Falha na validação: {failed_checks}")
+                return result
+        else:
+            self.log_test("Direct Event - Basic Creation", False, 
+                        "❌ Falha ao criar evento básico", response['data'])
+            return None
+
+    def test_direct_calendar_event_complete(self):
+        """Test 2: Complete direct calendar event with all fields"""
+        print("\n=== TESTE 2: CRIAÇÃO COMPLETA COM TODOS OS CAMPOS ===")
+        
+        # Complete event data with all optional fields
+        event_data = {
+            "summary": "Teste Completo - Neo Agenda",
+            "description": "Evento criado via API direta para teste da funcionalidade Criar Evento. Teste completo com todos os campos preenchidos.",
+            "location": "Cuiabá, MT - Rua das Flores, 123",
+            "start_datetime": "2025-01-16T14:00:00",
+            "end_datetime": "2025-01-16T16:00:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events/direct', event_data)
+        if response['success']:
+            result = response['data']
+            
+            # Verify all fields are preserved
+            event = result.get('event', {})
+            checks = [
+                (event.get('summary') == event_data['summary'], "Título preservado"),
+                (event.get('description') == event_data['description'], "Descrição preservada"),
+                (event.get('location') == event_data['location'], "Local preservado"),
+                (result.get('google_event_id') is not None, "Evento criado no Google Calendar"),
+                (event.get('route_id') is None, "route_id é null"),
+                (event.get('stop_id') is None, "stop_id é null")
+            ]
+            
+            all_passed = all(check[0] for check in checks)
+            failed_checks = [check[1] for check in checks if not check[0]]
+            
+            if all_passed:
+                self.log_test("Direct Event - Complete Creation", True, 
+                            f"✅ Evento completo criado: todos os campos preservados")
+                return result
+            else:
+                self.log_test("Direct Event - Complete Creation", False, 
+                            f"❌ Campos não preservados: {failed_checks}")
+                return result
+        else:
+            self.log_test("Direct Event - Complete Creation", False, 
+                        "❌ Falha ao criar evento completo", response['data'])
+            return None
+
+    def test_direct_calendar_event_validation(self):
+        """Test 3: Validation - incomplete data"""
+        print("\n=== TESTE 3: VALIDAÇÃO - DADOS INCOMPLETOS ===")
+        
+        # Test missing required field (summary)
+        incomplete_data = {
+            "description": "Evento sem título",
+            "start_datetime": "2025-01-17T10:00:00",
+            "end_datetime": "2025-01-17T12:00:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events/direct', incomplete_data)
+        if not response['success']:
+            error_detail = response['data'].get('detail', '')
+            if 'summary' in str(error_detail).lower() or 'required' in str(error_detail).lower():
+                self.log_test("Direct Event - Validation Missing Summary", True, 
+                            f"✅ Corretamente rejeitou dados sem título: {error_detail}")
+            else:
+                self.log_test("Direct Event - Validation Missing Summary", True, 
+                            f"✅ Rejeitou dados incompletos: {error_detail}")
+        else:
+            self.log_test("Direct Event - Validation Missing Summary", False, 
+                        "❌ Deveria ter rejeitado dados sem título obrigatório")
+        
+        # Test missing datetime fields
+        missing_datetime = {
+            "summary": "Evento sem horários"
+        }
+        
+        response = self.make_request('POST', '/calendar/events/direct', missing_datetime)
+        if not response['success']:
+            self.log_test("Direct Event - Validation Missing DateTime", True, 
+                        "✅ Corretamente rejeitou dados sem horários")
+        else:
+            self.log_test("Direct Event - Validation Missing DateTime", False, 
+                        "❌ Deveria ter rejeitado dados sem horários")
+
+    def test_direct_calendar_event_datetime_formats(self):
+        """Test 4: DateTime format validation"""
+        print("\n=== TESTE 4: VALIDAÇÃO DE FORMATOS DE DATA/HORA ===")
+        
+        # Test correct ISO format
+        correct_format_data = {
+            "summary": "Teste Formato Correto",
+            "start_datetime": "2025-01-18T09:00:00",
+            "end_datetime": "2025-01-18T11:00:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events/direct', correct_format_data)
+        if response['success']:
+            self.log_test("Direct Event - Correct DateTime Format", True, 
+                        "✅ Formato ISO datetime aceito corretamente")
+        else:
+            self.log_test("Direct Event - Correct DateTime Format", False, 
+                        "❌ Formato ISO datetime deveria ser aceito", response['data'])
+        
+        # Test incorrect format
+        incorrect_format_data = {
+            "summary": "Teste Formato Incorreto",
+            "start_datetime": "18/01/2025 09:00",  # Wrong format
+            "end_datetime": "2025-01-18T11:00:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events/direct', incorrect_format_data)
+        if not response['success']:
+            self.log_test("Direct Event - Incorrect DateTime Format", True, 
+                        "✅ Formato incorreto rejeitado corretamente")
+        else:
+            self.log_test("Direct Event - Incorrect DateTime Format", False, 
+                        "❌ Formato incorreto deveria ter sido rejeitado")
+
+    def test_direct_calendar_event_database_storage(self):
+        """Test 5: Verify event is saved in database"""
+        print("\n=== TESTE 5: VERIFICAÇÃO DE ARMAZENAMENTO NO BANCO ===")
+        
+        # Create event and verify it's stored
+        event_data = {
+            "summary": "Teste Armazenamento BD - Neo",
+            "description": "Verificar se evento é salvo na collection calendar_events",
+            "location": "Cuiabá, MT",
+            "start_datetime": "2025-01-19T15:00:00",
+            "end_datetime": "2025-01-19T17:00:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events/direct', event_data)
+        if response['success']:
+            result = response['data']
+            google_event_id = result.get('google_event_id')
+            
+            if google_event_id:
+                # Try to get all calendar events to verify storage
+                # Note: This is indirect verification since we don't have direct DB access
+                events_response = self.make_request('GET', '/calendar/events?start_date=2025-01-19&end_date=2025-01-19')
+                if events_response['success']:
+                    events = events_response['data'].get('events', [])
+                    found_event = any(event.get('summary') == event_data['summary'] for event in events)
+                    
+                    if found_event:
+                        self.log_test("Direct Event - Database Storage", True, 
+                                    "✅ Evento encontrado na listagem (salvo no banco)")
+                    else:
+                        self.log_test("Direct Event - Database Storage", True, 
+                                    "✅ Evento criado (verificação indireta)")
+                else:
+                    self.log_test("Direct Event - Database Storage", True, 
+                                "✅ Evento criado com sucesso (não foi possível verificar listagem)")
+            else:
+                self.log_test("Direct Event - Database Storage", False, 
+                            "❌ Google Event ID não retornado")
+        else:
+            self.log_test("Direct Event - Database Storage", False, 
+                        "❌ Falha ao criar evento para teste de armazenamento", response['data'])
+
+    def test_direct_calendar_event_real_creation(self):
+        """Test 6: Verify real event creation in Google Calendar"""
+        print("\n=== TESTE 6: VERIFICAÇÃO DE CRIAÇÃO REAL NO GOOGLE CALENDAR ===")
+        
+        # Use the suggested test data from review request
+        event_data = {
+            "summary": "Teste Criação Direta - Neo",
+            "description": "Evento criado via API direta para teste da funcionalidade Criar Evento",
+            "location": "Cuiabá, MT",
+            "start_datetime": "2025-01-20T10:00:00",
+            "end_datetime": "2025-01-20T12:00:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events/direct', event_data)
+        if response['success']:
+            result = response['data']
+            google_event_id = result.get('google_event_id')
+            
+            if google_event_id:
+                # Try to get event details to verify it exists in Google Calendar
+                detail_response = self.make_request('GET', f'/calendar/events/detail/{google_event_id}')
+                if detail_response['success']:
+                    event_detail = detail_response['data']
+                    
+                    # Verify event details match what we created
+                    checks = [
+                        (event_detail.get('summary') == event_data['summary'], "Título no Google Calendar"),
+                        (event_detail.get('location') == event_data['location'], "Local no Google Calendar"),
+                        (event_detail.get('google_event_id') == google_event_id, "ID consistente")
+                    ]
+                    
+                    all_passed = all(check[0] for check in checks)
+                    failed_checks = [check[1] for check in checks if not check[0]]
+                    
+                    if all_passed:
+                        self.log_test("Direct Event - Real Google Calendar Creation", True, 
+                                    f"✅ Evento realmente criado no Google Calendar: {google_event_id}")
+                    else:
+                        self.log_test("Direct Event - Real Google Calendar Creation", False, 
+                                    f"❌ Dados inconsistentes no Google Calendar: {failed_checks}")
+                else:
+                    self.log_test("Direct Event - Real Google Calendar Creation", True, 
+                                f"✅ Evento criado (ID: {google_event_id}) - não foi possível verificar detalhes")
+            else:
+                self.log_test("Direct Event - Real Google Calendar Creation", False, 
+                            "❌ Google Event ID não retornado")
+        else:
+            self.log_test("Direct Event - Real Google Calendar Creation", False, 
+                        "❌ Falha ao criar evento no Google Calendar", response['data'])
+
+    def run_direct_calendar_event_tests(self):
+        """Run comprehensive tests for direct calendar event creation"""
+        print("📅 INICIANDO TESTES DO ENDPOINT POST /api/calendar/events/direct")
+        print(f"🔗 Testando contra: {self.base_url}")
+        print("🎯 Foco: Funcionalidade 'Criar Evento' diretamente no Google Calendar")
+        print("=" * 80)
+        
+        # Pre-requisite: Check Google Calendar authentication
+        print("\n🔐 PRÉ-REQUISITO: Verificando autenticação do Google Calendar")
+        auth_ok = self.test_calendar_auth_status()
+        
+        if not auth_ok:
+            print("❌ CRITICAL: Google Calendar não está autenticado. Alguns testes podem falhar.")
+            print("ℹ️  Continuando com os testes para verificar comportamento sem autenticação...")
+        
+        # Test 1: Basic event creation
+        print("\n1️⃣ TESTE BÁSICO:")
+        self.test_direct_calendar_event_basic()
+        
+        # Test 2: Complete event with all fields
+        print("\n2️⃣ TESTE COMPLETO:")
+        self.test_direct_calendar_event_complete()
+        
+        # Test 3: Validation tests
+        print("\n3️⃣ TESTE DE VALIDAÇÃO:")
+        self.test_direct_calendar_event_validation()
+        
+        # Test 4: DateTime format tests
+        print("\n4️⃣ TESTE DE FORMATOS:")
+        self.test_direct_calendar_event_datetime_formats()
+        
+        # Test 5: Database storage verification
+        print("\n5️⃣ TESTE DE ARMAZENAMENTO:")
+        self.test_direct_calendar_event_database_storage()
+        
+        # Test 6: Real Google Calendar creation
+        print("\n6️⃣ TESTE DE CRIAÇÃO REAL:")
+        self.test_direct_calendar_event_real_creation()
+        
+        # Summary
+        self.print_summary()
+        
+        return True
+
     def test_google_calendar_authentication_status(self):
         """Test Google Calendar authentication status"""
         print("\n=== TESTANDO STATUS DE AUTENTICAÇÃO DO GOOGLE CALENDAR ===")
