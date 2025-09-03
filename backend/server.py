@@ -1138,6 +1138,66 @@ async def create_calendar_events(event_request: CalendarEventCreate):
         logger.error(f"Error creating calendar events: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/calendar/events/direct")
+async def create_direct_calendar_event(event_request: DirectEventCreate):
+    """Create a direct calendar event (not from route)"""
+    try:
+        # Get credentials from database
+        creds_doc = await db.calendar_credentials.find_one({})
+        if not creds_doc:
+            raise HTTPException(status_code=400, detail="Google Calendar not authenticated")
+        
+        # Create calendar service
+        service = get_calendar_service(creds_doc["credentials"])
+        
+        # Parse datetime strings
+        start_datetime = datetime.fromisoformat(event_request.start_datetime.replace('Z', '+00:00'))
+        end_datetime = datetime.fromisoformat(event_request.end_datetime.replace('Z', '+00:00'))
+        
+        # Create Google Calendar event
+        event = {
+            'summary': event_request.summary,
+            'description': event_request.description,
+            'location': event_request.location,
+            'start': {
+                'dateTime': start_datetime.isoformat(),
+                'timeZone': 'America/Cuiaba',
+            },
+            'end': {
+                'dateTime': end_datetime.isoformat(),
+                'timeZone': 'America/Cuiaba',
+            },
+            'colorId': '1'  # Azul para eventos criados manualmente
+        }
+        
+        # Create event in Google Calendar
+        google_event = service.events().insert(calendarId='primary', body=event).execute()
+        
+        # Store event in database
+        calendar_event = CalendarEvent(
+            id=f"CAL-{str(uuid.uuid4().int)[:7].zfill(7)}",
+            route_id=None,  # Não associado a uma rota
+            stop_id=None,   # Não associado a um stop
+            summary=event['summary'],
+            description=event.get('description'),
+            location=event.get('location'),
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            google_event_id=google_event['id']
+        )
+        
+        await db.calendar_events.insert_one(calendar_event.dict())
+        
+        return {
+            "message": "Direct calendar event created successfully",
+            "event": calendar_event.dict(),
+            "google_event_id": google_event['id']
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating direct calendar event: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/calendar/events/{route_id}")
 async def get_calendar_events_by_route(route_id: str):
     """Get calendar events for a specific route"""
