@@ -28,6 +28,17 @@ export function Agenda() {
   const [selectedStops, setSelectedStops] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [creatingEvents, setCreatingEvents] = useState(false);
+  const [showCreateEventModal, setShowCreateEventModal] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    title: '',
+    description: '',
+    location: '',
+    start_date: '',
+    start_time: '',
+    end_date: '',
+    end_time: '',
+    duration: 60
+  });
   const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [calendarView, setCalendarView] = useState('week'); // 'week', '3days', 'day'
