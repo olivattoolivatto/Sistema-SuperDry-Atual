@@ -1181,59 +1181,7 @@ export function Routes() {
     }
   };
 
-  const handleSendToCalendar = () => {
-    if (!optimizedRoute) {
-      toast({
-        title: "Aviso!",
-        description: "Otimize uma rota antes de enviar para agenda.",
-        variant: "default",
-      });
-      return;
-    }
 
-    // Initialize default values
-    const today = new Date();
-    const defaultDate = today.toISOString().split('T')[0]; // YYYY-MM-DD
-    const defaultTime = optimizedRoute.planned_start_time || '08:00';
-    
-    setCalendarDate(defaultDate);
-    setCalendarTime(defaultTime);
-    setSelectedStopsForCalendar(optimizedRoute.stops.map(stop => stop.id));
-    setShowCalendarModal(true);
-  };
-
-  const handleConfirmSendToCalendar = async () => {
-    try {
-      console.log('📅 Enviando eventos para Google Calendar...');
-      
-      const eventData = {
-        route_id: optimizedRoute.id,
-        stop_ids: selectedStopsForCalendar,
-        start_date: calendarDate,
-        start_time: calendarTime
-      };
-
-      console.log('📤 Dados do evento:', eventData);
-      
-      await agendaApi.createEvent(eventData);
-      
-      toast({
-        title: "Sucesso!",
-        description: `${selectedStopsForCalendar.length} eventos criados na agenda!`,
-        variant: "default",
-      });
-      
-      setShowCalendarModal(false);
-      
-    } catch (error) {
-      console.error('Erro ao criar eventos na agenda:', error);
-      toast({
-        title: "Erro!",
-        description: "Erro ao criar eventos na agenda. Verifique se o Google Calendar está conectado.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleEditRoute = async (routeId) => {
     logAction('EDIT_ROUTE_START', { routeId });
