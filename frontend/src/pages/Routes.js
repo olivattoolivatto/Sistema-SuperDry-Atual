@@ -2026,13 +2026,6 @@ export function Routes() {
                 Limpar
               </button>
               <button
-                onClick={handleSendToCalendar}
-                className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors"
-              >
-                <Calendar className="w-4 h-4 mr-2" />
-                Enviar para Agenda
-              </button>
-              <button
                 onClick={handleSaveRoute}
                 className="flex items-center px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
               >
