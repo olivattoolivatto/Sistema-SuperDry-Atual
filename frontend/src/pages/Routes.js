@@ -223,10 +223,7 @@ export function Routes() {
   const [currentVehicleType, setCurrentVehicleType] = useState('CARRO');
   const [routeAlias, setRouteAlias] = useState('');
   const [routeType, setRouteType] = useState('CURTA'); // New: CURTA or EFICIENTE
-  const [showCalendarModal, setShowCalendarModal] = useState(false);
-  const [calendarDate, setCalendarDate] = useState('');
-  const [calendarTime, setCalendarTime] = useState('');
-  const [selectedStopsForCalendar, setSelectedStopsForCalendar] = useState([]);
+
   
   // Map state
   const mapRef = useRef(null);
