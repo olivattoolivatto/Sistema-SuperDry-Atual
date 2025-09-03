@@ -2688,13 +2688,17 @@ if __name__ == "__main__":
             print("📅 Running CALENDAR INVESTIGATION TESTS only")
             tester = ServiceStatusBugTester()
             success = tester.run_calendar_investigation_tests()
+        elif sys.argv[1] == "--direct-calendar":
+            print("📅 Running DIRECT CALENDAR EVENT TESTS only")
+            tester = ServiceStatusBugTester()
+            success = tester.run_direct_calendar_event_tests()
         else:
             print("🚀 Running FULL ROUTES API TESTS")
             tester = ServiceStatusBugTester()
             success = tester.run_all_tests()
     else:
-        print("📅 Running CALENDAR INVESTIGATION TESTS (default)")
+        print("📅 Running DIRECT CALENDAR EVENT TESTS (default)")
         tester = ServiceStatusBugTester()
-        success = tester.run_calendar_investigation_tests()
+        success = tester.run_direct_calendar_event_tests()
     
     sys.exit(0 if success else 1)
