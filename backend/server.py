@@ -543,8 +543,8 @@ class RouteStopUpdate(BaseModel):
 # Google Calendar Models
 class CalendarEvent(BaseModel):
     id: Optional[str] = None
-    route_id: str
-    stop_id: str
+    route_id: Optional[str] = None  # Optional for direct events
+    stop_id: Optional[str] = None   # Optional for direct events
     summary: str
     description: Optional[str] = None
     location: Optional[str] = None
