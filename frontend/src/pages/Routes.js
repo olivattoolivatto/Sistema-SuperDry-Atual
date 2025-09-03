@@ -15,7 +15,7 @@ import {
   FileText
 } from 'lucide-react';
 import { toast } from '../hooks/use-toast';
-import { routesApi, agendaApi } from '../services/api';
+import { routesApi } from '../services/api';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
