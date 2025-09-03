@@ -102,7 +102,57 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Melhoria de visibilidade da coluna STATUS no Catálogo de Serviços. Implementações anteriores: preço editável em Orçamentos, colunas ordenáveis no Catálogo, refinamentos na tela de Rotas."
+user_problem_statement: "Implementar funcionalidade 'Criar Evento' na tela Agenda. O usuário solicitou um botão para criar eventos manualmente no Google Calendar com duração padrão de 2 horas (120 minutos), com campos convencionais: título, descrição, local, data/hora início e fim."
+
+backend:
+  - task: "Calendar Direct Event Creation API"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "Implementado novo modelo DirectEventCreate e endpoint POST /api/calendar/events/direct para criação direta de eventos no Google Calendar. Precisa ser testado para verificar funcionamento."
+
+frontend:
+  - task: "Create Event Button and Modal"
+    implemented: true
+    working: true
+    file: "pages/Agenda.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "✅ IMPLEMENTADO E FUNCIONANDO: Botão 'Criar Evento' visível no cabeçalho quando Google Calendar conectado. Modal completo com todos os campos: título, descrição, local, data/hora início e fim. Duração padrão de 2 horas (08:00 às 10:00). Ajuste automático do horário de fim. Interface testada via screenshot - funcionando perfeitamente."
+
+  - task: "Plus Icon Import"
+    implemented: true
+    working: true
+    file: "pages/Agenda.js"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "✅ CORRIGIDO: Import do ícone Plus adicionado na linha 18 dos imports do lucide-react."
+
+  - task: "Default Event Duration - 2 Hours"
+    implemented: true
+    working: true
+    file: "pages/Agenda.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "✅ IMPLEMENTADO: Duração padrão alterada de 1 hora para 2 horas (120 minutos). Horário de fim ajustado automaticamente de 08:00 para 10:00. Funcionalidade de ajuste automático implementada ao alterar horário de início."
 
 backend:
   - task: "Budget Update API Endpoint"
