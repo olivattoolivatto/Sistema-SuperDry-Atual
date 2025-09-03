@@ -2048,6 +2048,304 @@ class ServiceStatusBugTester:
         
         return True
 
+    def test_google_calendar_authentication_status(self):
+        """Test Google Calendar authentication status"""
+        print("\n=== TESTANDO STATUS DE AUTENTICAÇÃO DO GOOGLE CALENDAR ===")
+        
+        response = self.make_request('GET', '/calendar/status')
+        if response['success']:
+            status_data = response['data']
+            is_authenticated = status_data.get('authenticated', False)
+            message = status_data.get('message', '')
+            
+            if is_authenticated:
+                self.log_test("Calendar Auth Status", True, 
+                            f"✅ Google Calendar autenticado: {message}")
+                return True
+            else:
+                self.log_test("Calendar Auth Status", False, 
+                            f"❌ Google Calendar NÃO autenticado: {message}")
+                return False
+        else:
+            self.log_test("Calendar Auth Status", False, 
+                        "❌ Falha ao verificar status de autenticação", response['data'])
+            return False
+    
+    def test_calendar_events_creation_endpoint(self):
+        """Test POST /api/calendar/events endpoint - the main focus of the investigation"""
+        print("\n=== TESTANDO ENDPOINT POST /api/calendar/events ===")
+        
+        # First, check if we have existing routes to test with
+        routes_response = self.make_request('GET', '/routes')
+        if not routes_response['success']:
+            self.log_test("Calendar Events - Get Routes", False, 
+                        "❌ Falha ao obter rotas existentes", routes_response['data'])
+            return False
+        
+        routes = routes_response['data']
+        if not routes:
+            self.log_test("Calendar Events - Get Routes", False, 
+                        "❌ Nenhuma rota encontrada para teste")
+            return False
+        
+        # Use the first available route
+        test_route = routes[0]
+        route_id = test_route.get('id')
+        
+        if not route_id:
+            self.log_test("Calendar Events - Route ID", False, 
+                        "❌ Rota sem ID válido")
+            return False
+        
+        # Get route details to find stop IDs
+        route_details_response = self.make_request('GET', f'/routes/{route_id}')
+        if not route_details_response['success']:
+            self.log_test("Calendar Events - Route Details", False, 
+                        f"❌ Falha ao obter detalhes da rota {route_id}", route_details_response['data'])
+            return False
+        
+        route_details = route_details_response['data']
+        stops = route_details.get('stops', [])
+        
+        if not stops:
+            self.log_test("Calendar Events - Route Stops", False, 
+                        f"❌ Rota {route_id} não possui paradas")
+            return False
+        
+        # Prepare the exact payload format mentioned in the review request
+        stop_ids = [stop.get('id') for stop in stops[:2]]  # Use first 2 stops
+        
+        calendar_event_data = {
+            "route_id": route_id,
+            "stop_ids": stop_ids,
+            "start_date": "2025-03-09",
+            "start_time": "08:00"
+        }
+        
+        print(f"   📋 Testando com rota: {route_id}")
+        print(f"   📋 Stop IDs: {stop_ids}")
+        print(f"   📋 Data: {calendar_event_data['start_date']} às {calendar_event_data['start_time']}")
+        
+        # Test the endpoint
+        response = self.make_request('POST', '/calendar/events', calendar_event_data)
+        
+        # Analyze the response
+        if response['success']:
+            result = response['data']
+            events_created = result.get('events', [])
+            message = result.get('message', '')
+            
+            self.log_test("Calendar Events Creation", True, 
+                        f"✅ Eventos criados com sucesso: {message}")
+            
+            # Verify event structure
+            if events_created:
+                first_event = events_created[0]
+                required_fields = ['id', 'route_id', 'stop_id', 'summary', 'start_datetime', 'end_datetime']
+                missing_fields = [field for field in required_fields if field not in first_event]
+                
+                if not missing_fields:
+                    self.log_test("Calendar Events Structure", True, 
+                                f"✅ Estrutura dos eventos correta: {len(events_created)} eventos")
+                else:
+                    self.log_test("Calendar Events Structure", False, 
+                                f"❌ Campos ausentes na estrutura: {missing_fields}")
+            
+            return True
+        else:
+            # This is the key part - analyze the specific error
+            status_code = response['status_code']
+            error_data = response['data']
+            
+            if status_code == 400:
+                self.log_test("Calendar Events Creation", False, 
+                            f"❌ ERRO 400 (Bad Request): {error_data}")
+                
+                # Check for specific authentication error
+                error_detail = str(error_data.get('detail', ''))
+                if 'not authenticated' in error_detail.lower() or 'credentials' in error_detail.lower():
+                    self.log_test("Calendar Auth Issue", False, 
+                                "🔍 PROBLEMA IDENTIFICADO: Google Calendar não está autenticado")
+                elif 'route not found' in error_detail.lower():
+                    self.log_test("Calendar Route Issue", False, 
+                                "🔍 PROBLEMA IDENTIFICADO: Rota não encontrada")
+                elif 'stop' in error_detail.lower():
+                    self.log_test("Calendar Stop Issue", False, 
+                                "🔍 PROBLEMA IDENTIFICADO: Problema com os stops selecionados")
+                else:
+                    self.log_test("Calendar Unknown 400", False, 
+                                f"🔍 ERRO 400 DESCONHECIDO: {error_detail}")
+            
+            elif status_code == 401:
+                self.log_test("Calendar Events Creation", False, 
+                            f"❌ ERRO 401 (Unauthorized): Problema de autenticação Google")
+            
+            elif status_code == 404:
+                self.log_test("Calendar Events Creation", False, 
+                            f"❌ ERRO 404 (Not Found): Rota ou recurso não encontrado")
+            
+            elif status_code == 500:
+                self.log_test("Calendar Events Creation", False, 
+                            f"❌ ERRO 500 (Internal Server Error): {error_data}")
+            
+            else:
+                self.log_test("Calendar Events Creation", False, 
+                            f"❌ ERRO {status_code}: {error_data}")
+            
+            return False
+    
+    def test_calendar_events_with_real_route_data(self):
+        """Test with specific route data mentioned in the review (RTE-0000001, RTE-0000002)"""
+        print("\n=== TESTANDO COM DADOS DE ROTA REAL (RTE-0000001/RTE-0000002) ===")
+        
+        # Test with specific route IDs mentioned in the review
+        test_route_ids = ["RTE-0000001", "RTE-0000002"]
+        
+        for route_id in test_route_ids:
+            print(f"\n   🔍 Testando rota específica: {route_id}")
+            
+            # Get route details
+            route_response = self.make_request('GET', f'/routes/{route_id}')
+            if not route_response['success']:
+                self.log_test(f"Real Route Test - {route_id}", False, 
+                            f"❌ Rota {route_id} não encontrada")
+                continue
+            
+            route_data = route_response['data']
+            stops = route_data.get('stops', [])
+            
+            if not stops:
+                self.log_test(f"Real Route Test - {route_id}", False, 
+                            f"❌ Rota {route_id} não possui paradas")
+                continue
+            
+            # Test with first stop
+            stop_ids = [stops[0].get('id')]
+            
+            calendar_event_data = {
+                "route_id": route_id,
+                "stop_ids": stop_ids,
+                "start_date": "2025-03-09",
+                "start_time": "08:00"
+            }
+            
+            response = self.make_request('POST', '/calendar/events', calendar_event_data)
+            
+            if response['success']:
+                self.log_test(f"Real Route Test - {route_id}", True, 
+                            f"✅ Eventos criados para rota {route_id}")
+            else:
+                error_detail = response['data'].get('detail', 'Erro desconhecido')
+                self.log_test(f"Real Route Test - {route_id}", False, 
+                            f"❌ Falha para rota {route_id}: {error_detail}")
+        
+        return True
+    
+    def test_calendar_data_format_validation(self):
+        """Test different data formats to identify validation issues"""
+        print("\n=== TESTANDO VALIDAÇÃO DE FORMATO DE DADOS ===")
+        
+        # Get a valid route for testing
+        routes_response = self.make_request('GET', '/routes')
+        if not routes_response['success'] or not routes_response['data']:
+            self.log_test("Calendar Format Validation", False, 
+                        "❌ Nenhuma rota disponível para teste")
+            return False
+        
+        route_id = routes_response['data'][0].get('id')
+        
+        # Test 1: Invalid stop_ids format (not array)
+        invalid_format_1 = {
+            "route_id": route_id,
+            "stop_ids": "STP-0000001",  # String instead of array
+            "start_date": "2025-03-09",
+            "start_time": "08:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events', invalid_format_1)
+        if not response['success']:
+            self.log_test("Calendar Format - Invalid stop_ids", True, 
+                        f"✅ Corretamente rejeitou stop_ids como string: {response['data']}")
+        else:
+            self.log_test("Calendar Format - Invalid stop_ids", False, 
+                        "❌ Deveria ter rejeitado stop_ids como string")
+        
+        # Test 2: Invalid date format
+        invalid_format_2 = {
+            "route_id": route_id,
+            "stop_ids": ["STP-0000001"],
+            "start_date": "09/03/2025",  # Wrong format
+            "start_time": "08:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events', invalid_format_2)
+        if not response['success']:
+            self.log_test("Calendar Format - Invalid date", True, 
+                        f"✅ Corretamente rejeitou formato de data inválido: {response['data']}")
+        else:
+            self.log_test("Calendar Format - Invalid date", False, 
+                        "❌ Deveria ter rejeitado formato de data inválido")
+        
+        # Test 3: Invalid time format
+        invalid_format_3 = {
+            "route_id": route_id,
+            "stop_ids": ["STP-0000001"],
+            "start_date": "2025-03-09",
+            "start_time": "8:00 AM"  # Wrong format
+        }
+        
+        response = self.make_request('POST', '/calendar/events', invalid_format_3)
+        if not response['success']:
+            self.log_test("Calendar Format - Invalid time", True, 
+                        f"✅ Corretamente rejeitou formato de horário inválido: {response['data']}")
+        else:
+            self.log_test("Calendar Format - Invalid time", False, 
+                        "❌ Deveria ter rejeitado formato de horário inválido")
+        
+        # Test 4: Missing required fields
+        incomplete_data = {
+            "route_id": route_id,
+            # Missing stop_ids, start_date, start_time
+        }
+        
+        response = self.make_request('POST', '/calendar/events', incomplete_data)
+        if not response['success']:
+            self.log_test("Calendar Format - Missing fields", True, 
+                        f"✅ Corretamente rejeitou dados incompletos: {response['data']}")
+        else:
+            self.log_test("Calendar Format - Missing fields", False, 
+                        "❌ Deveria ter rejeitado dados incompletos")
+        
+        return True
+    
+    def run_calendar_investigation_tests(self):
+        """Run specific tests to investigate the calendar button issue"""
+        print("📅 INICIANDO INVESTIGAÇÃO DO BOTÃO 'LANÇAR NA AGENDA'")
+        print(f"🔗 Testando contra: {self.base_url}")
+        print("🎯 Foco: Descobrir por que os eventos não aparecem no Google Calendar")
+        print("=" * 80)
+        
+        # Test 1: Check Google Calendar authentication status
+        print("\n1️⃣ VERIFICANDO AUTENTICAÇÃO DO GOOGLE CALENDAR:")
+        auth_status = self.test_google_calendar_authentication_status()
+        
+        # Test 2: Test the main endpoint POST /api/calendar/events
+        print("\n2️⃣ TESTANDO ENDPOINT POST /api/calendar/events:")
+        self.test_calendar_events_creation_endpoint()
+        
+        # Test 3: Test with real route data (RTE-0000001, RTE-0000002)
+        print("\n3️⃣ TESTANDO COM ROTAS REAIS:")
+        self.test_calendar_events_with_real_route_data()
+        
+        # Test 4: Test data format validation
+        print("\n4️⃣ TESTANDO VALIDAÇÃO DE FORMATO:")
+        self.test_calendar_data_format_validation()
+        
+        # Summary
+        self.print_summary()
+        
+        return True
+
 if __name__ == "__main__":
     # Check which tests to run based on command line arguments
     if len(sys.argv) > 1:
@@ -2071,13 +2369,17 @@ if __name__ == "__main__":
             print("🔧 Running ROUTE CORRECTIONS TESTS only")
             tester = ServiceStatusBugTester()
             success = tester.test_route_corrections_implementation()
+        elif sys.argv[1] == "--calendar":
+            print("📅 Running CALENDAR INVESTIGATION TESTS only")
+            tester = ServiceStatusBugTester()
+            success = tester.run_calendar_investigation_tests()
         else:
             print("🚀 Running FULL ROUTES API TESTS")
             tester = ServiceStatusBugTester()
             success = tester.run_all_tests()
     else:
-        print("🚀 Running FULL ROUTES API TESTS")
+        print("📅 Running CALENDAR INVESTIGATION TESTS (default)")
         tester = ServiceStatusBugTester()
-        success = tester.run_all_tests()
+        success = tester.run_calendar_investigation_tests()
     
     sys.exit(0 if success else 1)
