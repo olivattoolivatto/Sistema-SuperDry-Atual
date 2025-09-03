@@ -14,7 +14,8 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronRight,
-  Trash2
+  Trash2,
+  Plus
 } from 'lucide-react';
 import { routesApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
