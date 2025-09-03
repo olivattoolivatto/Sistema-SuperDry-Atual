@@ -984,7 +984,7 @@ export function Agenda() {
       setShowCreateEventModal(false);
       
       // Refresh calendar events
-      await loadAllCalendarEvents();
+      await loadCalendarEvents();
       
     } catch (error) {
       console.error('Erro ao criar evento:', error);
