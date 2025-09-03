@@ -910,11 +910,11 @@ export function Agenda() {
       return;
     }
 
-    // Initialize with default values
+    // Initialize with default values - 2 horas de duração padrão
     const today = new Date();
     const defaultDate = today.toISOString().split('T')[0];
     const defaultTime = '08:00';
-    const endTime = '09:00';
+    const endTime = '10:00'; // 2 horas depois (120 minutos)
 
     setNewEvent({
       title: '',
@@ -924,7 +924,7 @@ export function Agenda() {
       start_time: defaultTime,
       end_date: defaultDate,
       end_time: endTime,
-      duration: 60
+      duration: 120 // 2 horas = 120 minutos
     });
 
     setShowCreateEventModal(true);
