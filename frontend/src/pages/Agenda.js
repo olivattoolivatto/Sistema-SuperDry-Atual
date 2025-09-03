@@ -899,6 +899,104 @@ export function Agenda() {
     }
   };
 
+  const handleCreateDirectEvent = () => {
+    if (!isGoogleAuthenticated) {
+      toast({
+        title: "Autenticação necessária!",
+        description: "Conecte-se ao Google Calendar primeiro.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Initialize with default values
+    const today = new Date();
+    const defaultDate = today.toISOString().split('T')[0];
+    const defaultTime = '08:00';
+    const endTime = '09:00';
+
+    setNewEvent({
+      title: '',
+      description: '',
+      location: '',
+      start_date: defaultDate,
+      start_time: defaultTime,
+      end_date: defaultDate,
+      end_time: endTime,
+      duration: 60
+    });
+
+    setShowCreateEventModal(true);
+  };
+
+  const handleConfirmCreateEvent = async () => {
+    if (!newEvent.title.trim()) {
+      toast({
+        title: "Aviso!",
+        description: "Por favor, preencha o título do evento.",
+        variant: "default",
+      });
+      return;
+    }
+
+    setCreatingEvents(true);
+
+    try {
+      console.log('📅 Criando evento direto no Google Calendar...');
+      
+      // Format datetime strings for the API
+      const startDateTime = `${newEvent.start_date}T${newEvent.start_time}:00`;
+      const endDateTime = `${newEvent.end_date}T${newEvent.end_time}:00`;
+
+      const eventData = {
+        summary: newEvent.title,
+        description: newEvent.description,
+        location: newEvent.location,
+        start_datetime: startDateTime,
+        end_datetime: endDateTime
+      };
+
+      console.log('📤 Dados do evento:', eventData);
+
+      const response = await fetch(`${BACKEND_URL}/api/calendar/events/direct`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Erro ${response.status}: ${errorData}`);
+      }
+
+      const data = await response.json();
+      
+      toast({
+        title: "Sucesso!",
+        description: "Evento criado no Google Calendar com sucesso!",
+        variant: "default",
+      });
+
+      // Close modal and refresh calendar
+      setShowCreateEventModal(false);
+      
+      // Refresh calendar events
+      await loadAllCalendarEvents();
+      
+    } catch (error) {
+      console.error('Erro ao criar evento:', error);
+      toast({
+        title: "Erro!",
+        description: `Erro ao criar evento: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingEvents(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
