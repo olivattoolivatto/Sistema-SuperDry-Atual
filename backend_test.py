@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 # Configuration
-BASE_URL = "https://laundry-manager-6.preview.emergentagent.com/api"
+BASE_URL = "https://superdry-routes.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 class ServiceStatusBugTester:
