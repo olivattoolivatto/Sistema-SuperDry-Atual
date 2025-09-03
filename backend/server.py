@@ -572,6 +572,13 @@ class GoogleAuthRequest(BaseModel):
     code: str
     redirect_uri: str
 
+class DirectEventCreate(BaseModel):
+    summary: str
+    description: Optional[str] = None
+    location: Optional[str] = None
+    start_datetime: str  # ISO format datetime string
+    end_datetime: str    # ISO format datetime string
+
 # SystemConfig class definition starts here
 class SystemConfig(BaseModel):
     # Company data
