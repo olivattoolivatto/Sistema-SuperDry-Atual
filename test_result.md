@@ -450,11 +450,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Route Optimization Critical Issues Fix"
-  stuck_tasks:
-    - "Route Optimization Critical Issues Fix"
+    - "Google Calendar Integration - Lançar na Agenda Button"
+  stuck_tasks: []
   test_all: false
-  test_priority: "critical_first"
+  test_priority: "high_first"
 
 agent_communication:
     -agent: "main"
