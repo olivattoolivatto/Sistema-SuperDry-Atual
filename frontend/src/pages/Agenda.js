@@ -1028,9 +1028,18 @@ export function Agenda() {
         )}
         
         {isGoogleAuthenticated && (
-          <div className="flex items-center text-green-600">
-            <CheckSquare className="w-5 h-5 mr-2" />
-            Google Calendar conectado
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={handleCreateDirectEvent}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Criar Evento
+            </button>
+            <div className="flex items-center text-green-600">
+              <CheckSquare className="w-5 h-5 mr-2" />
+              Google Calendar conectado
+            </div>
           </div>
         )}
       </div>
