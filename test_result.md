@@ -282,6 +282,18 @@ backend:
         -agent: "testing"
         -comment: "✅ CORREÇÕES IMPLEMENTADAS E TESTADAS: Comprehensive testing of route corrections completed with 100% success rate. 1) ✅ Campo 'alias' FUNCIONANDO: Route model now includes alias field (line 330), tested with route creation and PUT updates. Route RTE-0000002 successfully created with alias 'Rota Teste Neo - Correções' and updated to 'Rota Atualizada - Teste de Correções'. 2) ✅ Campo 'delivery_order' FUNCIONANDO: RouteStop model now includes delivery_order field (line 322) alongside order_sequence field. Both fields present in route stops and working correctly. 3) ✅ Endpoint PUT /routes/{id} FUNCIONANDO: Successfully tested updating route alias, vehicle_type, and planned_start_time via PUT /api/routes/{route_id} endpoint (lines 2195-2230). 4) ✅ Lógica separada entre order_sequence e delivery_order: Both fields implemented to support separate geographic optimization (order_sequence) and priority-based delivery sequence (delivery_order). All user requirements from review request have been successfully implemented and are working correctly."
 
+  - task: "Google Calendar Integration - Lançar na Agenda Button"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: false
+        -agent: "testing"
+        -comment: "🔍 PROBLEMA IDENTIFICADO E CORRIGIDO: Investigação completa do botão 'Lançar na Agenda' revelou erro crítico no backend. ❌ ERRO ENCONTRADO: 'name timedelta is not defined' - faltava import da classe timedelta no módulo datetime (linha 12). ✅ CORREÇÃO APLICADA: Adicionado 'timedelta' ao import: 'from datetime import datetime, date, timedelta'. ✅ ENDPOINT FUNCIONANDO: POST /api/calendar/events agora funciona perfeitamente com payload correto: {route_id, stop_ids[], start_date, start_time}. ✅ AUTENTICAÇÃO OK: Google Calendar está autenticado e conectado. ✅ VALIDAÇÃO OK: Endpoint rejeita corretamente formatos inválidos (stop_ids como string, datas/horários incorretos, campos ausentes). ✅ TESTES REAIS: Testado com rotas RTE-0000001 e RTE-0000002 - eventos criados com sucesso no Google Calendar. Problema resolvido - botão 'Lançar na Agenda' agora funciona corretamente."
+
 frontend:
   - task: "Auto-scroll to Prioritization Section"
     implemented: true
