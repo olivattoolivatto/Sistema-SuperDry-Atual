@@ -1768,6 +1768,7 @@ export function Agenda() {
                 type="button"
                 onClick={() => {
                   setShowCreateEventModal(false);
+                  setLocationSuggestions([]); // Limpar sugestões de local
                   setNewEvent({
                     title: '',
                     description: '',
