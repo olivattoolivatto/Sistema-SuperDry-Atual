@@ -901,6 +901,68 @@ export function Agenda() {
     }
   };
 
+  // Função para busca de endereços no campo Local
+  const handleLocationChange = async (e) => {
+    const value = e.target.value;
+    setNewEvent(prev => ({ ...prev, location: value }));
+
+    if (value.length > 2) {
+      try {
+        console.log('Buscando local:', value);
+        const response = await placesApi.search(value);
+        console.log('Resultados encontrados:', response.data.results);
+        setLocationSuggestions(response.data.results || []);
+      } catch (error) {
+        console.error('Erro ao buscar locais:', error);
+        setLocationSuggestions([]);
+      }
+    } else {
+      setLocationSuggestions([]);
+    }
+  };
+
+  // Função para selecionar uma sugestão de local
+  const handleLocationSelect = async (suggestion) => {
+    try {
+      console.log('Selecionando local:', suggestion);
+      
+      let locationText = suggestion.description || suggestion.structured_formatting?.main_text || '';
+      
+      // Se temos o place_id, tentamos obter detalhes mais completos
+      if (suggestion.place_id) {
+        try {
+          console.log('🔍 Buscando detalhes do local via place_id...');
+          const response = await placesApi.getDetails(suggestion.place_id);
+          const details = response.data.details.result;
+          console.log('Detalhes obtidos da API:', details);
+          
+          // Usar o endereço formatado completo se disponível
+          if (details && details.formatted_address) {
+            locationText = details.formatted_address;
+          }
+        } catch (detailsError) {
+          console.log('⚠️ Erro ao obter detalhes da API, usando texto da busca:', detailsError);
+        }
+      }
+      
+      // Atualizar o campo local com o endereço selecionado
+      setNewEvent(prev => ({ ...prev, location: locationText }));
+      
+      // Limpar sugestões
+      setLocationSuggestions([]);
+      
+      console.log('✅ Local atualizado:', locationText);
+      
+    } catch (error) {
+      console.error('Erro ao selecionar local:', error);
+      toast({
+        title: "Aviso!",
+        description: "Erro ao processar local selecionado.",
+        variant: "default",
+      });
+    }
+  };
+
   const handleCreateDirectEvent = () => {
     if (!isGoogleAuthenticated) {
       toast({
