@@ -55,6 +55,7 @@ export function Agenda() {
     end_date: '',
     end_time: ''
   });
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
 
   useEffect(() => {
     // Check if this is a redirect from Google OAuth
