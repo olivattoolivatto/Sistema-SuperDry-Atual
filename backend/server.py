@@ -1052,6 +1052,75 @@ async def authenticate_google_calendar(auth_request: GoogleAuthRequest):
         logger.error(f"Error authenticating calendar: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+def calculate_optimized_durations(stops):
+    """
+    Calcula durações otimizadas considerando múltiplos itens no mesmo local
+    """
+    if not stops:
+        return {}
+    
+    # Agrupar stops por localização (coordenadas ou endereço)
+    location_groups = {}
+    
+    for stop in stops:
+        address = stop.get("address", {})
+        lat = address.get("latitude")
+        lng = address.get("longitude")
+        
+        # Usar coordenadas se disponíveis, senão usar endereço completo
+        if lat and lng:
+            location_key = f"{lat},{lng}"
+        else:
+            location_key = address.get("full_address", f"stop_{stop['id']}")
+        
+        if location_key not in location_groups:
+            location_groups[location_key] = []
+        location_groups[location_key].append(stop)
+    
+    # Calcular durações otimizadas para cada grupo
+    duration_map = {}
+    
+    for location_key, location_stops in location_groups.items():
+        if len(location_stops) == 1:
+            # Item único no local - usar duração padrão
+            stop = location_stops[0]
+            if stop["service_status"] == "EXECUTAR_NO_LOCAL":
+                duration_map[stop["id"]] = 120  # 2 hours
+            else:
+                duration_map[stop["id"]] = 30   # 30 minutes
+        else:
+            # Múltiplos itens no mesmo local - aplicar otimização
+            base_duration = 0
+            has_execution = False
+            
+            for stop in location_stops:
+                if stop["service_status"] == "EXECUTAR_NO_LOCAL":
+                    base_duration += 120
+                    has_execution = True
+                else:
+                    base_duration += 30
+            
+            # Aplicar redução por eficiência quando há múltiplos itens
+            if len(location_stops) >= 2:
+                if has_execution:
+                    # Se há execução no local, reduzir menos (15%)
+                    optimized_duration = int(base_duration * 0.85)
+                else:
+                    # Apenas coletas/entregas, reduzir mais (25%)
+                    optimized_duration = int(base_duration * 0.75)
+            else:
+                optimized_duration = base_duration
+            
+            # Distribuir duração otimizada proporcionalmente
+            total_base = sum(120 if s["service_status"] == "EXECUTAR_NO_LOCAL" else 30 for s in location_stops)
+            
+            for stop in location_stops:
+                individual_base = 120 if stop["service_status"] == "EXECUTAR_NO_LOCAL" else 30
+                proportional_duration = int((individual_base / total_base) * optimized_duration)
+                duration_map[stop["id"]] = max(proportional_duration, 15)  # Mínimo 15 minutos
+    
+    return duration_map
+
 @api_router.post("/calendar/events")
 async def create_calendar_events(event_request: CalendarEventCreate):
     """Create calendar events from route stops"""
