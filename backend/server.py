@@ -1167,7 +1167,7 @@ async def create_direct_calendar_event(event_request: DirectEventCreate):
                 'dateTime': end_datetime.isoformat(),
                 'timeZone': 'America/Cuiaba',
             },
-            'colorId': '1'  # Azul para eventos criados manualmente
+            'colorId': '5'  # Amarelo banana para eventos criados manualmente
         }
         
         # Create event in Google Calendar
