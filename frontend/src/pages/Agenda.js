@@ -194,6 +194,10 @@ export function Agenda() {
     setSelectedStops(new Set());
     setRouteEvents([]);
     
+    // Inicializar data personalizada com a data planejada da rota ou hoje
+    const defaultDate = route.planned_date || new Date().toISOString().split('T')[0];
+    setCustomEventDate(defaultDate);
+    
     if (!route.stops || route.stops.length === 0) {
       console.log('❌ Nenhum stop encontrado na rota');
       return;
