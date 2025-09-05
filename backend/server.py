@@ -2574,6 +2574,50 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@api_router.post("/admin/migrate-budget-item-status")
+async def migrate_budget_item_status():
+    """
+    Migração para corrigir status dos budget items existentes
+    Atualiza budget items para herdar default_service_status dos serviços
+    """
+    try:
+        # Get all budget items
+        budget_items = await db.budget_items.find({}).to_list(length=None)
+        print(f"📋 Found {len(budget_items)} budget items to check")
+        
+        # Get all services for reference
+        services = await db.services.find({}).to_list(length=None)
+        service_map = {s["id"]: s for s in services}
+        
+        updated_count = 0
+        
+        for item in budget_items:
+            service_id = item.get("service_id")
+            current_status = item.get("status")
+            
+            if service_id in service_map:
+                service = service_map[service_id]
+                correct_status = service.get("default_service_status")
+                
+                # Update if status is different
+                if current_status != correct_status:
+                    await db.budget_items.update_one(
+                        {"id": item["id"]},
+                        {"$set": {"status": correct_status}}
+                    )
+                    updated_count += 1
+                    print(f"✅ Updated {item['id']}: {current_status} -> {correct_status}")
+        
+        return {
+            "message": f"Migration completed successfully",
+            "total_items": len(budget_items),
+            "updated_items": updated_count
+        }
+        
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
