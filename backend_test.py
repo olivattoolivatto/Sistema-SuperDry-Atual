@@ -3612,55 +3612,54 @@ class ServiceStatusBugTester:
             return False
 
 if __name__ == "__main__":
-    # Check which tests to run based on command line arguments
+    tester = ServiceStatusBugTester()
+    
+    # Check command line arguments
     if len(sys.argv) > 1:
-        if sys.argv[1] == "--migration":
-            print("🔄 Running MIGRATION TESTS only")
-            tester = ServiceStatusBugTester()
+        test_type = sys.argv[1].lower()
+        
+        if test_type == "debug":
+            print("🔍 RUNNING SERVICE STATUS DEBUG INVESTIGATION")
+            success = tester.run_service_status_debug_investigation()
+        elif test_type == "migration":
+            print("🔄 RUNNING MIGRATION TESTS")
             success = tester.run_migration_tests()
-        elif sys.argv[1] == "--status-bug":
-            print("🐛 Running SERVICE STATUS BUG TESTS only")
-            tester = ServiceStatusBugTester()
+        elif test_type == "status":
+            print("🐛 RUNNING SERVICE STATUS BUG TESTS")
             success = tester.run_service_status_bug_tests()
-        elif sys.argv[1] == "--duplication":
-            print("🔄 Running SERVICE DUPLICATION TESTS only")
-            tester = ServiceStatusBugTester()
+        elif test_type == "duplication":
+            print("📋 RUNNING SERVICE DUPLICATION TESTS")
             success = tester.run_service_duplication_tests()
-        elif sys.argv[1] == "--route-bug":
-            print("🔍 Running ROUTE BUG INVESTIGATION only")
-            tester = ServiceStatusBugTester()
+        elif test_type == "routes":
+            print("🚗 RUNNING ROUTES API TESTS")
+            success = tester.run_all_tests()
+        elif test_type == "route-bug":
+            print("🔍 RUNNING ROUTE BUG INVESTIGATION")
             success = tester.investigate_route_bug()
-        elif sys.argv[1] == "--422":
-            print("🔍 Running 422 ERROR INVESTIGATION only")
-            tester = ServiceStatusBugTester()
+        elif test_type == "422":
+            print("🔍 RUNNING 422 ERROR INVESTIGATION")
             success = tester.investigate_422_error_adding_stops()
-        elif sys.argv[1] == "--route-corrections":
-            print("🔧 Running ROUTE CORRECTIONS TESTS only")
-            tester = ServiceStatusBugTester()
+        elif test_type == "route-corrections":
+            print("🔧 RUNNING ROUTE CORRECTIONS TESTS")
             success = tester.test_route_corrections_implementation()
-        elif sys.argv[1] == "--calendar":
-            print("📅 Running CALENDAR INVESTIGATION TESTS only")
-            tester = ServiceStatusBugTester()
+        elif test_type == "calendar":
+            print("📅 RUNNING CALENDAR INVESTIGATION TESTS")
             success = tester.run_calendar_investigation_tests()
-        elif sys.argv[1] == "--direct-calendar":
-            print("📅 Running DIRECT CALENDAR EVENT TESTS only")
-            tester = ServiceStatusBugTester()
+        elif test_type == "direct-calendar":
+            print("📅 RUNNING DIRECT CALENDAR EVENT TESTS")
             success = tester.run_direct_calendar_event_tests()
-        elif sys.argv[1] == "--color":
-            print("🎨 Running CALENDAR COLOR CHANGE TESTS only")
-            tester = ServiceStatusBugTester()
+        elif test_type == "color":
+            print("🎨 RUNNING CALENDAR COLOR CHANGE TESTS")
             success = tester.test_calendar_color_change_implementation()
-        elif sys.argv[1] == "--service-status-bug":
-            print("🐛 Running ROUTE SERVICE STATUS BUG INVESTIGATION only")
-            tester = ServiceStatusBugTester()
+        elif test_type == "service-status-bug":
+            print("🐛 RUNNING ROUTE SERVICE STATUS BUG INVESTIGATION")
             success = tester.test_route_service_status_bug()
         else:
-            print("🚀 Running FULL ROUTES API TESTS")
-            tester = ServiceStatusBugTester()
-            success = tester.run_all_tests()
+            print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug")
+            sys.exit(1)
     else:
-        print("🔄 Running MIGRATION TESTS (default - based on review request)")
-        tester = ServiceStatusBugTester()
-        success = tester.run_migration_tests()
+        print("🔍 RUNNING SERVICE STATUS DEBUG INVESTIGATION (default)")
+        success = tester.run_service_status_debug_investigation()
     
+    # Exit with appropriate code
     sys.exit(0 if success else 1)
