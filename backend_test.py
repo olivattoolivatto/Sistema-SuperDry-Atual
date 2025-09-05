@@ -1436,6 +1436,180 @@ class ServiceStatusBugTester:
                         "❌ API deveria ter rejeitado tipo de dados inválido")
         
         return True
+
+    def test_service_status_debug_investigation(self):
+        """INVESTIGAÇÃO ESPECÍFICA: Debug exato dos dados enviados para service_status dos stops"""
+        print("\n=== INVESTIGAÇÃO ESPECÍFICA: DEBUG DO CAMPO service_status ===")
+        print("🔍 Investigando exatamente quais dados o backend está enviando para o campo service_status dos stops")
+        
+        # 1. Verificar API Response: GET /api/budget-items/available-for-routes
+        print("\n1️⃣ VERIFICANDO API RESPONSE: GET /api/budget-items/available-for-routes")
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Debug - Available Items API", False, "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        if not available_items:
+            self.log_test("Debug - Available Items API", False, "No available items found")
+            return False
+        
+        # Analisar estrutura exata dos dados retornados
+        print(f"   📊 Total items disponíveis: {len(available_items)}")
+        
+        # Verificar campos 'status' vs 'service_status' 
+        status_analysis = {}
+        service_status_analysis = {}
+        all_fields = set()
+        
+        for item in available_items:
+            # Coletar todos os campos para análise
+            all_fields.update(item.keys())
+            
+            # Analisar campo 'status'
+            status = item.get('status')
+            if status:
+                status_analysis[status] = status_analysis.get(status, 0) + 1
+            
+            # Analisar campo 'service_status' (se existir)
+            service_status = item.get('service_status')
+            if service_status:
+                service_status_analysis[service_status] = service_status_analysis.get(service_status, 0) + 1
+        
+        print(f"   📋 Campos encontrados nos items: {sorted(all_fields)}")
+        print(f"   📊 Campo 'status' distribuição: {dict(status_analysis)}")
+        print(f"   📊 Campo 'service_status' distribuição: {dict(service_status_analysis)}")
+        
+        # Verificar se todos ainda têm "RETIRAR"
+        all_retirar = all(item.get('status') == 'RETIRAR' for item in available_items)
+        if all_retirar:
+            self.log_test("Debug - Status Analysis", False, 
+                        f"❌ PROBLEMA CONFIRMADO: Todos os {len(available_items)} items têm status='RETIRAR'")
+        else:
+            self.log_test("Debug - Status Analysis", True, 
+                        f"✅ STATUS VARIADOS ENCONTRADOS: {dict(status_analysis)}")
+        
+        # 2. Verificar Nova Route Creation
+        print("\n2️⃣ VERIFICANDO NOVA ROUTE CREATION:")
+        
+        # Criar nova rota com items disponíveis
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2025-01-15",
+            "planned_start_time": "08:00",
+            "alias": "Debug Route - Service Status Investigation"
+        }
+        
+        response = self.make_request('POST', '/routes', route_data)
+        if not response['success']:
+            self.log_test("Debug - Create Route", False, "Failed to create debug route", response['data'])
+            return False
+        
+        route_id = response['data']['id']
+        self.created_resources['routes'].append(route_id)
+        
+        # Adicionar stops com items disponíveis
+        stops_data = []
+        for i, item in enumerate(available_items[:3]):  # Usar primeiros 3 items
+            stops_data.append({
+                "budget_item_id": item["budget_item_id"],
+                "priority": "AUTOMATICA"
+            })
+        
+        response = self.make_request('PUT', f'/routes/{route_id}/stops', stops_data)
+        if not response['success']:
+            self.log_test("Debug - Add Stops", False, "Failed to add stops", response['data'])
+            return False
+        
+        # Ver estrutura dos stops na rota criada
+        response = self.make_request('GET', f'/routes/{route_id}')
+        if not response['success']:
+            self.log_test("Debug - Get Route", False, "Failed to get route details", response['data'])
+            return False
+        
+        route_details = response['data']
+        stops = route_details.get('stops', [])
+        
+        print(f"   📋 Rota criada: {route_id} com {len(stops)} stops")
+        
+        # Verificar se stops herdam service_status corretamente
+        stop_fields = set()
+        stop_status_analysis = {}
+        stop_service_status_analysis = {}
+        
+        for stop in stops:
+            # Coletar todos os campos dos stops
+            stop_fields.update(stop.keys())
+            
+            # Analisar service_status nos stops
+            service_status = stop.get('service_status')
+            if service_status:
+                stop_service_status_analysis[service_status] = stop_service_status_analysis.get(service_status, 0) + 1
+            
+            # Verificar se há campo 'status' também
+            status = stop.get('status')
+            if status:
+                stop_status_analysis[status] = stop_status_analysis.get(status, 0) + 1
+        
+        print(f"   📋 Campos encontrados nos stops: {sorted(stop_fields)}")
+        print(f"   📊 Campo 'service_status' nos stops: {dict(stop_service_status_analysis)}")
+        print(f"   📊 Campo 'status' nos stops: {dict(stop_status_analysis)}")
+        
+        # 3. Debug Específico de Campos
+        print("\n3️⃣ DEBUG ESPECÍFICO DE CAMPOS:")
+        
+        # Verificar TODOS os campos que contêm status nos budget items
+        status_related_fields = []
+        for item in available_items[:1]:  # Analisar primeiro item em detalhe
+            for field_name, field_value in item.items():
+                if 'status' in field_name.lower():
+                    status_related_fields.append((field_name, field_value))
+        
+        print(f"   📋 Campos relacionados a 'status' encontrados:")
+        for field_name, field_value in status_related_fields:
+            print(f"      - {field_name}: {field_value}")
+        
+        # Verificar se há algum campo diferente sendo usado erroneamente
+        print(f"\n   🔍 ANÁLISE DETALHADA DO PRIMEIRO ITEM:")
+        if available_items:
+            first_item = available_items[0]
+            for key, value in first_item.items():
+                print(f"      {key}: {value}")
+        
+        print(f"\n   🔍 ANÁLISE DETALHADA DO PRIMEIRO STOP:")
+        if stops:
+            first_stop = stops[0]
+            for key, value in first_stop.items():
+                print(f"      {key}: {value}")
+        
+        # Resultado final da investigação
+        if all_retirar and len(stop_service_status_analysis) <= 1:
+            self.log_test("Service Status Debug Investigation", False, 
+                        f"❌ BUG CONFIRMADO: Items têm apenas RETIRAR, stops herdam service_status uniforme: {dict(stop_service_status_analysis)}")
+        else:
+            self.log_test("Service Status Debug Investigation", True, 
+                        f"✅ STATUS VARIADOS: Items: {dict(status_analysis)}, Stops: {dict(stop_service_status_analysis)}")
+        
+        return not all_retirar
+
+    def run_service_status_debug_investigation(self):
+        """Run the specific debug investigation requested in the review"""
+        print("🔍 INICIANDO INVESTIGAÇÃO DEBUG DO SERVICE_STATUS")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Foco: Investigar exatamente quais dados o backend está enviando para service_status dos stops")
+        print("📋 Problema: Usuário apagou todos orçamentos e refez, mas ainda vê 'STATUS: RETIRAR' nos popups")
+        print("=" * 80)
+        
+        # Execute the specific debug investigation
+        success = self.test_service_status_debug_investigation()
+        
+        # Cleanup
+        self.cleanup_test_data()
+        
+        # Summary
+        self.print_summary()
+        
+        return success
     
     def run_service_duplication_tests(self):
         """Run specific tests for service duplication functionality"""
