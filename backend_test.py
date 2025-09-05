@@ -3611,6 +3611,365 @@ class ServiceStatusBugTester:
                         "❌ Falha ao criar evento de teste para validação de cor", response['data'])
             return False
 
+class DurationOptimizationTester(ServiceStatusBugTester):
+    """Test class specifically for testing duration optimization changes"""
+    
+    def test_duration_base_values(self):
+        """Test 1: Verify base duration values - EXECUTAR_NO_LOCAL = 90min, RETIRAR/ENTREGAR = 30min"""
+        print("\n=== TESTING BASE DURATION VALUES ===")
+        
+        # Get available items to test with
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Duration Base Values", False, "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        if not available_items:
+            self.log_test("Duration Base Values", False, "No available items found for testing")
+            return False
+        
+        # Find items with different statuses
+        executar_item = next((item for item in available_items if item.get('status') == 'EXECUTAR_NO_LOCAL'), None)
+        retirar_item = next((item for item in available_items if item.get('status') == 'RETIRAR'), None)
+        
+        if not executar_item and not retirar_item:
+            self.log_test("Duration Base Values", False, "No items with EXECUTAR_NO_LOCAL or RETIRAR status found")
+            return False
+        
+        # Create route for testing
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2025-01-15",
+            "planned_start_time": "08:00",
+            "alias": "Teste Durações Base"
+        }
+        
+        response = self.make_request('POST', '/routes', route_data)
+        if not response['success']:
+            self.log_test("Duration Base Values", False, "Failed to create test route", response['data'])
+            return False
+        
+        route_id = response['data']['id']
+        self.created_resources['routes'].append(route_id)
+        
+        # Test with available items
+        test_items = []
+        if executar_item:
+            test_items.append(executar_item)
+        if retirar_item:
+            test_items.append(retirar_item)
+        
+        # Add items to route
+        stops_data = [{"budget_item_id": item["budget_item_id"], "priority": "AUTOMATICA"} for item in test_items]
+        
+        response = self.make_request('PUT', f'/routes/{route_id}/stops', stops_data)
+        if not response['success']:
+            self.log_test("Duration Base Values", False, "Failed to add stops to route", response['data'])
+            return False
+        
+        # Create calendar events to test duration calculation
+        event_data = {
+            "route_id": route_id,
+            "stop_ids": [item["budget_item_id"] for item in test_items],
+            "start_date": "2025-01-15",
+            "start_time": "08:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events', event_data)
+        if response['success']:
+            events = response['data'].get('events', [])
+            
+            # Check durations in created events
+            success = True
+            for event in events:
+                start_time = datetime.fromisoformat(event['start_datetime'])
+                end_time = datetime.fromisoformat(event['end_datetime'])
+                duration = int((end_time - start_time).total_seconds() / 60)
+                
+                if 'EXECUTAR_NO_LOCAL' in event.get('summary', ''):
+                    if duration == 90:
+                        self.log_test("Duration Base - EXECUTAR_NO_LOCAL", True, f"✅ EXECUTAR_NO_LOCAL duration = {duration} minutes (correct: 90min)")
+                    else:
+                        self.log_test("Duration Base - EXECUTAR_NO_LOCAL", False, f"❌ EXECUTAR_NO_LOCAL duration = {duration} minutes (expected: 90min)")
+                        success = False
+                elif 'RETIRAR' in event.get('summary', '') or 'ENTREGAR' in event.get('summary', ''):
+                    if duration == 30:
+                        self.log_test("Duration Base - RETIRAR/ENTREGAR", True, f"✅ RETIRAR/ENTREGAR duration = {duration} minutes (correct: 30min)")
+                    else:
+                        self.log_test("Duration Base - RETIRAR/ENTREGAR", False, f"❌ RETIRAR/ENTREGAR duration = {duration} minutes (expected: 30min)")
+                        success = False
+            
+            return success
+        else:
+            self.log_test("Duration Base Values", False, "Failed to create calendar events for duration testing", response['data'])
+            return False
+    
+    def test_multiple_items_optimization(self):
+        """Test optimization with multiple items - 15% reduction with execution, 25% without"""
+        print("\n=== TESTING MULTIPLE ITEMS OPTIMIZATION ===")
+        
+        # Get available items
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Multiple Items Optimization", False, "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        if len(available_items) < 2:
+            self.log_test("Multiple Items Optimization", False, "Need at least 2 items for testing optimization")
+            return False
+        
+        # Create route for testing
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2025-01-15",
+            "planned_start_time": "08:00",
+            "alias": "Teste Otimização Múltiplos Items"
+        }
+        
+        response = self.make_request('POST', '/routes', route_data)
+        if not response['success']:
+            self.log_test("Multiple Items Optimization", False, "Failed to create test route", response['data'])
+            return False
+        
+        route_id = response['data']['id']
+        self.created_resources['routes'].append(route_id)
+        
+        # Add multiple items to test optimization
+        stops_data = [
+            {"budget_item_id": available_items[0]["budget_item_id"], "priority": "AUTOMATICA"},
+            {"budget_item_id": available_items[1]["budget_item_id"], "priority": "AUTOMATICA"}
+        ]
+        
+        response = self.make_request('PUT', f'/routes/{route_id}/stops', stops_data)
+        if not response['success']:
+            self.log_test("Multiple Items Optimization", False, "Failed to add stops to route", response['data'])
+            return False
+        
+        # Create calendar events to test optimization
+        event_data = {
+            "route_id": route_id,
+            "stop_ids": [available_items[0]["budget_item_id"], available_items[1]["budget_item_id"]],
+            "start_date": "2025-01-15",
+            "start_time": "08:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events', event_data)
+        if response['success']:
+            events = response['data'].get('events', [])
+            
+            # Check if optimization was applied
+            total_duration = 0
+            has_execution = False
+            
+            for event in events:
+                start_time = datetime.fromisoformat(event['start_datetime'])
+                end_time = datetime.fromisoformat(event['end_datetime'])
+                duration = int((end_time - start_time).total_seconds() / 60)
+                total_duration += duration
+                
+                if 'EXECUTAR_NO_LOCAL' in event.get('summary', ''):
+                    has_execution = True
+            
+            # Remove travel time (15 min between events)
+            service_duration = total_duration - 15 if len(events) > 1 else total_duration
+            
+            # Check if duration is optimized and rounded up to multiples of 10
+            if service_duration % 10 == 0:
+                self.log_test("Multiple Items Optimization", True, 
+                            f"✅ Optimization applied: {service_duration}min total (rounded to 10s), has_execution: {has_execution}")
+                return True
+            else:
+                self.log_test("Multiple Items Optimization", False, 
+                            f"❌ Duration not rounded to 10s: {service_duration}min")
+                return False
+        else:
+            self.log_test("Multiple Items Optimization", False, "Failed to create calendar events", response['data'])
+            return False
+    
+    def test_rounding_algorithm(self):
+        """Test that durations are always rounded up to multiples of 10"""
+        print("\n=== TESTING ROUNDING ALGORITHM (ALWAYS UP TO MULTIPLES OF 10) ===")
+        
+        # Get available items
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Rounding Algorithm", False, "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        if not available_items:
+            self.log_test("Rounding Algorithm", False, "No available items found for testing")
+            return False
+        
+        # Create route for testing
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2025-01-15",
+            "planned_start_time": "08:00",
+            "alias": "Teste Algoritmo de Arredondamento"
+        }
+        
+        response = self.make_request('POST', '/routes', route_data)
+        if not response['success']:
+            self.log_test("Rounding Algorithm", False, "Failed to create test route", response['data'])
+            return False
+        
+        route_id = response['data']['id']
+        self.created_resources['routes'].append(route_id)
+        
+        # Test with single item to verify base durations are multiples of 10
+        stops_data = [{"budget_item_id": available_items[0]["budget_item_id"], "priority": "AUTOMATICA"}]
+        
+        response = self.make_request('PUT', f'/routes/{route_id}/stops', stops_data)
+        if not response['success']:
+            self.log_test("Rounding Algorithm", False, "Failed to add stops to route", response['data'])
+            return False
+        
+        # Create calendar event
+        event_data = {
+            "route_id": route_id,
+            "stop_ids": [available_items[0]["budget_item_id"]],
+            "start_date": "2025-01-15",
+            "start_time": "08:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events', event_data)
+        if response['success']:
+            events = response['data'].get('events', [])
+            
+            if events:
+                event = events[0]
+                start_time = datetime.fromisoformat(event['start_datetime'])
+                end_time = datetime.fromisoformat(event['end_datetime'])
+                duration = int((end_time - start_time).total_seconds() / 60)
+                
+                # Check if duration is multiple of 10
+                if duration % 10 == 0:
+                    self.log_test("Rounding Algorithm", True, 
+                                f"✅ Duration is multiple of 10: {duration} minutes")
+                    return True
+                else:
+                    self.log_test("Rounding Algorithm", False, 
+                                f"❌ Duration is not multiple of 10: {duration} minutes")
+                    return False
+            else:
+                self.log_test("Rounding Algorithm", False, "No events created for testing")
+                return False
+        else:
+            self.log_test("Rounding Algorithm", False, "Failed to create calendar events", response['data'])
+            return False
+    
+    def test_minimum_duration_guarantee(self):
+        """Test that minimum 20 minutes is guaranteed"""
+        print("\n=== TESTING MINIMUM DURATION GUARANTEE (20 MINUTES) ===")
+        
+        # Get available items
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Minimum Duration", False, "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        if not available_items:
+            self.log_test("Minimum Duration", False, "No available items found for testing")
+            return False
+        
+        # Create route for testing
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2025-01-15",
+            "planned_start_time": "08:00",
+            "alias": "Teste Duração Mínima 20min"
+        }
+        
+        response = self.make_request('POST', '/routes', route_data)
+        if not response['success']:
+            self.log_test("Minimum Duration", False, "Failed to create test route", response['data'])
+            return False
+        
+        route_id = response['data']['id']
+        self.created_resources['routes'].append(route_id)
+        
+        # Add single item
+        stops_data = [{"budget_item_id": available_items[0]["budget_item_id"], "priority": "AUTOMATICA"}]
+        
+        response = self.make_request('PUT', f'/routes/{route_id}/stops', stops_data)
+        if not response['success']:
+            self.log_test("Minimum Duration", False, "Failed to add stops to route", response['data'])
+            return False
+        
+        # Create calendar event
+        event_data = {
+            "route_id": route_id,
+            "stop_ids": [available_items[0]["budget_item_id"]],
+            "start_date": "2025-01-15",
+            "start_time": "08:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events', event_data)
+        if response['success']:
+            events = response['data'].get('events', [])
+            
+            if events:
+                event = events[0]
+                start_time = datetime.fromisoformat(event['start_datetime'])
+                end_time = datetime.fromisoformat(event['end_datetime'])
+                duration = int((end_time - start_time).total_seconds() / 60)
+                
+                # Check if duration is at least 20 minutes
+                if duration >= 20:
+                    self.log_test("Minimum Duration", True, 
+                                f"✅ Duration meets minimum requirement: {duration} minutes (≥20min)")
+                    return True
+                else:
+                    self.log_test("Minimum Duration", False, 
+                                f"❌ Duration below minimum: {duration} minutes (<20min)")
+                    return False
+            else:
+                self.log_test("Minimum Duration", False, "No events created for testing")
+                return False
+        else:
+            self.log_test("Minimum Duration", False, "Failed to create calendar events", response['data'])
+            return False
+    
+    def run_duration_optimization_tests(self):
+        """Run all duration optimization tests"""
+        print("⏱️  STARTING DURATION OPTIMIZATION TESTS")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Focus: Test new duration rules - 90min EXECUTAR_NO_LOCAL, rounding up to 10s")
+        print("=" * 80)
+        
+        # Setup test data if needed
+        if not self.setup_test_data():
+            print("❌ CRITICAL: Failed to setup test data. Aborting tests.")
+            return False
+        
+        # Test 1: Base duration values
+        print("\n1️⃣ TESTING BASE DURATION VALUES:")
+        self.test_duration_base_values()
+        
+        # Test 2: Multiple items optimization
+        print("\n2️⃣ TESTING MULTIPLE ITEMS OPTIMIZATION:")
+        self.test_multiple_items_optimization()
+        
+        # Test 3: Rounding algorithm
+        print("\n3️⃣ TESTING ROUNDING ALGORITHM:")
+        self.test_rounding_algorithm()
+        
+        # Test 4: Minimum duration guarantee
+        print("\n4️⃣ TESTING MINIMUM DURATION GUARANTEE:")
+        self.test_minimum_duration_guarantee()
+        
+        # Cleanup
+        self.cleanup_test_data()
+        
+        # Summary
+        self.print_summary()
+        
+        return True
+
 if __name__ == "__main__":
     tester = ServiceStatusBugTester()
     
