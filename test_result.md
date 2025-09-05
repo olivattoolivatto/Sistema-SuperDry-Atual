@@ -515,7 +515,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Calendar Direct Event Creation API"
+    - "Calendar Event Color Change to Yellow Banana"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -525,3 +525,5 @@ agent_communication:
     -message: "✅ FUNCIONALIDADE 'CRIAR EVENTO' IMPLEMENTADA: Frontend 100% funcional com botão, modal e duração padrão de 2 horas. Backend implementado com novo endpoint /api/calendar/events/direct. Precisa testar integração backend para verificar criação real de eventos no Google Calendar."
     -agent: "testing"
     -message: "✅ ENDPOINT POST /api/calendar/events/direct FUNCIONANDO PERFEITAMENTE: Todos os testes passaram (100% sucesso). Correção aplicada no CalendarEvent model para suportar eventos diretos. Google Calendar integração completa - eventos sendo criados e salvos corretamente. Frontend pode usar o endpoint sem problemas. MINOR FIX APLICADO: route_id e stop_id agora são Optional no modelo CalendarEvent."
+    -agent: "testing"
+    -message: "✅ ALTERAÇÃO DE COR PARA AMARELO BANANA TESTADA E FUNCIONANDO: Todos os testes de cor passaram (100% sucesso - 7/7). Eventos diretos e de rota são criados com colorId '5' (amarelo banana) corretamente. Google Calendar API aceita e aplica a cor conforme esperado. Testado com dados exatos da solicitação em Cuiabá, MT. A mudança da cor padrão de azul (colorId '1') para amarelo banana (colorId '5') está implementada e funcionando perfeitamente."
