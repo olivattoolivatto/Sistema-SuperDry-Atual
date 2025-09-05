@@ -2661,6 +2661,239 @@ class ServiceStatusBugTester:
         
         return True
 
+    def test_calendar_color_change_implementation(self):
+        """Test the specific calendar color change from blue (colorId '1') to yellow banana (colorId '5')"""
+        print("🎨 TESTANDO ALTERAÇÃO DA COR PADRÃO DOS EVENTOS PARA AMARELO BANANA")
+        print(f"🔗 Testando contra: {self.base_url}")
+        print("🎯 Foco: Verificar se eventos são criados com colorId '5' (amarelo banana)")
+        print("=" * 80)
+        
+        # Test 1: Check Google Calendar authentication status
+        print("\n1️⃣ VERIFICANDO AUTENTICAÇÃO DO GOOGLE CALENDAR:")
+        auth_status = self.test_google_calendar_auth_status()
+        
+        if not auth_status:
+            print("❌ CRITICAL: Google Calendar não está autenticado. Não é possível testar criação de eventos.")
+            return False
+        
+        # Test 2: Test direct event creation with yellow banana color
+        print("\n2️⃣ TESTANDO CRIAÇÃO DE EVENTO DIRETO COM COR AMARELO BANANA:")
+        direct_event_success = self.test_direct_event_creation_with_color()
+        
+        # Test 3: Test route event creation with yellow banana color (if routes exist)
+        print("\n3️⃣ TESTANDO CRIAÇÃO DE EVENTO DE ROTA COM COR AMARELO BANANA:")
+        route_event_success = self.test_route_event_creation_with_color()
+        
+        # Test 4: Verify Google Calendar API accepts colorId '5'
+        print("\n4️⃣ VERIFICANDO SE GOOGLE CALENDAR API ACEITA COLORID '5':")
+        color_validation_success = self.test_google_calendar_color_validation()
+        
+        # Summary
+        self.print_summary()
+        
+        return direct_event_success and route_event_success and color_validation_success
+    
+    def test_google_calendar_auth_status(self):
+        """Check if Google Calendar is authenticated"""
+        print("\n=== VERIFICANDO STATUS DE AUTENTICAÇÃO DO GOOGLE CALENDAR ===")
+        
+        response = self.make_request('GET', '/calendar/status')
+        if response['success']:
+            data = response['data']
+            is_authenticated = data.get('authenticated', False)
+            message = data.get('message', '')
+            
+            if is_authenticated:
+                self.log_test("Google Calendar Auth Status", True, 
+                            f"✅ Google Calendar autenticado: {message}")
+                return True
+            else:
+                self.log_test("Google Calendar Auth Status", False, 
+                            f"❌ Google Calendar não autenticado: {message}")
+                return False
+        else:
+            self.log_test("Google Calendar Auth Status", False, 
+                        "❌ Falha ao verificar status de autenticação", response['data'])
+            return False
+    
+    def test_direct_event_creation_with_color(self):
+        """Test POST /api/calendar/events/direct with yellow banana color"""
+        print("\n=== TESTANDO CRIAÇÃO DE EVENTO DIRETO COM COR AMARELO BANANA ===")
+        
+        # Test data as specified in the review request
+        event_data = {
+            "summary": "Teste Cor Amarelo Banana - Neo",
+            "description": "Teste da nova cor padrão amarelo banana para eventos SuperDry",
+            "location": "Cuiabá, MT",
+            "start_datetime": "2025-01-15T14:00:00",
+            "end_datetime": "2025-01-15T16:00:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events/direct', event_data)
+        if response['success']:
+            result = response['data']
+            event_created = result.get('event', {})
+            google_event_id = result.get('google_event_id')
+            
+            # Verify event was created successfully
+            checks = [
+                (result.get('message') == 'Direct calendar event created successfully', "Mensagem de sucesso"),
+                (event_created.get('summary') == event_data['summary'], "Título correto"),
+                (event_created.get('description') == event_data['description'], "Descrição correta"),
+                (event_created.get('location') == event_data['location'], "Local correto"),
+                (google_event_id is not None, "Google Event ID gerado"),
+                (event_created.get('route_id') is None, "route_id é None (evento direto)"),
+                (event_created.get('stop_id') is None, "stop_id é None (evento direto)")
+            ]
+            
+            all_passed = all(check[0] for check in checks)
+            failed_checks = [check[1] for check in checks if not check[0]]
+            
+            if all_passed:
+                self.log_test("Direct Event Creation", True, 
+                            f"✅ Evento direto criado com sucesso no Google Calendar: {google_event_id}")
+                
+                # Now verify the color in Google Calendar
+                return self.verify_event_color_in_google_calendar(google_event_id, "5")
+            else:
+                self.log_test("Direct Event Creation", False, 
+                            f"❌ Falha na validação dos dados do evento: {failed_checks}")
+                return False
+        else:
+            self.log_test("Direct Event Creation", False, 
+                        "❌ Falha ao criar evento direto", response['data'])
+            return False
+    
+    def test_route_event_creation_with_color(self):
+        """Test POST /api/calendar/events with yellow banana color (route events)"""
+        print("\n=== TESTANDO CRIAÇÃO DE EVENTO DE ROTA COM COR AMARELO BANANA ===")
+        
+        # First, check if there are any routes available
+        response = self.make_request('GET', '/routes')
+        if not response['success']:
+            self.log_test("Route Event Creation", False, 
+                        "❌ Falha ao buscar rotas existentes", response['data'])
+            return False
+        
+        routes = response['data']
+        if not routes or len(routes) == 0:
+            self.log_test("Route Event Creation", True, 
+                        "ℹ️  Nenhuma rota encontrada - pulando teste de evento de rota")
+            return True
+        
+        # Use the first available route
+        route = routes[0]
+        route_id = route.get('id')
+        stops = route.get('stops', [])
+        
+        if not stops or len(stops) == 0:
+            self.log_test("Route Event Creation", True, 
+                        f"ℹ️  Rota {route_id} não tem stops - pulando teste de evento de rota")
+            return True
+        
+        # Create calendar events for the route
+        event_request_data = {
+            "route_id": route_id,
+            "stop_ids": [stops[0]['id']],  # Use first stop
+            "start_date": "2025-01-16",
+            "start_time": "09:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events', event_request_data)
+        if response['success']:
+            result = response['data']
+            created_events = result.get('events', [])
+            
+            if len(created_events) > 0:
+                first_event = created_events[0]
+                google_event_id = first_event.get('google_event_id')
+                
+                self.log_test("Route Event Creation", True, 
+                            f"✅ Evento de rota criado com sucesso: {google_event_id}")
+                
+                # Verify the color in Google Calendar
+                return self.verify_event_color_in_google_calendar(google_event_id, "5")
+            else:
+                self.log_test("Route Event Creation", False, 
+                            "❌ Nenhum evento foi criado para a rota")
+                return False
+        else:
+            self.log_test("Route Event Creation", False, 
+                        "❌ Falha ao criar eventos de rota", response['data'])
+            return False
+    
+    def verify_event_color_in_google_calendar(self, google_event_id: str, expected_color_id: str):
+        """Verify that the event in Google Calendar has the correct colorId"""
+        print(f"\n=== VERIFICANDO COR DO EVENTO NO GOOGLE CALENDAR: {google_event_id} ===")
+        
+        response = self.make_request('GET', f'/calendar/events/detail/{google_event_id}')
+        if response['success']:
+            event_detail = response['data']
+            actual_color_id = event_detail.get('color_id')
+            
+            if actual_color_id == expected_color_id:
+                self.log_test("Event Color Verification", True, 
+                            f"✅ Evento tem a cor correta: colorId '{actual_color_id}' (amarelo banana)")
+                return True
+            elif actual_color_id is None:
+                # Some events might not have colorId set explicitly
+                self.log_test("Event Color Verification", False, 
+                            f"⚠️  Evento não tem colorId definido (pode usar cor padrão do calendário)")
+                return False
+            else:
+                self.log_test("Event Color Verification", False, 
+                            f"❌ Evento tem cor incorreta: colorId '{actual_color_id}' (esperado '{expected_color_id}')")
+                return False
+        else:
+            self.log_test("Event Color Verification", False, 
+                        f"❌ Falha ao buscar detalhes do evento {google_event_id}", response['data'])
+            return False
+    
+    def test_google_calendar_color_validation(self):
+        """Test if Google Calendar API accepts colorId '5' (yellow banana)"""
+        print("\n=== VERIFICANDO SE GOOGLE CALENDAR API ACEITA COLORID '5' ===")
+        
+        # Create a simple test event to verify color acceptance
+        test_event_data = {
+            "summary": "Teste Validação Cor - colorId 5",
+            "description": "Evento de teste para validar se Google Calendar aceita colorId '5'",
+            "location": "Teste",
+            "start_datetime": "2025-01-17T10:00:00",
+            "end_datetime": "2025-01-17T11:00:00"
+        }
+        
+        response = self.make_request('POST', '/calendar/events/direct', test_event_data)
+        if response['success']:
+            result = response['data']
+            google_event_id = result.get('google_event_id')
+            
+            if google_event_id:
+                # Check if the event was created and has the correct color
+                color_verified = self.verify_event_color_in_google_calendar(google_event_id, "5")
+                
+                if color_verified:
+                    self.log_test("Google Calendar Color Validation", True, 
+                                f"✅ Google Calendar API aceita e aplica colorId '5' corretamente")
+                    
+                    # Clean up test event
+                    self.make_request('DELETE', f'/calendar/events/{google_event_id}')
+                    return True
+                else:
+                    self.log_test("Google Calendar Color Validation", False, 
+                                f"❌ Google Calendar API não aplicou colorId '5' corretamente")
+                    
+                    # Clean up test event
+                    self.make_request('DELETE', f'/calendar/events/{google_event_id}')
+                    return False
+            else:
+                self.log_test("Google Calendar Color Validation", False, 
+                            "❌ Falha ao obter Google Event ID para validação")
+                return False
+        else:
+            self.log_test("Google Calendar Color Validation", False, 
+                        "❌ Falha ao criar evento de teste para validação de cor", response['data'])
+            return False
+
 if __name__ == "__main__":
     # Check which tests to run based on command line arguments
     if len(sys.argv) > 1:
