@@ -373,7 +373,7 @@ backend:
 
   - task: "Route Service Status Bug Investigation"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
     stuck_count: 1
     priority: "high"
@@ -382,6 +382,9 @@ backend:
         -working: false
         -agent: "testing"
         -comment: "🐛 BUG CONFIRMADO: Campo 'Tipo' no mapa de rotas sempre mostra 'RETIRAR'. Investigação completa realizada: 1) ❌ ROTA RTE-0000003: Não encontrada (404), 2) ❌ ROTA RTE-0000001: Todos os 4 stops têm service_status='RETIRAR', 3) ❌ BUDGET ITEMS: Todos os 7 items disponíveis têm status='RETIRAR', 4) ✅ SERVICES CATALOG: Catálogo tem variedade de default_service_status (EXECUTAR_NO_LOCAL: 46, RETIRAR: 36, CLIENTE_TROUXE: 18), 5) ✅ BACKEND FUNCIONANDO: Novos budget_items herdam corretamente o default_service_status dos services. CAUSA RAIZ: Orçamentos existentes foram criados antes da correção do bug de herança de status. SOLUÇÃO NECESSÁRIA: Atualizar orçamentos existentes ou criar novos para demonstrar funcionalidade corrigida."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ BUG COMPLETAMENTE CORRIGIDO: Migração executada com sucesso via POST /api/admin/migrate-budget-item-status. RESULTADOS DA MIGRAÇÃO: 7 de 8 budget items atualizados em 6 orçamentos. STATUS APÓS MIGRAÇÃO: Items disponíveis agora têm status variados (EXECUTAR_NO_LOCAL: 7, RETIRAR: 1) em vez de todos serem RETIRAR. TESTE DE NOVA ROTA: Criada rota RTE-0000003 com 2 stops demonstrando status variados - 1 stop com 'RETIRAR' e 1 stop com 'EXECUTAR_NO_LOCAL'. CAMPO 'TIPO' NO MAPA: Agora mostra status variados corretamente. Bug 100% resolvido - migração corrigiu orçamentos existentes e novas rotas herdam status corretos dos services."
 
 frontend:
   - task: "Auto-scroll to Prioritization Section"
