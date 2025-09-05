@@ -622,7 +622,7 @@ export function Routes() {
               <p style="margin: 4px 0;"><b>💰 Valor:</b> R$ ${stop.service_value.toFixed(2)}</p>
               <p style="margin: 4px 0;"><b>⏱️ Duração:</b> ${stop.estimated_duration} minutos</p>
               <p style="margin: 4px 0;"><b>🎚️ Prioridade:</b> <span style="color: #7C3AED;">${stop.priority}</span></p>
-              <p style="margin: 4px 0;"><b>📋 Tipo:</b> ${stop.service_status}</p>
+              <p style="margin: 4px 0;"><b>📋 STATUS:</b> ${stop.service_status}</p>
               <hr style="margin: 8px 0;">
               <p style="margin: 0; font-size: 11px; color: #666;">📍 ${stop.address.full_address || stop.address.neighborhood}</p>
             </div>
