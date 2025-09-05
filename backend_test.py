@@ -4292,8 +4292,12 @@ if __name__ == "__main__":
         elif test_type == "duration":
             print("⏱️  RUNNING DURATION OPTIMIZATION TESTS")
             success = duration_tester.run_duration_optimization_tests()
+        elif test_type == "investigate-srv":
+            print("🔍 RUNNING SPECIFIC INVESTIGATION: SRV-0037 and SRV-0036")
+            investigation_results = tester.investigate_services_srv_0037_0036()
+            success = True  # Investigation always succeeds, results are in the output
         else:
-            print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration")
+            print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv")
             sys.exit(1)
     else:
         print("🔍 RUNNING SERVICE STATUS DEBUG INVESTIGATION (default)")
