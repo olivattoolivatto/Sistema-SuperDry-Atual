@@ -3440,7 +3440,11 @@ class ServiceStatusBugTester:
 if __name__ == "__main__":
     # Check which tests to run based on command line arguments
     if len(sys.argv) > 1:
-        if sys.argv[1] == "--status-bug":
+        if sys.argv[1] == "--migration":
+            print("🔄 Running MIGRATION TESTS only")
+            tester = ServiceStatusBugTester()
+            success = tester.run_migration_tests()
+        elif sys.argv[1] == "--status-bug":
             print("🐛 Running SERVICE STATUS BUG TESTS only")
             tester = ServiceStatusBugTester()
             success = tester.run_service_status_bug_tests()
@@ -3481,8 +3485,8 @@ if __name__ == "__main__":
             tester = ServiceStatusBugTester()
             success = tester.run_all_tests()
     else:
-        print("🎨 Running CALENDAR COLOR CHANGE TESTS (default - based on review request)")
+        print("🔄 Running MIGRATION TESTS (default - based on review request)")
         tester = ServiceStatusBugTester()
-        success = tester.test_calendar_color_change_implementation()
+        success = tester.run_migration_tests()
     
     sys.exit(0 if success else 1)
