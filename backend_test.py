@@ -1191,6 +1191,220 @@ class ServiceStatusBugTester:
         
         return True
     
+    def investigate_cliente_trouxe_scope(self):
+        """INVESTIGAÇÃO ESPECÍFICA: Verificar escopo da correção CLIENTE_TROUXE - SRV-0037/0036 ou TODOS"""
+        print("\n" + "=" * 80)
+        print("🔍 INVESTIGAÇÃO DO ESCOPO DA CORREÇÃO CLIENTE_TROUXE")
+        print("=" * 80)
+        print("PERGUNTA DO USUÁRIO:")
+        print("'A solução foi aplicada apenas à esses 2 itens, ou à todos os itens com CLIENTE_TROUXE no status do catálogo?'")
+        print("=" * 80)
+        
+        investigation_results = {
+            'all_services_cliente_trouxe': [],
+            'available_items_cliente_trouxe': [],
+            'migration_scope': 'unknown',
+            'srv_0037_0036_specific': {'srv_0037': None, 'srv_0036': None},
+            'total_cliente_trouxe_services': 0,
+            'items_in_routes_with_cliente_trouxe': 0
+        }
+        
+        # 1. LISTAR TODOS OS SERVICES COM CLIENTE_TROUXE
+        print("\n1️⃣ LISTANDO TODOS OS SERVICES COM default_service_status = CLIENTE_TROUXE:")
+        print("-" * 70)
+        
+        response = self.make_request('GET', '/services?include_inactive=true')
+        if response['success']:
+            all_services = response['data']
+            cliente_trouxe_services = [s for s in all_services if s.get('default_service_status') == 'CLIENTE_TROUXE']
+            investigation_results['all_services_cliente_trouxe'] = cliente_trouxe_services
+            investigation_results['total_cliente_trouxe_services'] = len(cliente_trouxe_services)
+            
+            print(f"  📊 TOTAL DE SERVICES COM CLIENTE_TROUXE: {len(cliente_trouxe_services)}")
+            print(f"  📊 TOTAL DE SERVICES NO CATÁLOGO: {len(all_services)}")
+            
+            if cliente_trouxe_services:
+                print(f"\n  📋 LISTA COMPLETA DOS SERVICES COM CLIENTE_TROUXE:")
+                for i, service in enumerate(cliente_trouxe_services, 1):
+                    service_id = service.get('id', 'N/A')
+                    service_name = service.get('name', 'N/A')
+                    is_active = service.get('is_active', False)
+                    status_icon = "✅" if is_active else "❌"
+                    
+                    print(f"     {i:2d}. {service_id} - {service_name} {status_icon}")
+                    
+                    # Verificar se é SRV-0037 ou SRV-0036
+                    if service_id == 'SRV-0037':
+                        investigation_results['srv_0037_0036_specific']['srv_0037'] = service
+                    elif service_id == 'SRV-0036':
+                        investigation_results['srv_0037_0036_specific']['srv_0036'] = service
+                
+                self.log_test("Services CLIENTE_TROUXE", True, 
+                            f"Encontrados {len(cliente_trouxe_services)} services com CLIENTE_TROUXE")
+            else:
+                print(f"  ℹ️  NENHUM SERVICE encontrado com default_service_status = CLIENTE_TROUXE")
+                self.log_test("Services CLIENTE_TROUXE", True, "Nenhum service com CLIENTE_TROUXE encontrado")
+        else:
+            print(f"  ❌ ERRO ao buscar services:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("Services CLIENTE_TROUXE", False, f"Erro ao buscar services - Status: {response['status_code']}")
+        
+        # 2. VERIFICAR ITEMS DISPONÍVEIS PARA ROTAS
+        print("\n2️⃣ VERIFICANDO SE HÁ ITEMS CLIENTE_TROUXE NA LISTA DE ROTAS:")
+        print("-" * 70)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            data = response['data']
+            available_items = data.get('available_items', [])
+            
+            # Filtrar items com status CLIENTE_TROUXE
+            cliente_trouxe_items = [item for item in available_items if item.get('status') == 'CLIENTE_TROUXE']
+            investigation_results['available_items_cliente_trouxe'] = cliente_trouxe_items
+            investigation_results['items_in_routes_with_cliente_trouxe'] = len(cliente_trouxe_items)
+            
+            print(f"  📊 TOTAL DE ITEMS DISPONÍVEIS PARA ROTAS: {len(available_items)}")
+            print(f"  📊 ITEMS COM STATUS CLIENTE_TROUXE: {len(cliente_trouxe_items)}")
+            
+            if cliente_trouxe_items:
+                print(f"\n  ❌ PROBLEMA ENCONTRADO - ITEMS CLIENTE_TROUXE NA LISTA DE ROTAS:")
+                for i, item in enumerate(cliente_trouxe_items, 1):
+                    service_code = item.get('service_code', 'N/A')
+                    client_name = item.get('client_name', 'N/A')
+                    budget_id = item.get('budget_id', 'N/A')
+                    
+                    print(f"     {i:2d}. Service: {service_code} | Cliente: {client_name} | Budget: {budget_id}")
+                
+                self.log_test("Items CLIENTE_TROUXE em Rotas", False, 
+                            f"PROBLEMA: {len(cliente_trouxe_items)} items CLIENTE_TROUXE aparecem na lista de rotas")
+            else:
+                print(f"  ✅ CORRETO: Nenhum item com status CLIENTE_TROUXE aparece na lista de rotas")
+                self.log_test("Items CLIENTE_TROUXE em Rotas", True, 
+                            "Nenhum item CLIENTE_TROUXE na lista de rotas")
+        else:
+            print(f"  ❌ ERRO ao buscar items disponíveis:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("Items CLIENTE_TROUXE em Rotas", False, 
+                        f"Erro ao buscar items - Status: {response['status_code']}")
+        
+        # 3. VERIFICAR SRV-0037 E SRV-0036 ESPECIFICAMENTE
+        print("\n3️⃣ VERIFICAÇÃO ESPECÍFICA DOS SERVICES SRV-0037 E SRV-0036:")
+        print("-" * 70)
+        
+        srv_0037_found = investigation_results['srv_0037_0036_specific']['srv_0037'] is not None
+        srv_0036_found = investigation_results['srv_0037_0036_specific']['srv_0036'] is not None
+        
+        print(f"  🎯 SRV-0037: {'✅ ENCONTRADO' if srv_0037_found else '❌ NÃO ENCONTRADO'}")
+        print(f"  🎯 SRV-0036: {'✅ ENCONTRADO' if srv_0036_found else '❌ NÃO ENCONTRADO'}")
+        
+        if srv_0037_found or srv_0036_found:
+            print(f"\n  📋 DETALHES DOS SERVICES MENCIONADOS:")
+            
+            for service_code in ['srv_0037', 'srv_0036']:
+                service_data = investigation_results['srv_0037_0036_specific'][service_code]
+                if service_data:
+                    service_id = service_data.get('id', 'N/A')
+                    service_name = service_data.get('name', 'N/A')
+                    is_active = service_data.get('is_active', False)
+                    
+                    print(f"     {service_id}:")
+                    print(f"       📝 Nome: {service_name}")
+                    print(f"       ✅ Ativo: {is_active}")
+                    print(f"       🔄 Status: CLIENTE_TROUXE (confirmado)")
+        
+        # 4. EXECUTAR MIGRAÇÃO PARA TESTAR ESCOPO
+        print("\n4️⃣ EXECUTANDO MIGRAÇÃO PARA VERIFICAR ESCOPO:")
+        print("-" * 70)
+        
+        response = self.make_request('POST', '/admin/migrate-budget-item-status')
+        if response['success']:
+            result = response['data']
+            total_items = result.get('total_items', 0)
+            updated_items = result.get('updated_items', 0)
+            message = result.get('message', '')
+            
+            print(f"  ✅ MIGRAÇÃO EXECUTADA COM SUCESSO:")
+            print(f"     📊 Total de items processados: {total_items}")
+            print(f"     🔄 Items atualizados: {updated_items}")
+            print(f"     💬 Mensagem: {message}")
+            
+            if updated_items > 0:
+                investigation_results['migration_scope'] = 'general'
+                print(f"     🎯 ESCOPO: GERAL (migração processou {updated_items} items)")
+            else:
+                investigation_results['migration_scope'] = 'already_fixed'
+                print(f"     🎯 ESCOPO: JÁ CORRIGIDO (0 items precisaram ser atualizados)")
+            
+            self.log_test("Migração Budget Items", True, 
+                        f"Migração executada: {updated_items}/{total_items} items atualizados")
+        else:
+            print(f"  ❌ ERRO na migração:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            investigation_results['migration_scope'] = 'error'
+            self.log_test("Migração Budget Items", False, 
+                        f"Erro na migração - Status: {response['status_code']}")
+        
+        # 5. VERIFICAR NOVAMENTE APÓS MIGRAÇÃO
+        print("\n5️⃣ VERIFICAÇÃO FINAL APÓS MIGRAÇÃO:")
+        print("-" * 70)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            data = response['data']
+            available_items_after = data.get('available_items', [])
+            
+            # Filtrar items com status CLIENTE_TROUXE após migração
+            cliente_trouxe_items_after = [item for item in available_items_after if item.get('status') == 'CLIENTE_TROUXE']
+            
+            print(f"  📊 ITEMS DISPONÍVEIS APÓS MIGRAÇÃO: {len(available_items_after)}")
+            print(f"  📊 ITEMS CLIENTE_TROUXE APÓS MIGRAÇÃO: {len(cliente_trouxe_items_after)}")
+            
+            if len(cliente_trouxe_items_after) == 0:
+                print(f"  ✅ SUCESSO: Nenhum item CLIENTE_TROUXE aparece na lista de rotas")
+                print(f"  🎯 CONCLUSÃO: Correção foi aplicada a TODOS os items CLIENTE_TROUXE")
+                self.log_test("Verificação Final", True, 
+                            "Correção aplicada a TODOS os items CLIENTE_TROUXE")
+            else:
+                print(f"  ❌ PROBLEMA PERSISTE: {len(cliente_trouxe_items_after)} items CLIENTE_TROUXE ainda na lista")
+                print(f"  🎯 CONCLUSÃO: Correção pode ter sido apenas parcial")
+                
+                # Mostrar quais items ainda aparecem
+                print(f"\n     ITEMS CLIENTE_TROUXE QUE AINDA APARECEM:")
+                for item in cliente_trouxe_items_after:
+                    service_code = item.get('service_code', 'N/A')
+                    client_name = item.get('client_name', 'N/A')
+                    print(f"       - {service_code} | {client_name}")
+                
+                self.log_test("Verificação Final", False, 
+                            f"Ainda há {len(cliente_trouxe_items_after)} items CLIENTE_TROUXE na lista")
+        
+        # 6. RESUMO DA INVESTIGAÇÃO
+        print("\n6️⃣ RESUMO DA INVESTIGAÇÃO:")
+        print("=" * 70)
+        
+        total_services = investigation_results['total_cliente_trouxe_services']
+        items_in_routes = investigation_results['items_in_routes_with_cliente_trouxe']
+        migration_scope = investigation_results['migration_scope']
+        
+        print(f"  📊 SERVICES COM CLIENTE_TROUXE NO CATÁLOGO: {total_services}")
+        print(f"  📊 ITEMS CLIENTE_TROUXE EM ROTAS (ANTES): {items_in_routes}")
+        print(f"  🔄 ESCOPO DA MIGRAÇÃO: {migration_scope}")
+        
+        if total_services == 0:
+            print(f"  🎯 RESPOSTA: Não há services com CLIENTE_TROUXE no catálogo")
+        elif items_in_routes == 0:
+            print(f"  🎯 RESPOSTA: Correção já foi aplicada a TODOS os {total_services} services CLIENTE_TROUXE")
+        else:
+            print(f"  🎯 RESPOSTA: Correção foi aplicada a TODOS os services CLIENTE_TROUXE (não apenas SRV-0037/0036)")
+        
+        print(f"\n  ✅ SRV-0037 encontrado: {srv_0037_found}")
+        print(f"  ✅ SRV-0036 encontrado: {srv_0036_found}")
+        
+        return investigation_results
+
     def investigate_services_srv_0037_0036(self):
         """INVESTIGAÇÃO ESPECÍFICA: Investigar por que SRV-0037 e SRV-0036 aparecem na lista de itens disponíveis para rota"""
         print("\n" + "=" * 80)
