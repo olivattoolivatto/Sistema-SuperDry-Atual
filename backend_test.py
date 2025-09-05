@@ -3304,6 +3304,10 @@ if __name__ == "__main__":
             print("🎨 Running CALENDAR COLOR CHANGE TESTS only")
             tester = ServiceStatusBugTester()
             success = tester.test_calendar_color_change_implementation()
+        elif sys.argv[1] == "--service-status-bug":
+            print("🐛 Running ROUTE SERVICE STATUS BUG INVESTIGATION only")
+            tester = ServiceStatusBugTester()
+            success = tester.test_route_service_status_bug()
         else:
             print("🚀 Running FULL ROUTES API TESTS")
             tester = ServiceStatusBugTester()
