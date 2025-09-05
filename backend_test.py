@@ -1191,6 +1191,260 @@ class ServiceStatusBugTester:
         
         return True
     
+    def investigate_services_srv_0037_0036(self):
+        """INVESTIGAÇÃO ESPECÍFICA: Investigar por que SRV-0037 e SRV-0036 aparecem na lista de itens disponíveis para rota"""
+        print("\n" + "=" * 80)
+        print("🔍 INVESTIGAÇÃO ESPECÍFICA: SERVIÇOS SRV-0037 e SRV-0036")
+        print("=" * 80)
+        print("PROBLEMA REPORTADO: Usuário testou com serviços SRV-0037 e SRV-0036")
+        print("Estes serviços estão aparecendo em 'Serviços disponíveis para Rota'")
+        print("Pode ser um bug se eles não deveriam aparecer")
+        print("=" * 80)
+        
+        investigation_results = {
+            'srv_0037': {'found': False, 'characteristics': {}, 'budget_items': []},
+            'srv_0036': {'found': False, 'characteristics': {}, 'budget_items': []},
+            'available_items': [],
+            'analysis': {}
+        }
+        
+        # 1. VERIFICAR CARACTERÍSTICAS DOS SERVIÇOS
+        print("\n1️⃣ VERIFICANDO CARACTERÍSTICAS DOS SERVIÇOS:")
+        print("-" * 50)
+        
+        for service_code in ['SRV-0037', 'SRV-0036']:
+            print(f"\n🔍 Investigando {service_code}:")
+            
+            response = self.make_request('GET', f'/services/{service_code}')
+            if response['success']:
+                service = response['data']
+                investigation_results[service_code.lower().replace('-', '_')]['found'] = True
+                investigation_results[service_code.lower().replace('-', '_')]['characteristics'] = service
+                
+                print(f"  ✅ {service_code} ENCONTRADO:")
+                print(f"     📝 Nome: {service.get('name', 'N/A')}")
+                print(f"     📂 Categoria: {service.get('category', 'N/A')}")
+                print(f"     🏠 execution_location: {service.get('execution_location', 'N/A')}")
+                print(f"     🔄 default_service_status: {service.get('default_service_status', 'N/A')}")
+                print(f"     ✅ is_active: {service.get('is_active', 'N/A')}")
+                
+                self.log_test(f"Investigação {service_code}", True, 
+                            f"Serviço encontrado - default_service_status: {service.get('default_service_status')}")
+            else:
+                print(f"  ❌ {service_code} NÃO ENCONTRADO:")
+                print(f"     Status: {response['status_code']}")
+                print(f"     Erro: {response['data']}")
+                
+                self.log_test(f"Investigação {service_code}", False, 
+                            f"Serviço não encontrado - Status: {response['status_code']}")
+        
+        # 2. VERIFICAR BUDGET ITEMS CRIADOS
+        print("\n2️⃣ VERIFICANDO BUDGET ITEMS DISPONÍVEIS PARA ROTAS:")
+        print("-" * 50)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            data = response['data']
+            available_items = data.get('available_items', [])
+            investigation_results['available_items'] = available_items
+            
+            print(f"  📊 Total de items disponíveis: {len(available_items)}")
+            
+            # Filtrar pelos serviços específicos
+            srv_0037_items = [item for item in available_items if item.get('service_code') == 'SRV-0037']
+            srv_0036_items = [item for item in available_items if item.get('service_code') == 'SRV-0036']
+            
+            investigation_results['srv_0037']['budget_items'] = srv_0037_items
+            investigation_results['srv_0036']['budget_items'] = srv_0036_items
+            
+            print(f"\n  🎯 ITEMS COM SRV-0037: {len(srv_0037_items)}")
+            for item in srv_0037_items:
+                print(f"     📋 Budget Item ID: {item.get('budget_item_id', 'N/A')}")
+                print(f"     📄 Budget ID: {item.get('budget_id', 'N/A')}")
+                print(f"     👤 Cliente: {item.get('client_name', 'N/A')}")
+                print(f"     🔄 Status: {item.get('status', 'N/A')}")
+                print(f"     💰 Valor: R$ {item.get('service_value', 0):.2f}")
+                print(f"     📍 Endereço: {item.get('address', {}).get('full_address', 'N/A')}")
+                print("     " + "-" * 40)
+            
+            print(f"\n  🎯 ITEMS COM SRV-0036: {len(srv_0036_items)}")
+            for item in srv_0036_items:
+                print(f"     📋 Budget Item ID: {item.get('budget_item_id', 'N/A')}")
+                print(f"     📄 Budget ID: {item.get('budget_id', 'N/A')}")
+                print(f"     👤 Cliente: {item.get('client_name', 'N/A')}")
+                print(f"     🔄 Status: {item.get('status', 'N/A')}")
+                print(f"     💰 Valor: R$ {item.get('service_value', 0):.2f}")
+                print(f"     📍 Endereço: {item.get('address', {}).get('full_address', 'N/A')}")
+                print("     " + "-" * 40)
+            
+            # Análise de status
+            all_statuses = set(item.get('status') for item in available_items if item.get('status'))
+            status_counts = {}
+            for item in available_items:
+                status = item.get('status')
+                if status:
+                    status_counts[status] = status_counts.get(status, 0) + 1
+            
+            investigation_results['analysis']['all_statuses'] = list(all_statuses)
+            investigation_results['analysis']['status_distribution'] = status_counts
+            
+            print(f"\n  📊 DISTRIBUIÇÃO DE STATUS DE TODOS OS ITEMS:")
+            for status, count in status_counts.items():
+                print(f"     {status}: {count} items")
+            
+            self.log_test("Budget Items Disponíveis", True, 
+                        f"Encontrados {len(available_items)} items - SRV-0037: {len(srv_0037_items)}, SRV-0036: {len(srv_0036_items)}")
+        else:
+            print(f"  ❌ ERRO ao buscar items disponíveis:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            
+            self.log_test("Budget Items Disponíveis", False, 
+                        f"Erro ao buscar items - Status: {response['status_code']}")
+        
+        # 3. ANALISAR LÓGICA DE FILTRO
+        print("\n3️⃣ ANÁLISE DA LÓGICA DE FILTRO:")
+        print("-" * 50)
+        
+        expected_route_statuses = ['RETIRAR', 'EXECUTAR_NO_LOCAL', 'ENTREGAR']
+        
+        for service_code in ['SRV-0037', 'SRV-0036']:
+            service_key = service_code.lower().replace('-', '_')
+            service_data = investigation_results[service_key]
+            
+            if service_data['found']:
+                service_chars = service_data['characteristics']
+                budget_items = service_data['budget_items']
+                
+                print(f"\n  🔍 ANÁLISE {service_code}:")
+                print(f"     🏠 execution_location: {service_chars.get('execution_location', 'N/A')}")
+                print(f"     🔄 default_service_status: {service_chars.get('default_service_status', 'N/A')}")
+                print(f"     📊 Items disponíveis para rota: {len(budget_items)}")
+                
+                if budget_items:
+                    item_statuses = set(item.get('status') for item in budget_items)
+                    print(f"     📋 Status dos items: {list(item_statuses)}")
+                    
+                    # Verificar se status está na lista esperada
+                    for status in item_statuses:
+                        if status in expected_route_statuses:
+                            print(f"     ✅ Status '{status}' é VÁLIDO para rotas (está em {expected_route_statuses})")
+                        else:
+                            print(f"     ❌ Status '{status}' NÃO deveria aparecer em rotas (não está em {expected_route_statuses})")
+                else:
+                    print(f"     ℹ️  Nenhum item disponível para rota com este serviço")
+        
+        # 4. TESTE DE CENÁRIOS
+        print("\n4️⃣ TESTE DE CENÁRIOS:")
+        print("-" * 50)
+        
+        for service_code in ['SRV-0037', 'SRV-0036']:
+            service_key = service_code.lower().replace('-', '_')
+            service_data = investigation_results[service_key]
+            
+            if service_data['found']:
+                service_chars = service_data['characteristics']
+                budget_items = service_data['budget_items']
+                default_status = service_chars.get('default_service_status')
+                
+                print(f"\n  🧪 CENÁRIO {service_code}:")
+                
+                if default_status == 'CLIENTE_TROUXE':
+                    if budget_items:
+                        print(f"     ❌ BUG DETECTADO: Serviço tem default_service_status=CLIENTE_TROUXE")
+                        print(f"        mas {len(budget_items)} items aparecem disponíveis para rota!")
+                        print(f"        Items com CLIENTE_TROUXE NÃO deveriam aparecer na lista.")
+                        
+                        self.log_test(f"Cenário {service_code}", False, 
+                                    f"BUG: Items com CLIENTE_TROUXE aparecem na lista de rotas")
+                    else:
+                        print(f"     ✅ CORRETO: Serviço tem default_service_status=CLIENTE_TROUXE")
+                        print(f"        e nenhum item aparece disponível para rota (comportamento esperado)")
+                        
+                        self.log_test(f"Cenário {service_code}", True, 
+                                    f"Correto: CLIENTE_TROUXE não aparece na lista")
+                
+                elif default_status in expected_route_statuses:
+                    if budget_items:
+                        print(f"     ✅ COMPORTAMENTO NORMAL: Serviço tem default_service_status={default_status}")
+                        print(f"        e {len(budget_items)} items aparecem disponíveis para rota")
+                        print(f"        Items com {default_status} DEVEM aparecer na lista.")
+                        
+                        self.log_test(f"Cenário {service_code}", True, 
+                                    f"Normal: {default_status} aparece corretamente na lista")
+                    else:
+                        print(f"     ⚠️  INESPERADO: Serviço tem default_service_status={default_status}")
+                        print(f"        mas nenhum item aparece disponível para rota")
+                        print(f"        Pode indicar que não há orçamentos com este serviço ou")
+                        print(f"        que os items estão em status diferente do esperado.")
+                        
+                        self.log_test(f"Cenário {service_code}", True, 
+                                    f"Inesperado mas não é bug: {default_status} sem items disponíveis")
+                
+                else:
+                    print(f"     ⚠️  STATUS DESCONHECIDO: default_service_status={default_status}")
+                    print(f"        Status não reconhecido na análise")
+                    
+                    self.log_test(f"Cenário {service_code}", True, 
+                                f"Status desconhecido: {default_status}")
+        
+        # 5. CONCLUSÃO DA INVESTIGAÇÃO
+        print("\n5️⃣ CONCLUSÃO DA INVESTIGAÇÃO:")
+        print("=" * 50)
+        
+        srv_0037_found = investigation_results['srv_0037']['found']
+        srv_0036_found = investigation_results['srv_0036']['found']
+        srv_0037_items = len(investigation_results['srv_0037']['budget_items'])
+        srv_0036_items = len(investigation_results['srv_0036']['budget_items'])
+        
+        if srv_0037_found or srv_0036_found:
+            print(f"📋 RESUMO DOS ACHADOS:")
+            
+            if srv_0037_found:
+                srv_0037_chars = investigation_results['srv_0037']['characteristics']
+                print(f"  • SRV-0037: {srv_0037_chars.get('name', 'N/A')}")
+                print(f"    - default_service_status: {srv_0037_chars.get('default_service_status', 'N/A')}")
+                print(f"    - Items disponíveis para rota: {srv_0037_items}")
+            
+            if srv_0036_found:
+                srv_0036_chars = investigation_results['srv_0036']['characteristics']
+                print(f"  • SRV-0036: {srv_0036_chars.get('name', 'N/A')}")
+                print(f"    - default_service_status: {srv_0036_chars.get('default_service_status', 'N/A')}")
+                print(f"    - Items disponíveis para rota: {srv_0036_items}")
+            
+            # Determinar se é bug ou comportamento normal
+            total_items = srv_0037_items + srv_0036_items
+            if total_items > 0:
+                print(f"\n🎯 RESULTADO: {total_items} items destes serviços aparecem na lista de rotas")
+                
+                # Verificar se algum tem CLIENTE_TROUXE
+                has_cliente_trouxe_bug = False
+                if srv_0037_found and investigation_results['srv_0037']['characteristics'].get('default_service_status') == 'CLIENTE_TROUXE' and srv_0037_items > 0:
+                    has_cliente_trouxe_bug = True
+                if srv_0036_found and investigation_results['srv_0036']['characteristics'].get('default_service_status') == 'CLIENTE_TROUXE' and srv_0036_items > 0:
+                    has_cliente_trouxe_bug = True
+                
+                if has_cliente_trouxe_bug:
+                    print("❌ CONCLUSÃO: É UM BUG - Items com CLIENTE_TROUXE não deveriam aparecer")
+                    self.log_test("Investigação Final", False, 
+                                "BUG CONFIRMADO: Items com CLIENTE_TROUXE aparecem na lista de rotas")
+                else:
+                    print("✅ CONCLUSÃO: COMPORTAMENTO NORMAL - Items têm status válidos para rotas")
+                    self.log_test("Investigação Final", True, 
+                                "Comportamento normal: Items têm status válidos para rotas")
+            else:
+                print("ℹ️  RESULTADO: Nenhum item destes serviços aparece na lista de rotas")
+                print("✅ CONCLUSÃO: COMPORTAMENTO ESPERADO - Serviços não geram items para rotas")
+                self.log_test("Investigação Final", True, 
+                            "Comportamento esperado: Serviços não geram items para rotas")
+        else:
+            print("❌ SERVIÇOS NÃO ENCONTRADOS: SRV-0037 e SRV-0036 não existem no sistema")
+            self.log_test("Investigação Final", False, 
+                        "Serviços SRV-0037 e SRV-0036 não encontrados no sistema")
+        
+        print("=" * 80)
+        return investigation_results
+
     def print_summary(self):
         """Print test results summary"""
         print("\n" + "=" * 60)
