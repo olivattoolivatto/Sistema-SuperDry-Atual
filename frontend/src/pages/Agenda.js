@@ -333,11 +333,14 @@ export function Agenda() {
         if (locationStops.length >= 2) {
           if (hasExecution) {
             // Se há execução no local, reduzir menos (15%)
-            optimizedDuration = Math.round(baseDuration * 0.85);
+            optimizedDuration = baseDuration * 0.85;
           } else {
             // Apenas coletas/entregas, reduzir mais (25%)
-            optimizedDuration = Math.round(baseDuration * 0.75);
+            optimizedDuration = baseDuration * 0.75;
           }
+          
+          // Arredondar para cima de 10 em 10 minutos
+          optimizedDuration = roundUpToTens(optimizedDuration);
         }
         
         totalDuration += optimizedDuration;
