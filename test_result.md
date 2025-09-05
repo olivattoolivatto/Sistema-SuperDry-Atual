@@ -371,6 +371,18 @@ backend:
         -agent: "testing"
         -comment: "✅ NOVA FUNCIONALIDADE TESTADA E FUNCIONANDO: Comprehensive testing of route events with custom dates and optimized durations completed successfully. 1) ✅ CUSTOM DATE FUNCTIONALITY: Events created with custom date (2025-09-10) different from route planned_date working perfectly. 2) ✅ BASIC DURATIONS: EXECUTAR_NO_LOCAL=120min and RETIRAR/ENTREGAR=30min implemented correctly. 3) ✅ MULTIPLE ITEMS SAME LOCATION: Algorithm calculate_optimized_durations() working perfectly - tested with 1 EXECUTAR_NO_LOCAL + 1 RETIRAR at same location resulted in correct optimization (150min base -> 127min optimized, 15% reduction). 4) ✅ COLOR ID: Events created with colorId '5' (yellow banana) as specified. 5) ✅ STORAGE: Events stored correctly in database and Google Calendar. All implemented rules working: multiple items same location with 15% reduction (with execution) or 25% reduction (without execution). Function tested with real data and mathematical verification confirms algorithm accuracy."
 
+  - task: "Route Service Status Bug Investigation"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: false
+        -agent: "testing"
+        -comment: "🐛 BUG CONFIRMADO: Campo 'Tipo' no mapa de rotas sempre mostra 'RETIRAR'. Investigação completa realizada: 1) ❌ ROTA RTE-0000003: Não encontrada (404), 2) ❌ ROTA RTE-0000001: Todos os 4 stops têm service_status='RETIRAR', 3) ❌ BUDGET ITEMS: Todos os 7 items disponíveis têm status='RETIRAR', 4) ✅ SERVICES CATALOG: Catálogo tem variedade de default_service_status (EXECUTAR_NO_LOCAL: 46, RETIRAR: 36, CLIENTE_TROUXE: 18), 5) ✅ BACKEND FUNCIONANDO: Novos budget_items herdam corretamente o default_service_status dos services. CAUSA RAIZ: Orçamentos existentes foram criados antes da correção do bug de herança de status. SOLUÇÃO NECESSÁRIA: Atualizar orçamentos existentes ou criar novos para demonstrar funcionalidade corrigida."
+
 frontend:
   - task: "Auto-scroll to Prioritization Section"
     implemented: true
