@@ -284,6 +284,64 @@ export function Agenda() {
     }
   };
 
+  // Função para calcular duração otimizada quando há múltiplos itens no mesmo local
+  const calculateOptimizedDuration = (stops) => {
+    if (!stops || stops.length === 0) return 0;
+    if (stops.length === 1) return calculateDuration(stops[0].service_status);
+
+    // Agrupar stops por endereço (coordenadas ou endereço completo)
+    const locationGroups = {};
+    
+    stops.forEach(stop => {
+      const locationKey = stop.address?.latitude && stop.address?.longitude 
+        ? `${stop.address.latitude},${stop.address.longitude}`
+        : stop.address?.full_address || 'unknown';
+      
+      if (!locationGroups[locationKey]) {
+        locationGroups[locationKey] = [];
+      }
+      locationGroups[locationKey].push(stop);
+    });
+
+    let totalDuration = 0;
+
+    Object.values(locationGroups).forEach(locationStops => {
+      if (locationStops.length === 1) {
+        // Item único no local
+        totalDuration += calculateDuration(locationStops[0].service_status);
+      } else {
+        // Múltiplos itens no mesmo local - aplicar otimização
+        let baseDuration = 0;
+        let hasExecution = false;
+        
+        locationStops.forEach(stop => {
+          const duration = calculateDuration(stop.service_status);
+          baseDuration += duration;
+          
+          if (stop.service_status === 'EXECUTAR_NO_LOCAL') {
+            hasExecution = true;
+          }
+        });
+        
+        // Reduzir tempo quando há múltiplos itens no mesmo local
+        let optimizedDuration = baseDuration;
+        if (locationStops.length >= 2) {
+          if (hasExecution) {
+            // Se há execução no local, reduzir menos (15%)
+            optimizedDuration = Math.round(baseDuration * 0.85);
+          } else {
+            // Apenas coletas/entregas, reduzir mais (25%)
+            optimizedDuration = Math.round(baseDuration * 0.75);
+          }
+        }
+        
+        totalDuration += optimizedDuration;
+      }
+    });
+
+    return totalDuration;
+  };
+
   const toggleStopSelection = (stopId) => {
     console.log('🔄 Toggle selection para ID:', stopId);
     
