@@ -607,15 +607,6 @@ export function Routes() {
             .addTo(mapInstanceRef.current);
 
           // Create detailed popup content with correct sequence information
-          // DEBUG: Log complete stop data to identify service_status issue
-          console.log(`🔍 DEBUG Stop Data for ${stop.client_name}:`, {
-            service_status: stop.service_status,
-            status: stop.status,
-            service_name: stop.service_name,
-            all_fields: Object.keys(stop),
-            complete_stop: stop
-          });
-
           const popupContent = `
             <div style="min-width: 280px; font-size: 13px;">
               <h4 style="margin: 0 0 8px 0; color: #DC2626; font-weight: bold;">
