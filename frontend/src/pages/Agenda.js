@@ -850,6 +850,15 @@ export function Agenda() {
       return;
     }
 
+    if (!customEventDate) {
+      toast({
+        title: "Aviso!",
+        description: "Selecione uma data para lançar os eventos na agenda.",
+        variant: "default",
+      });
+      return;
+    }
+
     if (!isGoogleAuthenticated) {
       toast({
         title: "Autenticação necessária!",
@@ -870,7 +879,7 @@ export function Agenda() {
         body: JSON.stringify({
           route_id: selectedRoute.id,
           stop_ids: Array.from(selectedStops),
-          start_date: selectedRoute.planned_date,
+          start_date: customEventDate, // Usar data personalizada
           start_time: selectedRoute.planned_start_time
         })
       });
