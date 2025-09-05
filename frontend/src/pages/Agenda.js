@@ -1272,6 +1272,31 @@ export function Agenda() {
             </div>
           </div>
 
+          {/* Campo de Data para Lançamento na Agenda */}
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center space-x-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-blue-900 mb-2">
+                  📅 Data para Lançar na Agenda
+                </label>
+                <input
+                  type="date"
+                  value={customEventDate}
+                  onChange={(e) => setCustomEventDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  min={new Date().toISOString().split('T')[0]} // Não permitir datas passadas
+                />
+              </div>
+              <div className="text-sm text-blue-700">
+                <div className="font-medium">ℹ️ Horário de Início</div>
+                <div>{selectedRoute.planned_start_time || '08:00'}</div>
+              </div>
+            </div>
+            <p className="text-xs text-blue-600 mt-2">
+              💡 Todos os eventos selecionados serão criados nesta data, começando no horário planejado da rota
+            </p>
+          </div>
+
           <div className="space-y-3">
             {routeEvents.map((event, index) => {
               const isSelected = selectedStops.has(event.id);
