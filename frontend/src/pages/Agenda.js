@@ -56,6 +56,7 @@ export function Agenda() {
     end_time: ''
   });
   const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [customEventDate, setCustomEventDate] = useState(''); // Data personalizada para eventos da rota
 
   useEffect(() => {
     // Check if this is a redirect from Google OAuth
