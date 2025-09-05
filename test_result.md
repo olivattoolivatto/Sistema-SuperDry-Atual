@@ -552,7 +552,8 @@ metadata:
 test_plan:
   current_focus:
     - "Route Service Status Bug Investigation"
-  stuck_tasks: []
+  stuck_tasks:
+    - "Route Service Status Bug Investigation"
   test_all: false
   test_priority: "high_first"
 
