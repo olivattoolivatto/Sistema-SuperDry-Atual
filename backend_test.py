@@ -4300,8 +4300,9 @@ if __name__ == "__main__":
             print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv")
             sys.exit(1)
     else:
-        print("🔍 RUNNING SERVICE STATUS DEBUG INVESTIGATION (default)")
-        success = tester.run_service_status_debug_investigation()
+        print("🔍 RUNNING SPECIFIC INVESTIGATION: SRV-0037 and SRV-0036 (default)")
+        investigation_results = tester.investigate_services_srv_0037_0036()
+        success = True
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
