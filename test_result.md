@@ -539,8 +539,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Calendar Event Color Change to Yellow Banana"
-  stuck_tasks: []
+    - "Route Service Status Bug Investigation"
+  stuck_tasks:
+    - "Route Service Status Bug Investigation"
   test_all: false
   test_priority: "high_first"
 
