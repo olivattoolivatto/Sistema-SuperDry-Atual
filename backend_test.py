@@ -3619,6 +3619,12 @@ class DurationOptimizationTester(ServiceStatusBugTester):
         """Test 1: Verify base duration values - EXECUTAR_NO_LOCAL = 90min, RETIRAR/ENTREGAR = 30min"""
         print("\n=== TESTING BASE DURATION VALUES ===")
         
+        # First check if Google Calendar is authenticated
+        response = self.make_request('GET', '/calendar/status')
+        if not response['success'] or not response['data'].get('authenticated'):
+            self.log_test("Duration Base Values", False, "Google Calendar not authenticated - cannot test durations")
+            return False
+        
         # Get available items to test with
         response = self.make_request('GET', '/budget-items/available-for-routes')
         if not response['success']:
@@ -3680,6 +3686,10 @@ class DurationOptimizationTester(ServiceStatusBugTester):
         response = self.make_request('POST', '/calendar/events', event_data)
         if response['success']:
             events = response['data'].get('events', [])
+            
+            if not events:
+                self.log_test("Duration Base Values", False, "No events were created")
+                return False
             
             # Check durations in created events
             success = True
