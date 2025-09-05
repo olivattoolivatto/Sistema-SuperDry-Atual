@@ -394,6 +394,9 @@ backend:
         -working: false
         -agent: "testing"
         -comment: "🚨 CRITICAL BUG DISCOVERED - SRV-0037 & SRV-0036 INVESTIGATION: Investigação específica dos serviços SRV-0037 e SRV-0036 revelou BUG CRÍTICO no filtro de items disponíveis para rotas. ❌ PROBLEMA CONFIRMADO: Ambos serviços têm default_service_status='CLIENTE_TROUXE' mas 15 items (5 do SRV-0037 + 10 do SRV-0036) aparecem na lista de 'Serviços disponíveis para Rota'. ❌ LÓGICA INCORRETA: Items com status CLIENTE_TROUXE NÃO deveriam aparecer na lista pois não precisam de coleta/entrega - cliente já trouxe o item. ❌ CAUSA RAIZ: Todos os 15 items têm status='RETIRAR' em vez de herdar o correto 'CLIENTE_TROUXE' do service. ❌ IMPACTO: Usuário vê serviços que não deveriam estar disponíveis para rotas, causando confusão operacional. SOLUÇÃO NECESSÁRIA: Corrigir lógica de herança de status OU filtro de items disponíveis para excluir CLIENTE_TROUXE."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ CRITICAL BUG FIXED - SRV-0037 & SRV-0036 RESOLVED: Executado teste crítico específico conforme solicitado na review request. ✅ MIGRAÇÃO EXECUTADA: POST /api/admin/migrate-budget-item-status processou 21 items com sucesso, atualizando todos os items necessários em 6 orçamentos. ✅ SERVICES VERIFICADOS: SRV-0037 e SRV-0036 confirmados com default_service_status='CLIENTE_TROUXE'. ✅ FILTRO FUNCIONANDO: GET /api/budget-items/available-for-routes retorna apenas 6 items disponíveis, NENHUM dos serviços SRV-0037 ou SRV-0036 aparece na lista. ✅ VERIFICAÇÃO ADICIONAL: Nenhum item com status CLIENTE_TROUXE aparece na lista de rotas disponíveis. ✅ RESULTADO ESPERADO ALCANÇADO: Items CLIENTE_TROUXE não aparecem mais na lista de rotas, eliminando confusão operacional para motoristas. Bug crítico 100% resolvido - sistema funcionando corretamente."
 
 frontend:
   - task: "Auto-scroll to Prioritization Section"
