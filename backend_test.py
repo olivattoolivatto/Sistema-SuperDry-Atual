@@ -1300,6 +1300,381 @@ class ServiceStatusBugTester:
         
         return True
 
+    def test_route_service_status_bug(self):
+        """INVESTIGAÇÃO DO BUG: Campo 'Tipo' no mapa de rotas sempre mostra 'RETIRAR'"""
+        print("🐛 INVESTIGANDO BUG DO CAMPO 'TIPO' NO MAPA DE ROTAS")
+        print(f"🔗 Testando contra: {self.base_url}")
+        print("🎯 Foco: Verificar se service_status nos stops das rotas está correto")
+        print("=" * 80)
+        
+        # Test 1: Verificar rota específica RTE-0000003
+        print("\n1️⃣ VERIFICANDO ROTA RTE-0000003:")
+        self.test_specific_route_rte_0000003()
+        
+        # Test 2: Verificar outras rotas existentes
+        print("\n2️⃣ VERIFICANDO OUTRAS ROTAS EXISTENTES:")
+        self.test_all_existing_routes_service_status()
+        
+        # Test 3: Verificar budget items disponíveis para rotas
+        print("\n3️⃣ VERIFICANDO BUDGET ITEMS DISPONÍVEIS:")
+        self.test_budget_items_available_service_status()
+        
+        # Test 4: Verificar origem dos dados - service_status nos budget_items vs stops
+        print("\n4️⃣ VERIFICANDO ORIGEM DOS DADOS:")
+        self.test_service_status_data_origin()
+        
+        # Test 5: Criar nova rota e verificar se o problema persiste
+        print("\n5️⃣ TESTANDO CRIAÇÃO DE NOVA ROTA:")
+        self.test_new_route_service_status_inheritance()
+        
+        # Summary
+        self.print_summary()
+        
+        return True
+    
+    def test_specific_route_rte_0000003(self):
+        """Verificar dados específicos da rota RTE-0000003"""
+        print("\n=== VERIFICANDO ROTA RTE-0000003 ===")
+        
+        response = self.make_request('GET', '/routes/RTE-0000003')
+        if response['success']:
+            route = response['data']
+            stops = route.get('stops', [])
+            
+            if not stops:
+                self.log_test("Rota RTE-0000003", False, "❌ Rota não tem stops")
+                return False
+            
+            # Analisar service_status de cada stop
+            status_counts = {}
+            stop_details = []
+            
+            for stop in stops:
+                service_status = stop.get('service_status')
+                client_name = stop.get('client_name', 'N/A')
+                service_name = stop.get('service_name', 'N/A')
+                
+                if service_status:
+                    status_counts[service_status] = status_counts.get(service_status, 0) + 1
+                
+                stop_details.append({
+                    'client': client_name,
+                    'service': service_name,
+                    'status': service_status
+                })
+            
+            # Log detalhes dos stops
+            print(f"   📋 Total de stops: {len(stops)}")
+            print(f"   📊 Distribuição de service_status: {dict(status_counts)}")
+            
+            for i, detail in enumerate(stop_details, 1):
+                print(f"   Stop {i}: {detail['client']} - {detail['service']} - Status: {detail['status']}")
+            
+            # Verificar se todos têm RETIRAR (indicando o bug)
+            if len(status_counts) == 1 and 'RETIRAR' in status_counts:
+                self.log_test("Rota RTE-0000003 - Bug Confirmado", False, 
+                            f"❌ BUG CONFIRMADO: Todos os {len(stops)} stops têm service_status 'RETIRAR'")
+                return False
+            elif len(status_counts) > 1:
+                self.log_test("Rota RTE-0000003 - Status Variado", True, 
+                            f"✅ Status variados encontrados: {dict(status_counts)}")
+                return True
+            else:
+                self.log_test("Rota RTE-0000003 - Status Único", True, 
+                            f"Status único encontrado: {dict(status_counts)} (pode ser normal)")
+                return True
+        else:
+            if response['status_code'] == 404:
+                self.log_test("Rota RTE-0000003", True, 
+                            "ℹ️  Rota RTE-0000003 não encontrada (pode não existir)")
+            else:
+                self.log_test("Rota RTE-0000003", False, 
+                            "❌ Erro ao buscar rota RTE-0000003", response['data'])
+            return False
+    
+    def test_all_existing_routes_service_status(self):
+        """Verificar service_status em todas as rotas existentes"""
+        print("\n=== VERIFICANDO TODAS AS ROTAS EXISTENTES ===")
+        
+        response = self.make_request('GET', '/routes')
+        if not response['success']:
+            self.log_test("Listar Rotas", False, "❌ Erro ao listar rotas", response['data'])
+            return False
+        
+        routes = response['data']
+        if not routes:
+            self.log_test("Listar Rotas", True, "ℹ️  Nenhuma rota encontrada no sistema")
+            return True
+        
+        print(f"   📋 Total de rotas encontradas: {len(routes)}")
+        
+        bug_routes = []
+        normal_routes = []
+        
+        for route in routes:
+            route_id = route.get('id')
+            stops = route.get('stops', [])
+            
+            if not stops:
+                continue
+            
+            # Contar service_status nos stops
+            status_counts = {}
+            for stop in stops:
+                service_status = stop.get('service_status')
+                if service_status:
+                    status_counts[service_status] = status_counts.get(service_status, 0) + 1
+            
+            # Verificar se todos são RETIRAR
+            if len(status_counts) == 1 and 'RETIRAR' in status_counts:
+                bug_routes.append({
+                    'id': route_id,
+                    'stops_count': len(stops),
+                    'status_counts': status_counts
+                })
+            else:
+                normal_routes.append({
+                    'id': route_id,
+                    'stops_count': len(stops),
+                    'status_counts': status_counts
+                })
+        
+        # Relatório
+        print(f"   🐛 Rotas com possível bug (só RETIRAR): {len(bug_routes)}")
+        print(f"   ✅ Rotas com status variado: {len(normal_routes)}")
+        
+        if bug_routes:
+            print("   📋 Rotas com bug:")
+            for route in bug_routes:
+                print(f"     - {route['id']}: {route['stops_count']} stops, todos RETIRAR")
+        
+        if normal_routes:
+            print("   📋 Rotas normais:")
+            for route in normal_routes:
+                print(f"     - {route['id']}: {route['stops_count']} stops, status: {dict(route['status_counts'])}")
+        
+        # Conclusão
+        if bug_routes and not normal_routes:
+            self.log_test("Análise Geral de Rotas", False, 
+                        f"❌ BUG CONFIRMADO: Todas as {len(bug_routes)} rotas têm apenas status RETIRAR")
+            return False
+        elif bug_routes and normal_routes:
+            self.log_test("Análise Geral de Rotas", False, 
+                        f"⚠️  BUG PARCIAL: {len(bug_routes)} rotas com bug, {len(normal_routes)} normais")
+            return False
+        else:
+            self.log_test("Análise Geral de Rotas", True, 
+                        f"✅ Todas as rotas têm status variados - sem bug detectado")
+            return True
+    
+    def test_budget_items_available_service_status(self):
+        """Verificar service_status nos budget items disponíveis para rotas"""
+        print("\n=== VERIFICANDO BUDGET ITEMS DISPONÍVEIS ===")
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Budget Items Disponíveis", False, 
+                        "❌ Erro ao buscar budget items", response['data'])
+            return False
+        
+        data = response['data']
+        available_items = data.get('available_items', [])
+        
+        if not available_items:
+            self.log_test("Budget Items Disponíveis", True, 
+                        "ℹ️  Nenhum budget item disponível para rotas")
+            return True
+        
+        # Analisar service_status dos items disponíveis
+        status_counts = {}
+        for item in available_items:
+            service_status = item.get('status')  # Note: pode ser 'status' em vez de 'service_status'
+            if service_status:
+                status_counts[service_status] = status_counts.get(service_status, 0) + 1
+        
+        print(f"   📋 Total de items disponíveis: {len(available_items)}")
+        print(f"   📊 Distribuição de status: {dict(status_counts)}")
+        
+        # Mostrar alguns exemplos
+        print("   📋 Exemplos de items:")
+        for i, item in enumerate(available_items[:5], 1):
+            client_name = item.get('client_name', 'N/A')
+            service_name = item.get('service_name', 'N/A')
+            status = item.get('status', 'N/A')
+            print(f"     {i}. {client_name} - {service_name} - Status: {status}")
+        
+        # Verificar se há variedade de status
+        if len(status_counts) == 1 and 'RETIRAR' in status_counts:
+            self.log_test("Budget Items - Status Variety", False, 
+                        f"❌ PROBLEMA NA ORIGEM: Todos os {len(available_items)} items têm status RETIRAR")
+            return False
+        elif len(status_counts) > 1:
+            self.log_test("Budget Items - Status Variety", True, 
+                        f"✅ Variedade de status encontrada: {dict(status_counts)}")
+            return True
+        else:
+            self.log_test("Budget Items - Status Variety", True, 
+                        f"Status único: {dict(status_counts)} (pode ser normal)")
+            return True
+    
+    def test_service_status_data_origin(self):
+        """Verificar origem dos dados de service_status"""
+        print("\n=== VERIFICANDO ORIGEM DOS DADOS DE SERVICE_STATUS ===")
+        
+        # 1. Verificar services no catálogo
+        response = self.make_request('GET', '/services')
+        if not response['success']:
+            self.log_test("Origem - Services", False, "❌ Erro ao buscar services")
+            return False
+        
+        services = response['data']
+        service_status_counts = {}
+        
+        for service in services:
+            default_status = service.get('default_service_status')
+            if default_status:
+                service_status_counts[default_status] = service_status_counts.get(default_status, 0) + 1
+        
+        print(f"   📋 Services no catálogo: {len(services)}")
+        print(f"   📊 default_service_status: {dict(service_status_counts)}")
+        
+        # 2. Verificar budgets
+        response = self.make_request('GET', '/budgets')
+        if not response['success']:
+            self.log_test("Origem - Budgets", False, "❌ Erro ao buscar budgets")
+            return False
+        
+        budgets = response['data']
+        budget_item_status_counts = {}
+        total_items = 0
+        
+        for budget in budgets:
+            items = budget.get('items', [])
+            for item in items:
+                total_items += 1
+                status = item.get('status')
+                if status:
+                    budget_item_status_counts[status] = budget_item_status_counts.get(status, 0) + 1
+        
+        print(f"   📋 Budgets encontrados: {len(budgets)}")
+        print(f"   📋 Total de items em budgets: {total_items}")
+        print(f"   📊 Status dos items: {dict(budget_item_status_counts)}")
+        
+        # Análise
+        if len(service_status_counts) > 1:
+            self.log_test("Origem - Services Variety", True, 
+                        f"✅ Services têm default_service_status variados: {dict(service_status_counts)}")
+        else:
+            self.log_test("Origem - Services Variety", False, 
+                        f"❌ Services têm apenas um default_service_status: {dict(service_status_counts)}")
+        
+        if len(budget_item_status_counts) > 1:
+            self.log_test("Origem - Budget Items Variety", True, 
+                        f"✅ Budget items têm status variados: {dict(budget_item_status_counts)}")
+        else:
+            self.log_test("Origem - Budget Items Variety", False, 
+                        f"❌ Budget items têm apenas um status: {dict(budget_item_status_counts)}")
+        
+        return True
+    
+    def test_new_route_service_status_inheritance(self):
+        """Criar nova rota e verificar se service_status é herdado corretamente"""
+        print("\n=== TESTANDO CRIAÇÃO DE NOVA ROTA ===")
+        
+        # Setup test data if needed
+        if not self.created_resources['clients']:
+            if not self.setup_test_data_for_status_bug():
+                self.log_test("Setup para Nova Rota", False, "❌ Falha no setup")
+                return False
+        
+        # 1. Criar nova rota
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2024-12-25",
+            "planned_start_time": "09:00",
+            "alias": "Rota Teste - Investigação Bug Service Status"
+        }
+        
+        response = self.make_request('POST', '/routes', route_data)
+        if not response['success']:
+            self.log_test("Nova Rota - Criação", False, "❌ Erro ao criar rota", response['data'])
+            return False
+        
+        route = response['data']
+        route_id = route['id']
+        self.created_resources['routes'].append(route_id)
+        
+        # 2. Buscar items disponíveis
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Nova Rota - Items Disponíveis", False, "❌ Erro ao buscar items")
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        if not available_items:
+            self.log_test("Nova Rota - Items Disponíveis", False, "❌ Nenhum item disponível")
+            return False
+        
+        # 3. Adicionar stops com diferentes status esperados
+        stops_data = []
+        expected_statuses = []
+        
+        for i, item in enumerate(available_items[:3]):  # Usar até 3 items
+            stops_data.append({
+                "budget_item_id": item["budget_item_id"],
+                "priority": "AUTOMATICA"
+            })
+            expected_statuses.append(item.get('status'))
+        
+        response = self.make_request('PUT', f'/routes/{route_id}/stops', stops_data)
+        if not response['success']:
+            self.log_test("Nova Rota - Adicionar Stops", False, "❌ Erro ao adicionar stops", response['data'])
+            return False
+        
+        # 4. Verificar se service_status foi herdado corretamente
+        response = self.make_request('GET', f'/routes/{route_id}')
+        if not response['success']:
+            self.log_test("Nova Rota - Verificar Stops", False, "❌ Erro ao buscar rota criada")
+            return False
+        
+        route = response['data']
+        stops = route.get('stops', [])
+        
+        # Comparar status esperados vs obtidos
+        status_matches = []
+        status_mismatches = []
+        
+        for i, stop in enumerate(stops):
+            actual_status = stop.get('service_status')
+            expected_status = expected_statuses[i] if i < len(expected_statuses) else None
+            
+            if actual_status == expected_status:
+                status_matches.append(f"Stop {i+1}: {actual_status} ✅")
+            else:
+                status_mismatches.append(f"Stop {i+1}: esperado '{expected_status}', obtido '{actual_status}' ❌")
+        
+        print(f"   📋 Stops criados: {len(stops)}")
+        print(f"   ✅ Status corretos: {len(status_matches)}")
+        print(f"   ❌ Status incorretos: {len(status_mismatches)}")
+        
+        if status_matches:
+            for match in status_matches:
+                print(f"     {match}")
+        
+        if status_mismatches:
+            for mismatch in status_mismatches:
+                print(f"     {mismatch}")
+        
+        # Conclusão
+        if status_mismatches:
+            self.log_test("Nova Rota - Herança de Status", False, 
+                        f"❌ BUG CONFIRMADO: {len(status_mismatches)} stops com status incorreto")
+            return False
+        else:
+            self.log_test("Nova Rota - Herança de Status", True, 
+                        f"✅ Todos os {len(status_matches)} stops herdaram status corretamente")
+            return True
+
     def test_route_corrections_implementation(self):
         """Test the specific route corrections mentioned in the review request"""
         print("🔧 TESTANDO CORREÇÕES IMPLEMENTADAS NAS ROTAS")
