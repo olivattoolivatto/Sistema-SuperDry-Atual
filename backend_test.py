@@ -446,6 +446,174 @@ class ServiceStatusBugTester:
         
         return fix_working
     
+    def test_migration_endpoint(self):
+        """Test POST /api/admin/migrate-budget-item-status migration endpoint"""
+        print("\n=== TESTING MIGRATION ENDPOINT ===")
+        
+        response = self.make_request('POST', '/admin/migrate-budget-item-status')
+        if response['success']:
+            result = response['data']
+            total_items = result.get('total_items', 0)
+            updated_items = result.get('updated_items', 0)
+            message = result.get('message', '')
+            
+            self.log_test("Migration Endpoint", True, 
+                        f"✅ Migration executed: {updated_items}/{total_items} items updated - {message}")
+            
+            print(f"   📊 Migration Results:")
+            print(f"   📋 Total items checked: {total_items}")
+            print(f"   🔄 Items updated: {updated_items}")
+            print(f"   💬 Message: {message}")
+            
+            return {
+                'total_items': total_items,
+                'updated_items': updated_items,
+                'success': True
+            }
+        else:
+            self.log_test("Migration Endpoint", False, 
+                        "❌ Migration failed", response['data'])
+            return {
+                'total_items': 0,
+                'updated_items': 0,
+                'success': False
+            }
+    
+    def test_create_new_route_with_varied_status(self):
+        """Test creating a new route to verify if stops have varied status after migration"""
+        print("\n=== TESTING NEW ROUTE CREATION WITH VARIED STATUS ===")
+        
+        # First get available items
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("New Route - Get Available Items", False, 
+                        "Failed to get available items", response['data'])
+            return None
+        
+        available_items = response['data'].get('available_items', [])
+        if not available_items:
+            self.log_test("New Route - Get Available Items", False, 
+                        "No available items found for route creation")
+            return None
+        
+        # Check status variety in available items
+        statuses_found = set(item.get('status') for item in available_items if item.get('status'))
+        print(f"   📊 Available items status variety: {list(statuses_found)}")
+        
+        # Create a new route
+        route_data = {
+            "vehicle_type": "CARRO",
+            "planned_date": "2025-01-15",
+            "planned_start_time": "08:00",
+            "alias": "Rota Teste Migração - Status Variados"
+        }
+        
+        response = self.make_request('POST', '/routes', route_data)
+        if not response['success']:
+            self.log_test("New Route - Create Route", False, 
+                        "Failed to create route", response['data'])
+            return None
+        
+        route = response['data']
+        route_id = route['id']
+        self.created_resources['routes'].append(route_id)
+        
+        # Add stops with different items (to get varied status)
+        stops_data = []
+        for i, item in enumerate(available_items[:5]):  # Use first 5 items
+            stops_data.append({
+                "budget_item_id": item["budget_item_id"],
+                "priority": "AUTOMATICA"
+            })
+        
+        response = self.make_request('PUT', f'/routes/{route_id}/stops', stops_data)
+        if not response['success']:
+            self.log_test("New Route - Add Stops", False, 
+                        "Failed to add stops to route", response['data'])
+            return None
+        
+        # Get route details to verify stop statuses
+        response = self.make_request('GET', f'/routes/{route_id}')
+        if not response['success']:
+            self.log_test("New Route - Get Route Details", False, 
+                        "Failed to get route details", response['data'])
+            return None
+        
+        route_details = response['data']
+        stops = route_details.get('stops', [])
+        
+        # Analyze stop statuses
+        stop_statuses = set(stop.get('service_status') for stop in stops if stop.get('service_status'))
+        status_counts = {}
+        for stop in stops:
+            status = stop.get('service_status')
+            if status:
+                status_counts[status] = status_counts.get(status, 0) + 1
+        
+        print(f"   📋 Route {route_id} created with {len(stops)} stops")
+        print(f"   📊 Stop status distribution: {dict(status_counts)}")
+        
+        # Check if we have variety (not all RETIRAR)
+        if len(stop_statuses) > 1:
+            self.log_test("New Route - Status Variety", True, 
+                        f"✅ Route has varied stop statuses: {list(stop_statuses)} - Bug FIXED!")
+            return route_id
+        elif len(stop_statuses) == 1 and 'RETIRAR' in stop_statuses:
+            self.log_test("New Route - Status Variety", False, 
+                        f"❌ All stops still have RETIRAR status - Bug NOT FIXED!")
+            return route_id
+        else:
+            self.log_test("New Route - Status Variety", True, 
+                        f"Route has single status type: {list(stop_statuses)}")
+            return route_id
+
+    def run_migration_tests(self):
+        """Run the migration tests as requested in the review"""
+        print("🔄 EXECUTANDO MIGRAÇÃO PARA CORRIGIR STATUS DOS BUDGET ITEMS")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Foco: Executar migração e verificar se o bug do campo 'Tipo' foi resolvido")
+        print("=" * 80)
+        
+        # Test 1: Execute migration
+        print("\n1️⃣ EXECUTANDO MIGRAÇÃO:")
+        migration_result = self.test_migration_endpoint()
+        
+        # Test 2: Verify budget items after migration
+        print("\n2️⃣ VERIFICANDO BUDGET ITEMS APÓS MIGRAÇÃO:")
+        self.test_available_for_routes_status_variety()
+        
+        # Test 3: Create new route to test
+        print("\n3️⃣ CRIANDO NOVA ROTA PARA TESTAR:")
+        new_route_id = self.test_create_new_route_with_varied_status()
+        
+        # Test 4: Verify new route has stops with varied status
+        if new_route_id:
+            print("\n4️⃣ VERIFICANDO SE NOVA ROTA TEM STOPS COM STATUS VARIADOS:")
+            response = self.make_request('GET', f'/routes/{new_route_id}')
+            if response['success']:
+                route = response['data']
+                stops = route.get('stops', [])
+                status_counts = {}
+                for stop in stops:
+                    status = stop.get('service_status')
+                    if status:
+                        status_counts[status] = status_counts.get(status, 0) + 1
+                
+                if len(status_counts) > 1:
+                    self.log_test("Final Verification", True, 
+                                f"✅ SUCCESS: New route {new_route_id} has varied stop statuses: {dict(status_counts)}")
+                else:
+                    self.log_test("Final Verification", False, 
+                                f"❌ ISSUE: New route {new_route_id} still has uniform status: {dict(status_counts)}")
+        
+        # Cleanup
+        self.cleanup_test_data()
+        
+        # Summary
+        self.print_summary()
+        
+        return migration_result['success'] if migration_result else False
+
     def run_service_status_bug_tests(self):
         """Run the specific tests for the service status bug"""
         print("🐛 STARTING SERVICE STATUS BUG TESTS")
