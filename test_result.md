@@ -373,10 +373,10 @@ backend:
 
   - task: "Route Service Status Bug Investigation"
     implemented: true
-    working: true
+    working: false
     file: "server.py"
-    stuck_count: 2
-    priority: "high"
+    stuck_count: 3
+    priority: "critical"
     needs_retesting: false
     status_history:
         -working: false
@@ -391,6 +391,9 @@ backend:
         -working: true
         -agent: "testing"
         -comment: "🚨 URGENTE RESOLVIDO: Executada nova migração conforme solicitado na review. ✅ MIGRAÇÃO EXECUTADA: POST /api/admin/migrate-budget-item-status processou 8 items (0 atualizados pois já estavam corretos). ✅ SERVICES CATALOG CONFIRMADO: 100 services com status variados (EXECUTAR_NO_LOCAL: 46, RETIRAR: 36, CLIENTE_TROUXE: 18). ✅ HERANÇA FUNCIONANDO: Testado criação de novos budget items - herdam corretamente default_service_status dos services (linhas 2140-2143 do server.py funcionando). ✅ ITEMS DISPONÍVEIS: GET /api/budget-items/available-for-routes retorna 10 items com status variados (EXECUTAR_NO_LOCAL: 7, RETIRAR: 3). ✅ RESULTADO ESPERADO ALCANÇADO: Frontend mostrará STATUS corretos (EXECUTAR_NO_LOCAL, RETIRAR, etc.). Bug crítico 100% resolvido - migração corrigiu items existentes e novos items herdam status corretos."
+        -working: false
+        -agent: "testing"
+        -comment: "🚨 CRITICAL BUG DISCOVERED - SRV-0037 & SRV-0036 INVESTIGATION: Investigação específica dos serviços SRV-0037 e SRV-0036 revelou BUG CRÍTICO no filtro de items disponíveis para rotas. ❌ PROBLEMA CONFIRMADO: Ambos serviços têm default_service_status='CLIENTE_TROUXE' mas 15 items (5 do SRV-0037 + 10 do SRV-0036) aparecem na lista de 'Serviços disponíveis para Rota'. ❌ LÓGICA INCORRETA: Items com status CLIENTE_TROUXE NÃO deveriam aparecer na lista pois não precisam de coleta/entrega - cliente já trouxe o item. ❌ CAUSA RAIZ: Todos os 15 items têm status='RETIRAR' em vez de herdar o correto 'CLIENTE_TROUXE' do service. ❌ IMPACTO: Usuário vê serviços que não deveriam estar disponíveis para rotas, causando confusão operacional. SOLUÇÃO NECESSÁRIA: Corrigir lógica de herança de status OU filtro de items disponíveis para excluir CLIENTE_TROUXE."
 
 frontend:
   - task: "Auto-scroll to Prioritization Section"
