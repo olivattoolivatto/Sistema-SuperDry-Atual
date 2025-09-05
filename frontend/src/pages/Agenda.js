@@ -276,12 +276,17 @@ export function Agenda() {
   const calculateDuration = (serviceStatus) => {
     switch (serviceStatus) {
       case 'EXECUTAR_NO_LOCAL':
-        return 120; // 2 hours
+        return 90; // 1h30m (90 minutes)
       case 'RETIRAR':
       case 'ENTREGAR':
       default:
         return 30; // 30 minutes
     }
+  };
+
+  // Função para arredondar para cima de 10 em 10 minutos
+  const roundUpToTens = (minutes) => {
+    return Math.ceil(minutes / 10) * 10;
   };
 
   // Função para calcular duração otimizada quando há múltiplos itens no mesmo local
