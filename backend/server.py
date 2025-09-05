@@ -1056,9 +1056,16 @@ async def authenticate_google_calendar(auth_request: GoogleAuthRequest):
 def calculate_optimized_durations(stops):
     """
     Calcula durações otimizadas considerando múltiplos itens no mesmo local
+    - EXECUTAR_NO_LOCAL: 90 minutos (1h30m)
+    - RETIRAR/ENTREGAR: 30 minutos
+    - Arredondamentos de 10 em 10 minutos, sempre para cima
     """
     if not stops:
         return {}
+    
+    def round_up_to_tens(minutes):
+        """Arredonda para cima de 10 em 10 minutos"""
+        return int(math.ceil(minutes / 10) * 10)
     
     # Agrupar stops por localização (coordenadas ou endereço)
     location_groups = {}
@@ -1086,7 +1093,7 @@ def calculate_optimized_durations(stops):
             # Item único no local - usar duração padrão
             stop = location_stops[0]
             if stop["service_status"] == "EXECUTAR_NO_LOCAL":
-                duration_map[stop["id"]] = 120  # 2 hours
+                duration_map[stop["id"]] = 90  # 1h30m (90 minutes)
             else:
                 duration_map[stop["id"]] = 30   # 30 minutes
         else:
@@ -1096,7 +1103,7 @@ def calculate_optimized_durations(stops):
             
             for stop in location_stops:
                 if stop["service_status"] == "EXECUTAR_NO_LOCAL":
-                    base_duration += 120
+                    base_duration += 90  # Atualizado para 90 minutos
                     has_execution = True
                 else:
                     base_duration += 30
@@ -1105,20 +1112,24 @@ def calculate_optimized_durations(stops):
             if len(location_stops) >= 2:
                 if has_execution:
                     # Se há execução no local, reduzir menos (15%)
-                    optimized_duration = int(base_duration * 0.85)
+                    optimized_duration = base_duration * 0.85
                 else:
                     # Apenas coletas/entregas, reduzir mais (25%)
-                    optimized_duration = int(base_duration * 0.75)
+                    optimized_duration = base_duration * 0.75
+                
+                # Arredondar para cima de 10 em 10 minutos
+                optimized_duration = round_up_to_tens(optimized_duration)
             else:
                 optimized_duration = base_duration
             
             # Distribuir duração otimizada proporcionalmente
-            total_base = sum(120 if s["service_status"] == "EXECUTAR_NO_LOCAL" else 30 for s in location_stops)
+            total_base = sum(90 if s["service_status"] == "EXECUTAR_NO_LOCAL" else 30 for s in location_stops)
             
             for stop in location_stops:
-                individual_base = 120 if stop["service_status"] == "EXECUTAR_NO_LOCAL" else 30
-                proportional_duration = int((individual_base / total_base) * optimized_duration)
-                duration_map[stop["id"]] = max(proportional_duration, 15)  # Mínimo 15 minutos
+                individual_base = 90 if stop["service_status"] == "EXECUTAR_NO_LOCAL" else 30
+                proportional_duration = (individual_base / total_base) * optimized_duration
+                # Arredondar para cima de 10 em 10 minutos, mínimo 20 minutos
+                duration_map[stop["id"]] = max(round_up_to_tens(proportional_duration), 20)
     
     return duration_map
 
