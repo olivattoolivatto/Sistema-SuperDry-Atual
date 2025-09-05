@@ -1104,7 +1104,7 @@ async def create_calendar_events(event_request: CalendarEventCreate):
                     'dateTime': end_datetime.isoformat(),
                     'timeZone': 'America/Cuiaba',
                 },
-                'colorId': '1'  # Azul para eventos do sistema SuperDry
+                'colorId': '5'  # Amarelo banana para eventos do sistema SuperDry
             }
             
             # Create event in Google Calendar
