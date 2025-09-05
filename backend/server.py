@@ -2581,37 +2581,51 @@ async def migrate_budget_item_status():
     Atualiza budget items para herdar default_service_status dos serviços
     """
     try:
-        # Get all budget items
-        budget_items = await db.budget_items.find({}).to_list(length=None)
-        print(f"📋 Found {len(budget_items)} budget items to check")
+        # Get all budgets with items
+        budgets = await db.budgets.find({}).to_list(length=None)
+        print(f"📋 Found {len(budgets)} budgets to check")
         
         # Get all services for reference
         services = await db.services.find({}).to_list(length=None)
         service_map = {s["id"]: s for s in services}
         
         updated_count = 0
+        total_items = 0
+        budgets_updated = 0
         
-        for item in budget_items:
-            service_id = item.get("service_id")
-            current_status = item.get("status")
+        for budget in budgets:
+            items = budget.get('items', [])
+            items_updated = False
             
-            if service_id in service_map:
-                service = service_map[service_id]
-                correct_status = service.get("default_service_status")
+            for item in items:
+                total_items += 1
+                service_id = item.get('service_id')
+                current_status = item.get('status')
                 
-                # Update if status is different
-                if current_status != correct_status:
-                    await db.budget_items.update_one(
-                        {"id": item["id"]},
-                        {"$set": {"status": correct_status}}
-                    )
-                    updated_count += 1
-                    print(f"✅ Updated {item['id']}: {current_status} -> {correct_status}")
+                if service_id in service_map:
+                    service = service_map[service_id]
+                    correct_status = service.get('default_service_status')
+                    
+                    # Update if status is different
+                    if current_status != correct_status:
+                        item['status'] = correct_status
+                        items_updated = True
+                        updated_count += 1
+                        print(f"✅ Updated {item['id']}: {current_status} -> {correct_status}")
+            
+            # Update budget if any items were changed
+            if items_updated:
+                await db.budgets.update_one(
+                    {"id": budget["id"]},
+                    {"$set": {"items": items, "updated_at": datetime.utcnow()}}
+                )
+                budgets_updated += 1
         
         return {
             "message": f"Migration completed successfully",
-            "total_items": len(budget_items),
-            "updated_items": updated_count
+            "total_items": total_items,
+            "updated_items": updated_count,
+            "budgets_updated": budgets_updated
         }
         
     except Exception as e:
