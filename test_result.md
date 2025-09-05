@@ -373,9 +373,9 @@ backend:
 
   - task: "Route Service Status Bug Investigation"
     implemented: true
-    working: true
+    working: false
     file: "server.py"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -385,6 +385,9 @@ backend:
         -working: true
         -agent: "testing"
         -comment: "✅ BUG COMPLETAMENTE CORRIGIDO: Migração executada com sucesso via POST /api/admin/migrate-budget-item-status. RESULTADOS DA MIGRAÇÃO: 7 de 8 budget items atualizados em 6 orçamentos. STATUS APÓS MIGRAÇÃO: Items disponíveis agora têm status variados (EXECUTAR_NO_LOCAL: 7, RETIRAR: 1) em vez de todos serem RETIRAR. TESTE DE NOVA ROTA: Criada rota RTE-0000003 com 2 stops demonstrando status variados - 1 stop com 'RETIRAR' e 1 stop com 'EXECUTAR_NO_LOCAL'. CAMPO 'TIPO' NO MAPA: Agora mostra status variados corretamente. Bug 100% resolvido - migração corrigiu orçamentos existentes e novas rotas herdam status corretos dos services."
+        -working: false
+        -agent: "testing"
+        -comment: "🔍 DEBUG INVESTIGATION COMPLETED: Investigação específica dos dados enviados para service_status dos stops confirmou que o BUG RETORNOU. ❌ PROBLEMA CONFIRMADO: GET /api/budget-items/available-for-routes retorna 7 items, TODOS com status='RETIRAR'. ❌ NOVA ROTA CRIADA: RTE-0000002 com 3 stops, TODOS com service_status='RETIRAR'. 📊 ESTRUTURA DE DADOS: Items disponíveis têm campo 'status' (não 'service_status'), stops herdam para campo 'service_status'. 🔍 CAUSA RAIZ: Mesmo após usuário apagar todos orçamentos e refazer, os novos budget_items ainda são criados com status='RETIRAR' uniformemente. CONCLUSÃO: O bug de herança de status dos services para budget_items voltou a ocorrer ou a migração anterior foi revertida."
 
 frontend:
   - task: "Auto-scroll to Prioritization Section"
