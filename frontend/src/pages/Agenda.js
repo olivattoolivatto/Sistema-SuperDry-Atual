@@ -1543,7 +1543,7 @@ export function Agenda() {
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 text-xs">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: '#a4bdfc' }}></div>
-                <span className="text-gray-700">SuperDry (Azul)</span>
+                <span className="text-gray-700">Azul Lavanda</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: '#7ae7bf' }}></div>
@@ -1559,7 +1559,7 @@ export function Agenda() {
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffd8b1' }}></div>
-                <span className="text-gray-700">Amarelo Banana</span>
+                <span className="text-gray-700">SuperDry (Amarelo Banana)</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffb74d' }}></div>
