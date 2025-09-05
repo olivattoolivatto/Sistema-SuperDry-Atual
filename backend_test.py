@@ -4427,13 +4427,15 @@ if __name__ == "__main__":
             print("🔍 RUNNING SPECIFIC INVESTIGATION: SRV-0037 and SRV-0036")
             investigation_results = tester.investigate_services_srv_0037_0036()
             success = True  # Investigation always succeeds, results are in the output
+        elif test_type == "critical":
+            print("🚨 RUNNING CRITICAL BUG TEST: SRV-0037/SRV-0036")
+            success = tester.test_critical_srv_0037_0036_bug()
         else:
-            print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv")
+            print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical")
             sys.exit(1)
     else:
-        print("🔍 RUNNING SPECIFIC INVESTIGATION: SRV-0037 and SRV-0036 (default)")
-        investigation_results = tester.investigate_services_srv_0037_0036()
-        success = True
+        print("🚨 RUNNING CRITICAL BUG TEST: SRV-0037/SRV-0036 (default)")
+        success = tester.test_critical_srv_0037_0036_bug()
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
