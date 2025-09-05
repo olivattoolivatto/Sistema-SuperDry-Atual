@@ -105,6 +105,18 @@
 user_problem_statement: "Implementar funcionalidade 'Criar Evento' na tela Agenda. O usuário solicitou um botão para criar eventos manualmente no Google Calendar com duração padrão de 2 horas (120 minutos), com campos convencionais: título, descrição, local, data/hora início e fim."
 
 backend:
+  - task: "Calendar Event Color Change to Yellow Banana"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "✅ COR AMARELO BANANA IMPLEMENTADA E FUNCIONANDO PERFEITAMENTE: Testado com 100% de sucesso (7/7 testes). 🎨 ALTERAÇÃO CONFIRMADA: Eventos agora são criados com colorId '5' (amarelo banana) em vez do azul padrão (colorId '1'). ✅ TESTES REALIZADOS: 1) Criação de evento direto via POST /api/calendar/events/direct com dados especificados, 2) Criação de evento de rota via POST /api/calendar/events, 3) Verificação da cor no Google Calendar API, 4) Validação de que Google Calendar aceita colorId '5'. ✅ INTEGRAÇÃO COMPLETA: Google Calendar autenticado e conectado, eventos criados com cor amarelo banana aplicada corretamente. ✅ DADOS DE TESTE APROVADOS: Testado com dados exatos da solicitação - 'Teste Cor Amarelo Banana - Neo' em Cuiabá, MT funcionando perfeitamente com a nova cor padrão."
+
   - task: "Calendar Direct Event Creation API"
     implemented: true
     working: true
