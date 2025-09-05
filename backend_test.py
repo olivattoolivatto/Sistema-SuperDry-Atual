@@ -3866,6 +3866,143 @@ class ServiceStatusBugTester:
                         "❌ Falha ao criar evento de teste para validação de cor", response['data'])
             return False
 
+    def test_critical_srv_0037_0036_bug(self):
+        """CRITICAL TEST: Test the specific bug with SRV-0037 and SRV-0036 appearing in routes list"""
+        print("\n" + "=" * 80)
+        print("🚨 CRITICAL BUG TEST: SRV-0037 & SRV-0036 CLIENTE_TROUXE ISSUE")
+        print("=" * 80)
+        print("PROBLEMA: Items dos serviços SRV-0037 e SRV-0036 aparecem na lista de rotas")
+        print("ESPERADO: Items com status CLIENTE_TROUXE NÃO devem aparecer em rotas")
+        print("=" * 80)
+        
+        # Step 1: Execute migration as requested
+        print("\n1️⃣ EXECUTANDO MIGRAÇÃO ESPECÍFICA:")
+        migration_response = self.make_request('POST', '/admin/migrate-budget-item-status')
+        if migration_response['success']:
+            result = migration_response['data']
+            self.log_test("Migration Execution", True, 
+                        f"Migration executed: {result.get('updated_items', 0)} items updated")
+            print(f"   📊 Migration result: {result}")
+        else:
+            self.log_test("Migration Execution", False, 
+                        "Failed to execute migration", migration_response['data'])
+            return False
+        
+        # Step 2: Check services SRV-0037 and SRV-0036 directly
+        print("\n2️⃣ VERIFICANDO SERVIÇOS SRV-0037 E SRV-0036:")
+        srv_0037_status = None
+        srv_0036_status = None
+        
+        for service_id in ['SRV-0037', 'SRV-0036']:
+            response = self.make_request('GET', f'/services/{service_id}')
+            if response['success']:
+                service = response['data']
+                default_status = service.get('default_service_status')
+                print(f"   ✅ {service_id}: default_service_status = {default_status}")
+                
+                if service_id == 'SRV-0037':
+                    srv_0037_status = default_status
+                else:
+                    srv_0036_status = default_status
+                    
+                self.log_test(f"Service {service_id} Check", True, 
+                            f"Found service with default_service_status: {default_status}")
+            else:
+                print(f"   ❌ {service_id}: Service not found")
+                self.log_test(f"Service {service_id} Check", False, 
+                            f"Service not found - Status: {response['status_code']}")
+        
+        # Step 3: Check available items for routes
+        print("\n3️⃣ VERIFICANDO ITEMS DISPONÍVEIS PARA ROTAS:")
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Available Items Check", False, 
+                        "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        print(f"   📊 Total items disponíveis: {len(available_items)}")
+        
+        # Filter items by service codes
+        srv_0037_items = [item for item in available_items 
+                         if item.get('service_code') == 'SRV-0037' or 
+                            'SRV-0037' in str(item.get('budget_item_id', ''))]
+        srv_0036_items = [item for item in available_items 
+                         if item.get('service_code') == 'SRV-0036' or 
+                            'SRV-0036' in str(item.get('budget_item_id', ''))]
+        
+        print(f"   🎯 Items com SRV-0037: {len(srv_0037_items)}")
+        print(f"   🎯 Items com SRV-0036: {len(srv_0036_items)}")
+        
+        # Step 4: Analyze the critical bug
+        print("\n4️⃣ ANÁLISE DO BUG CRÍTICO:")
+        bug_found = False
+        
+        # Check SRV-0037
+        if srv_0037_status == 'CLIENTE_TROUXE' and srv_0037_items:
+            print(f"   ❌ BUG CONFIRMADO SRV-0037: Service tem CLIENTE_TROUXE mas {len(srv_0037_items)} items aparecem na lista!")
+            for item in srv_0037_items:
+                print(f"      📋 Item {item.get('budget_item_id')}: status={item.get('status')}")
+            bug_found = True
+            self.log_test("SRV-0037 Bug Check", False, 
+                        f"CRITICAL: {len(srv_0037_items)} CLIENTE_TROUXE items appear in routes list")
+        elif srv_0037_status == 'CLIENTE_TROUXE' and not srv_0037_items:
+            print(f"   ✅ SRV-0037 CORRETO: Service tem CLIENTE_TROUXE e nenhum item aparece na lista")
+            self.log_test("SRV-0037 Bug Check", True, 
+                        "Correct: No CLIENTE_TROUXE items in routes list")
+        
+        # Check SRV-0036
+        if srv_0036_status == 'CLIENTE_TROUXE' and srv_0036_items:
+            print(f"   ❌ BUG CONFIRMADO SRV-0036: Service tem CLIENTE_TROUXE mas {len(srv_0036_items)} items aparecem na lista!")
+            for item in srv_0036_items:
+                print(f"      📋 Item {item.get('budget_item_id')}: status={item.get('status')}")
+            bug_found = True
+            self.log_test("SRV-0036 Bug Check", False, 
+                        f"CRITICAL: {len(srv_0036_items)} CLIENTE_TROUXE items appear in routes list")
+        elif srv_0036_status == 'CLIENTE_TROUXE' and not srv_0036_items:
+            print(f"   ✅ SRV-0036 CORRETO: Service tem CLIENTE_TROUXE e nenhum item aparece na lista")
+            self.log_test("SRV-0036 Bug Check", True, 
+                        "Correct: No CLIENTE_TROUXE items in routes list")
+        
+        # Step 5: Additional filter verification
+        print("\n5️⃣ VERIFICAÇÃO ADICIONAL DO FILTRO:")
+        cliente_trouxe_items = [item for item in available_items 
+                               if item.get('status') == 'CLIENTE_TROUXE']
+        
+        if cliente_trouxe_items:
+            print(f"   ❌ FILTRO FALHOU: {len(cliente_trouxe_items)} items com status CLIENTE_TROUXE na lista!")
+            for item in cliente_trouxe_items:
+                print(f"      📋 Item {item.get('budget_item_id')}: {item.get('client_name')} - {item.get('service_name')}")
+            bug_found = True
+            self.log_test("Filter Verification", False, 
+                        f"CRITICAL: {len(cliente_trouxe_items)} CLIENTE_TROUXE items bypass filter")
+        else:
+            print(f"   ✅ FILTRO FUNCIONANDO: Nenhum item com status CLIENTE_TROUXE na lista")
+            self.log_test("Filter Verification", True, 
+                        "Filter working: No CLIENTE_TROUXE items in list")
+        
+        # Final result
+        if bug_found:
+            print(f"\n🚨 RESULTADO: BUG CRÍTICO CONFIRMADO!")
+            print(f"   Items CLIENTE_TROUXE aparecem incorretamente na lista de rotas")
+            print(f"   Isso confunde os motoristas e afeta a operação")
+            self.log_test("Critical Bug Test", False, 
+                        "CRITICAL BUG CONFIRMED: CLIENTE_TROUXE items appear in routes")
+            
+            # Print summary
+            self.print_summary()
+            return False
+        else:
+            print(f"\n✅ RESULTADO: BUG CORRIGIDO!")
+            print(f"   Items CLIENTE_TROUXE não aparecem na lista de rotas")
+            print(f"   Sistema funcionando corretamente")
+            self.log_test("Critical Bug Test", True, 
+                        "Bug fixed: No CLIENTE_TROUXE items in routes list")
+            
+            # Print summary
+            self.print_summary()
+            return True
+
 class DurationOptimizationTester(ServiceStatusBugTester):
     """Test class specifically for testing duration optimization changes"""
     
