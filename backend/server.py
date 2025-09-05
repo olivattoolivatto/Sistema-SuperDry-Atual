@@ -18,6 +18,7 @@ from io import BytesIO
 import aiofiles
 import re
 import requests
+import math
 from typing import Tuple
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
