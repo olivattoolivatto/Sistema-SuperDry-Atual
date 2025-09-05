@@ -1143,6 +1143,12 @@ async def create_calendar_events(event_request: CalendarEventCreate):
         start_time = datetime.strptime(event_request.start_time, "%H:%M").time()
         current_datetime = datetime.combine(start_date, start_time)
         
+        # Get selected stops
+        selected_stops = [s for s in route.get("stops", []) if s["id"] in event_request.stop_ids]
+        
+        # Calculate optimized durations considering multiple items at same location
+        duration_map = calculate_optimized_durations(selected_stops)
+        
         created_events = []
         
         # Create events for selected stops
@@ -1152,11 +1158,8 @@ async def create_calendar_events(event_request: CalendarEventCreate):
             if not stop:
                 continue
             
-            # Calculate event duration based on service type
-            if stop["service_status"] == "EXECUTAR_NO_LOCAL":
-                duration_minutes = 120  # 2 hours for on-site execution
-            else:
-                duration_minutes = 30   # 30 minutes for pickup/delivery
+            # Use optimized duration
+            duration_minutes = duration_map.get(stop_id, 30)  # Fallback to 30 minutes
             
             end_datetime = current_datetime + timedelta(minutes=duration_minutes)
             
