@@ -2925,13 +2925,17 @@ if __name__ == "__main__":
             print("📅 Running DIRECT CALENDAR EVENT TESTS only")
             tester = ServiceStatusBugTester()
             success = tester.run_direct_calendar_event_tests()
+        elif sys.argv[1] == "--color":
+            print("🎨 Running CALENDAR COLOR CHANGE TESTS only")
+            tester = ServiceStatusBugTester()
+            success = tester.test_calendar_color_change_implementation()
         else:
             print("🚀 Running FULL ROUTES API TESTS")
             tester = ServiceStatusBugTester()
             success = tester.run_all_tests()
     else:
-        print("📅 Running DIRECT CALENDAR EVENT TESTS (default)")
+        print("🎨 Running CALENDAR COLOR CHANGE TESTS (default - based on review request)")
         tester = ServiceStatusBugTester()
-        success = tester.run_direct_calendar_event_tests()
+        success = tester.test_calendar_color_change_implementation()
     
     sys.exit(0 if success else 1)
