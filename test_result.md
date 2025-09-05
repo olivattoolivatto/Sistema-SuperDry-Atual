@@ -359,6 +359,18 @@ backend:
         -agent: "testing"
         -comment: "🔍 PROBLEMA IDENTIFICADO E CORRIGIDO: Investigação completa do botão 'Lançar na Agenda' revelou erro crítico no backend. ❌ ERRO ENCONTRADO: 'name timedelta is not defined' - faltava import da classe timedelta no módulo datetime (linha 12). ✅ CORREÇÃO APLICADA: Adicionado 'timedelta' ao import: 'from datetime import datetime, date, timedelta'. ✅ ENDPOINT FUNCIONANDO: POST /api/calendar/events agora funciona perfeitamente com payload correto: {route_id, stop_ids[], start_date, start_time}. ✅ AUTENTICAÇÃO OK: Google Calendar está autenticado e conectado. ✅ VALIDAÇÃO OK: Endpoint rejeita corretamente formatos inválidos (stop_ids como string, datas/horários incorretos, campos ausentes). ✅ TESTES REAIS: Testado com rotas RTE-0000001 e RTE-0000002 - eventos criados com sucesso no Google Calendar. Problema resolvido - botão 'Lançar na Agenda' agora funciona corretamente."
 
+  - task: "Route Events with Custom Date and Optimized Durations"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "✅ NOVA FUNCIONALIDADE TESTADA E FUNCIONANDO: Comprehensive testing of route events with custom dates and optimized durations completed successfully. 1) ✅ CUSTOM DATE FUNCTIONALITY: Events created with custom date (2025-09-10) different from route planned_date working perfectly. 2) ✅ BASIC DURATIONS: EXECUTAR_NO_LOCAL=120min and RETIRAR/ENTREGAR=30min implemented correctly. 3) ✅ MULTIPLE ITEMS SAME LOCATION: Algorithm calculate_optimized_durations() working perfectly - tested with 1 EXECUTAR_NO_LOCAL + 1 RETIRAR at same location resulted in correct optimization (150min base -> 127min optimized, 15% reduction). 4) ✅ COLOR ID: Events created with colorId '5' (yellow banana) as specified. 5) ✅ STORAGE: Events stored correctly in database and Google Calendar. All implemented rules working: multiple items same location with 15% reduction (with execution) or 25% reduction (without execution). Function tested with real data and mathematical verification confirms algorithm accuracy."
+
 frontend:
   - task: "Auto-scroll to Prioritization Section"
     implemented: true
