@@ -3972,6 +3972,7 @@ class DurationOptimizationTester(ServiceStatusBugTester):
 
 if __name__ == "__main__":
     tester = ServiceStatusBugTester()
+    duration_tester = DurationOptimizationTester()
     
     # Check command line arguments
     if len(sys.argv) > 1:
@@ -4013,8 +4014,11 @@ if __name__ == "__main__":
         elif test_type == "service-status-bug":
             print("🐛 RUNNING ROUTE SERVICE STATUS BUG INVESTIGATION")
             success = tester.test_route_service_status_bug()
+        elif test_type == "duration":
+            print("⏱️  RUNNING DURATION OPTIMIZATION TESTS")
+            success = duration_tester.run_duration_optimization_tests()
         else:
-            print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug")
+            print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration")
             sys.exit(1)
     else:
         print("🔍 RUNNING SERVICE STATUS DEBUG INVESTIGATION (default)")
