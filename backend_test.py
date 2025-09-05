@@ -3720,6 +3720,12 @@ class DurationOptimizationTester(ServiceStatusBugTester):
         """Test optimization with multiple items - 15% reduction with execution, 25% without"""
         print("\n=== TESTING MULTIPLE ITEMS OPTIMIZATION ===")
         
+        # First check if Google Calendar is authenticated
+        response = self.make_request('GET', '/calendar/status')
+        if not response['success'] or not response['data'].get('authenticated'):
+            self.log_test("Multiple Items Optimization", False, "Google Calendar not authenticated - cannot test durations")
+            return False
+        
         # Get available items
         response = self.make_request('GET', '/budget-items/available-for-routes')
         if not response['success']:
@@ -3769,6 +3775,10 @@ class DurationOptimizationTester(ServiceStatusBugTester):
         response = self.make_request('POST', '/calendar/events', event_data)
         if response['success']:
             events = response['data'].get('events', [])
+            
+            if not events:
+                self.log_test("Multiple Items Optimization", False, "No events were created")
+                return False
             
             # Check if optimization was applied
             total_duration = 0
