@@ -1,0 +1,805 @@
+{
+  "available_items": [
+    {
+      "budget_item_id": "ITM-1311375",
+      "budget_id": "ORC-0000001",
+      "client_id": "CLI-0005",
+      "client_name": "Gabriela",
+      "service_name": "Lavagem de Cabeceira",
+      "service_code": "SRV-0015",
+      "service_value": 150.0,
+      "status": "EXECUTAR_NO_LOCAL",
+      "neighborhood": "Paiagu\u00e1s",
+      "address": {
+        "full_address": "R. Conde do Prado, 20 - Paiagu\u00e1s, V\u00e1rzea Grande - MT, 78148-584, Brasil",
+        "complement": "",
+        "neighborhood": "Paiagu\u00e1s",
+        "city": "V\u00e1rzea Grande",
+        "state": "MT",
+        "latitude": -15.6689415,
+        "longitude": -56.171181
+      }
+    },
+    {
+      "budget_item_id": "ITM-1325828",
+      "budget_id": "ORC-0000002",
+      "client_id": "CLI-0004",
+      "client_name": "Daiana",
+      "service_name": "Lavagem de Colch\u00e3o Queen",
+      "service_code": "SRV-0021",
+      "service_value": 190.0,
+      "status": "EXECUTAR_NO_LOCAL",
+      "neighborhood": "Santa Isabel",
+      "address": {
+        "full_address": "R. Nova Ol\u00edmpia, 108 - Santa Isabel, Cuiab\u00e1 - MT, 78035-040, Brasil",
+        "complement": "",
+        "neighborhood": "Santa Isabel",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5990985,
+        "longitude": -56.1291337
+      }
+    },
+    {
+      "budget_item_id": "ITM-1354271",
+      "budget_id": "ORC-0000003",
+      "client_id": "CLI-0001",
+      "client_name": "Diego Olivatto",
+      "service_name": "Lavagem de Sof\u00e1 3 e 2 Lugares",
+      "service_code": "SRV-0007",
+      "service_value": 350.0,
+      "status": "EXECUTAR_NO_LOCAL",
+      "neighborhood": "Barra do Pari",
+      "address": {
+        "full_address": "R. Profa. Neuza Lula Rodrigues, 150 - Barra do Pari, Cuiab\u00e1 - MT, 78035-600, Brasil",
+        "complement": "",
+        "neighborhood": "Barra do Pari",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.591253,
+        "longitude": -56.1305984
+      }
+    },
+    {
+      "budget_item_id": "ITM-1370083",
+      "budget_id": "ORC-0000004",
+      "client_id": "CLI-0002",
+      "client_name": "Neusa Gon\u00e7alves Desid\u00e9rio",
+      "service_name": "Lavagem de Cadeira Tipo Cadeir\u00e3o",
+      "service_code": "SRV-0010",
+      "service_value": 140.0,
+      "status": "EXECUTAR_NO_LOCAL",
+      "neighborhood": "Goiabeiras",
+      "address": {
+        "full_address": "Av. Sen. Filinto M\u00fcller, 1301 - Goiabeiras, Cuiab\u00e1 - MT, 78043-409, Brasil",
+        "complement": "",
+        "neighborhood": "Goiabeiras",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5859252,
+        "longitude": -56.1041241
+      }
+    },
+    {
+      "budget_item_id": "ITM-1384548",
+      "budget_id": "ORC-0000004",
+      "client_id": "CLI-0002",
+      "client_name": "Neusa Gon\u00e7alves Desid\u00e9rio",
+      "service_name": "Lavagem de Sof\u00e1 3 Lugares",
+      "service_code": "SRV-0005",
+      "service_value": 320.0,
+      "status": "EXECUTAR_NO_LOCAL",
+      "neighborhood": "Goiabeiras",
+      "address": {
+        "full_address": "Av. Sen. Filinto M\u00fcller, 1301 - Goiabeiras, Cuiab\u00e1 - MT, 78043-409, Brasil",
+        "complement": "",
+        "neighborhood": "Goiabeiras",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5859252,
+        "longitude": -56.1041241
+      }
+    },
+    {
+      "budget_item_id": "ITM-1397261",
+      "budget_id": "ORC-0000005",
+      "client_id": "CLI-0008",
+      "client_name": "Alex Klasener",
+      "service_name": "Lavagem de Bancos de Carro",
+      "service_code": "SRV-0066",
+      "service_value": 150,
+      "status": "EXECUTAR_NO_LOCAL",
+      "neighborhood": "Rodoviaria Parque",
+      "address": {
+        "full_address": "R. Madrid, 135 - Rodoviaria Parque, Cuiab\u00e1 - MT, 78048-076, Brasil",
+        "complement": "",
+        "neighborhood": "Rodoviaria Parque",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5761136,
+        "longitude": -56.0930871
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843020",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Tapete M\u00b2 - Parceiro Leonardo Dry Clean",
+      "service_code": "SRV-0145",
+      "service_value": 18.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843026",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Leonardo Dry Clean",
+      "service_code": "SRV-0146",
+      "service_value": 18.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843039",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Cortinas / Blackouts Parceiro Leonardo Dry Clean",
+      "service_code": "SRV-0155",
+      "service_value": 18.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843046",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Persianas Parceiro Leonardo Dry Clean",
+      "service_code": "SRV-0156",
+      "service_value": 18.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843055",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Tapete M\u00b2 - Parceiro Vinicius Higia",
+      "service_code": "SRV-0147",
+      "service_value": 19.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843066",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Vinicius Higia",
+      "service_code": "SRV-0148",
+      "service_value": 19.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843075",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Tapete M\u00b2 - Parceiro Wesley Higieniza\u00e7\u00e3o",
+      "service_code": "SRV-0151",
+      "service_value": 20.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843086",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Wesley Higieniza\u00e7\u00e3o",
+      "service_code": "SRV-0152",
+      "service_value": 20.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843094",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Tapete M\u00b2 - Parceiro Maika FormaClean",
+      "service_code": "SRV-0149",
+      "service_value": 20.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843105",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Maika FormaClean",
+      "service_code": "SRV-0150",
+      "service_value": 20.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843113",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Teto de Carro (na empresa)",
+      "service_code": "SRV-0161",
+      "service_value": 80.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843123",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Bancos de Carro (na empresa)",
+      "service_code": "SRV-0157",
+      "service_value": 150.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843131",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem Interior Completo de Carro (na empresa)",
+      "service_code": "SRV-0162",
+      "service_value": 280.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843146",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Carpete de Carro (na empresa)",
+      "service_code": "SRV-0158",
+      "service_value": 80.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843155",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Porta-malas de Carro (na empresa)",
+      "service_code": "SRV-0160",
+      "service_value": 20.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    },
+    {
+      "budget_item_id": "ITM-9843165",
+      "budget_id": "ORC-0000007",
+      "client_id": "CLI-0006",
+      "client_name": "Parceiro Leonardo Dry - Clean / Dhiego",
+      "service_name": "Lavagem de Forra\u00e7\u00f5es de Portas (na empresa)",
+      "service_code": "SRV-0159",
+      "service_value": 10.0,
+      "status": "RETIRAR",
+      "neighborhood": "A",
+      "address": {
+        "full_address": "R. Mal. Mascarenhas de Mor\u00e3es, 278 - A - Duque de Caxias II, Cuiab\u00e1 - MT, 78000-000, Brasil",
+        "complement": "",
+        "neighborhood": "A",
+        "city": "Cuiab\u00e1",
+        "state": "MT",
+        "latitude": -15.5874108,
+        "longitude": -56.1108225
+      }
+    }
+  ],
+  "cliente_trouxe_services": {
+    "SRV-0036": {
+      "id": "SRV-0036",
+      "name": "Lavagem de Tapete M\u00b2 - Parceiro Leonardo Dry Clean",
+      "category": "TAPETES",
+      "service_type": "Tapete Parceiro",
+      "measure_type": "AREA_DE_TAPETE",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 18.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:57:44.805000",
+      "updated_at": "2025-09-06T11:59:26.467000"
+    },
+    "SRV-0037": {
+      "id": "SRV-0037",
+      "name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Leonardo Dry Clean",
+      "category": "TAPETES",
+      "service_type": "Tapete Parceiro",
+      "measure_type": "TAPETE_REDONDO_DIAMETRO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 18.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:57:44.903000",
+      "updated_at": "2025-09-06T11:59:26.520000"
+    },
+    "SRV-0038": {
+      "id": "SRV-0038",
+      "name": "Lavagem de Tapete M\u00b2 - Parceiro Vinicius Higia",
+      "category": "TAPETES",
+      "service_type": "Tapete Parceiro",
+      "measure_type": "AREA_DE_TAPETE",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 19.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:57:44.989000",
+      "updated_at": "2025-09-06T11:59:26.570000"
+    },
+    "SRV-0039": {
+      "id": "SRV-0039",
+      "name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Vinicius Higia",
+      "category": "TAPETES",
+      "service_type": "Tapete Parceiro",
+      "measure_type": "TAPETE_REDONDO_DIAMETRO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 19.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:57:45.078000",
+      "updated_at": "2025-09-06T11:59:26.623000"
+    },
+    "SRV-0040": {
+      "id": "SRV-0040",
+      "name": "Lavagem de Tapete M\u00b2 - Parceiro Maika FormaClean",
+      "category": "TAPETES",
+      "service_type": "Tapete Parceiro",
+      "measure_type": "AREA_DE_TAPETE",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 20.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:57:45.161000",
+      "updated_at": "2025-09-06T11:59:26.675000"
+    },
+    "SRV-0041": {
+      "id": "SRV-0041",
+      "name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Maika FormaClean",
+      "category": "TAPETES",
+      "service_type": "Tapete Parceiro",
+      "measure_type": "TAPETE_REDONDO_DIAMETRO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 20.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:57:45.229000",
+      "updated_at": "2025-09-06T11:59:26.723000"
+    },
+    "SRV-0042": {
+      "id": "SRV-0042",
+      "name": "Lavagem de Tapete M\u00b2 - Parceiro Wesley Higieniza\u00e7\u00e3o",
+      "category": "TAPETES",
+      "service_type": "Tapete Parceiro",
+      "measure_type": "AREA_DE_TAPETE",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 20.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:57:45.317000",
+      "updated_at": "2025-09-06T11:59:26.775000"
+    },
+    "SRV-0043": {
+      "id": "SRV-0043",
+      "name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Wesley Higieniza\u00e7\u00e3o",
+      "category": "TAPETES",
+      "service_type": "Tapete Parceiro",
+      "measure_type": "TAPETE_REDONDO_DIAMETRO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 20.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:57:45.414000",
+      "updated_at": "2025-09-06T11:59:26.824000"
+    },
+    "SRV-0044": {
+      "id": "SRV-0044",
+      "name": "Lavagem de Tapete M\u00b2 - Parceiro Jo\u00e3o / Felipe",
+      "category": "TAPETES",
+      "service_type": "Tapete Parceiro",
+      "measure_type": "AREA_DE_TAPETE",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 17.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:57:45.502000",
+      "updated_at": "2025-09-06T11:59:26.882000"
+    },
+    "SRV-0045": {
+      "id": "SRV-0045",
+      "name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Jo\u00e3o / Felipe",
+      "category": "TAPETES",
+      "service_type": "Tapete Parceiro",
+      "measure_type": "TAPETE_REDONDO_DIAMETRO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 17.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:57:45.593000",
+      "updated_at": "2025-09-06T11:59:26.933000"
+    },
+    "SRV-0058": {
+      "id": "SRV-0058",
+      "name": "Lavagem de Cortinas / Blackouts Parceiro Leonardo Dry Clean",
+      "category": "CORTINAS",
+      "service_type": "Cortina Simples",
+      "measure_type": "METRAGEM_LINEAR_CORTINA_SIMPLES",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 3.0,
+      "sale_price": 18.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:58:09.757000",
+      "updated_at": "2025-09-06T11:59:26.985000"
+    },
+    "SRV-0062": {
+      "id": "SRV-0062",
+      "name": "Lavagem de Persianas Parceiro Leonardo Dry Clean",
+      "category": "PERSIANAS",
+      "service_type": "Persiana Rol\u00f4/Romana",
+      "measure_type": "AREA_PERSIANA",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 3.0,
+      "sale_price": 18.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-24T00:58:10.103000",
+      "updated_at": "2025-09-06T11:59:27.034000"
+    },
+    "SRV-0093": {
+      "id": "SRV-0093",
+      "name": "Lavagem de Bancos de Carro (na empresa)",
+      "category": "VEICULOS",
+      "service_type": "Bancos de Ve\u00edculo",
+      "measure_type": "UNITARIO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 10.0,
+      "sale_price": 150.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-29T12:26:11.105000",
+      "updated_at": "2025-09-06T11:59:27.086000"
+    },
+    "SRV-0094": {
+      "id": "SRV-0094",
+      "name": "Lavagem de Carpete de Carro (na empresa)",
+      "category": "VEICULOS",
+      "service_type": "Carpete de Ve\u00edculo",
+      "measure_type": "UNITARIO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 8.0,
+      "sale_price": 80.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-29T12:27:06.511000",
+      "updated_at": "2025-09-06T11:59:27.136000"
+    },
+    "SRV-0095": {
+      "id": "SRV-0095",
+      "name": "Lavagem de Forra\u00e7\u00f5es de Portas (na empresa)",
+      "category": "VEICULOS",
+      "service_type": "Forra\u00e7\u00f5es de Portas",
+      "measure_type": "UNITARIO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 1.0,
+      "sale_price": 10.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-29T12:27:42.480000",
+      "updated_at": "2025-09-06T11:59:27.186000"
+    },
+    "SRV-0096": {
+      "id": "SRV-0096",
+      "name": "Lavagem de Porta-malas de Carro (na empresa)",
+      "category": "VEICULOS",
+      "service_type": "Porta Malas",
+      "measure_type": "UNITARIO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 3.0,
+      "sale_price": 20.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-29T12:31:23.796000",
+      "updated_at": "2025-09-06T11:59:27.235000"
+    },
+    "SRV-0097": {
+      "id": "SRV-0097",
+      "name": "Lavagem de Teto de Carro (na empresa)",
+      "category": "VEICULOS",
+      "service_type": "Teto de Ve\u00edculo",
+      "measure_type": "UNITARIO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 2.0,
+      "sale_price": 80.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-29T12:32:30.415000",
+      "updated_at": "2025-09-06T11:59:27.283000"
+    },
+    "SRV-0098": {
+      "id": "SRV-0098",
+      "name": "Lavagem Interior Completo de Carro (na empresa)",
+      "category": "VEICULOS",
+      "service_type": "Interior Ve\u00edculo Completo",
+      "measure_type": "UNITARIO",
+      "execution_location": "CLIENTE_TROUXE",
+      "cost_price": 50.0,
+      "sale_price": 280.0,
+      "is_active": false,
+      "default_service_status": "CLIENTE_TROUXE",
+      "created_at": "2025-08-29T12:33:43.743000",
+      "updated_at": "2025-09-06T11:59:27.332000"
+    }
+  },
+  "inconsistencies": [],
+  "specific_findings": {
+    "SRV-0036": {
+      "found": true,
+      "name": "Lavagem de Tapete M\u00b2 - Parceiro Leonardo Dry Clean",
+      "default_status": "CLIENTE_TROUXE",
+      "is_active": false,
+      "is_cliente_trouxe": true
+    },
+    "SRV-0037": {
+      "found": true,
+      "name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Leonardo Dry Clean",
+      "default_status": "CLIENTE_TROUXE",
+      "is_active": false,
+      "is_cliente_trouxe": true
+    },
+    "SRV-0145": {
+      "found": true,
+      "name": "Lavagem de Tapete M\u00b2 - Parceiro Leonardo Dry Clean",
+      "default_status": "CLIENTE_TROUXE",
+      "is_active": true,
+      "is_cliente_trouxe": true
+    },
+    "SRV-0146": {
+      "found": true,
+      "name": "Lavagem de Tapete Redondo M\u00b2 - Parceiro Leonardo Dry Clean",
+      "default_status": "CLIENTE_TROUXE",
+      "is_active": true,
+      "is_cliente_trouxe": true
+    },
+    "SRV-0161": {
+      "found": true,
+      "name": "Lavagem de Teto de Carro (na empresa)",
+      "default_status": "CLIENTE_TROUXE",
+      "is_active": true,
+      "is_cliente_trouxe": true
+    }
+  },
+  "findings": [
+    {
+      "category": "LISTA LIMPA",
+      "finding": "Nenhum item com status CLIENTE_TROUXE encontrado na lista de rotas",
+      "timestamp": "2025-09-06T20:22:06.904977",
+      "data": null
+    },
+    {
+      "category": "SERVICES CLIENTE_TROUXE",
+      "finding": "Encontrados 18 services com CLIENTE_TROUXE",
+      "timestamp": "2025-09-06T20:22:06.959684",
+      "data": [
+        "SRV-0036",
+        "SRV-0037",
+        "SRV-0038",
+        "SRV-0039",
+        "SRV-0040",
+        "SRV-0041",
+        "SRV-0042",
+        "SRV-0043",
+        "SRV-0044",
+        "SRV-0045",
+        "SRV-0058",
+        "SRV-0062",
+        "SRV-0093",
+        "SRV-0094",
+        "SRV-0095",
+        "SRV-0096",
+        "SRV-0097",
+        "SRV-0098"
+      ]
+    },
+    {
+      "category": "NENHUMA INCONSIST\u00caNCIA",
+      "finding": "Nenhum item na lista de rotas usa services CLIENTE_TROUXE",
+      "timestamp": "2025-09-06T20:22:06.959756",
+      "data": null
+    },
+    {
+      "category": "SERVICE SRV-0036",
+      "finding": "Encontrado - Status: CLIENTE_TROUXE, Ativo: False",
+      "timestamp": "2025-09-06T20:22:07.016021",
+      "data": null
+    },
+    {
+      "category": "SERVICE SRV-0037",
+      "finding": "Encontrado - Status: CLIENTE_TROUXE, Ativo: False",
+      "timestamp": "2025-09-06T20:22:07.068039",
+      "data": null
+    },
+    {
+      "category": "SERVICE SRV-0145",
+      "finding": "Encontrado - Status: CLIENTE_TROUXE, Ativo: True",
+      "timestamp": "2025-09-06T20:22:07.120327",
+      "data": null
+    },
+    {
+      "category": "SERVICE SRV-0146",
+      "finding": "Encontrado - Status: CLIENTE_TROUXE, Ativo: True",
+      "timestamp": "2025-09-06T20:22:07.173289",
+      "data": null
+    },
+    {
+      "category": "SERVICE SRV-0161",
+      "finding": "Encontrado - Status: CLIENTE_TROUXE, Ativo: True",
+      "timestamp": "2025-09-06T20:22:07.227186",
+      "data": null
+    }
+  ]
+}
