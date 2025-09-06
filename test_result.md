@@ -105,6 +105,18 @@
 user_problem_statement: "Implementar funcionalidade 'Criar Evento' na tela Agenda. O usuário solicitou um botão para criar eventos manualmente no Google Calendar com duração padrão de 2 horas (120 minutos), com campos convencionais: título, descrição, local, data/hora início e fim."
 
 backend:
+  - task: "SRV-0162 Critical Bug Investigation"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+        -working: false
+        -agent: "testing"
+        -comment: "🚨 BUG ESTRUTURAL CONFIRMADO NO SRV-0162: Investigação crítica revelou problema exato reportado pelo usuário. ❌ PROBLEMA CONFIRMADO: SRV-0162 tem default_service_status='CLIENTE_TROUXE' mas item ITM-3284401 aparece na lista de rotas com status='RETIRAR'. ✅ HERANÇA NOVA FUNCIONANDO: Teste de criação de novo orçamento com SRV-0162 funciona corretamente - novo item herda status 'CLIENTE_TROUXE'. ❌ DADOS HISTÓRICOS CORROMPIDOS: 19 items do orçamento ORC-0000005 (Parceiro Leonardo) têm status='RETIRAR' quando deveriam ter status='CLIENTE_TROUXE'. 🎯 CAUSA RAIZ: Items existentes foram criados antes da correção do bug de herança ou migração não foi aplicada ao ORC-0000005. 📊 EVIDÊNCIAS: 24 items na lista de rotas (esperados 22), todos os 19 items do ORC-0000005 com status incorreto, SRV-0162 específico confirmado com problema. SOLUÇÃO NECESSÁRIA: Migração específica do orçamento ORC-0000005 ou recriação dos items com herança correta."
+
   - task: "CLIENTE_TROUXE Service Re-registration - Definitive Solution"
     implemented: true
     working: true
