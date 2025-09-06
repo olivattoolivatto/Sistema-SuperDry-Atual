@@ -2198,6 +2198,144 @@ class ServiceStatusBugTester:
         
         return investigation_results
 
+    def test_service_srv_0145_complete_data(self):
+        """SPECIFIC TEST: Query and display complete data for service SRV-0145"""
+        print("\n" + "=" * 80)
+        print("🔍 CONSULTA COMPLETA DO SERVIÇO SRV-0145")
+        print("=" * 80)
+        print("OBJETIVO: Mostrar todas as informações do serviço SRV-0145 do catálogo")
+        print("CONSULTA: GET /api/services/SRV-0145")
+        print("=" * 80)
+        
+        # Test GET /api/services/SRV-0145
+        response = self.make_request('GET', '/services/SRV-0145')
+        
+        if response['success']:
+            service_data = response['data']
+            
+            print("\n✅ SERVIÇO SRV-0145 ENCONTRADO COM SUCESSO!")
+            print("=" * 60)
+            
+            # Display complete service structure
+            print("\n📋 ESTRUTURA COMPLETA DOS DADOS:")
+            print("-" * 40)
+            
+            # Core identification fields
+            print(f"🆔 ID: {service_data.get('id', 'N/A')}")
+            print(f"📝 Nome: {service_data.get('name', 'N/A')}")
+            print(f"🏷️  Categoria: {service_data.get('category', 'N/A')}")
+            print(f"🔧 Tipo de Serviço: {service_data.get('service_type', 'N/A')}")
+            
+            # Measurement and execution details
+            print(f"\n📏 MEDIÇÃO E EXECUÇÃO:")
+            print(f"   📐 Tipo de Medida: {service_data.get('measure_type', 'N/A')}")
+            print(f"   📍 Local de Execução: {service_data.get('execution_location', 'N/A')}")
+            print(f"   🔄 Status Padrão: {service_data.get('default_service_status', 'N/A')}")
+            
+            # Financial information
+            print(f"\n💰 INFORMAÇÕES FINANCEIRAS:")
+            cost_price = service_data.get('cost_price', 0)
+            sale_price = service_data.get('sale_price', 0)
+            print(f"   💵 Preço de Custo: R$ {cost_price:.2f}")
+            print(f"   💲 Preço de Venda: R$ {sale_price:.2f}")
+            
+            if sale_price > 0 and cost_price > 0:
+                margin = ((sale_price - cost_price) / sale_price) * 100
+                print(f"   📊 Margem de Lucro: {margin:.1f}%")
+            
+            # Status and configuration
+            print(f"\n⚙️  STATUS E CONFIGURAÇÕES:")
+            is_active = service_data.get('is_active', False)
+            print(f"   ✅ Ativo: {'Sim' if is_active else 'Não'}")
+            
+            # Timestamps
+            print(f"\n🕐 TIMESTAMPS:")
+            created_at = service_data.get('created_at', 'N/A')
+            updated_at = service_data.get('updated_at', 'N/A')
+            print(f"   📅 Criado em: {created_at}")
+            print(f"   🔄 Atualizado em: {updated_at}")
+            
+            # Raw JSON structure
+            print(f"\n🔍 ESTRUTURA JSON COMPLETA:")
+            print("-" * 40)
+            print(json.dumps(service_data, indent=2, ensure_ascii=False, default=str))
+            
+            # Field analysis
+            print(f"\n📊 ANÁLISE DOS CAMPOS:")
+            print("-" * 40)
+            total_fields = len(service_data)
+            non_null_fields = sum(1 for v in service_data.values() if v is not None and v != '')
+            
+            print(f"   📋 Total de campos: {total_fields}")
+            print(f"   ✅ Campos preenchidos: {non_null_fields}")
+            print(f"   📈 Taxa de preenchimento: {(non_null_fields/total_fields)*100:.1f}%")
+            
+            # Integrity verification
+            print(f"\n🔍 VERIFICAÇÃO DE INTEGRIDADE:")
+            print("-" * 40)
+            
+            integrity_checks = [
+                (service_data.get('id', '').startswith('SRV-'), "ID no formato correto (SRV-XXXX)"),
+                (service_data.get('name', '') != '', "Nome não vazio"),
+                (service_data.get('category') in ['ESTOFADOS', 'COLCHOES', 'BOX', 'TAPETES', 'CARPETES_E_TAPETES_NO_LOCAL', 'CORTINAS', 'PERSIANAS', 'ITENS_INFANTIS', 'VEICULOS', 'IMPERMEABILIZACAO', 'OUTROS_ITENS'], "Categoria válida"),
+                (service_data.get('measure_type') in ['UNITARIO', 'AREA_DE_TAPETE', 'CARPETE_TAPETE_LOCAL', 'TAPETE_REDONDO_DIAMETRO', 'AREA_PERSIANA', 'METRAGEM_LINEAR_CORTINA_SIMPLES', 'METRAGEM_LINEAR_PE_DIREITO_DUPLO', 'METRAGEM_LINEAR_ESPECIAL'], "Tipo de medida válido"),
+                (service_data.get('execution_location') in ['RETIRADA', 'NO_LOCAL', 'CLIENTE_TROUXE'], "Local de execução válido"),
+                (service_data.get('default_service_status') in ['RETIRAR', 'EXECUTAR_NO_LOCAL', 'CLIENTE_TROUXE', 'COLETADO', 'EM_LAVAGEM', 'EM_LAVAGEM_PARCEIRO', 'AGUARDANDO_ENTREGA', 'AGUARDANDO_BUSCAR', 'ENTREGAR', 'ENTREGUE', 'BUSCOU', 'EXECUTADO', 'CANCELADO_PELO_CLIENTE'], "Status padrão válido"),
+                (isinstance(service_data.get('cost_price'), (int, float)) and service_data.get('cost_price', 0) >= 0, "Preço de custo válido"),
+                (isinstance(service_data.get('sale_price'), (int, float)) and service_data.get('sale_price', 0) >= 0, "Preço de venda válido"),
+                (isinstance(service_data.get('is_active'), bool), "Status ativo é booleano"),
+                (service_data.get('created_at') is not None, "Data de criação presente"),
+                (service_data.get('updated_at') is not None, "Data de atualização presente")
+            ]
+            
+            passed_checks = sum(1 for check, _ in integrity_checks if check)
+            total_checks = len(integrity_checks)
+            
+            for check, description in integrity_checks:
+                status = "✅" if check else "❌"
+                print(f"   {status} {description}")
+            
+            print(f"\n📊 RESULTADO DA VERIFICAÇÃO:")
+            print(f"   ✅ Verificações aprovadas: {passed_checks}/{total_checks}")
+            print(f"   📈 Taxa de integridade: {(passed_checks/total_checks)*100:.1f}%")
+            
+            # Context about SRV-0145 (from re-registration)
+            print(f"\n🔄 CONTEXTO DO SERVIÇO SRV-0145:")
+            print("-" * 40)
+            print("   📋 Este serviço faz parte do recadastramento definitivo")
+            print("   🔄 Criado para substituir serviços CLIENTE_TROUXE antigos")
+            print("   🎯 Parte da solução para eliminar bug de herança de status")
+            print("   📊 Faixa de IDs: SRV-0145 a SRV-0162 (18 serviços recadastrados)")
+            
+            self.log_test("Service SRV-0145 Complete Query", True, 
+                        f"Serviço SRV-0145 consultado com sucesso - {passed_checks}/{total_checks} verificações aprovadas")
+            
+            return service_data
+            
+        else:
+            print(f"\n❌ SERVIÇO SRV-0145 NÃO ENCONTRADO!")
+            print("=" * 60)
+            print(f"Status HTTP: {response['status_code']}")
+            print(f"Erro: {response['data']}")
+            
+            if response['status_code'] == 404:
+                print(f"\n🔍 POSSÍVEIS CAUSAS:")
+                print("   1. Serviço SRV-0145 não existe no banco de dados")
+                print("   2. ID incorreto ou serviço foi deletado")
+                print("   3. Problema na numeração sequencial de IDs")
+                
+                # Try to find services in the SRV-0145 range
+                print(f"\n🔍 VERIFICANDO SERVIÇOS NA FAIXA SRV-0145:")
+                for srv_id in ['SRV-0145', 'SRV-0146', 'SRV-0147', 'SRV-0148', 'SRV-0149']:
+                    check_response = self.make_request('GET', f'/services/{srv_id}')
+                    status = "✅ EXISTE" if check_response['success'] else "❌ NÃO EXISTE"
+                    print(f"   {srv_id}: {status}")
+            
+            self.log_test("Service SRV-0145 Complete Query", False, 
+                        f"Serviço SRV-0145 não encontrado - Status: {response['status_code']}")
+            
+            return None
+
     def print_summary(self):
         """Print test results summary"""
         print("\n" + "=" * 60)
