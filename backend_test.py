@@ -1659,6 +1659,199 @@ class ServiceStatusBugTester:
         print("=" * 80)
         return investigation_results
 
+    def investigate_critical_15_services_issue(self):
+        """INVESTIGAÇÃO CRÍTICA: Verificar os 15 serviços específicos que estão aparecendo incorretamente"""
+        print("\n" + "=" * 80)
+        print("🚨 INVESTIGAÇÃO CRÍTICA DOS 15 SERVIÇOS PROBLEMÁTICOS")
+        print("=" * 80)
+        print("SERVIÇOS REPORTADOS COMO PROBLEMÁTICOS:")
+        print("SRV-0093, SRV-0094, SRV-0096, SRV-0097, SRV-0098,")
+        print("SRV-0038, SRV-0039, SRV-0040, SRV-0041, SRV-0042,") 
+        print("SRV-0043, SRV-0044, SRV-0045, SRV-0058, SRV-0062")
+        print("=" * 80)
+        
+        problematic_services = [
+            "SRV-0093", "SRV-0094", "SRV-0096", "SRV-0097", "SRV-0098",
+            "SRV-0038", "SRV-0039", "SRV-0040", "SRV-0041", "SRV-0042",
+            "SRV-0043", "SRV-0044", "SRV-0045", "SRV-0058", "SRV-0062"
+        ]
+        
+        investigation_results = {
+            'services_found': {},
+            'services_with_cliente_trouxe': [],
+            'items_in_routes_from_problematic_services': [],
+            'total_items_in_routes': 0,
+            'migration_needed': False
+        }
+        
+        # 1. VERIFICAR CADA SERVIÇO ESPECÍFICO
+        print("\n1️⃣ VERIFICANDO STATUS DE CADA SERVIÇO ESPECÍFICO:")
+        print("-" * 70)
+        
+        for service_id in problematic_services:
+            print(f"\n🔍 Verificando {service_id}:")
+            
+            response = self.make_request('GET', f'/services/{service_id}')
+            if response['success']:
+                service = response['data']
+                service_name = service.get('name', 'N/A')
+                default_status = service.get('default_service_status', 'N/A')
+                is_active = service.get('is_active', False)
+                
+                investigation_results['services_found'][service_id] = service
+                
+                print(f"   ✅ ENCONTRADO: {service_name}")
+                print(f"   📊 default_service_status: {default_status}")
+                print(f"   🔄 is_active: {is_active}")
+                
+                if default_status == 'CLIENTE_TROUXE':
+                    investigation_results['services_with_cliente_trouxe'].append(service_id)
+                    print(f"   🎯 CONFIRMADO: Tem default_service_status = CLIENTE_TROUXE")
+                else:
+                    print(f"   ℹ️  Status diferente de CLIENTE_TROUXE: {default_status}")
+                
+                self.log_test(f"Service {service_id} Check", True, 
+                            f"Status: {default_status}, Active: {is_active}")
+            else:
+                print(f"   ❌ NÃO ENCONTRADO ou ERRO:")
+                print(f"      Status HTTP: {response['status_code']}")
+                print(f"      Erro: {response['data']}")
+                
+                self.log_test(f"Service {service_id} Check", False, 
+                            f"Service não encontrado - Status: {response['status_code']}")
+        
+        # 2. VERIFICAR ITEMS NA LISTA DE ROTAS
+        print(f"\n2️⃣ VERIFICANDO ITEMS DOS SERVIÇOS PROBLEMÁTICOS NA LISTA DE ROTAS:")
+        print("-" * 70)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            data = response['data']
+            available_items = data.get('available_items', [])
+            investigation_results['total_items_in_routes'] = len(available_items)
+            
+            print(f"   📊 TOTAL DE ITEMS DISPONÍVEIS PARA ROTAS: {len(available_items)}")
+            
+            # Filtrar items dos serviços problemáticos
+            problematic_items = []
+            for item in available_items:
+                service_code = item.get('service_code', '')
+                if service_code in problematic_services:
+                    problematic_items.append(item)
+            
+            investigation_results['items_in_routes_from_problematic_services'] = problematic_items
+            
+            if problematic_items:
+                print(f"\n   🚨 PROBLEMA CONFIRMADO: {len(problematic_items)} items dos serviços problemáticos aparecem na lista!")
+                print(f"   📋 DETALHES DOS ITEMS PROBLEMÁTICOS:")
+                
+                for i, item in enumerate(problematic_items, 1):
+                    service_code = item.get('service_code', 'N/A')
+                    client_name = item.get('client_name', 'N/A')
+                    budget_id = item.get('budget_id', 'N/A')
+                    item_status = item.get('status', 'N/A')
+                    
+                    print(f"      {i:2d}. Service: {service_code} | Cliente: {client_name}")
+                    print(f"          Budget: {budget_id} | Status: {item_status}")
+                
+                self.log_test("Problematic Items in Routes", False, 
+                            f"CRÍTICO: {len(problematic_items)} items dos 15 serviços aparecem na lista de rotas")
+                investigation_results['migration_needed'] = True
+            else:
+                print(f"   ✅ CORRETO: Nenhum item dos serviços problemáticos aparece na lista de rotas")
+                self.log_test("Problematic Items in Routes", True, 
+                            "Nenhum item dos serviços problemáticos na lista")
+        else:
+            print(f"   ❌ ERRO ao buscar items disponíveis:")
+            print(f"      Status: {response['status_code']}")
+            print(f"      Erro: {response['data']}")
+            self.log_test("Available Items Check", False, 
+                        f"Erro ao buscar items - Status: {response['status_code']}")
+        
+        # 3. EXECUTAR MIGRAÇÃO SE NECESSÁRIO
+        if investigation_results['migration_needed']:
+            print(f"\n3️⃣ EXECUTANDO MIGRAÇÃO PARA CORRIGIR ITEMS PROBLEMÁTICOS:")
+            print("-" * 70)
+            
+            response = self.make_request('POST', '/admin/migrate-budget-item-status')
+            if response['success']:
+                result = response['data']
+                total_items = result.get('total_items', 0)
+                updated_items = result.get('updated_items', 0)
+                message = result.get('message', '')
+                
+                print(f"   ✅ MIGRAÇÃO EXECUTADA:")
+                print(f"      📊 Total processado: {total_items}")
+                print(f"      🔄 Items corrigidos: {updated_items}")
+                print(f"      💬 Mensagem: {message}")
+                
+                self.log_test("Critical Migration", True, 
+                            f"Migração executada: {updated_items}/{total_items} items corrigidos")
+            else:
+                print(f"   ❌ ERRO na migração:")
+                print(f"      Status: {response['status_code']}")
+                print(f"      Erro: {response['data']}")
+                self.log_test("Critical Migration", False, 
+                            f"Erro na migração - Status: {response['status_code']}")
+        else:
+            print(f"\n3️⃣ MIGRAÇÃO NÃO NECESSÁRIA:")
+            print("-" * 70)
+            print(f"   ✅ Nenhum item problemático encontrado na lista de rotas")
+        
+        # 4. VERIFICAÇÃO FINAL
+        print(f"\n4️⃣ VERIFICAÇÃO FINAL APÓS CORREÇÃO:")
+        print("-" * 70)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            data = response['data']
+            available_items_final = data.get('available_items', [])
+            
+            # Verificar se ainda há items dos serviços problemáticos
+            final_problematic_items = []
+            for item in available_items_final:
+                service_code = item.get('service_code', '')
+                if service_code in problematic_services:
+                    final_problematic_items.append(item)
+            
+            print(f"   📊 ITEMS DISPONÍVEIS APÓS CORREÇÃO: {len(available_items_final)}")
+            print(f"   📊 ITEMS DOS SERVIÇOS PROBLEMÁTICOS: {len(final_problematic_items)}")
+            
+            if final_problematic_items:
+                print(f"\n   ❌ PROBLEMA PERSISTE: {len(final_problematic_items)} items ainda aparecem!")
+                for item in final_problematic_items:
+                    service_code = item.get('service_code', 'N/A')
+                    item_status = item.get('status', 'N/A')
+                    print(f"      - {service_code}: status = {item_status}")
+                
+                self.log_test("Final Verification", False, 
+                            f"CRÍTICO: {len(final_problematic_items)} items ainda aparecem na lista")
+            else:
+                print(f"   ✅ SUCESSO: Nenhum item dos serviços problemáticos aparece na lista!")
+                self.log_test("Final Verification", True, 
+                            "Todos os items CLIENTE_TROUXE foram removidos da lista de rotas")
+        
+        # 5. RESUMO DA INVESTIGAÇÃO
+        print(f"\n" + "=" * 80)
+        print(f"📋 RESUMO DA INVESTIGAÇÃO CRÍTICA:")
+        print(f"=" * 80)
+        print(f"🎯 Serviços verificados: {len(problematic_services)}")
+        print(f"✅ Serviços encontrados: {len(investigation_results['services_found'])}")
+        print(f"🔄 Serviços com CLIENTE_TROUXE: {len(investigation_results['services_with_cliente_trouxe'])}")
+        print(f"📊 Items problemáticos iniciais: {len(investigation_results['items_in_routes_from_problematic_services'])}")
+        print(f"🚨 Migração necessária: {'SIM' if investigation_results['migration_needed'] else 'NÃO'}")
+        
+        if investigation_results['services_with_cliente_trouxe']:
+            print(f"\n🔄 SERVIÇOS COM CLIENTE_TROUXE CONFIRMADOS:")
+            for service_id in investigation_results['services_with_cliente_trouxe']:
+                service_name = investigation_results['services_found'][service_id].get('name', 'N/A')
+                print(f"   - {service_id}: {service_name}")
+        
+        # Cleanup and summary
+        self.print_summary()
+        
+        return investigation_results
+
     def print_summary(self):
         """Print test results summary"""
         print("\n" + "=" * 60)
