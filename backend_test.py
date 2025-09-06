@@ -6822,9 +6822,9 @@ if __name__ == "__main__":
                 print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items")
                 sys.exit(1)
     else:
-        print("🔄 RUNNING DEFAULT: CLIENTE_TROUXE RE-REGISTRATION")
-        tester = ClienteTrouxeReregistrationTester()
-        success = tester.run_complete_reregistration()
+        print("📋 RUNNING DEFAULT: DETAILED ITEMS LIST REQUEST")
+        tester = ServiceStatusBugTester()
+        success = tester.run_detailed_items_request()
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
