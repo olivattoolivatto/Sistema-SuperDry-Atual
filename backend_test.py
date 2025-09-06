@@ -1852,6 +1852,207 @@ class ServiceStatusBugTester:
         
         return investigation_results
 
+    def investigate_specific_problematic_services(self):
+        """INVESTIGAÇÃO CRÍTICA: Verificar os 13 serviços específicos reportados como problemáticos"""
+        print("\n" + "=" * 80)
+        print("🚨 INVESTIGAÇÃO CRÍTICA DOS 13 SERVIÇOS PROBLEMÁTICOS REPORTADOS")
+        print("=" * 80)
+        print("SERVIÇOS REPORTADOS COMO PROBLEMÁTICOS:")
+        print("SRV-0161, SRV-0145, SRV-0146, SRV-0155, SRV-0156, SRV-0151, SRV-0152,")
+        print("SRV-0147, SRV-0148, SRV-0149, SRV-0150, SRV-0153, SRV-0154")
+        print("=" * 80)
+        
+        problematic_services = [
+            "SRV-0161", "SRV-0145", "SRV-0146", "SRV-0155", "SRV-0156", 
+            "SRV-0151", "SRV-0152", "SRV-0147", "SRV-0148", "SRV-0149", 
+            "SRV-0150", "SRV-0153", "SRV-0154"
+        ]
+        
+        investigation_results = {
+            'services_found': {},
+            'services_with_cliente_trouxe': [],
+            'budget_items_with_these_services': [],
+            'items_appearing_in_routes': [],
+            'total_problematic_found': 0
+        }
+        
+        # 1. VERIFICAR CADA SERVIÇO INDIVIDUALMENTE
+        print("\n1️⃣ VERIFICANDO CADA SERVIÇO INDIVIDUALMENTE:")
+        print("-" * 70)
+        
+        for service_id in problematic_services:
+            print(f"\n🔍 Verificando {service_id}:")
+            
+            response = self.make_request('GET', f'/services/{service_id}')
+            if response['success']:
+                service = response['data']
+                default_status = service.get('default_service_status')
+                is_active = service.get('is_active', False)
+                service_name = service.get('name', 'N/A')
+                
+                investigation_results['services_found'][service_id] = service
+                
+                print(f"  ✅ ENCONTRADO: {service_name}")
+                print(f"     📊 Status Padrão: {default_status}")
+                print(f"     🔄 Ativo: {is_active}")
+                
+                if default_status == 'CLIENTE_TROUXE':
+                    investigation_results['services_with_cliente_trouxe'].append(service_id)
+                    print(f"     🎯 CONFIRMADO: Tem default_service_status = CLIENTE_TROUXE")
+                else:
+                    print(f"     ⚠️  ATENÇÃO: Status diferente de CLIENTE_TROUXE: {default_status}")
+                
+                self.log_test(f"Service Check {service_id}", True, 
+                            f"Encontrado com status {default_status}, ativo: {is_active}")
+            else:
+                print(f"  ❌ NÃO ENCONTRADO ou ERRO:")
+                print(f"     Status HTTP: {response['status_code']}")
+                print(f"     Erro: {response['data']}")
+                
+                self.log_test(f"Service Check {service_id}", False, 
+                            f"Não encontrado - Status: {response['status_code']}")
+        
+        investigation_results['total_problematic_found'] = len(investigation_results['services_found'])
+        
+        # 2. VERIFICAR BUDGET ITEMS COM ESTES SERVIÇOS
+        print(f"\n2️⃣ VERIFICANDO BUDGET ITEMS DOS {len(investigation_results['services_with_cliente_trouxe'])} SERVIÇOS CLIENTE_TROUXE:")
+        print("-" * 70)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            data = response['data']
+            available_items = data.get('available_items', [])
+            
+            # Filtrar items que usam os serviços problemáticos
+            problematic_items = []
+            for item in available_items:
+                service_code = item.get('service_code', '')
+                if service_code in problematic_services:
+                    problematic_items.append(item)
+                    investigation_results['budget_items_with_these_services'].append(item)
+            
+            print(f"  📊 TOTAL DE ITEMS DISPONÍVEIS: {len(available_items)}")
+            print(f"  🚨 ITEMS DOS SERVIÇOS PROBLEMÁTICOS: {len(problematic_items)}")
+            
+            if problematic_items:
+                print(f"\n  ❌ PROBLEMA CRÍTICO CONFIRMADO:")
+                print(f"     Os seguintes items dos serviços CLIENTE_TROUXE aparecem na lista de rotas:")
+                
+                for i, item in enumerate(problematic_items, 1):
+                    service_code = item.get('service_code', 'N/A')
+                    client_name = item.get('client_name', 'N/A')
+                    budget_id = item.get('budget_id', 'N/A')
+                    item_status = item.get('status', 'N/A')
+                    
+                    print(f"     {i:2d}. {service_code} | Cliente: {client_name} | Budget: {budget_id} | Status: {item_status}")
+                    
+                    investigation_results['items_appearing_in_routes'].append({
+                        'service_code': service_code,
+                        'client_name': client_name,
+                        'budget_id': budget_id,
+                        'status': item_status,
+                        'item': item
+                    })
+                
+                self.log_test("Items Problemáticos em Rotas", False, 
+                            f"CRÍTICO: {len(problematic_items)} items dos serviços CLIENTE_TROUXE aparecem na lista de rotas")
+            else:
+                print(f"  ✅ CORRETO: Nenhum item dos serviços problemáticos aparece na lista de rotas")
+                self.log_test("Items Problemáticos em Rotas", True, 
+                            "Nenhum item dos serviços problemáticos na lista de rotas")
+        else:
+            print(f"  ❌ ERRO ao buscar items disponíveis:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("Items Problemáticos em Rotas", False, 
+                        f"Erro ao buscar items - Status: {response['status_code']}")
+        
+        # 3. EXECUTAR MIGRAÇÃO PARA CORRIGIR
+        print(f"\n3️⃣ EXECUTANDO MIGRAÇÃO PARA CORRIGIR ITEMS PROBLEMÁTICOS:")
+        print("-" * 70)
+        
+        response = self.make_request('POST', '/admin/migrate-budget-item-status')
+        if response['success']:
+            result = response['data']
+            total_items = result.get('total_items', 0)
+            updated_items = result.get('updated_items', 0)
+            message = result.get('message', '')
+            
+            print(f"  ✅ MIGRAÇÃO EXECUTADA:")
+            print(f"     📊 Total processado: {total_items}")
+            print(f"     🔄 Items corrigidos: {updated_items}")
+            print(f"     💬 Mensagem: {message}")
+            
+            self.log_test("Migração Corretiva", True, 
+                        f"Migração executada: {updated_items}/{total_items} items corrigidos")
+        else:
+            print(f"  ❌ ERRO na migração:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("Migração Corretiva", False, 
+                        f"Erro na migração - Status: {response['status_code']}")
+        
+        # 4. VERIFICAÇÃO FINAL
+        print(f"\n4️⃣ VERIFICAÇÃO FINAL APÓS MIGRAÇÃO:")
+        print("-" * 70)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            data = response['data']
+            available_items_after = data.get('available_items', [])
+            
+            # Verificar se ainda há items problemáticos
+            problematic_items_after = []
+            for item in available_items_after:
+                service_code = item.get('service_code', '')
+                if service_code in problematic_services:
+                    problematic_items_after.append(item)
+            
+            print(f"  📊 ITEMS DISPONÍVEIS APÓS MIGRAÇÃO: {len(available_items_after)}")
+            print(f"  🎯 ITEMS PROBLEMÁTICOS RESTANTES: {len(problematic_items_after)}")
+            
+            if problematic_items_after:
+                print(f"\n  ❌ PROBLEMA PERSISTE:")
+                for i, item in enumerate(problematic_items_after, 1):
+                    service_code = item.get('service_code', 'N/A')
+                    client_name = item.get('client_name', 'N/A')
+                    item_status = item.get('status', 'N/A')
+                    
+                    print(f"     {i:2d}. {service_code} | Cliente: {client_name} | Status: {item_status}")
+                
+                self.log_test("Verificação Final", False, 
+                            f"PROBLEMA PERSISTE: {len(problematic_items_after)} items problemáticos ainda na lista")
+            else:
+                print(f"  ✅ PROBLEMA RESOLVIDO: Nenhum item dos serviços problemáticos aparece mais na lista")
+                self.log_test("Verificação Final", True, 
+                            "PROBLEMA RESOLVIDO: Todos os items problemáticos foram removidos da lista de rotas")
+        else:
+            print(f"  ❌ ERRO na verificação final:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("Verificação Final", False, 
+                        f"Erro na verificação final - Status: {response['status_code']}")
+        
+        # RESUMO DA INVESTIGAÇÃO
+        print(f"\n" + "=" * 80)
+        print("📋 RESUMO DA INVESTIGAÇÃO CRÍTICA:")
+        print("=" * 80)
+        print(f"🔍 Serviços investigados: {len(problematic_services)}")
+        print(f"✅ Serviços encontrados: {investigation_results['total_problematic_found']}")
+        print(f"🎯 Serviços com CLIENTE_TROUXE: {len(investigation_results['services_with_cliente_trouxe'])}")
+        print(f"🚨 Items problemáticos encontrados: {len(investigation_results['items_appearing_in_routes'])}")
+        
+        if investigation_results['services_with_cliente_trouxe']:
+            print(f"\n📋 SERVIÇOS COM CLIENTE_TROUXE CONFIRMADOS:")
+            for service_id in investigation_results['services_with_cliente_trouxe']:
+                service_name = investigation_results['services_found'][service_id].get('name', 'N/A')
+                print(f"  • {service_id}: {service_name}")
+        
+        # Cleanup and summary
+        self.print_summary()
+        
+        return investigation_results
+
     def investigate_route_structure(self):
         """INVESTIGAÇÃO ESPECÍFICA: Estrutura das rotas salvas para entender ordem dos stops após otimização"""
         print("\n" + "=" * 80)
