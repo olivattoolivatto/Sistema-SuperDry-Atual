@@ -6750,6 +6750,188 @@ class ClienteTrouxeReregistrationTester:
             print(f"❌ {failed_tests} etapas falharam - verificar logs acima")
 
 
+    def investigate_specific_services_srv_0157_to_0162(self):
+        """INVESTIGAÇÃO ESPECÍFICA: SRV-0157, SRV-0158, SRV-0159, SRV-0160, SRV-0161, SRV-0162"""
+        print("\n" + "=" * 80)
+        print("🔍 INVESTIGAÇÃO ESPECÍFICA DOS SERVIÇOS SRV-0157 A SRV-0162")
+        print("=" * 80)
+        print("FOCO DA INVESTIGAÇÃO:")
+        print("- Verificar quais desses 6 serviços aparecem na lista de 22 itens")
+        print("- Confirmar qual deveria ser o status correto de cada um (verificar services)")
+        print("- Identificar se há inconsistência entre service.default_service_status e item.status")
+        print("=" * 80)
+        
+        target_services = ['SRV-0157', 'SRV-0158', 'SRV-0159', 'SRV-0160', 'SRV-0161', 'SRV-0162']
+        investigation_results = {}
+        
+        # 1. VERIFICAR CADA SERVIÇO INDIVIDUALMENTE
+        print("\n1️⃣ VERIFICANDO CADA SERVIÇO INDIVIDUALMENTE:")
+        print("-" * 70)
+        
+        for service_id in target_services:
+            print(f"\n🔍 INVESTIGANDO {service_id}:")
+            
+            # Get service details
+            response = self.make_request('GET', f'/services/{service_id}')
+            if response['success']:
+                service = response['data']
+                service_name = service.get('name', 'N/A')
+                default_status = service.get('default_service_status', 'N/A')
+                is_active = service.get('is_active', False)
+                
+                investigation_results[service_id] = {
+                    'exists': True,
+                    'name': service_name,
+                    'default_service_status': default_status,
+                    'is_active': is_active,
+                    'appears_in_routes': False,
+                    'items_found': []
+                }
+                
+                print(f"   ✅ Serviço encontrado: {service_name}")
+                print(f"   📊 Status padrão: {default_status}")
+                print(f"   🔄 Ativo: {'Sim' if is_active else 'Não'}")
+                
+                self.log_test(f"Service Check {service_id}", True, 
+                            f"Encontrado: {service_name} - Status: {default_status}")
+            else:
+                investigation_results[service_id] = {
+                    'exists': False,
+                    'error': response['data']
+                }
+                print(f"   ❌ Serviço não encontrado")
+                self.log_test(f"Service Check {service_id}", False, 
+                            f"Serviço não encontrado - Status: {response['status_code']}")
+        
+        # 2. VERIFICAR LISTA DE ITENS DISPONÍVEIS PARA ROTAS
+        print(f"\n2️⃣ VERIFICANDO LISTA DE ITENS DISPONÍVEIS PARA ROTAS:")
+        print("-" * 70)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            data = response['data']
+            available_items = data.get('available_items', [])
+            
+            print(f"   📊 Total de itens disponíveis: {len(available_items)}")
+            
+            # Check which target services appear in the list
+            for item in available_items:
+                service_code = item.get('service_code', '')
+                if service_code in target_services:
+                    service_id = service_code
+                    item_status = item.get('status', 'N/A')
+                    client_name = item.get('client_name', 'N/A')
+                    budget_id = item.get('budget_id', 'N/A')
+                    
+                    if service_id in investigation_results:
+                        investigation_results[service_id]['appears_in_routes'] = True
+                        investigation_results[service_id]['items_found'].append({
+                            'budget_item_id': item.get('budget_item_id', 'N/A'),
+                            'budget_id': budget_id,
+                            'client_name': client_name,
+                            'status': item_status
+                        })
+                    
+                    print(f"   🔍 {service_id} ENCONTRADO NA LISTA:")
+                    print(f"      Cliente: {client_name}")
+                    print(f"      Budget: {budget_id}")
+                    print(f"      Status do item: {item_status}")
+        else:
+            print(f"   ❌ Erro ao obter lista de itens: {response['data']}")
+        
+        # 3. ANÁLISE DE INCONSISTÊNCIAS
+        print(f"\n3️⃣ ANÁLISE DE INCONSISTÊNCIAS:")
+        print("-" * 70)
+        
+        inconsistencies_found = 0
+        services_in_routes = 0
+        
+        for service_id, data in investigation_results.items():
+            if not data.get('exists', False):
+                continue
+                
+            service_status = data.get('default_service_status', 'N/A')
+            appears_in_routes = data.get('appears_in_routes', False)
+            items_found = data.get('items_found', [])
+            
+            print(f"\n   📋 {service_id}:")
+            print(f"      Service default_status: {service_status}")
+            print(f"      Aparece na lista de rotas: {'Sim' if appears_in_routes else 'Não'}")
+            
+            if appears_in_routes:
+                services_in_routes += 1
+                print(f"      Itens encontrados: {len(items_found)}")
+                
+                # Check for inconsistencies
+                for item in items_found:
+                    item_status = item['status']
+                    if service_status != item_status:
+                        inconsistencies_found += 1
+                        print(f"      ❌ INCONSISTÊNCIA: Service={service_status}, Item={item_status}")
+                        print(f"         Budget: {item['budget_id']}, Cliente: {item['client_name']}")
+                    else:
+                        print(f"      ✅ CONSISTENTE: Service={service_status}, Item={item_status}")
+            
+            # Special check for CLIENTE_TROUXE services appearing in routes
+            if service_status == 'CLIENTE_TROUXE' and appears_in_routes:
+                print(f"      🚨 PROBLEMA: Serviço CLIENTE_TROUXE aparece na lista de rotas!")
+                inconsistencies_found += 1
+        
+        # 4. RESUMO DA INVESTIGAÇÃO
+        print(f"\n4️⃣ RESUMO DA INVESTIGAÇÃO:")
+        print("-" * 70)
+        
+        services_found = sum(1 for data in investigation_results.values() if data.get('exists', False))
+        
+        print(f"   📊 Serviços investigados: {len(target_services)}")
+        print(f"   ✅ Serviços encontrados: {services_found}")
+        print(f"   📋 Serviços que aparecem na lista de rotas: {services_in_routes}")
+        print(f"   ❌ Inconsistências encontradas: {inconsistencies_found}")
+        
+        # Check if these should be CLIENTE_TROUXE
+        cliente_trouxe_count = sum(1 for data in investigation_results.values() 
+                                 if data.get('default_service_status') == 'CLIENTE_TROUXE')
+        
+        if cliente_trouxe_count > 0:
+            print(f"   🎯 Serviços com status CLIENTE_TROUXE: {cliente_trouxe_count}")
+            if services_in_routes > 0:
+                print(f"   🚨 PROBLEMA CONFIRMADO: Serviços CLIENTE_TROUXE aparecem na lista de rotas")
+            else:
+                print(f"   ✅ CORRETO: Serviços CLIENTE_TROUXE não aparecem na lista de rotas")
+        
+        # 5. CONCLUSÃO
+        print(f"\n5️⃣ CONCLUSÃO:")
+        print("-" * 70)
+        
+        if inconsistencies_found == 0:
+            print("   ✅ SISTEMA FUNCIONANDO CORRETAMENTE")
+            print("   ✅ Nenhuma inconsistência encontrada entre service.default_service_status e item.status")
+            self.log_test("Investigation SRV-0157 to SRV-0162", True, 
+                        f"Investigação completa: {services_found} serviços verificados, 0 inconsistências")
+        else:
+            print(f"   ❌ PROBLEMAS ENCONTRADOS: {inconsistencies_found} inconsistências")
+            print("   ❌ Há discrepâncias entre service.default_service_status e item.status")
+            self.log_test("Investigation SRV-0157 to SRV-0162", False, 
+                        f"Investigação completa: {inconsistencies_found} inconsistências encontradas")
+        
+        print("=" * 80)
+        return investigation_results
+
+    def run_specific_services_investigation(self):
+        """Execute the specific investigation for SRV-0157 to SRV-0162"""
+        print("🔍 EXECUTANDO INVESTIGAÇÃO ESPECÍFICA DOS SERVIÇOS SRV-0157 A SRV-0162")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Objetivo: Investigar especificamente os 6 serviços solicitados")
+        print("=" * 80)
+        
+        # Execute the specific investigation
+        investigation_results = self.investigate_specific_services_srv_0157_to_0162()
+        
+        # Summary
+        self.print_summary()
+        
+        return investigation_results
+
 if __name__ == "__main__":
     # Check command line arguments
     if len(sys.argv) > 1:
