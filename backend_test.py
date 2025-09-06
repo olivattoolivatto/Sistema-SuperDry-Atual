@@ -568,6 +568,204 @@ class ServiceStatusBugTester:
                         f"Route has single status type: {list(stop_statuses)}")
             return route_id
 
+    def test_orc_0000005_specific_migration(self):
+        """CORREÇÃO URGENTE: Testar migração específica para orçamento ORC-0000005"""
+        print("\n" + "=" * 80)
+        print("🚨 CORREÇÃO URGENTE: MIGRAÇÃO ESPECÍFICA PARA ORC-0000005")
+        print("=" * 80)
+        print("PROBLEMA IDENTIFICADO:")
+        print("- Orçamento ORC-0000005 tem 19 itens CLIENTE_TROUXE aparecendo com status RETIRAR")
+        print("- Itens ITM-3284345 até ITM-3284401 todos precisam ser corrigidos")
+        print("- Migração anterior não processou este orçamento específico")
+        print("")
+        print("CORREÇÃO NECESSÁRIA:")
+        print("- Executar POST /api/admin/migrate-budget-item-status")
+        print("- Focar na correção do orçamento ORC-0000005")
+        print("- Validar que todos os 19 itens saem da lista de rotas")
+        print("- Confirmar lista volta ao normal (6 itens)")
+        print("=" * 80)
+        
+        # STEP 1: Verificar estado atual antes da migração
+        print("\n1️⃣ VERIFICANDO ESTADO ATUAL ANTES DA MIGRAÇÃO:")
+        print("-" * 60)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("ORC-0000005 Migration - Pre-check", False, 
+                        "Failed to get available items before migration", response['data'])
+            return False
+        
+        available_items_before = response['data'].get('available_items', [])
+        items_before_count = len(available_items_before)
+        
+        print(f"📊 ITENS NA LISTA ANTES DA MIGRAÇÃO: {items_before_count}")
+        
+        # Count items from ORC-0000005 specifically
+        orc_0000005_items = []
+        srv_0162_items = []
+        
+        for item in available_items_before:
+            budget_id = item.get('budget_id')
+            service_code = item.get('service_code')
+            status = item.get('status')
+            
+            if budget_id == 'ORC-0000005':
+                orc_0000005_items.append({
+                    'budget_item_id': item.get('budget_item_id'),
+                    'service_code': service_code,
+                    'status': status,
+                    'client_name': item.get('client_name')
+                })
+            
+            if service_code == 'SRV-0162':
+                srv_0162_items.append({
+                    'budget_item_id': item.get('budget_item_id'),
+                    'budget_id': budget_id,
+                    'status': status,
+                    'client_name': item.get('client_name')
+                })
+        
+        print(f"🎯 ITENS DO ORC-0000005 NA LISTA: {len(orc_0000005_items)}")
+        print(f"🔧 ITENS SRV-0162 NA LISTA: {len(srv_0162_items)}")
+        
+        if len(orc_0000005_items) == 19:
+            print("✅ CONFIRMADO: 19 itens do ORC-0000005 encontrados na lista (conforme reportado)")
+        else:
+            print(f"⚠️  ATENÇÃO: Encontrados {len(orc_0000005_items)} itens do ORC-0000005 (esperados 19)")
+        
+        # Show details of problematic items
+        if orc_0000005_items:
+            print("\n📋 DETALHES DOS ITENS PROBLEMÁTICOS DO ORC-0000005:")
+            for i, item in enumerate(orc_0000005_items, 1):
+                print(f"   {i:2d}. {item['budget_item_id']} - {item['service_code']} - Status: {item['status']} - Cliente: {item['client_name']}")
+        
+        # STEP 2: Executar migração específica
+        print(f"\n2️⃣ EXECUTANDO MIGRAÇÃO ESPECÍFICA:")
+        print("-" * 40)
+        
+        response = self.make_request('POST', '/admin/migrate-budget-item-status')
+        if not response['success']:
+            self.log_test("ORC-0000005 Migration - Execute", False, 
+                        "Failed to execute migration", response['data'])
+            return False
+        
+        migration_result = response['data']
+        total_items = migration_result.get('total_items', 0)
+        updated_items = migration_result.get('updated_items', 0)
+        message = migration_result.get('message', '')
+        
+        print(f"📊 RESULTADO DA MIGRAÇÃO:")
+        print(f"   Total de itens processados: {total_items}")
+        print(f"   Itens atualizados: {updated_items}")
+        print(f"   Mensagem: {message}")
+        
+        self.log_test("ORC-0000005 Migration - Execute", True, 
+                    f"Migração executada: {updated_items}/{total_items} itens atualizados")
+        
+        # STEP 3: Verificar estado após migração
+        print(f"\n3️⃣ VERIFICANDO ESTADO APÓS MIGRAÇÃO:")
+        print("-" * 45)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("ORC-0000005 Migration - Post-check", False, 
+                        "Failed to get available items after migration", response['data'])
+            return False
+        
+        available_items_after = response['data'].get('available_items', [])
+        items_after_count = len(available_items_after)
+        
+        print(f"📊 ITENS NA LISTA APÓS MIGRAÇÃO: {items_after_count}")
+        print(f"📉 REDUÇÃO: {items_before_count} → {items_after_count} ({items_before_count - items_after_count} itens removidos)")
+        
+        # Check if ORC-0000005 items are gone
+        orc_0000005_items_after = []
+        srv_0162_items_after = []
+        
+        for item in available_items_after:
+            budget_id = item.get('budget_id')
+            service_code = item.get('service_code')
+            
+            if budget_id == 'ORC-0000005':
+                orc_0000005_items_after.append({
+                    'budget_item_id': item.get('budget_item_id'),
+                    'service_code': service_code,
+                    'status': item.get('status')
+                })
+            
+            if service_code == 'SRV-0162':
+                srv_0162_items_after.append({
+                    'budget_item_id': item.get('budget_item_id'),
+                    'budget_id': budget_id,
+                    'status': item.get('status')
+                })
+        
+        print(f"🎯 ITENS DO ORC-0000005 RESTANTES: {len(orc_0000005_items_after)}")
+        print(f"🔧 ITENS SRV-0162 RESTANTES: {len(srv_0162_items_after)}")
+        
+        # STEP 4: Validar resultado esperado
+        print(f"\n4️⃣ VALIDANDO RESULTADO ESPERADO:")
+        print("-" * 40)
+        
+        success = True
+        
+        # Check if 19 items were corrected (removed from list)
+        items_removed = len(orc_0000005_items) - len(orc_0000005_items_after)
+        if items_removed == 19:
+            print("✅ SUCESSO: 19 itens do ORC-0000005 foram corrigidos (removidos da lista)")
+            self.log_test("ORC-0000005 Items Corrected", True, 
+                        f"19 itens do ORC-0000005 corrigidos de RETIRAR → CLIENTE_TROUXE")
+        else:
+            print(f"❌ PROBLEMA: Apenas {items_removed} itens foram removidos (esperados 19)")
+            self.log_test("ORC-0000005 Items Corrected", False, 
+                        f"Apenas {items_removed}/19 itens do ORC-0000005 foram corrigidos")
+            success = False
+        
+        # Check if list returned to normal (6 items)
+        if items_after_count == 6:
+            print("✅ SUCESSO: Lista reduzida para 6 itens válidos (conforme esperado)")
+            self.log_test("List Normalized", True, 
+                        f"Lista normalizada: {items_before_count} → 6 itens")
+        else:
+            print(f"⚠️  ATENÇÃO: Lista tem {items_after_count} itens (esperados 6)")
+            self.log_test("List Normalized", False, 
+                        f"Lista não normalizada: {items_after_count} itens (esperados 6)")
+            # This might not be a failure if there are other valid items
+        
+        # Check specific SRV-0162 item (ITM-3284401)
+        srv_0162_corrected = len(srv_0162_items) > len(srv_0162_items_after)
+        if srv_0162_corrected:
+            print("✅ SUCESSO: Item SRV-0162 (ITM-3284401) corrigido")
+            self.log_test("SRV-0162 Corrected", True, 
+                        "Item SRV-0162 específico foi corrigido")
+        else:
+            print("❌ PROBLEMA: Item SRV-0162 ainda aparece na lista")
+            self.log_test("SRV-0162 Corrected", False, 
+                        "Item SRV-0162 ainda não foi corrigido")
+            success = False
+        
+        # STEP 5: Resultado final
+        print(f"\n5️⃣ RESULTADO FINAL:")
+        print("-" * 25)
+        
+        if success:
+            print("🎉 CORREÇÃO URGENTE EXECUTADA COM SUCESSO!")
+            print("✅ Todos os 19 itens do ORC-0000005 foram corrigidos")
+            print("✅ Sistema funcionando 100% correto")
+            print("✅ Problema resolvido definitivamente")
+            
+            self.log_test("ORC-0000005 Urgent Fix", True, 
+                        "Correção urgente executada com sucesso - ORC-0000005 corrigido definitivamente")
+        else:
+            print("❌ CORREÇÃO URGENTE PARCIALMENTE EXECUTADA")
+            print("⚠️  Alguns itens podem não ter sido corrigidos completamente")
+            print("🔄 Pode ser necessária investigação adicional")
+            
+            self.log_test("ORC-0000005 Urgent Fix", False, 
+                        "Correção urgente parcialmente executada - verificar itens restantes")
+        
+        return success
+
     def run_migration_tests(self):
         """Run the migration tests as requested in the review"""
         print("🔄 EXECUTANDO MIGRAÇÃO PARA CORRIGIR STATUS DOS BUDGET ITEMS")
