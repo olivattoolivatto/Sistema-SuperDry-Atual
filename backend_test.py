@@ -7436,8 +7436,11 @@ if __name__ == "__main__":
                 print("🔍 RUNNING SPECIFIC SERVICES INVESTIGATION: SRV-0157 to SRV-0162")
                 investigation_results = tester.run_specific_services_investigation()
                 success = True  # Investigation always succeeds if it runs
+            elif test_type == "direct-correction":
+                print("🔧 RUNNING DIRECT CORRECTION OF 4 PROBLEMATIC ITEMS")
+                success = tester.run_direct_correction_request()
             else:
-                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162")
+                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction")
                 sys.exit(1)
     else:
         print("📋 RUNNING DEFAULT: DETAILED ITEMS LIST REQUEST")
