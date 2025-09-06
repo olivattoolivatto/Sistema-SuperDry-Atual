@@ -397,6 +397,9 @@ backend:
         -working: true
         -agent: "testing"
         -comment: "✅ CRITICAL BUG FIXED - SRV-0037 & SRV-0036 RESOLVED: Executado teste crítico específico conforme solicitado na review request. ✅ MIGRAÇÃO EXECUTADA: POST /api/admin/migrate-budget-item-status processou 21 items com sucesso, atualizando todos os items necessários em 6 orçamentos. ✅ SERVICES VERIFICADOS: SRV-0037 e SRV-0036 confirmados com default_service_status='CLIENTE_TROUXE'. ✅ FILTRO FUNCIONANDO: GET /api/budget-items/available-for-routes retorna apenas 6 items disponíveis, NENHUM dos serviços SRV-0037 ou SRV-0036 aparece na lista. ✅ VERIFICAÇÃO ADICIONAL: Nenhum item com status CLIENTE_TROUXE aparece na lista de rotas disponíveis. ✅ RESULTADO ESPERADO ALCANÇADO: Items CLIENTE_TROUXE não aparecem mais na lista de rotas, eliminando confusão operacional para motoristas. Bug crítico 100% resolvido - sistema funcionando corretamente."
+        -working: true
+        -agent: "testing"
+        -comment: "🚨 INVESTIGAÇÃO CRÍTICA DOS 15 SERVIÇOS PROBLEMÁTICOS COMPLETADA: Executada investigação urgente dos serviços SRV-0093, SRV-0094, SRV-0096, SRV-0097, SRV-0098, SRV-0038, SRV-0039, SRV-0040, SRV-0041, SRV-0042, SRV-0043, SRV-0044, SRV-0045, SRV-0058, SRV-0062. ✅ TODOS OS 15 SERVIÇOS CONFIRMADOS: Todos têm default_service_status='CLIENTE_TROUXE' conforme esperado. ❌ PROBLEMA IDENTIFICADO: 15 items destes serviços apareciam incorretamente na lista de rotas disponíveis com status='RETIRAR' em vez de 'CLIENTE_TROUXE'. ✅ MIGRAÇÃO EXECUTADA: POST /api/admin/migrate-budget-item-status corrigiu 15/21 items processados. ✅ VERIFICAÇÃO FINAL: Após migração, NENHUM dos 15 serviços problemáticos aparece mais na lista de rotas. ✅ RESULTADO: Sistema funcionando 100% correto - todos os items CLIENTE_TROUXE foram eliminados da lista de rotas conforme esperado. Bug crítico resolvido completamente."
 
 frontend:
   - task: "Auto-scroll to Prioritization Section"
