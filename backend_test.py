@@ -1255,6 +1255,21 @@ class ServiceStatusBugTester:
         
         return available_items
 
+    def run_detailed_items_request(self):
+        """Execute the specific user request for detailed 22 items list"""
+        print("🔍 EXECUTANDO SOLICITAÇÃO ESPECÍFICA DO USUÁRIO")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Objetivo: Fornecer lista DETALHADA dos 22 itens disponíveis para rotas")
+        print("=" * 80)
+        
+        # Execute the detailed items list request
+        available_items = self.get_detailed_available_items_list()
+        
+        # Summary
+        self.print_summary()
+        
+        return len(available_items) > 0
+
     def run_all_tests(self):
         """Run complete routes API test suite"""
         print("🚀 STARTING ROUTES API COMPREHENSIVE TESTS")
