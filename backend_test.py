@@ -5609,79 +5609,496 @@ class DurationOptimizationTester(ServiceStatusBugTester):
         
         return investigation_results
 
-if __name__ == "__main__":
-    tester = ServiceStatusBugTester()
-    duration_tester = DurationOptimizationTester()
+
+class ClienteTrouxeReregistrationTester:
+    """
+    Tester for CLIENTE_TROUXE service re-registration process
+    Implements the definitive solution requested in the review
+    """
     
+    def __init__(self):
+        self.base_url = BASE_URL
+        self.headers = HEADERS
+        self.test_results = []
+        self.cliente_trouxe_services = []
+        self.backup_data = []
+        self.new_services = []
+        self.deactivated_services = []
+    
+    def log_test(self, test_name: str, success: bool, message: str, details: Any = None):
+        """Log test results"""
+        result = {
+            'test': test_name,
+            'success': success,
+            'message': message,
+            'timestamp': datetime.now().isoformat(),
+            'details': details
+        }
+        self.test_results.append(result)
+        status = "✅ PASS" if success else "❌ FAIL"
+        print(f"{status} {test_name}: {message}")
+        if details and not success:
+            print(f"   Details: {details}")
+    
+    def make_request(self, method: str, endpoint: str, data: Dict = None) -> Dict:
+        """Make HTTP request with error handling"""
+        url = f"{self.base_url}{endpoint}"
+        try:
+            if method.upper() == 'GET':
+                response = requests.get(url, headers=self.headers)
+            elif method.upper() == 'POST':
+                response = requests.post(url, headers=self.headers, json=data)
+            elif method.upper() == 'PUT':
+                response = requests.put(url, headers=self.headers, json=data)
+            elif method.upper() == 'DELETE':
+                response = requests.delete(url, headers=self.headers)
+            
+            return {
+                'status_code': response.status_code,
+                'data': response.json() if response.content else {},
+                'success': 200 <= response.status_code < 300
+            }
+        except Exception as e:
+            return {
+                'status_code': 0,
+                'data': {'error': str(e)},
+                'success': False
+            }
+    
+    def step_1_identify_cliente_trouxe_services(self):
+        """Step 1: Identify all services with CLIENTE_TROUXE status"""
+        print("\n" + "=" * 80)
+        print("📋 PASSO 1: IDENTIFICAR SERVIÇOS COM CLIENTE_TROUXE")
+        print("=" * 80)
+        
+        response = self.make_request('GET', '/services?include_inactive=true')
+        if not response['success']:
+            self.log_test("Identify CLIENTE_TROUXE Services", False, 
+                         "Failed to retrieve services", response['data'])
+            return False
+        
+        all_services = response['data']
+        self.cliente_trouxe_services = [
+            s for s in all_services 
+            if s.get('default_service_status') == 'CLIENTE_TROUXE'
+        ]
+        
+        print(f"📊 Total de serviços no catálogo: {len(all_services)}")
+        print(f"🎯 Serviços com CLIENTE_TROUXE: {len(self.cliente_trouxe_services)}")
+        
+        if self.cliente_trouxe_services:
+            print("\n📋 LISTA DOS SERVIÇOS CLIENTE_TROUXE IDENTIFICADOS:")
+            for i, service in enumerate(self.cliente_trouxe_services, 1):
+                service_id = service.get('id', 'N/A')
+                service_name = service.get('name', 'N/A')
+                is_active = service.get('is_active', False)
+                status_icon = "✅" if is_active else "❌"
+                
+                print(f"  {i:2d}. {service_id} - {service_name} {status_icon}")
+            
+            self.log_test("Identify CLIENTE_TROUXE Services", True, 
+                         f"Identificados {len(self.cliente_trouxe_services)} serviços CLIENTE_TROUXE")
+            return True
+        else:
+            self.log_test("Identify CLIENTE_TROUXE Services", True, 
+                         "Nenhum serviço CLIENTE_TROUXE encontrado")
+            return True
+    
+    def step_2_backup_service_data(self):
+        """Step 2: Create backup of all CLIENTE_TROUXE service data"""
+        print("\n" + "=" * 80)
+        print("💾 PASSO 2: BACKUP DOS DADOS DOS SERVIÇOS")
+        print("=" * 80)
+        
+        if not self.cliente_trouxe_services:
+            self.log_test("Backup Service Data", True, "Nenhum serviço para backup")
+            return True
+        
+        self.backup_data = []
+        
+        for service in self.cliente_trouxe_services:
+            service_id = service.get('id')
+            
+            # Get complete service details
+            response = self.make_request('GET', f'/services/{service_id}')
+            if response['success']:
+                complete_service = response['data']
+                self.backup_data.append(complete_service)
+                
+                print(f"💾 Backup criado para: {service_id} - {complete_service.get('name', 'N/A')}")
+            else:
+                self.log_test("Backup Service Data", False, 
+                             f"Failed to backup service {service_id}", response['data'])
+                return False
+        
+        print(f"\n✅ Backup completo de {len(self.backup_data)} serviços")
+        self.log_test("Backup Service Data", True, 
+                     f"Backup criado para {len(self.backup_data)} serviços")
+        return True
+    
+    def step_3_create_new_services(self):
+        """Step 3: Create new identical services with new IDs"""
+        print("\n" + "=" * 80)
+        print("🆕 PASSO 3: CRIAR NOVOS SERVIÇOS IDÊNTICOS")
+        print("=" * 80)
+        
+        if not self.backup_data:
+            self.log_test("Create New Services", True, "Nenhum serviço para recriar")
+            return True
+        
+        self.new_services = []
+        
+        for original_service in self.backup_data:
+            # Prepare new service data (remove ID and timestamps)
+            new_service_data = {
+                "name": original_service.get('name'),
+                "category": original_service.get('category'),
+                "service_type": original_service.get('service_type'),
+                "measure_type": original_service.get('measure_type'),
+                "execution_location": original_service.get('execution_location'),
+                "cost_price": original_service.get('cost_price'),
+                "sale_price": original_service.get('sale_price'),
+                "default_service_status": original_service.get('default_service_status'),
+                "is_active": True  # New services should be active
+            }
+            
+            # Create new service
+            response = self.make_request('POST', '/services', new_service_data)
+            if response['success']:
+                new_service = response['data']
+                self.new_services.append({
+                    'original_id': original_service.get('id'),
+                    'new_service': new_service
+                })
+                
+                print(f"🆕 Criado: {original_service.get('id')} → {new_service.get('id')}")
+                print(f"   📝 Nome: {new_service.get('name')}")
+                print(f"   🔄 Status: {new_service.get('default_service_status')}")
+            else:
+                self.log_test("Create New Services", False, 
+                             f"Failed to create new service for {original_service.get('id')}", 
+                             response['data'])
+                return False
+        
+        print(f"\n✅ Criados {len(self.new_services)} novos serviços")
+        self.log_test("Create New Services", True, 
+                     f"Criados {len(self.new_services)} novos serviços com novos IDs")
+        return True
+    
+    def step_4_deactivate_old_services(self):
+        """Step 4: Deactivate old services (is_active = false)"""
+        print("\n" + "=" * 80)
+        print("❌ PASSO 4: INATIVAR SERVIÇOS ANTIGOS")
+        print("=" * 80)
+        
+        if not self.cliente_trouxe_services:
+            self.log_test("Deactivate Old Services", True, "Nenhum serviço para inativar")
+            return True
+        
+        self.deactivated_services = []
+        
+        for service in self.cliente_trouxe_services:
+            service_id = service.get('id')
+            
+            # Deactivate service
+            response = self.make_request('PUT', f'/services/{service_id}/deactivate')
+            if response['success']:
+                self.deactivated_services.append(service_id)
+                print(f"❌ Inativado: {service_id} - {service.get('name', 'N/A')}")
+            else:
+                self.log_test("Deactivate Old Services", False, 
+                             f"Failed to deactivate service {service_id}", response['data'])
+                return False
+        
+        print(f"\n✅ Inativados {len(self.deactivated_services)} serviços antigos")
+        self.log_test("Deactivate Old Services", True, 
+                     f"Inativados {len(self.deactivated_services)} serviços antigos")
+        return True
+    
+    def step_5_validate_cleanup(self):
+        """Step 5: Validate that no CLIENTE_TROUXE items appear in routes"""
+        print("\n" + "=" * 80)
+        print("✅ PASSO 5: VALIDAR LIMPEZA - VERIFICAR LISTA DE ROTAS")
+        print("=" * 80)
+        
+        # Check available items for routes
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Validate Cleanup", False, 
+                         "Failed to get available items for routes", response['data'])
+            return False
+        
+        data = response['data']
+        available_items = data.get('available_items', [])
+        
+        # Filter items with CLIENTE_TROUXE status
+        cliente_trouxe_items = [
+            item for item in available_items 
+            if item.get('status') == 'CLIENTE_TROUXE'
+        ]
+        
+        print(f"📊 Total de itens disponíveis para rotas: {len(available_items)}")
+        print(f"🎯 Itens com status CLIENTE_TROUXE: {len(cliente_trouxe_items)}")
+        
+        if cliente_trouxe_items:
+            print("\n❌ PROBLEMA: Ainda há itens CLIENTE_TROUXE na lista de rotas:")
+            for i, item in enumerate(cliente_trouxe_items, 1):
+                service_code = item.get('service_code', 'N/A')
+                client_name = item.get('client_name', 'N/A')
+                budget_id = item.get('budget_id', 'N/A')
+                
+                print(f"  {i:2d}. Service: {service_code} | Cliente: {client_name} | Budget: {budget_id}")
+            
+            self.log_test("Validate Cleanup", False, 
+                         f"FALHA: {len(cliente_trouxe_items)} itens CLIENTE_TROUXE ainda aparecem na lista de rotas")
+            return False
+        else:
+            print("✅ SUCESSO: Nenhum item CLIENTE_TROUXE aparece na lista de rotas")
+            self.log_test("Validate Cleanup", True, 
+                         "Lista de rotas limpa - nenhum item CLIENTE_TROUXE encontrado")
+            return True
+    
+    def verify_new_services_active(self):
+        """Verify that new services are active and properly configured"""
+        print("\n" + "=" * 80)
+        print("🔍 VERIFICAÇÃO: NOVOS SERVIÇOS ATIVOS E CONFIGURADOS")
+        print("=" * 80)
+        
+        if not self.new_services:
+            self.log_test("Verify New Services", True, "Nenhum novo serviço para verificar")
+            return True
+        
+        all_verified = True
+        
+        for service_mapping in self.new_services:
+            new_service = service_mapping['new_service']
+            service_id = new_service.get('id')
+            
+            # Get current service data
+            response = self.make_request('GET', f'/services/{service_id}')
+            if response['success']:
+                current_service = response['data']
+                is_active = current_service.get('is_active', False)
+                status = current_service.get('default_service_status')
+                
+                if is_active and status == 'CLIENTE_TROUXE':
+                    print(f"✅ {service_id}: Ativo e configurado corretamente")
+                else:
+                    print(f"❌ {service_id}: Problema - Ativo: {is_active}, Status: {status}")
+                    all_verified = False
+            else:
+                print(f"❌ {service_id}: Erro ao verificar serviço")
+                all_verified = False
+        
+        if all_verified:
+            self.log_test("Verify New Services", True, 
+                         f"Todos os {len(self.new_services)} novos serviços estão ativos e configurados")
+        else:
+            self.log_test("Verify New Services", False, 
+                         "Alguns novos serviços têm problemas de configuração")
+        
+        return all_verified
+    
+    def verify_old_services_inactive(self):
+        """Verify that old services are properly deactivated"""
+        print("\n" + "=" * 80)
+        print("🔍 VERIFICAÇÃO: SERVIÇOS ANTIGOS INATIVADOS")
+        print("=" * 80)
+        
+        if not self.deactivated_services:
+            self.log_test("Verify Old Services Inactive", True, "Nenhum serviço antigo para verificar")
+            return True
+        
+        all_inactive = True
+        
+        for service_id in self.deactivated_services:
+            response = self.make_request('GET', f'/services/{service_id}')
+            if response['success']:
+                service = response['data']
+                is_active = service.get('is_active', True)
+                
+                if not is_active:
+                    print(f"✅ {service_id}: Corretamente inativado")
+                else:
+                    print(f"❌ {service_id}: Ainda está ativo")
+                    all_inactive = False
+            else:
+                print(f"❌ {service_id}: Erro ao verificar serviço")
+                all_inactive = False
+        
+        if all_inactive:
+            self.log_test("Verify Old Services Inactive", True, 
+                         f"Todos os {len(self.deactivated_services)} serviços antigos estão inativados")
+        else:
+            self.log_test("Verify Old Services Inactive", False, 
+                         "Alguns serviços antigos ainda estão ativos")
+        
+        return all_inactive
+    
+    def run_complete_reregistration(self):
+        """Execute the complete CLIENTE_TROUXE service re-registration process"""
+        print("🔄 SOLUÇÃO DEFINITIVA: RECADASTRAMENTO DE SERVIÇOS CLIENTE_TROUXE")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Objetivo: Resolver bug de exibição na lista de rotas através de recadastramento")
+        print("=" * 80)
+        
+        # Execute all steps in sequence
+        steps = [
+            ("Identificar Serviços CLIENTE_TROUXE", self.step_1_identify_cliente_trouxe_services),
+            ("Backup dos Dados", self.step_2_backup_service_data),
+            ("Criar Novos Serviços", self.step_3_create_new_services),
+            ("Inativar Serviços Antigos", self.step_4_deactivate_old_services),
+            ("Validar Limpeza", self.step_5_validate_cleanup),
+            ("Verificar Novos Serviços", self.verify_new_services_active),
+            ("Verificar Serviços Antigos", self.verify_old_services_inactive)
+        ]
+        
+        all_success = True
+        
+        for step_name, step_function in steps:
+            print(f"\n🔄 Executando: {step_name}")
+            success = step_function()
+            if not success:
+                print(f"❌ FALHA em: {step_name}")
+                all_success = False
+                break
+            else:
+                print(f"✅ SUCESSO em: {step_name}")
+        
+        # Final summary
+        self.print_reregistration_summary()
+        
+        return all_success
+    
+    def print_reregistration_summary(self):
+        """Print comprehensive summary of the re-registration process"""
+        print("\n" + "=" * 80)
+        print("📊 RESUMO DO RECADASTRAMENTO CLIENTE_TROUXE")
+        print("=" * 80)
+        
+        # Count results
+        total_tests = len(self.test_results)
+        passed_tests = sum(1 for result in self.test_results if result['success'])
+        failed_tests = total_tests - passed_tests
+        
+        print(f"📋 Total de testes executados: {total_tests}")
+        print(f"✅ Testes aprovados: {passed_tests}")
+        print(f"❌ Testes falharam: {failed_tests}")
+        print(f"📊 Taxa de sucesso: {(passed_tests/total_tests*100):.1f}%" if total_tests > 0 else "N/A")
+        
+        print(f"\n🔢 ESTATÍSTICAS DO RECADASTRAMENTO:")
+        print(f"   📋 Serviços CLIENTE_TROUXE identificados: {len(self.cliente_trouxe_services)}")
+        print(f"   💾 Backups criados: {len(self.backup_data)}")
+        print(f"   🆕 Novos serviços criados: {len(self.new_services)}")
+        print(f"   ❌ Serviços antigos inativados: {len(self.deactivated_services)}")
+        
+        if self.new_services:
+            print(f"\n🆕 MAPEAMENTO DE RECADASTRAMENTO:")
+            for mapping in self.new_services:
+                original_id = mapping['original_id']
+                new_service = mapping['new_service']
+                new_id = new_service.get('id')
+                service_name = new_service.get('name', 'N/A')
+                
+                print(f"   {original_id} → {new_id} ({service_name})")
+        
+        # Print failed tests details
+        if failed_tests > 0:
+            print(f"\n❌ DETALHES DOS TESTES FALHARAM:")
+            for result in self.test_results:
+                if not result['success']:
+                    print(f"   • {result['test']}: {result['message']}")
+        
+        print("\n" + "=" * 80)
+        
+        if failed_tests == 0:
+            print("🎉 RECADASTRAMENTO CONCLUÍDO COM SUCESSO!")
+            print("✅ Todos os serviços CLIENTE_TROUXE foram recadastrados")
+            print("✅ Bug de exibição na lista de rotas deve estar resolvido")
+        else:
+            print("⚠️  RECADASTRAMENTO CONCLUÍDO COM PROBLEMAS")
+            print(f"❌ {failed_tests} etapas falharam - verificar logs acima")
+
+
+if __name__ == "__main__":
     # Check command line arguments
     if len(sys.argv) > 1:
         test_type = sys.argv[1].lower()
         
-        if test_type == "debug":
-            print("🔍 RUNNING SERVICE STATUS DEBUG INVESTIGATION")
-            success = tester.run_service_status_debug_investigation()
-        elif test_type == "migration":
-            print("🔄 RUNNING MIGRATION TESTS")
-            success = tester.run_migration_tests()
-        elif test_type == "status":
-            print("🐛 RUNNING SERVICE STATUS BUG TESTS")
-            success = tester.run_service_status_bug_tests()
-        elif test_type == "duplication":
-            print("📋 RUNNING SERVICE DUPLICATION TESTS")
-            success = tester.run_service_duplication_tests()
-        elif test_type == "routes":
-            print("🚗 RUNNING ROUTES API TESTS")
-            success = tester.run_all_tests()
-        elif test_type == "route-bug":
-            print("🔍 RUNNING ROUTE BUG INVESTIGATION")
-            success = tester.investigate_route_bug()
-        elif test_type == "422":
-            print("🔍 RUNNING 422 ERROR INVESTIGATION")
-            success = tester.investigate_422_error_adding_stops()
-        elif test_type == "route-corrections":
-            print("🔧 RUNNING ROUTE CORRECTIONS TESTS")
-            success = tester.test_route_corrections_implementation()
-        elif test_type == "calendar":
-            print("📅 RUNNING CALENDAR INVESTIGATION TESTS")
-            success = tester.run_calendar_investigation_tests()
-        elif test_type == "direct-calendar":
-            print("📅 RUNNING DIRECT CALENDAR EVENT TESTS")
-            success = tester.run_direct_calendar_event_tests()
-        elif test_type == "color":
-            print("🎨 RUNNING CALENDAR COLOR CHANGE TESTS")
-            success = tester.test_calendar_color_change_implementation()
-        elif test_type == "service-status-bug":
-            print("🐛 RUNNING ROUTE SERVICE STATUS BUG INVESTIGATION")
-            success = tester.test_route_service_status_bug()
-        elif test_type == "duration":
-            print("⏱️  RUNNING DURATION OPTIMIZATION TESTS")
-            success = duration_tester.run_duration_optimization_tests()
-        elif test_type == "investigate-srv":
-            print("🔍 RUNNING SPECIFIC INVESTIGATION: SRV-0037 and SRV-0036")
-            investigation_results = tester.investigate_services_srv_0037_0036()
-            success = True  # Investigation always succeeds, results are in the output
-        elif test_type == "critical":
-            print("🚨 RUNNING CRITICAL BUG TEST: SRV-0037/SRV-0036")
-            success = tester.test_critical_srv_0037_0036_bug()
-        elif test_type == "cliente-trouxe-scope":
-            print("🔍 RUNNING CLIENTE_TROUXE SCOPE INVESTIGATION")
-            investigation_results = tester.investigate_cliente_trouxe_scope()
-            success = True  # Investigation always succeeds if it runs
-        elif test_type == "critical15":
-            print("🚨 RUNNING CRITICAL 15 SERVICES INVESTIGATION")
-            investigation_results = tester.investigate_critical_15_services_issue()
-            success = True  # Investigation always succeeds if it runs
-        elif test_type == "route_structure":
-            print("🔍 RUNNING ROUTE STRUCTURE INVESTIGATION")
-            investigation_results = tester.investigate_route_structure()
-            success = True  # Investigation always succeeds if it runs
+        if test_type == "reregistration" or test_type == "recadastramento":
+            print("🔄 RUNNING CLIENTE_TROUXE RE-REGISTRATION TESTS")
+            tester = ClienteTrouxeReregistrationTester()
+            success = tester.run_complete_reregistration()
         else:
-            print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure")
-            sys.exit(1)
+            # Use existing tester for other test types
+            tester = ServiceStatusBugTester()
+            duration_tester = DurationOptimizationTester()
+            
+            if test_type == "debug":
+                print("🔍 RUNNING SERVICE STATUS DEBUG INVESTIGATION")
+                success = tester.run_service_status_debug_investigation()
+            elif test_type == "migration":
+                print("🔄 RUNNING MIGRATION TESTS")
+                success = tester.run_migration_tests()
+            elif test_type == "status":
+                print("🐛 RUNNING SERVICE STATUS BUG TESTS")
+                success = tester.run_service_status_bug_tests()
+            elif test_type == "duplication":
+                print("📋 RUNNING SERVICE DUPLICATION TESTS")
+                success = tester.run_service_duplication_tests()
+            elif test_type == "routes":
+                print("🚗 RUNNING ROUTES API TESTS")
+                success = tester.run_all_tests()
+            elif test_type == "route-bug":
+                print("🔍 RUNNING ROUTE BUG INVESTIGATION")
+                success = tester.investigate_route_bug()
+            elif test_type == "422":
+                print("🔍 RUNNING 422 ERROR INVESTIGATION")
+                success = tester.investigate_422_error_adding_stops()
+            elif test_type == "route-corrections":
+                print("🔧 RUNNING ROUTE CORRECTIONS TESTS")
+                success = tester.test_route_corrections_implementation()
+            elif test_type == "calendar":
+                print("📅 RUNNING CALENDAR INVESTIGATION TESTS")
+                success = tester.run_calendar_investigation_tests()
+            elif test_type == "direct-calendar":
+                print("📅 RUNNING DIRECT CALENDAR EVENT TESTS")
+                success = tester.run_direct_calendar_event_tests()
+            elif test_type == "color":
+                print("🎨 RUNNING CALENDAR COLOR CHANGE TESTS")
+                success = tester.test_calendar_color_change_implementation()
+            elif test_type == "service-status-bug":
+                print("🐛 RUNNING ROUTE SERVICE STATUS BUG INVESTIGATION")
+                success = tester.test_route_service_status_bug()
+            elif test_type == "duration":
+                print("⏱️  RUNNING DURATION OPTIMIZATION TESTS")
+                success = duration_tester.run_duration_optimization_tests()
+            elif test_type == "investigate-srv":
+                print("🔍 RUNNING SPECIFIC INVESTIGATION: SRV-0037 and SRV-0036")
+                investigation_results = tester.investigate_services_srv_0037_0036()
+                success = True  # Investigation always succeeds, results are in the output
+            elif test_type == "critical":
+                print("🚨 RUNNING CRITICAL BUG TEST: SRV-0037/SRV-0036")
+                success = tester.test_critical_srv_0037_0036_bug()
+            elif test_type == "cliente-trouxe-scope":
+                print("🔍 RUNNING CLIENTE_TROUXE SCOPE INVESTIGATION")
+                investigation_results = tester.investigate_cliente_trouxe_scope()
+                success = True  # Investigation always succeeds if it runs
+            elif test_type == "critical15":
+                print("🚨 RUNNING CRITICAL 15 SERVICES INVESTIGATION")
+                investigation_results = tester.investigate_critical_15_services_issue()
+                success = True  # Investigation always succeeds if it runs
+            elif test_type == "route_structure":
+                print("🔍 RUNNING ROUTE STRUCTURE INVESTIGATION")
+                investigation_results = tester.investigate_route_structure()
+                success = True  # Investigation always succeeds if it runs
+            else:
+                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure")
+                sys.exit(1)
     else:
-        print("🔍 RUNNING CLIENTE_TROUXE SCOPE INVESTIGATION (default)")
-        investigation_results = tester.investigate_cliente_trouxe_scope()
-        success = True
+        print("🔄 RUNNING DEFAULT: CLIENTE_TROUXE RE-REGISTRATION")
+        tester = ClienteTrouxeReregistrationTester()
+        success = tester.run_complete_reregistration()
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
