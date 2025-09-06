@@ -105,6 +105,18 @@
 user_problem_statement: "Implementar funcionalidade 'Criar Evento' na tela Agenda. O usuário solicitou um botão para criar eventos manualmente no Google Calendar com duração padrão de 2 horas (120 minutos), com campos convencionais: título, descrição, local, data/hora início e fim."
 
 backend:
+  - task: "CLIENTE_TROUXE Service Re-registration - Definitive Solution"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "🎉 SOLUÇÃO DEFINITIVA EXECUTADA COM 100% DE SUCESSO: Recadastramento completo de todos os 18 serviços CLIENTE_TROUXE realizado conforme plano de recadastramento. ✅ PASSO 1 - IDENTIFICAÇÃO: 18 serviços CLIENTE_TROUXE identificados (SRV-0036 até SRV-0098, incluindo parceiros Leonardo Dry Clean, Vinicius Higia, Maika FormaClean, Wesley Higienização, João/Felipe). ✅ PASSO 2 - BACKUP: Backup completo de todos os 18 serviços criado com sucesso. ✅ PASSO 3 - RECRIAÇÃO: 18 novos serviços idênticos criados com novos IDs (SRV-0145 até SRV-0162), mantendo todas as características originais. ✅ PASSO 4 - INATIVAÇÃO: Todos os 18 serviços antigos inativados (is_active = false) para evitar uso futuro. ✅ PASSO 5 - VALIDAÇÃO: Lista de rotas completamente limpa - 0 itens CLIENTE_TROUXE aparecem na lista de rotas disponíveis. ✅ VERIFICAÇÕES FINAIS: Todos os novos serviços ativos e configurados corretamente, todos os serviços antigos corretamente inativados. 🔢 ESTATÍSTICAS: 7/7 testes aprovados (100% sucesso), 18 serviços recadastrados, bug de herança completamente eliminado através da solução definitiva de recadastramento."
+
   - task: "Calendar Event Color Change to Yellow Banana"
     implemented: true
     working: true
