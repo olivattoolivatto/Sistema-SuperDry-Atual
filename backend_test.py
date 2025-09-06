@@ -7860,13 +7860,16 @@ if __name__ == "__main__":
             elif test_type == "srv0162":
                 print("🚨 RUNNING SRV-0162 CRITICAL INVESTIGATION")
                 success = tester.run_srv_0162_investigation()
+            elif test_type == "orc-0000005":
+                print("🚨 RUNNING ORC-0000005 URGENT MIGRATION TEST")
+                success = tester.test_orc_0000005_specific_migration()
             else:
-                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction, srv0162")
+                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction, srv0162, orc-0000005")
                 sys.exit(1)
     else:
-        print("🚨 RUNNING DEFAULT: SRV-0162 CRITICAL INVESTIGATION")
+        print("🚨 RUNNING DEFAULT: ORC-0000005 URGENT MIGRATION TEST")
         tester = ServiceStatusBugTester()
-        success = tester.run_srv_0162_investigation()
+        success = tester.test_orc_0000005_specific_migration()
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
