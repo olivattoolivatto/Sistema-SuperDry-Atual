@@ -6230,8 +6230,12 @@ if __name__ == "__main__":
                 print("🔍 RUNNING ROUTE STRUCTURE INVESTIGATION")
                 investigation_results = tester.investigate_route_structure()
                 success = True  # Investigation always succeeds if it runs
+            elif test_type == "srv0145":
+                print("🔍 RUNNING SRV-0145 COMPLETE DATA QUERY")
+                service_data = tester.test_service_srv_0145_complete_data()
+                success = service_data is not None
             else:
-                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure")
+                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145")
                 sys.exit(1)
     else:
         print("🔄 RUNNING DEFAULT: CLIENTE_TROUXE RE-REGISTRATION")
