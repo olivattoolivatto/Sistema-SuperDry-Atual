@@ -4920,6 +4920,349 @@ class DurationOptimizationTester(ServiceStatusBugTester):
                         "Bug fixed: No CLIENTE_TROUXE items in routes list")
             return True
 
+    def investigate_route_structure(self):
+        """INVESTIGAÇÃO ESPECÍFICA: Estrutura das rotas salvas para entender ordem dos stops após otimização"""
+        print("\n" + "=" * 80)
+        print("🔍 INVESTIGAÇÃO DA ESTRUTURA DAS ROTAS SALVAS")
+        print("=" * 80)
+        print("PROBLEMA IDENTIFICADO:")
+        print("- Eventos aparecem na ordem correta (pós-cálculo)")
+        print("- Horários seguem ordem incorreta (pré-cálculo)")
+        print("- Função calculateEstimatedTime usa route.stops[i] que pode ser ordem original")
+        print("=" * 80)
+        
+        investigation_results = {
+            'existing_routes': [],
+            'route_structure_analysis': {},
+            'stops_ordering_analysis': {},
+            'order_fields_comparison': {},
+            'optimization_impact': {}
+        }
+        
+        # 1. LISTAR ROTAS EXISTENTES
+        print("\n1️⃣ LISTANDO ROTAS SALVAS EXISTENTES:")
+        print("-" * 70)
+        
+        response = self.make_request('GET', '/routes')
+        if response['success']:
+            existing_routes = response['data']
+            investigation_results['existing_routes'] = existing_routes
+            
+            print(f"  📊 TOTAL DE ROTAS ENCONTRADAS: {len(existing_routes)}")
+            
+            if existing_routes:
+                print(f"\n  📋 LISTA DAS ROTAS:")
+                for i, route in enumerate(existing_routes, 1):
+                    route_id = route.get('id', 'N/A')
+                    vehicle_type = route.get('vehicle_type', 'N/A')
+                    planned_date = route.get('planned_date', 'N/A')
+                    stops_count = len(route.get('stops', []))
+                    status = route.get('status', 'N/A')
+                    alias = route.get('alias', 'Sem nome')
+                    
+                    print(f"     {i:2d}. {route_id} - {alias}")
+                    print(f"         🚗 Veículo: {vehicle_type} | 📅 Data: {planned_date}")
+                    print(f"         📍 Stops: {stops_count} | 🔄 Status: {status}")
+                
+                self.log_test("Listar Rotas Existentes", True, 
+                            f"Encontradas {len(existing_routes)} rotas para análise")
+            else:
+                print(f"  ℹ️  NENHUMA ROTA encontrada no sistema")
+                self.log_test("Listar Rotas Existentes", True, "Nenhuma rota encontrada")
+        else:
+            print(f"  ❌ ERRO ao buscar rotas:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("Listar Rotas Existentes", False, f"Erro ao buscar rotas - Status: {response['status_code']}")
+            return investigation_results
+        
+        # 2. ANALISAR ESTRUTURA DETALHADA DE UMA ROTA ESPECÍFICA
+        if existing_routes:
+            print("\n2️⃣ ANÁLISE DETALHADA DA ESTRUTURA DE ROTA:")
+            print("-" * 70)
+            
+            # Pegar a primeira rota para análise detalhada
+            target_route = existing_routes[0]
+            route_id = target_route.get('id')
+            
+            response = self.make_request('GET', f'/routes/{route_id}')
+            if response['success']:
+                route_details = response['data']
+                stops = route_details.get('stops', [])
+                
+                print(f"  🎯 ANALISANDO ROTA: {route_id}")
+                print(f"  📊 TOTAL DE STOPS: {len(stops)}")
+                
+                # Analisar estrutura geral da rota
+                route_fields = list(route_details.keys())
+                print(f"\n  📋 CAMPOS DA ROTA:")
+                for field in sorted(route_fields):
+                    value = route_details.get(field)
+                    if field == 'stops':
+                        print(f"     {field}: Lista com {len(value)} elementos")
+                    elif isinstance(value, dict):
+                        print(f"     {field}: Objeto com {len(value)} campos")
+                    elif isinstance(value, list):
+                        print(f"     {field}: Lista com {len(value)} elementos")
+                    else:
+                        print(f"     {field}: {value}")
+                
+                investigation_results['route_structure_analysis'] = {
+                    'route_id': route_id,
+                    'total_stops': len(stops),
+                    'route_fields': route_fields,
+                    'has_optimization_data': bool(route_details.get('total_duration') or route_details.get('total_distance')),
+                    'has_route_geometry': bool(route_details.get('route_geometry'))
+                }
+                
+                # 3. ANALISAR ESTRUTURA DOS STOPS
+                if stops:
+                    print(f"\n3️⃣ ANÁLISE DETALHADA DOS STOPS:")
+                    print("-" * 70)
+                    
+                    # Analisar campos dos stops
+                    first_stop = stops[0]
+                    stop_fields = list(first_stop.keys())
+                    print(f"  📋 CAMPOS DE CADA STOP:")
+                    for field in sorted(stop_fields):
+                        value = first_stop.get(field)
+                        if isinstance(value, dict):
+                            print(f"     {field}: Objeto com {len(value)} campos")
+                        elif isinstance(value, list):
+                            print(f"     {field}: Lista com {len(value)} elementos")
+                        else:
+                            print(f"     {field}: {type(value).__name__}")
+                    
+                    # Verificar campos de ordem específicos
+                    order_fields = ['order_sequence', 'delivery_order']
+                    has_order_sequence = 'order_sequence' in stop_fields
+                    has_delivery_order = 'delivery_order' in stop_fields
+                    
+                    print(f"\n  🔢 CAMPOS DE ORDENAÇÃO:")
+                    print(f"     order_sequence: {'✅ PRESENTE' if has_order_sequence else '❌ AUSENTE'}")
+                    print(f"     delivery_order: {'✅ PRESENTE' if has_delivery_order else '❌ AUSENTE'}")
+                    
+                    investigation_results['stops_ordering_analysis'] = {
+                        'stop_fields': stop_fields,
+                        'has_order_sequence': has_order_sequence,
+                        'has_delivery_order': has_delivery_order,
+                        'total_stops': len(stops)
+                    }
+                    
+                    # 4. COMPARAR VALORES DE order_sequence vs delivery_order
+                    print(f"\n4️⃣ COMPARAÇÃO order_sequence vs delivery_order:")
+                    print("-" * 70)
+                    
+                    order_comparison = []
+                    print(f"  {'#':<3} {'Cliente':<20} {'order_seq':<10} {'delivery_ord':<12} {'Status':<15} {'Prioridade':<10}")
+                    print(f"  {'-'*3:<3} {'-'*20:<20} {'-'*10:<10} {'-'*12:<12} {'-'*15:<15} {'-'*10:<10}")
+                    
+                    for i, stop in enumerate(stops, 1):
+                        client_name = stop.get('client_name', 'N/A')[:18]
+                        order_seq = stop.get('order_sequence', 'N/A')
+                        delivery_ord = stop.get('delivery_order', 'N/A')
+                        service_status = stop.get('service_status', 'N/A')[:13]
+                        priority = stop.get('priority', 'N/A')
+                        
+                        print(f"  {i:<3} {client_name:<20} {order_seq:<10} {delivery_ord:<12} {service_status:<15} {priority:<10}")
+                        
+                        order_comparison.append({
+                            'position': i,
+                            'client_name': client_name,
+                            'order_sequence': order_seq,
+                            'delivery_order': delivery_ord,
+                            'service_status': service_status,
+                            'priority': priority
+                        })
+                    
+                    investigation_results['order_fields_comparison'] = order_comparison
+                    
+                    # Verificar se há diferenças entre order_sequence e delivery_order
+                    if has_order_sequence and has_delivery_order:
+                        order_seq_values = [stop.get('order_sequence') for stop in stops if stop.get('order_sequence') is not None]
+                        delivery_ord_values = [stop.get('delivery_order') for stop in stops if stop.get('delivery_order') is not None]
+                        
+                        sequences_different = order_seq_values != delivery_ord_values
+                        
+                        print(f"\n  📊 ANÁLISE DAS SEQUÊNCIAS:")
+                        print(f"     order_sequence: {order_seq_values}")
+                        print(f"     delivery_order: {delivery_ord_values}")
+                        print(f"     Sequências diferentes: {'✅ SIM' if sequences_different else '❌ NÃO'}")
+                        
+                        if sequences_different:
+                            print(f"     🎯 CONCLUSÃO: Há diferença entre ordem geográfica (order_sequence) e ordem de entrega (delivery_order)")
+                        else:
+                            print(f"     🎯 CONCLUSÃO: order_sequence e delivery_order são idênticos")
+                    
+                    # 5. VERIFICAR SE STOPS ESTÃO ORDENADOS
+                    print(f"\n5️⃣ VERIFICAÇÃO DA ORDENAÇÃO DOS STOPS:")
+                    print("-" * 70)
+                    
+                    # Verificar se stops estão ordenados por delivery_order
+                    if has_delivery_order:
+                        delivery_orders = [stop.get('delivery_order', 0) for stop in stops]
+                        is_ordered_by_delivery = delivery_orders == sorted(delivery_orders)
+                        
+                        print(f"  📊 STOPS ORDENADOS POR delivery_order: {'✅ SIM' if is_ordered_by_delivery else '❌ NÃO'}")
+                        print(f"     Sequência atual: {delivery_orders}")
+                        print(f"     Sequência ordenada: {sorted(delivery_orders)}")
+                    
+                    # Verificar se stops estão ordenados por order_sequence
+                    if has_order_sequence:
+                        order_sequences = [stop.get('order_sequence', 0) for stop in stops]
+                        is_ordered_by_sequence = order_sequences == sorted(order_sequences)
+                        
+                        print(f"  📊 STOPS ORDENADOS POR order_sequence: {'✅ SIM' if is_ordered_by_sequence else '❌ NÃO'}")
+                        print(f"     Sequência atual: {order_sequences}")
+                        print(f"     Sequência ordenada: {sorted(order_sequences)}")
+                    
+                    self.log_test("Análise Estrutura Stops", True, 
+                                f"Analisados {len(stops)} stops com campos de ordenação")
+                else:
+                    print(f"  ℹ️  ROTA SEM STOPS para análise")
+                    self.log_test("Análise Estrutura Stops", True, "Rota sem stops")
+            else:
+                print(f"  ❌ ERRO ao buscar detalhes da rota {route_id}:")
+                print(f"     Status: {response['status_code']}")
+                print(f"     Erro: {response['data']}")
+                self.log_test("Análise Estrutura Rota", False, f"Erro ao buscar rota {route_id}")
+        
+        # 6. CRIAR E OTIMIZAR NOVA ROTA PARA TESTAR
+        print(f"\n6️⃣ CRIANDO NOVA ROTA PARA TESTAR OTIMIZAÇÃO:")
+        print("-" * 70)
+        
+        # Primeiro, obter items disponíveis
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            available_items = response['data'].get('available_items', [])
+            
+            if len(available_items) >= 3:
+                # Criar nova rota
+                route_data = {
+                    "vehicle_type": "CARRO",
+                    "planned_date": "2025-01-20",
+                    "planned_start_time": "08:00",
+                    "alias": "Rota Teste - Investigação Estrutura"
+                }
+                
+                response = self.make_request('POST', '/routes', route_data)
+                if response['success']:
+                    new_route_id = response['data']['id']
+                    self.created_resources['routes'].append(new_route_id)
+                    
+                    print(f"  ✅ NOVA ROTA CRIADA: {new_route_id}")
+                    
+                    # Adicionar stops com diferentes prioridades
+                    stops_data = []
+                    priorities = ["PRIMEIRA", "AUTOMATICA", "ULTIMA"]
+                    
+                    for i, item in enumerate(available_items[:3]):
+                        priority = priorities[i % len(priorities)]
+                        stops_data.append({
+                            "budget_item_id": item["budget_item_id"],
+                            "priority": priority
+                        })
+                    
+                    response = self.make_request('PUT', f'/routes/{new_route_id}/stops', stops_data)
+                    if response['success']:
+                        print(f"  ✅ STOPS ADICIONADOS: {len(stops_data)} stops com prioridades variadas")
+                        
+                        # Otimizar rota
+                        response = self.make_request('POST', f'/routes/{new_route_id}/optimize?route_type=CURTA')
+                        if response['success']:
+                            print(f"  ✅ ROTA OTIMIZADA COM SUCESSO")
+                            
+                            # Analisar rota otimizada
+                            response = self.make_request('GET', f'/routes/{new_route_id}')
+                            if response['success']:
+                                optimized_route = response['data']
+                                optimized_stops = optimized_route.get('stops', [])
+                                
+                                print(f"\n  📊 ANÁLISE DA ROTA OTIMIZADA:")
+                                print(f"     Total de stops: {len(optimized_stops)}")
+                                
+                                if optimized_stops:
+                                    print(f"\n  📋 ESTRUTURA DOS STOPS APÓS OTIMIZAÇÃO:")
+                                    print(f"  {'#':<3} {'Cliente':<20} {'order_seq':<10} {'delivery_ord':<12} {'Prioridade':<10}")
+                                    print(f"  {'-'*3:<3} {'-'*20:<20} {'-'*10:<10} {'-'*12:<12} {'-'*10:<10}")
+                                    
+                                    for i, stop in enumerate(optimized_stops, 1):
+                                        client_name = stop.get('client_name', 'N/A')[:18]
+                                        order_seq = stop.get('order_sequence', 'N/A')
+                                        delivery_ord = stop.get('delivery_order', 'N/A')
+                                        priority = stop.get('priority', 'N/A')
+                                        
+                                        print(f"  {i:<3} {client_name:<20} {order_seq:<10} {delivery_ord:<12} {priority:<10}")
+                                    
+                                    investigation_results['optimization_impact'] = {
+                                        'route_id': new_route_id,
+                                        'stops_after_optimization': len(optimized_stops),
+                                        'order_sequences': [s.get('order_sequence') for s in optimized_stops],
+                                        'delivery_orders': [s.get('delivery_order') for s in optimized_stops],
+                                        'priorities': [s.get('priority') for s in optimized_stops]
+                                    }
+                                    
+                                    self.log_test("Teste Rota Otimizada", True, 
+                                                f"Rota {new_route_id} otimizada e analisada com sucesso")
+                                else:
+                                    self.log_test("Teste Rota Otimizada", False, "Rota otimizada sem stops")
+                            else:
+                                self.log_test("Teste Rota Otimizada", False, "Erro ao buscar rota otimizada")
+                        else:
+                            self.log_test("Otimização Rota", False, "Erro ao otimizar rota")
+                    else:
+                        self.log_test("Adicionar Stops", False, "Erro ao adicionar stops")
+                else:
+                    self.log_test("Criar Nova Rota", False, "Erro ao criar nova rota")
+            else:
+                print(f"  ⚠️  INSUFICIENTES ITEMS DISPONÍVEIS: {len(available_items)} (mínimo 3 necessários)")
+                self.log_test("Items Disponíveis", False, f"Apenas {len(available_items)} items disponíveis")
+        else:
+            self.log_test("Buscar Items Disponíveis", False, "Erro ao buscar items disponíveis")
+        
+        # 7. CONCLUSÕES E RECOMENDAÇÕES
+        print(f"\n7️⃣ CONCLUSÕES E RECOMENDAÇÕES:")
+        print("-" * 70)
+        
+        print(f"  📊 RESUMO DA INVESTIGAÇÃO:")
+        print(f"     Rotas analisadas: {len(investigation_results['existing_routes'])}")
+        
+        if investigation_results['stops_ordering_analysis']:
+            analysis = investigation_results['stops_ordering_analysis']
+            print(f"     Campo order_sequence: {'✅ Presente' if analysis['has_order_sequence'] else '❌ Ausente'}")
+            print(f"     Campo delivery_order: {'✅ Presente' if analysis['has_delivery_order'] else '❌ Ausente'}")
+        
+        print(f"\n  🎯 RECOMENDAÇÕES PARA calculateEstimatedTime:")
+        
+        if investigation_results['stops_ordering_analysis'].get('has_delivery_order'):
+            print(f"     1. ✅ USE delivery_order para cálculo de horários")
+            print(f"     2. ✅ Ordene stops por delivery_order antes do cálculo")
+            print(f"     3. ✅ delivery_order representa a sequência real de entrega")
+        else:
+            print(f"     1. ⚠️  Campo delivery_order não encontrado")
+        
+        if investigation_results['stops_ordering_analysis'].get('has_order_sequence'):
+            print(f"     4. ℹ️  order_sequence representa otimização geográfica")
+            print(f"     5. ℹ️  Pode diferir de delivery_order devido a prioridades")
+        else:
+            print(f"     4. ⚠️  Campo order_sequence não encontrado")
+        
+        print(f"\n  🔧 CORREÇÃO SUGERIDA:")
+        print(f"     - Função calculateEstimatedTime deve:")
+        print(f"       1. Ordenar stops por delivery_order (não por índice do array)")
+        print(f"       2. Usar a sequência delivery_order para cálculo temporal")
+        print(f"       3. Ignorar order_sequence para cálculo de horários")
+        
+        # Cleanup da rota de teste
+        if 'routes' in self.created_resources:
+            for route_id in self.created_resources['routes']:
+                self.make_request('DELETE', f'/routes/{route_id}')
+        
+        self.log_test("Investigação Estrutura Rotas", True, 
+                    "Investigação completa da estrutura das rotas realizada")
+        
+        return investigation_results
+
 if __name__ == "__main__":
     tester = ServiceStatusBugTester()
     duration_tester = DurationOptimizationTester()
