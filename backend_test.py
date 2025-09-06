@@ -1270,6 +1270,226 @@ class ServiceStatusBugTester:
         
         return len(available_items) > 0
 
+    def investigate_srv_0162_critical_bug(self):
+        """INVESTIGAÇÃO CRÍTICA: Analisar SRV-0162 e logs de herança conforme review request"""
+        print("\n" + "=" * 80)
+        print("🚨 INVESTIGAÇÃO CRÍTICA: ITEM SRV-0162 E LOGS DE HERANÇA")
+        print("=" * 80)
+        print("PROBLEMA CONFIRMADO PELO USUÁRIO:")
+        print("- Usuário criou novo orçamento")
+        print("- TODOS os itens voltaram a aparecer na lista de rotas")
+        print("- Confirma bug estrutural no código de herança")
+        print("- Solicitou análise específica do SRV-0162 e logs implementados")
+        print("")
+        print("INVESTIGAÇÃO NECESSÁRIA:")
+        print("1. Verificar lista atual - confirmar se items voltaram após novo orçamento")
+        print("2. Analisar SRV-0162 - ver qual status está sendo aplicado ao item")
+        print("3. Verificar logs de herança - examinar logs implementados na criação de budget items")
+        print("4. Identificar problema - descobrir por que herança não está funcionando")
+        print("5. Confirmar bug estrutural - validar que problema é no código, não apenas dados históricos")
+        print("=" * 80)
+        
+        investigation_results = {
+            'srv_0162_found': False,
+            'srv_0162_status': None,
+            'srv_0162_expected_status': None,
+            'inheritance_working': False,
+            'total_items_in_routes': 0,
+            'cliente_trouxe_items_count': 0,
+            'bug_confirmed': False
+        }
+        
+        # STEP 1: Verificar lista atual de itens disponíveis para rotas
+        print("\n1️⃣ VERIFICANDO LISTA ATUAL DE ITENS DISPONÍVEIS PARA ROTAS:")
+        print("-" * 60)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("SRV-0162 Investigation - Get Available Items", False, 
+                        "Failed to get available items", response['data'])
+            return investigation_results
+        
+        available_items = response['data'].get('available_items', [])
+        investigation_results['total_items_in_routes'] = len(available_items)
+        
+        print(f"📊 TOTAL DE ITENS NA LISTA DE ROTAS: {len(available_items)}")
+        
+        # Count CLIENTE_TROUXE items (these should NOT be in routes)
+        cliente_trouxe_count = 0
+        srv_0162_item = None
+        
+        for item in available_items:
+            status = item.get('status')
+            service_code = item.get('service_code')
+            
+            if status == 'CLIENTE_TROUXE':
+                cliente_trouxe_count += 1
+                print(f"❌ ITEM PROBLEMÁTICO: {service_code} - {item.get('service_name')} (Status: {status})")
+            
+            if service_code == 'SRV-0162':
+                srv_0162_item = item
+                investigation_results['srv_0162_found'] = True
+                investigation_results['srv_0162_status'] = status
+                print(f"🎯 SRV-0162 ENCONTRADO: {item.get('service_name')} (Status: {status})")
+        
+        investigation_results['cliente_trouxe_items_count'] = cliente_trouxe_count
+        
+        if cliente_trouxe_count > 0:
+            print(f"🚨 PROBLEMA CONFIRMADO: {cliente_trouxe_count} itens CLIENTE_TROUXE aparecem na lista de rotas!")
+            investigation_results['bug_confirmed'] = True
+        else:
+            print("✅ Nenhum item CLIENTE_TROUXE encontrado na lista de rotas")
+        
+        # STEP 2: Analisar serviço SRV-0162 especificamente
+        print(f"\n2️⃣ ANALISANDO SERVIÇO SRV-0162 ESPECIFICAMENTE:")
+        print("-" * 50)
+        
+        srv_response = self.make_request('GET', '/services/SRV-0162')
+        if srv_response['success']:
+            service = srv_response['data']
+            expected_status = service.get('default_service_status')
+            investigation_results['srv_0162_expected_status'] = expected_status
+            
+            print(f"📋 SERVIÇO SRV-0162:")
+            print(f"   Nome: {service.get('name')}")
+            print(f"   Categoria: {service.get('category')}")
+            print(f"   Execução: {service.get('execution_location')}")
+            print(f"   Status Padrão: {expected_status}")
+            print(f"   Ativo: {service.get('is_active')}")
+            
+            if srv_0162_item:
+                actual_status = srv_0162_item.get('status')
+                if actual_status == expected_status:
+                    print(f"✅ HERANÇA OK: Item tem status '{actual_status}' = Service default '{expected_status}'")
+                    investigation_results['inheritance_working'] = True
+                else:
+                    print(f"❌ HERANÇA FALHOU: Item tem status '{actual_status}' ≠ Service default '{expected_status}'")
+                    investigation_results['inheritance_working'] = False
+            else:
+                print("⚠️  SRV-0162 não encontrado na lista de rotas disponíveis")
+        else:
+            print(f"❌ Falha ao obter serviço SRV-0162: {srv_response['data']}")
+        
+        # STEP 3: Testar criação de novo orçamento para verificar herança em tempo real
+        print(f"\n3️⃣ TESTANDO CRIAÇÃO DE NOVO ORÇAMENTO COM SRV-0162:")
+        print("-" * 55)
+        
+        # First, get a test client
+        clients_response = self.make_request('GET', '/clients?limit=1')
+        if not clients_response['success'] or not clients_response['data']:
+            print("❌ Nenhum cliente disponível para teste")
+        else:
+            test_client = clients_response['data'][0]
+            client_id = test_client['id']
+            
+            # Create new budget with SRV-0162
+            budget_data = {
+                "client_id": client_id,
+                "payment_method": "PIX_CNPJ_25995295000104",
+                "salesperson": "Gabriela Alcântara",
+                "internal_observations": "TESTE CRÍTICO - Investigação SRV-0162 herança de status"
+            }
+            
+            budget_response = self.make_request('POST', '/budgets', budget_data)
+            if budget_response['success']:
+                budget_id = budget_response['data']['id']
+                print(f"✅ Orçamento criado: {budget_id}")
+                
+                # Add SRV-0162 item to budget
+                item_data = {
+                    "service_id": "SRV-0162",
+                    "quantity": 1.0,
+                    "observations": "TESTE CRÍTICO - Verificar herança de status do SRV-0162"
+                }
+                
+                item_response = self.make_request('POST', f'/budgets/{budget_id}/items', item_data)
+                if item_response['success']:
+                    new_item = item_response['data']
+                    new_item_status = new_item.get('status')
+                    
+                    print(f"📋 NOVO ITEM CRIADO:")
+                    print(f"   ID: {new_item.get('id')}")
+                    print(f"   Serviço: {new_item.get('service_name')}")
+                    print(f"   Status herdado: {new_item_status}")
+                    
+                    # Compare with service default
+                    if investigation_results['srv_0162_expected_status']:
+                        expected = investigation_results['srv_0162_expected_status']
+                        if new_item_status == expected:
+                            print(f"✅ HERANÇA FUNCIONANDO: Status '{new_item_status}' = Esperado '{expected}'")
+                        else:
+                            print(f"❌ HERANÇA FALHANDO: Status '{new_item_status}' ≠ Esperado '{expected}'")
+                            print("🚨 BUG ESTRUTURAL CONFIRMADO NO CÓDIGO DE HERANÇA!")
+                    
+                    # Clean up test budget
+                    self.make_request('DELETE', f'/budgets/{budget_id}')
+                    print(f"🧹 Orçamento de teste {budget_id} removido")
+                else:
+                    print(f"❌ Falha ao adicionar item SRV-0162: {item_response['data']}")
+            else:
+                print(f"❌ Falha ao criar orçamento de teste: {budget_response['data']}")
+        
+        # STEP 4: Verificar logs de herança (se implementados)
+        print(f"\n4️⃣ VERIFICANDO LOGS DE HERANÇA IMPLEMENTADOS:")
+        print("-" * 45)
+        
+        # Check if there's a logs endpoint
+        logs_response = self.make_request('GET', '/admin/inheritance-logs')
+        if logs_response['success']:
+            logs = logs_response['data']
+            print(f"📋 LOGS DE HERANÇA ENCONTRADOS: {len(logs)} entradas")
+            
+            # Show recent logs related to SRV-0162
+            srv_0162_logs = [log for log in logs if 'SRV-0162' in str(log)]
+            if srv_0162_logs:
+                print(f"🎯 LOGS ESPECÍFICOS DO SRV-0162: {len(srv_0162_logs)} entradas")
+                for log in srv_0162_logs[-5:]:  # Show last 5
+                    print(f"   {log}")
+            else:
+                print("⚠️  Nenhum log específico do SRV-0162 encontrado")
+        else:
+            print("ℹ️  Endpoint de logs não disponível ou logs não implementados")
+        
+        # STEP 5: Resumo da investigação
+        print(f"\n5️⃣ RESUMO DA INVESTIGAÇÃO CRÍTICA:")
+        print("-" * 40)
+        
+        print(f"📊 RESULTADOS:")
+        print(f"   Total de itens na lista de rotas: {investigation_results['total_items_in_routes']}")
+        print(f"   Itens CLIENTE_TROUXE problemáticos: {investigation_results['cliente_trouxe_items_count']}")
+        print(f"   SRV-0162 encontrado na lista: {investigation_results['srv_0162_found']}")
+        
+        if investigation_results['srv_0162_found']:
+            print(f"   Status atual do SRV-0162: {investigation_results['srv_0162_status']}")
+            print(f"   Status esperado do SRV-0162: {investigation_results['srv_0162_expected_status']}")
+            print(f"   Herança funcionando: {investigation_results['inheritance_working']}")
+        
+        # Final assessment
+        if investigation_results['bug_confirmed']:
+            self.log_test("SRV-0162 Critical Investigation", False, 
+                        f"🚨 BUG ESTRUTURAL CONFIRMADO: {investigation_results['cliente_trouxe_items_count']} itens CLIENTE_TROUXE na lista de rotas")
+        else:
+            self.log_test("SRV-0162 Critical Investigation", True, 
+                        "✅ Sistema funcionando corretamente - nenhum item CLIENTE_TROUXE na lista de rotas")
+        
+        print("=" * 80)
+        return investigation_results
+
+    def run_srv_0162_investigation(self):
+        """Execute the critical SRV-0162 investigation as requested"""
+        print("🚨 EXECUTANDO INVESTIGAÇÃO CRÍTICA DO SRV-0162")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Foco: Analisar item SRV-0162 e logs de herança de status")
+        print("=" * 80)
+        
+        # Execute the critical investigation
+        results = self.investigate_srv_0162_critical_bug()
+        
+        # Summary
+        self.print_summary()
+        
+        return not results['bug_confirmed']  # Return True if no bug found
+
     def test_direct_correction_srv_0157_to_0162(self):
         """CORREÇÃO DIRETA: Alterar status dos 4 items problemáticos de RETIRAR para CLIENTE_TROUXE"""
         print("\n" + "=" * 80)
