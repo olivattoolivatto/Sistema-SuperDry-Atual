@@ -1136,6 +1136,125 @@ class ServiceStatusBugTester:
         print(f"ℹ️  Services created: {len(self.created_resources['services'])} (not deleted)")
         print(f"ℹ️  System config updated: {self.created_resources['system_config']} (not reverted)")
     
+    def get_detailed_available_items_list(self):
+        """SOLICITAÇÃO DO USUÁRIO: Fornecer lista DETALHADA dos 22 itens disponíveis para rotas"""
+        print("\n" + "=" * 80)
+        print("📋 LISTA DETALHADA DOS ITENS DISPONÍVEIS PARA ROTAS")
+        print("=" * 80)
+        print("SOLICITAÇÃO DO USUÁRIO:")
+        print("- Usuário quer ver lista completa e detalhada dos 22 itens")
+        print("- Incluir TODOS os campos relevantes de cada item")
+        print("- Mostrar especialmente: service_code, service_name, status, client_name, budget_id")
+        print("- Identificar possíveis items problemáticos")
+        print("- Verificar se há algum item CLIENTE_TROUXE 'escondido' na lista")
+        print("=" * 80)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Get Detailed Available Items", False, 
+                        f"Failed to retrieve available items - Status: {response['status_code']}", 
+                        response['data'])
+            return []
+        
+        data = response['data']
+        available_items = data.get('available_items', [])
+        
+        if not available_items:
+            self.log_test("Get Detailed Available Items", False, "No available items found for routes")
+            print("\n❌ NENHUM ITEM DISPONÍVEL ENCONTRADO")
+            return []
+        
+        total_items = len(available_items)
+        print(f"\n📊 TOTAL DE ITENS ENCONTRADOS: {total_items}")
+        
+        if total_items != 22:
+            print(f"⚠️  ATENÇÃO: Esperados 22 itens, encontrados {total_items}")
+        
+        print(f"\n📋 LISTA COMPLETA E DETALHADA DOS {total_items} ITENS:")
+        print("=" * 120)
+        
+        # Analyze status distribution
+        status_counts = {}
+        cliente_trouxe_items = []
+        
+        for i, item in enumerate(available_items, 1):
+            # Extract all relevant fields
+            budget_item_id = item.get('budget_item_id', 'N/A')
+            budget_id = item.get('budget_id', 'N/A')
+            client_id = item.get('client_id', 'N/A')
+            client_name = item.get('client_name', 'N/A')
+            service_code = item.get('service_code', 'N/A')
+            service_name = item.get('service_name', 'N/A')
+            service_value = item.get('service_value', 0)
+            status = item.get('status', 'N/A')
+            address = item.get('address', {})
+            neighborhood = address.get('neighborhood', 'N/A') if isinstance(address, dict) else 'N/A'
+            full_address = address.get('full_address', 'N/A') if isinstance(address, dict) else 'N/A'
+            
+            # Count status distribution
+            if status != 'N/A':
+                status_counts[status] = status_counts.get(status, 0) + 1
+            
+            # Check for CLIENTE_TROUXE items (these should NOT appear in routes)
+            if status == 'CLIENTE_TROUXE':
+                cliente_trouxe_items.append({
+                    'item_number': i,
+                    'service_code': service_code,
+                    'client_name': client_name,
+                    'budget_id': budget_id
+                })
+            
+            # Print detailed item information
+            print(f"\n{i:2d}. ITEM ID: {budget_item_id}")
+            print(f"    📋 Budget ID: {budget_id}")
+            print(f"    👤 Cliente: {client_name} (ID: {client_id})")
+            print(f"    🔧 Serviço: {service_code} - {service_name}")
+            print(f"    💰 Valor: R$ {service_value:.2f}")
+            print(f"    📊 Status: {status}")
+            print(f"    🏠 Bairro: {neighborhood}")
+            print(f"    📍 Endereço: {full_address}")
+            print("-" * 120)
+        
+        # Summary analysis
+        print(f"\n📊 ANÁLISE DOS STATUS:")
+        print("=" * 50)
+        for status, count in status_counts.items():
+            print(f"  {status}: {count} itens")
+        
+        # Check for problematic CLIENTE_TROUXE items
+        if cliente_trouxe_items:
+            print(f"\n🚨 PROBLEMA CRÍTICO ENCONTRADO:")
+            print(f"❌ {len(cliente_trouxe_items)} ITENS COM STATUS 'CLIENTE_TROUXE' APARECEM NA LISTA DE ROTAS")
+            print("   Estes itens NÃO deveriam aparecer pois o cliente já trouxe o item!")
+            print("\n   ITENS PROBLEMÁTICOS:")
+            for problematic_item in cliente_trouxe_items:
+                print(f"     Item {problematic_item['item_number']}: {problematic_item['service_code']} - "
+                      f"Cliente: {problematic_item['client_name']} - Budget: {problematic_item['budget_id']}")
+            
+            self.log_test("Check CLIENTE_TROUXE Items", False, 
+                        f"CRÍTICO: {len(cliente_trouxe_items)} itens CLIENTE_TROUXE aparecem incorretamente na lista de rotas")
+        else:
+            print(f"\n✅ VERIFICAÇÃO DE CLIENTE_TROUXE:")
+            print("   Nenhum item com status CLIENTE_TROUXE encontrado na lista (CORRETO)")
+            self.log_test("Check CLIENTE_TROUXE Items", True, 
+                        "Nenhum item CLIENTE_TROUXE na lista de rotas (correto)")
+        
+        # Check for expected 22 items
+        if total_items == 22:
+            self.log_test("Get Detailed Available Items", True, 
+                        f"✅ Lista completa obtida: {total_items} itens com todos os campos detalhados")
+        else:
+            self.log_test("Get Detailed Available Items", True, 
+                        f"Lista obtida: {total_items} itens (esperados 22) com todos os campos detalhados")
+        
+        print(f"\n🎯 CONCLUSÃO:")
+        print(f"   Total de itens disponíveis para rotas: {total_items}")
+        print(f"   Distribuição de status: {dict(status_counts)}")
+        print(f"   Itens problemáticos (CLIENTE_TROUXE): {len(cliente_trouxe_items)}")
+        print("=" * 80)
+        
+        return available_items
+
     def run_all_tests(self):
         """Run complete routes API test suite"""
         print("🚀 STARTING ROUTES API COMPREHENSIVE TESTS")
