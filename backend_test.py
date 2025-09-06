@@ -2399,6 +2399,263 @@ class ServiceStatusBugTester:
         
         return investigation_results
 
+    def investigate_srv_0145_bug(self):
+        """INVESTIGAÇÃO CRÍTICA: Testar criação de budget item com serviço CLIENTE_TROUXE para descobrir o bug real"""
+        print("\n" + "=" * 80)
+        print("🚨 INVESTIGAÇÃO CRÍTICA: TESTE DE CRIAÇÃO COM SRV-0145 (CLIENTE_TROUXE)")
+        print("=" * 80)
+        print("HIPÓTESE DO USUÁRIO: Há bug estrutural na criação/herança de status")
+        print("TESTE: Criar budget item real com SRV-0145 e verificar herança")
+        print("=" * 80)
+        
+        investigation_results = {
+            'srv_0145_exists': False,
+            'srv_0145_data': None,
+            'budget_created': False,
+            'budget_id': None,
+            'item_created': False,
+            'item_data': None,
+            'inheritance_working': False,
+            'expected_status': 'CLIENTE_TROUXE',
+            'actual_status': None,
+            'bug_confirmed': False
+        }
+        
+        # PASSO 1: Verificar se SRV-0145 existe
+        print("\n1️⃣ VERIFICANDO SERVIÇO SRV-0145:")
+        print("-" * 50)
+        
+        response = self.make_request('GET', '/services/SRV-0145')
+        if response['success']:
+            service_data = response['data']
+            investigation_results['srv_0145_exists'] = True
+            investigation_results['srv_0145_data'] = service_data
+            
+            service_name = service_data.get('name', 'N/A')
+            default_status = service_data.get('default_service_status', 'N/A')
+            is_active = service_data.get('is_active', False)
+            
+            print(f"  ✅ SRV-0145 ENCONTRADO:")
+            print(f"     📝 Nome: {service_name}")
+            print(f"     🔄 Status Padrão: {default_status}")
+            print(f"     ✅ Ativo: {is_active}")
+            
+            if default_status == 'CLIENTE_TROUXE':
+                print(f"     ✅ CONFIRMADO: Service tem default_service_status = CLIENTE_TROUXE")
+                self.log_test("SRV-0145 Verification", True, f"Service encontrado com status CLIENTE_TROUXE")
+            else:
+                print(f"     ❌ PROBLEMA: Service tem status {default_status} (esperado CLIENTE_TROUXE)")
+                self.log_test("SRV-0145 Verification", False, f"Service tem status incorreto: {default_status}")
+                return investigation_results
+        else:
+            print(f"  ❌ SRV-0145 NÃO ENCONTRADO:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("SRV-0145 Verification", False, f"Service SRV-0145 não encontrado")
+            return investigation_results
+        
+        # PASSO 2: Criar orçamento de teste se necessário
+        print("\n2️⃣ CRIANDO ORÇAMENTO DE TESTE:")
+        print("-" * 50)
+        
+        # Primeiro, verificar se temos um cliente disponível
+        response = self.make_request('GET', '/clients?limit=1')
+        if response['success'] and response['data']:
+            client_id = response['data'][0]['id']
+            client_name = response['data'][0]['name']
+            print(f"  ✅ Usando cliente existente: {client_name} ({client_id})")
+        else:
+            # Criar cliente de teste
+            client_data = {
+                "name": "Cliente Teste SRV-0145",
+                "phone_primary": "11999887766",
+                "email": "teste.srv0145@email.com",
+                "address": {
+                    "full_address": "Rua Teste SRV-0145, 123",
+                    "neighborhood": "Centro",
+                    "city": "São Paulo",
+                    "state": "SP",
+                    "latitude": -23.5505,
+                    "longitude": -46.6333
+                }
+            }
+            
+            response = self.make_request('POST', '/clients', client_data)
+            if response['success']:
+                client_id = response['data']['id']
+                client_name = response['data']['name']
+                self.created_resources['clients'].append(client_id)
+                print(f"  ✅ Cliente criado: {client_name} ({client_id})")
+            else:
+                print(f"  ❌ ERRO ao criar cliente:")
+                print(f"     Status: {response['status_code']}")
+                print(f"     Erro: {response['data']}")
+                self.log_test("Create Test Client", False, "Falha ao criar cliente de teste")
+                return investigation_results
+        
+        # Criar orçamento
+        budget_data = {
+            "client_id": client_id,
+            "payment_method": "PIX_CNPJ_25995295000104",
+            "salesperson": "Gabriela Alcântara",
+            "internal_observations": "TESTE CRÍTICO: Investigação do bug SRV-0145 CLIENTE_TROUXE"
+        }
+        
+        response = self.make_request('POST', '/budgets', budget_data)
+        if response['success']:
+            budget = response['data']
+            budget_id = budget['id']
+            investigation_results['budget_created'] = True
+            investigation_results['budget_id'] = budget_id
+            self.created_resources['budgets'].append(budget_id)
+            
+            print(f"  ✅ ORÇAMENTO CRIADO: {budget_id}")
+            self.log_test("Create Test Budget", True, f"Orçamento criado: {budget_id}")
+        else:
+            print(f"  ❌ ERRO ao criar orçamento:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("Create Test Budget", False, "Falha ao criar orçamento")
+            return investigation_results
+        
+        # PASSO 3: Adicionar item com SRV-0145
+        print("\n3️⃣ ADICIONANDO ITEM COM SRV-0145:")
+        print("-" * 50)
+        
+        item_data = {
+            "service_id": "SRV-0145",
+            "quantity": 1,
+            "width": 10,
+            "height": 10,
+            "observations": "TESTE CRÍTICO: Item SRV-0145 para verificar herança de status CLIENTE_TROUXE"
+        }
+        
+        print(f"  📤 Enviando dados do item:")
+        print(f"     Service ID: {item_data['service_id']}")
+        print(f"     Quantidade: {item_data['quantity']}")
+        print(f"     Dimensões: {item_data['width']}x{item_data['height']}")
+        
+        response = self.make_request('POST', f'/budgets/{budget_id}/items', item_data)
+        if response['success']:
+            item = response['data']
+            investigation_results['item_created'] = True
+            investigation_results['item_data'] = item
+            
+            item_id = item.get('id', 'N/A')
+            actual_status = item.get('status', 'N/A')
+            service_name = item.get('service_name', 'N/A')
+            
+            investigation_results['actual_status'] = actual_status
+            
+            print(f"  ✅ ITEM CRIADO COM SUCESSO:")
+            print(f"     📝 ID do Item: {item_id}")
+            print(f"     📝 Nome do Serviço: {service_name}")
+            print(f"     🔄 Status Herdado: {actual_status}")
+            print(f"     🎯 Status Esperado: CLIENTE_TROUXE")
+            
+            # VERIFICAÇÃO CRÍTICA: Status herdado corretamente?
+            if actual_status == 'CLIENTE_TROUXE':
+                investigation_results['inheritance_working'] = True
+                investigation_results['bug_confirmed'] = False
+                print(f"     ✅ HERANÇA FUNCIONANDO: Item herdou CLIENTE_TROUXE corretamente")
+                self.log_test("Item Status Inheritance", True, "✅ Item herdou status CLIENTE_TROUXE corretamente - SEM BUG")
+            else:
+                investigation_results['inheritance_working'] = False
+                investigation_results['bug_confirmed'] = True
+                print(f"     ❌ BUG CONFIRMADO: Item herdou '{actual_status}' em vez de 'CLIENTE_TROUXE'")
+                self.log_test("Item Status Inheritance", False, f"❌ BUG CONFIRMADO: Item herdou '{actual_status}' em vez de 'CLIENTE_TROUXE'")
+            
+        else:
+            print(f"  ❌ ERRO ao criar item:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("Create Budget Item", False, f"Falha ao criar item com SRV-0145")
+            return investigation_results
+        
+        # PASSO 4: Verificar se item herda CLIENTE_TROUXE ou fica como RETIRAR
+        print("\n4️⃣ VERIFICAÇÃO FINAL DO ORÇAMENTO:")
+        print("-" * 50)
+        
+        response = self.make_request('GET', f'/budgets/{budget_id}')
+        if response['success']:
+            budget_details = response['data']
+            items = budget_details.get('items', [])
+            
+            print(f"  📊 ORÇAMENTO {budget_id} CONTÉM {len(items)} ITEM(S):")
+            
+            for i, item in enumerate(items, 1):
+                item_id = item.get('id', 'N/A')
+                service_id = item.get('service_id', 'N/A')
+                service_name = item.get('service_name', 'N/A')
+                status = item.get('status', 'N/A')
+                
+                print(f"     {i}. Item {item_id}:")
+                print(f"        Service: {service_id} - {service_name}")
+                print(f"        Status: {status}")
+                
+                if service_id == 'SRV-0145':
+                    if status == 'CLIENTE_TROUXE':
+                        print(f"        ✅ CORRETO: Status CLIENTE_TROUXE herdado corretamente")
+                    else:
+                        print(f"        ❌ BUG: Status '{status}' incorreto (esperado CLIENTE_TROUXE)")
+            
+            self.log_test("Budget Verification", True, f"Orçamento verificado com {len(items)} item(s)")
+        else:
+            print(f"  ❌ ERRO ao verificar orçamento:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("Budget Verification", False, "Falha ao verificar orçamento")
+        
+        # PASSO 5: Testar consulta de serviço
+        print("\n5️⃣ TESTE DE CONSULTA DE SERVIÇO:")
+        print("-" * 50)
+        
+        response = self.make_request('GET', '/services/SRV-0145')
+        if response['success']:
+            service_data = response['data']
+            
+            print(f"  ✅ CONSULTA DE SERVIÇO FUNCIONANDO:")
+            print(f"     📝 ID: {service_data.get('id', 'N/A')}")
+            print(f"     📝 Nome: {service_data.get('name', 'N/A')}")
+            print(f"     🔄 Status Padrão: {service_data.get('default_service_status', 'N/A')}")
+            print(f"     💰 Preço: R$ {service_data.get('sale_price', 0):.2f}")
+            
+            self.log_test("Service Query", True, "Consulta de serviço SRV-0145 funcionando")
+        else:
+            print(f"  ❌ ERRO na consulta de serviço:")
+            print(f"     Status: {response['status_code']}")
+            print(f"     Erro: {response['data']}")
+            self.log_test("Service Query", False, "Falha na consulta de serviço")
+        
+        # RESULTADO FINAL
+        print("\n" + "=" * 80)
+        print("🎯 RESULTADO DA INVESTIGAÇÃO CRÍTICA:")
+        print("=" * 80)
+        
+        if investigation_results['bug_confirmed']:
+            print("❌ BUG ESTRUTURAL CONFIRMADO:")
+            print(f"   • Serviço SRV-0145 tem default_service_status = CLIENTE_TROUXE")
+            print(f"   • Item criado herdou status = {investigation_results['actual_status']}")
+            print(f"   • PROBLEMA: Item deveria herdar CLIENTE_TROUXE mas herdou {investigation_results['actual_status']}")
+            print(f"   • CAUSA: Bug na criação/herança de status (linhas do código de criação de item)")
+            print(f"   • IMPACTO: Itens CLIENTE_TROUXE aparecem incorretamente na lista de rotas")
+            
+            self.log_test("INVESTIGAÇÃO CRÍTICA", False, 
+                        f"❌ BUG CONFIRMADO: Item herdou '{investigation_results['actual_status']}' em vez de 'CLIENTE_TROUXE'")
+        else:
+            print("✅ HERANÇA FUNCIONANDO CORRETAMENTE:")
+            print(f"   • Serviço SRV-0145 tem default_service_status = CLIENTE_TROUXE")
+            print(f"   • Item criado herdou status = CLIENTE_TROUXE (correto)")
+            print(f"   • RESULTADO: Herança de status funcionando perfeitamente")
+            print(f"   • CONCLUSÃO: Não há bug estrutural na criação de items")
+            
+            self.log_test("INVESTIGAÇÃO CRÍTICA", True, 
+                        "✅ HERANÇA FUNCIONANDO: Item herdou CLIENTE_TROUXE corretamente")
+        
+        print("=" * 80)
+        
+        return investigation_results
+
     def test_service_srv_0145_complete_data(self):
         """SPECIFIC TEST: Query and display complete data for service SRV-0145"""
         print("\n" + "=" * 80)
