@@ -7015,8 +7015,12 @@ if __name__ == "__main__":
             elif test_type == "detailed-items":
                 print("📋 RUNNING DETAILED ITEMS LIST REQUEST")
                 success = tester.run_detailed_items_request()
+            elif test_type == "srv-0157-0162":
+                print("🔍 RUNNING SPECIFIC SERVICES INVESTIGATION: SRV-0157 to SRV-0162")
+                investigation_results = tester.run_specific_services_investigation()
+                success = True  # Investigation always succeeds if it runs
             else:
-                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items")
+                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162")
                 sys.exit(1)
     else:
         print("📋 RUNNING DEFAULT: DETAILED ITEMS LIST REQUEST")
