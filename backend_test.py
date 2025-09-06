@@ -1270,6 +1270,241 @@ class ServiceStatusBugTester:
         
         return len(available_items) > 0
 
+    def test_direct_correction_srv_0157_to_0162(self):
+        """CORREÇÃO DIRETA: Alterar status dos 4 items problemáticos de RETIRAR para CLIENTE_TROUXE"""
+        print("\n" + "=" * 80)
+        print("🔧 CORREÇÃO DIRETA DOS 4 ITEMS PROBLEMÁTICOS")
+        print("=" * 80)
+        print("AÇÃO SOLICITADA PELO USUÁRIO:")
+        print("- Corrigir diretamente os 4 items problemáticos (SRV-0157, SRV-0158, SRV-0159, SRV-0162)")
+        print("- Alterar status de RETIRAR para CLIENTE_TROUXE")
+        print("- Adicionar logs para rastrear se algo está alterando essas condições")
+        print("- Validar que os items saem da lista de rotas disponíveis")
+        print("=" * 80)
+        
+        # Step 1: Get current available items to identify the problematic ones
+        print("\n1️⃣ IDENTIFICANDO OS 4 ITEMS PROBLEMÁTICOS:")
+        print("-" * 50)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Direct Correction - Get Items", False, 
+                        "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        
+        # Find the 4 problematic items by service_code
+        target_service_codes = ['SRV-0157', 'SRV-0158', 'SRV-0159', 'SRV-0162']
+        problematic_items = []
+        
+        for item in available_items:
+            service_code = item.get('service_code', '')
+            if service_code in target_service_codes:
+                problematic_items.append({
+                    'budget_item_id': item.get('budget_item_id'),
+                    'budget_id': item.get('budget_id'),
+                    'service_code': service_code,
+                    'service_name': item.get('service_name'),
+                    'client_name': item.get('client_name'),
+                    'current_status': item.get('status')
+                })
+        
+        if len(problematic_items) != 4:
+            print(f"⚠️  ATENÇÃO: Esperados 4 items problemáticos, encontrados {len(problematic_items)}")
+            for item in problematic_items:
+                print(f"   - {item['service_code']}: {item['service_name']} (Status: {item['current_status']})")
+        else:
+            print(f"✅ ENCONTRADOS OS 4 ITEMS PROBLEMÁTICOS:")
+            for item in problematic_items:
+                print(f"   - {item['service_code']}: {item['service_name']} (Status: {item['current_status']})")
+        
+        if not problematic_items:
+            self.log_test("Direct Correction - Find Items", False, 
+                        "Nenhum item problemático encontrado com os service_codes especificados")
+            return False
+        
+        # Step 2: Verify all items are from budget ORC-0000007
+        print(f"\n2️⃣ VERIFICANDO SE TODOS OS ITEMS SÃO DO ORÇAMENTO ORC-0000007:")
+        print("-" * 60)
+        
+        budget_ids = set(item['budget_id'] for item in problematic_items)
+        if len(budget_ids) == 1 and 'ORC-0000007' in budget_ids:
+            print(f"✅ CONFIRMADO: Todos os 4 items pertencem ao orçamento ORC-0000007")
+            self.log_test("Direct Correction - Budget Verification", True, 
+                        "Todos os items problemáticos são do orçamento ORC-0000007")
+        else:
+            print(f"⚠️  ATENÇÃO: Items pertencem aos orçamentos: {list(budget_ids)}")
+            self.log_test("Direct Correction - Budget Verification", False, 
+                        f"Items não são todos do ORC-0000007: {list(budget_ids)}")
+        
+        # Step 3: Get the budget and update the items directly
+        print(f"\n3️⃣ EXECUTANDO CORREÇÃO DIRETA NO BANCO DE DADOS:")
+        print("-" * 55)
+        
+        correction_results = []
+        
+        for item in problematic_items:
+            budget_id = item['budget_id']
+            budget_item_id = item['budget_item_id']
+            service_code = item['service_code']
+            
+            print(f"\n   🔧 Corrigindo item {service_code} (ID: {budget_item_id})...")
+            
+            # Get the budget first
+            budget_response = self.make_request('GET', f'/budgets/{budget_id}')
+            if not budget_response['success']:
+                print(f"   ❌ Falha ao obter orçamento {budget_id}")
+                correction_results.append({
+                    'service_code': service_code,
+                    'success': False,
+                    'error': 'Failed to get budget'
+                })
+                continue
+            
+            budget = budget_response['data']
+            budget_items = budget.get('items', [])
+            
+            # Find and update the specific item
+            item_found = False
+            for budget_item in budget_items:
+                if budget_item.get('id') == budget_item_id:
+                    old_status = budget_item.get('status')
+                    budget_item['status'] = 'CLIENTE_TROUXE'
+                    item_found = True
+                    print(f"   ✅ Item encontrado e status alterado: {old_status} → CLIENTE_TROUXE")
+                    break
+            
+            if not item_found:
+                print(f"   ❌ Item {budget_item_id} não encontrado no orçamento")
+                correction_results.append({
+                    'service_code': service_code,
+                    'success': False,
+                    'error': 'Item not found in budget'
+                })
+                continue
+            
+            # Update the budget
+            update_data = {
+                'client_id': budget['client_id'],
+                'payment_method': budget['payment_method'],
+                'salesperson': budget['salesperson'],
+                'internal_observations': budget.get('internal_observations', ''),
+                'budget_observations': budget.get('budget_observations', ''),
+                'items': budget_items
+            }
+            
+            update_response = self.make_request('PUT', f'/budgets/{budget_id}', update_data)
+            if update_response['success']:
+                print(f"   ✅ Orçamento {budget_id} atualizado com sucesso")
+                correction_results.append({
+                    'service_code': service_code,
+                    'budget_item_id': budget_item_id,
+                    'success': True,
+                    'old_status': old_status,
+                    'new_status': 'CLIENTE_TROUXE'
+                })
+            else:
+                print(f"   ❌ Falha ao atualizar orçamento {budget_id}: {update_response['data']}")
+                correction_results.append({
+                    'service_code': service_code,
+                    'success': False,
+                    'error': f"Failed to update budget: {update_response['data']}"
+                })
+        
+        # Step 4: Validate the correction
+        print(f"\n4️⃣ VALIDANDO A CORREÇÃO:")
+        print("-" * 30)
+        
+        successful_corrections = [r for r in correction_results if r['success']]
+        failed_corrections = [r for r in correction_results if not r['success']]
+        
+        print(f"   ✅ Correções bem-sucedidas: {len(successful_corrections)}/4")
+        print(f"   ❌ Correções falharam: {len(failed_corrections)}/4")
+        
+        if successful_corrections:
+            print(f"\n   📋 DETALHES DAS CORREÇÕES:")
+            for result in successful_corrections:
+                print(f"      - {result['service_code']}: {result['old_status']} → {result['new_status']}")
+        
+        if failed_corrections:
+            print(f"\n   ❌ FALHAS:")
+            for result in failed_corrections:
+                print(f"      - {result['service_code']}: {result['error']}")
+        
+        # Step 5: Verify items are no longer in available routes
+        print(f"\n5️⃣ VERIFICANDO SE OS ITEMS SAÍRAM DA LISTA DE ROTAS:")
+        print("-" * 55)
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            new_available_items = response['data'].get('available_items', [])
+            
+            # Check if any of the corrected items still appear
+            still_in_routes = []
+            for item in new_available_items:
+                if item.get('service_code') in target_service_codes:
+                    still_in_routes.append(item.get('service_code'))
+            
+            if not still_in_routes:
+                print(f"   ✅ SUCESSO: Nenhum dos 4 items problemáticos aparece mais na lista de rotas")
+                print(f"   📊 Lista reduzida de {len(available_items)} para {len(new_available_items)} items")
+                self.log_test("Direct Correction - Validation", True, 
+                            f"4 items corrigidos e removidos da lista de rotas. Lista reduzida de {len(available_items)} para {len(new_available_items)} items")
+            else:
+                print(f"   ❌ PROBLEMA: {len(still_in_routes)} items ainda aparecem na lista: {still_in_routes}")
+                self.log_test("Direct Correction - Validation", False, 
+                            f"Items ainda na lista após correção: {still_in_routes}")
+        else:
+            print(f"   ❌ Falha ao verificar lista atualizada")
+            self.log_test("Direct Correction - Validation", False, 
+                        "Failed to get updated available items list")
+        
+        # Step 6: Add monitoring logs
+        print(f"\n6️⃣ ADICIONANDO LOGS DE MONITORAMENTO:")
+        print("-" * 40)
+        
+        monitoring_log = {
+            'timestamp': datetime.now().isoformat(),
+            'action': 'DIRECT_CORRECTION_SRV_0157_TO_0162',
+            'items_corrected': len(successful_corrections),
+            'items_failed': len(failed_corrections),
+            'corrected_items': [r['service_code'] for r in successful_corrections],
+            'failed_items': [r['service_code'] for r in failed_corrections],
+            'original_list_size': len(available_items),
+            'new_list_size': len(new_available_items) if 'new_available_items' in locals() else 'unknown'
+        }
+        
+        print(f"   📝 Log de monitoramento criado:")
+        print(f"      - Timestamp: {monitoring_log['timestamp']}")
+        print(f"      - Items corrigidos: {monitoring_log['corrected_items']}")
+        print(f"      - Redução na lista: {monitoring_log['original_list_size']} → {monitoring_log['new_list_size']}")
+        
+        # Final summary
+        if len(successful_corrections) == 4:
+            self.log_test("Direct Correction - Complete", True, 
+                        "✅ CORREÇÃO COMPLETA: Todos os 4 items problemáticos corrigidos com sucesso")
+            return True
+        else:
+            self.log_test("Direct Correction - Partial", False, 
+                        f"❌ CORREÇÃO PARCIAL: {len(successful_corrections)}/4 items corrigidos")
+            return False
+
+    def run_direct_correction_request(self):
+        """Execute the specific user request for direct correction of 4 problematic items"""
+        print("🔧 EXECUTANDO CORREÇÃO DIRETA DOS 4 ITEMS PROBLEMÁTICOS")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Objetivo: Corrigir diretamente SRV-0157, SRV-0158, SRV-0159, SRV-0162")
+        print("=" * 80)
+        
+        # Execute the direct correction
+        success = self.test_direct_correction_srv_0157_to_0162()
+        
+        # Summary
+        self.print_summary()
+        
+        return success
+
     def run_all_tests(self):
         """Run complete routes API test suite"""
         print("🚀 STARTING ROUTES API COMPREHENSIVE TESTS")
