@@ -6815,8 +6815,11 @@ if __name__ == "__main__":
                 print("🚨 RUNNING CRITICAL 13 SERVICES INVESTIGATION")
                 investigation_results = tester.investigate_specific_problematic_services()
                 success = True  # Investigation always succeeds if it runs
+            elif test_type == "detailed-items":
+                print("📋 RUNNING DETAILED ITEMS LIST REQUEST")
+                success = tester.run_detailed_items_request()
             else:
-                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13")
+                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items")
                 sys.exit(1)
     else:
         print("🔄 RUNNING DEFAULT: CLIENTE_TROUXE RE-REGISTRATION")
