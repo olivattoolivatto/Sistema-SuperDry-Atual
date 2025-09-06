@@ -2151,11 +2151,20 @@ async def add_budget_item(budget_id: str, item_data: BudgetItemCreate):
         service_dict = service_obj.dict() if hasattr(service_obj, 'dict') else service_obj
         default_status = service_dict.get('default_service_status')
         
+        # 🔍 LOG DE MONITORAMENTO - Adicionado para rastrear herança de status
+        logger.info(f"💾 HERANÇA DE STATUS - Item: {item_dict['id']}, Service: {service_obj.id}, Herança: {default_status}")
+        
         if default_status:
             item_dict["status"] = default_status
+            logger.info(f"✅ HERANÇA APLICADA - Item {item_dict['id']} recebeu status '{default_status}' do service {service_obj.id}")
         else:
             # Fallback para lógica anterior (serviços antigos sem o campo)
-            item_dict["status"] = ServiceStatus.RETIRAR if service_obj.execution_location == ExecutionLocation.RETIRADA else ServiceStatus.EXECUTAR_NO_LOCAL
+            fallback_status = ServiceStatus.RETIRAR if service_obj.execution_location == ExecutionLocation.RETIRADA else ServiceStatus.EXECUTAR_NO_LOCAL
+            item_dict["status"] = fallback_status
+            logger.warning(f"⚠️ FALLBACK APLICADO - Item {item_dict['id']} do service {service_obj.id} sem default_service_status, aplicado fallback: {fallback_status}")
+        
+        # 🔍 LOG FINAL DE CONFIRMAÇÃO
+        logger.info(f"🎯 STATUS FINAL - Item {item_dict['id']}: {item_dict['status']} (Service: {service_obj.id}, Nome: {service_obj.name})")
         item_dict["created_at"] = datetime.utcnow()
         
         budget_item = BudgetItem(**item_dict)
