@@ -4785,8 +4785,12 @@ if __name__ == "__main__":
             print("🔍 RUNNING CLIENTE_TROUXE SCOPE INVESTIGATION")
             investigation_results = tester.investigate_cliente_trouxe_scope()
             success = True  # Investigation always succeeds if it runs
+        elif test_type == "critical15":
+            print("🚨 RUNNING CRITICAL 15 SERVICES INVESTIGATION")
+            investigation_results = tester.investigate_critical_15_services_issue()
+            success = True  # Investigation always succeeds if it runs
         else:
-            print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope")
+            print("❌ Invalid test type. Available options: debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15")
             sys.exit(1)
     else:
         print("🔍 RUNNING CLIENTE_TROUXE SCOPE INVESTIGATION (default)")
