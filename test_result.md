@@ -117,6 +117,18 @@ backend:
         -agent: "testing"
         -comment: "🚨 BUG ESTRUTURAL CONFIRMADO NO SRV-0162: Investigação crítica revelou problema exato reportado pelo usuário. ❌ PROBLEMA CONFIRMADO: SRV-0162 tem default_service_status='CLIENTE_TROUXE' mas item ITM-3284401 aparece na lista de rotas com status='RETIRAR'. ✅ HERANÇA NOVA FUNCIONANDO: Teste de criação de novo orçamento com SRV-0162 funciona corretamente - novo item herda status 'CLIENTE_TROUXE'. ❌ DADOS HISTÓRICOS CORROMPIDOS: 19 items do orçamento ORC-0000005 (Parceiro Leonardo) têm status='RETIRAR' quando deveriam ter status='CLIENTE_TROUXE'. 🎯 CAUSA RAIZ: Items existentes foram criados antes da correção do bug de herança ou migração não foi aplicada ao ORC-0000005. 📊 EVIDÊNCIAS: 24 items na lista de rotas (esperados 22), todos os 19 items do ORC-0000005 com status incorreto, SRV-0162 específico confirmado com problema. SOLUÇÃO NECESSÁRIA: Migração específica do orçamento ORC-0000005 ou recriação dos items com herança correta."
 
+  - task: "ORC-0000005 Specific Migration - URGENT"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "🎉 CORREÇÃO URGENTE EXECUTADA COM 100% DE SUCESSO: Migração específica para orçamento ORC-0000005 realizada conforme solicitado na review request. ✅ PROBLEMA CONFIRMADO: 19 itens do ORC-0000005 (Parceiro Leonardo) encontrados na lista de rotas com status='RETIRAR' quando deveriam ter status='CLIENTE_TROUXE'. ✅ MIGRAÇÃO EXECUTADA: POST /api/admin/migrate-budget-item-status processou 24 items totais, corrigindo exatamente os 19 items problemáticos. ✅ RESULTADO ESPERADO ALCANÇADO: Lista reduzida de 24 para 5 itens válidos, todos os 19 itens do ORC-0000005 removidos da lista de rotas. ✅ SRV-0162 ESPECÍFICO CORRIGIDO: Item ITM-3284401 (SRV-0162) corrigido de RETIRAR → CLIENTE_TROUXE conforme reportado. ✅ VALIDAÇÃO COMPLETA: Nenhum item do ORC-0000005 restante na lista, sistema funcionando 100% correto, problema resolvido definitivamente. 📊 ESTATÍSTICAS: 19/19 items corrigidos (100% sucesso), migração específica bem-sucedida, correção urgente completada."
+
   - task: "CLIENTE_TROUXE Service Re-registration - Definitive Solution"
     implemented: true
     working: true
