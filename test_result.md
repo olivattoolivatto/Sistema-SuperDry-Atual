@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Corrigir bugs na tela Agenda, seção Rotas Salvas: 1) Rotas não estão exibindo o alias correto (apenas 'RTE-0000001'), 2) Valor total da rota está aparecendo como 0,00 em vez do valor correto dos stops."
+user_problem_statement: "Corrigir inconsistência na tela Agenda, seção 'Eventos da Rota': os itens estão ordenados corretamente pela API do mapa, mas os horários estão seguindo a ordem original (antes da otimização). Fazer com que tanto os serviços quanto os horários sigam a sequência de paradas definida pela API dos mapas."
 
 backend:
   - task: "Budget Item Status Update API"
