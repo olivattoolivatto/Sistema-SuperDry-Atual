@@ -674,7 +674,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Event Time Sequence Bug Fix in Agenda"
+    - "Calendar Event Creation Enhancement"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
