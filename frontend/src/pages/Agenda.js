@@ -1085,10 +1085,7 @@ export function Agenda() {
           
         } catch (eventError) {
           console.error(`❌ Erro ao criar evento para ${event.client_name}:`, eventError);
-          console.error('📋 Dados que causaram erro:', {
-            eventData,
-            error: eventError.response?.data || eventError.message
-          });
+          console.error('📋 Erro detalhado:', eventError.response?.data || eventError.message);
           toast({
             title: "Erro parcial!",
             description: `Erro ao criar evento para ${event.client_name}: ${eventError.response?.data?.detail || eventError.message}`,
