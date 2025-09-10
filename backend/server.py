@@ -2642,6 +2642,39 @@ async def migrate_budget_item_status():
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Additional endpoint for updating budget item status
+@api_router.put("/budget-items/{item_id}/status")
+async def update_budget_item_status(item_id: str, status: str):
+    """Update the status of a specific budget item"""
+    try:
+        # Validate status
+        if status not in [s.value for s in ServiceStatus]:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Valid options: {[s.value for s in ServiceStatus]}")
+        
+        # Find the budget containing this item
+        budget = await db.budgets.find_one({"items.id": item_id})
+        if not budget:
+            raise HTTPException(status_code=404, detail="Budget item not found")
+        
+        # Update the specific item's status
+        result = await db.budgets.update_one(
+            {"items.id": item_id},
+            {"$set": {"items.$.status": status, "items.$.updated_at": datetime.utcnow().isoformat()}}
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Failed to update budget item status")
+        
+        return {"success": True, "item_id": item_id, "new_status": status}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating budget item status: {str(e)}")
+
+@api_router.get("/service-status/options")
+async def get_service_status_options():
+    """Get all available service status options"""
+    return {"status_options": [{"value": status.value, "label": status.value} for status in ServiceStatus]}
+
 # Include the router in the main app
 app.include_router(api_router)
 
