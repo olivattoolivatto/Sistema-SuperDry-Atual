@@ -107,15 +107,18 @@ user_problem_statement: "Na tela Rotas, seção Serviços disponíveis para Rota
 backend:
   - task: "Budget Item Status Update API"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         -working: false
         -agent: "main"
         -comment: "Implementado endpoint PUT /api/budget-items/{item_id}/status para atualizar status de itens individuais e GET /api/service-status/options para obter todas as opções de status. Precisa testar funcionalidade."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ ENDPOINTS TESTADOS COM 100% DE SUCESSO: Comprehensive testing completed with all scenarios passed successfully. 1) ✅ GET /api/service-status/options: Retorna todas as 13 opções de status do ServiceStatus enum no formato correto {value, label}. Inclui todos os status esperados: RETIRAR, EXECUTAR_NO_LOCAL, CLIENTE_TROUXE, COLETADO, EM_LAVAGEM, EM_LAVAGEM_PARCEIRO, AGUARDANDO_ENTREGA, AGUARDANDO_BUSCAR, ENTREGAR, ENTREGUE, BUSCOU, EXECUTADO, CANCELADO_PELO_CLIENTE. 2) ✅ PUT /api/budget-items/{item_id}/status?status={new_status}: Funciona perfeitamente para atualizar status de itens específicos. Testa com item válido e status válido (sucesso), item inexistente (404), status inválido (400 com mensagem de erro). Atualiza corretamente os campos status e updated_at do item. Retorna formato esperado: {success: True, item_id: '...', new_status: '...'}. 3) ✅ VALIDAÇÃO COMPLETA: Status validado contra ServiceStatus enum, encontra budget contendo o item especificado, usa positional operator ($) do MongoDB para atualizar item no array, retorna erros apropriados (400, 404, 500). 4) ✅ PERSISTÊNCIA VERIFICADA: Mudanças são persistidas no banco de dados e refletidas imediatamente na lista de itens disponíveis para rotas. Todos os cenários de teste da review request funcionando 100% corretamente."
 
   - task: "SRV-0162 Critical Bug Investigation"
     implemented: true
