@@ -942,6 +942,73 @@ export function Agenda() {
     }
   };
 
+  // Função auxiliar para buscar dados do orçamento e cliente
+  const getBudgetAndClientData = async (budgetItemId) => {
+    try {
+      // Buscar todos os orçamentos para encontrar o que contém este item
+      const budgetsResponse = await budgetsApi.getAll();
+      const budgets = budgetsResponse.data;
+      
+      // Encontrar o orçamento que contém este item
+      const budget = budgets.find(b => 
+        b.items && b.items.some(item => item.id === budgetItemId)
+      );
+      
+      if (!budget) {
+        throw new Error('Orçamento não encontrado para o item');
+      }
+      
+      // Buscar dados completos do cliente
+      const clientResponse = await clientsApi.getById(budget.client_id);
+      const client = clientResponse.data;
+      
+      return { budget, client };
+    } catch (error) {
+      console.error('Erro ao buscar dados do orçamento/cliente:', error);
+      throw error;
+    }
+  };
+
+  // Função para gerar emoji do serviço (placeholder até receber a lista)
+  const getServiceEmoji = (serviceName) => {
+    // Por enquanto retorna emoji genérico, será atualizado com lista específica
+    if (serviceName.toLowerCase().includes('lavagem')) return '🧽';
+    if (serviceName.toLowerCase().includes('limpeza')) return '🧹';
+    if (serviceName.toLowerCase().includes('tapete')) return '🏠';
+    if (serviceName.toLowerCase().includes('sofá')) return '🛋️';
+    if (serviceName.toLowerCase().includes('cadeira')) return '🪑';
+    return '✨'; // Emoji padrão
+  };
+
+  // Função para formatar a descrição do evento
+  const formatEventDescription = (budget, client, eventData) => {
+    const totalItems = budget.items ? budget.items.length : 0;
+    const totalValue = budget.items ? budget.items.reduce((sum, item) => sum + (parseFloat(item.total_value) || 0), 0) : 0;
+    
+    let description = `Código do Orçamento: ${budget.id}\n`;
+    description += `<b>Cliente: ${client.name}</b>\n`;
+    description += `Atendente: ${budget.salesperson || 'Não informado'}\n`;
+    description += `Endereço: ${client.full_address || client.address || 'Não informado'}\n`;
+    description += `Complemento: ${client.address_complement || 'NENHUM'}\n`;
+    description += `Data do Orçamento: ${new Date(budget.updated_at || budget.created_at).toLocaleDateString('pt-BR')}\n`;
+    description += `Forma de Pagamento: ${budget.payment_method || 'Não informado'}\n`;
+    description += `<i>Observações Internas:</i> ${budget.internal_observations || 'Nenhuma observação'}\n\n`;
+    description += `<b>Quantidade de Itens:</b> ${totalItems}\n`;
+    
+    // Adicionar itens do orçamento
+    if (budget.items && budget.items.length > 0) {
+      budget.items.forEach(item => {
+        const quantity = item.quantity || 1;
+        const unitValue = parseFloat(item.total_value) || 0;
+        description += `<i>- ${item.service_name || 'Serviço'} - ${quantity} unid. - R$ ${unitValue.toFixed(2)}</i>\n`;
+      });
+    }
+    
+    description += `\n<b><i>VALOR TOTAL: R$ ${totalValue.toFixed(2)}</b></i>`;
+    
+    return description;
+  };
+
   const createCalendarEvents = async () => {
     if (!selectedRoute || selectedStops.size === 0) {
       toast({
