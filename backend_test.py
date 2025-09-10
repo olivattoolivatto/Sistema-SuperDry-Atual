@@ -766,6 +766,212 @@ class ServiceStatusBugTester:
         
         return success
 
+    def test_service_status_options_endpoint(self):
+        """Test GET /api/service-status/options - Get all service status options"""
+        print("\n=== TESTING SERVICE STATUS OPTIONS ENDPOINT ===")
+        
+        response = self.make_request('GET', '/service-status/options')
+        if not response['success']:
+            self.log_test("Service Status Options", False, 
+                        f"Failed to retrieve status options - Status: {response['status_code']}", 
+                        response['data'])
+            return False
+        
+        data = response['data']
+        status_options = data.get('status_options', [])
+        
+        if not status_options:
+            self.log_test("Service Status Options", False, "No status options returned")
+            return False
+        
+        # Expected status options based on ServiceStatus enum
+        expected_statuses = [
+            "RETIRAR", "EXECUTAR_NO_LOCAL", "CLIENTE_TROUXE", "COLETADO", 
+            "EM_LAVAGEM", "EM_LAVAGEM_PARCEIRO", "AGUARDANDO_ENTREGA", 
+            "AGUARDANDO_BUSCAR", "ENTREGAR", "ENTREGUE", "BUSCOU"
+        ]
+        
+        # Verify format and content
+        returned_values = [option.get('value') for option in status_options if option.get('value')]
+        returned_labels = [option.get('label') for option in status_options if option.get('label')]
+        
+        # Check if all expected statuses are present
+        missing_statuses = [status for status in expected_statuses if status not in returned_values]
+        extra_statuses = [status for status in returned_values if status not in expected_statuses]
+        
+        # Verify format (each option should have 'value' and 'label')
+        format_valid = all(
+            isinstance(option, dict) and 'value' in option and 'label' in option 
+            for option in status_options
+        )
+        
+        # Verify values match labels
+        values_match_labels = all(
+            option.get('value') == option.get('label') 
+            for option in status_options
+        )
+        
+        print(f"   📊 Total status options returned: {len(status_options)}")
+        print(f"   📋 Expected statuses: {len(expected_statuses)}")
+        print(f"   ✅ Format valid: {format_valid}")
+        print(f"   🔄 Values match labels: {values_match_labels}")
+        
+        if missing_statuses:
+            print(f"   ❌ Missing statuses: {missing_statuses}")
+        if extra_statuses:
+            print(f"   ➕ Extra statuses: {extra_statuses}")
+        
+        success = (
+            len(status_options) >= 11 and  # At least 11 expected statuses
+            format_valid and
+            values_match_labels and
+            len(missing_statuses) == 0
+        )
+        
+        if success:
+            self.log_test("Service Status Options", True, 
+                        f"✅ All {len(status_options)} status options returned correctly with proper format")
+        else:
+            issues = []
+            if not format_valid:
+                issues.append("Invalid format")
+            if not values_match_labels:
+                issues.append("Values don't match labels")
+            if missing_statuses:
+                issues.append(f"Missing: {missing_statuses}")
+            
+            self.log_test("Service Status Options", False, 
+                        f"❌ Issues found: {', '.join(issues)}")
+        
+        return success
+
+    def test_budget_item_status_update_endpoint(self):
+        """Test PUT /api/budget-items/{item_id}/status - Update budget item status"""
+        print("\n=== TESTING BUDGET ITEM STATUS UPDATE ENDPOINT ===")
+        
+        # First, get available items to have valid item IDs to test with
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Budget Item Status Update - Setup", False, 
+                        "Failed to get available items for testing")
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        if not available_items:
+            self.log_test("Budget Item Status Update - Setup", False, 
+                        "No available items found for testing")
+            return False
+        
+        test_item = available_items[0]  # Use first available item
+        item_id = test_item.get('budget_item_id')
+        original_status = test_item.get('status')
+        
+        print(f"   🎯 Testing with item: {item_id}")
+        print(f"   📊 Original status: {original_status}")
+        
+        # Test 1: Valid status update
+        new_status = "EXECUTAR_NO_LOCAL" if original_status != "EXECUTAR_NO_LOCAL" else "RETIRAR"
+        
+        response = self.make_request('PUT', f'/budget-items/{item_id}/status?status={new_status}')
+        if response['success']:
+            result = response['data']
+            
+            # Verify response format
+            expected_fields = ['success', 'item_id', 'new_status']
+            missing_fields = [field for field in expected_fields if field not in result]
+            
+            if not missing_fields and result.get('success') and result.get('item_id') == item_id and result.get('new_status') == new_status:
+                self.log_test("Budget Item Status Update - Valid", True, 
+                            f"✅ Successfully updated {item_id}: {original_status} → {new_status}")
+                
+                # Verify the change was persisted by checking available items again
+                verify_response = self.make_request('GET', '/budget-items/available-for-routes')
+                if verify_response['success']:
+                    updated_items = verify_response['data'].get('available_items', [])
+                    updated_item = next((item for item in updated_items if item.get('budget_item_id') == item_id), None)
+                    
+                    if updated_item and updated_item.get('status') == new_status:
+                        self.log_test("Budget Item Status Update - Persistence", True, 
+                                    f"✅ Status change persisted in database")
+                    else:
+                        self.log_test("Budget Item Status Update - Persistence", False, 
+                                    f"❌ Status change not persisted in database")
+                else:
+                    self.log_test("Budget Item Status Update - Persistence", False, 
+                                "Failed to verify persistence")
+            else:
+                self.log_test("Budget Item Status Update - Valid", False, 
+                            f"❌ Invalid response format or data: {result}")
+        else:
+            self.log_test("Budget Item Status Update - Valid", False, 
+                        f"❌ Failed to update valid status", response['data'])
+        
+        # Test 2: Invalid status
+        invalid_status = "INVALID_STATUS"
+        response = self.make_request('PUT', f'/budget-items/{item_id}/status?status={invalid_status}')
+        if not response['success'] and response['status_code'] == 400:
+            self.log_test("Budget Item Status Update - Invalid Status", True, 
+                        f"✅ Correctly rejected invalid status '{invalid_status}' with 400 error")
+        else:
+            self.log_test("Budget Item Status Update - Invalid Status", False, 
+                        f"❌ Should have rejected invalid status with 400 error")
+        
+        # Test 3: Non-existent item
+        fake_item_id = "ITM-FAKE123"
+        response = self.make_request('PUT', f'/budget-items/{fake_item_id}/status?status=RETIRAR')
+        if not response['success'] and response['status_code'] == 404:
+            self.log_test("Budget Item Status Update - Invalid Item", True, 
+                        f"✅ Correctly returned 404 for non-existent item '{fake_item_id}'")
+        else:
+            self.log_test("Budget Item Status Update - Invalid Item", False, 
+                        f"❌ Should have returned 404 for non-existent item")
+        
+        # Test 4: Test multiple status changes
+        test_statuses = ["COLETADO", "EM_LAVAGEM", "AGUARDANDO_ENTREGA", "ENTREGAR"]
+        successful_updates = 0
+        
+        for status in test_statuses:
+            response = self.make_request('PUT', f'/budget-items/{item_id}/status?status={status}')
+            if response['success']:
+                successful_updates += 1
+                print(f"   ✅ Successfully updated to {status}")
+            else:
+                print(f"   ❌ Failed to update to {status}")
+        
+        if successful_updates == len(test_statuses):
+            self.log_test("Budget Item Status Update - Multiple Updates", True, 
+                        f"✅ All {len(test_statuses)} status updates successful")
+        else:
+            self.log_test("Budget Item Status Update - Multiple Updates", False, 
+                        f"❌ Only {successful_updates}/{len(test_statuses)} status updates successful")
+        
+        # Restore original status
+        restore_response = self.make_request('PUT', f'/budget-items/{item_id}/status?status={original_status}')
+        if restore_response['success']:
+            print(f"   🔄 Restored original status: {original_status}")
+        
+        return True
+
+    def run_budget_item_status_update_tests(self):
+        """Run comprehensive tests for the new budget item status update endpoints"""
+        print("🔄 TESTING NEW BUDGET ITEM STATUS UPDATE ENDPOINTS")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Focus: Test GET /api/service-status/options and PUT /api/budget-items/{item_id}/status")
+        print("=" * 80)
+        
+        # Test 1: Service Status Options Endpoint
+        print("\n1️⃣ TESTING SERVICE STATUS OPTIONS:")
+        status_options_success = self.test_service_status_options_endpoint()
+        
+        # Test 2: Budget Item Status Update Endpoint
+        print("\n2️⃣ TESTING BUDGET ITEM STATUS UPDATE:")
+        status_update_success = self.test_budget_item_status_update_endpoint()
+        
+        # Summary
+        self.print_summary()
+        
+        return status_options_success and status_update_success
+
     def run_migration_tests(self):
         """Run the migration tests as requested in the review"""
         print("🔄 EXECUTANDO MIGRAÇÃO PARA CORRIGIR STATUS DOS BUDGET ITEMS")
