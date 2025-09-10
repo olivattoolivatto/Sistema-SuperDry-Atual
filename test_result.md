@@ -174,15 +174,18 @@ backend:
 frontend:
   - task: "Ver Status Checkbox in Routes Section"
     implemented: true
-    working: false
+    working: true
     file: "pages/Routes.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         -working: false
         -agent: "main"
         -comment: "Implementado checkbox 'Ver Status' na seção Serviços Disponíveis para Rota. Quando marcado, adiciona coluna de status com badges coloridos para cada item (EXECUTAR_NO_LOCAL, RETIRAR, ENTREGAR, CLIENTE_TROUXE). Precisa testar funcionalidade."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ FUNCIONALIDADE 'VER STATUS' TESTADA COM 100% DE SUCESSO: Comprehensive testing completed with all 7 scenarios passed successfully. ✅ ESTADO INICIAL: Checkbox 'Ver Status' visível mas desmarcado inicialmente, coluna STATUS corretamente oculta. ✅ ATIVAÇÃO: Checkbox funciona perfeitamente - ao marcar, coluna STATUS aparece instantaneamente. ✅ BADGES COLORIDOS: Status badges exibidos com cores corretas - EXECUTAR_NO_LOCAL (roxo/purple), RETIRAR (azul/blue). Encontrados 10 badges no total (5 EXECUTAR_NO_LOCAL + 5 RETIRAR). ✅ DESATIVAÇÃO: Ao desmarcar checkbox, coluna STATUS desaparece corretamente. ✅ RESPONSIVIDADE: Funcionalidade testada e aprovada em desktop (1920x1080) e mobile (390x844) - checkbox visível e funcional em ambas as resoluções. ✅ PERSISTÊNCIA: Estado do checkbox persiste durante interações na página (scroll, navegação). ✅ TODOS OS CENÁRIOS DA REVIEW REQUEST ATENDIDOS: Estado inicial, ativação/desativação, badges coloridos, responsividade e persistência funcionando perfeitamente. Feature implementada conforme especificação e totalmente funcional."
 
   - task: "Create Event Button and Modal"
     implemented: true
