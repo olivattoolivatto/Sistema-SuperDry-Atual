@@ -204,7 +204,19 @@ export function Agenda() {
     }
     
     // Transform route stops into event format com cópia profunda
-    const events = route.stops.map((stop, index) => {
+    // CORREÇÃO CRÍTICA: Ordenar stops antes de criar eventos para que o índice corresponda à ordem real
+    const sortedStops = [...route.stops].sort((a, b) => {
+      const aOrder = a.delivery_order || a.order_sequence || 0;
+      const bOrder = b.delivery_order || b.order_sequence || 0;
+      return aOrder - bOrder;
+    });
+
+    console.log('📋 Ordem corrigida dos stops:', {
+      originalOrder: route.stops.map(s => `${s.client_name} (${s.order_sequence || 0})`),
+      sortedOrder: sortedStops.map(s => `${s.client_name} (${s.delivery_order || s.order_sequence || 0})`)
+    });
+
+    const events = sortedStops.map((stop, index) => {
       // Garantir ID único usando múltiplas fontes
       const eventId = stop.id || stop.budget_item_id || `${route.id}-stop-${index}-${Date.now()}`;
       
