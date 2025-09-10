@@ -1244,7 +1244,7 @@ export function Agenda() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium text-green-600">
-                      R$ {route.total_value?.toFixed(2) || '0,00'}
+                      R$ {route.stops?.reduce((total, stop) => total + (parseFloat(stop.service_value) || 0), 0).toFixed(2) || '0,00'}
                     </p>
                     <p className="text-xs text-gray-500">
                       Atualizado: {new Date(route.updated_at).toLocaleDateString()}
