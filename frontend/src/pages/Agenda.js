@@ -1040,33 +1040,75 @@ export function Agenda() {
     setCreatingEvents(true);
     
     try {
-      const response = await fetch(`${BACKEND_URL}/api/calendar/events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          route_id: selectedRoute.id,
-          stop_ids: Array.from(selectedStops),
-          start_date: customEventDate, // Usar data personalizada
-          start_time: selectedRoute.planned_start_time
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao criar eventos');
-      }
-
-      const data = await response.json();
+      // Filtrar eventos selecionados
+      const selectedEvents = routeEvents.filter(event => selectedStops.has(event.id));
+      const createdEvents = [];
       
-      toast({
-        title: "Sucesso!",
-        description: `${data.events.length} eventos criados no Google Calendar.`,
-        variant: "default",
-      });
-
-      // Clear selection
-      setSelectedStops(new Set());
+      console.log(`🗓️ Criando ${selectedEvents.length} eventos individuais...`);
+      
+      // Criar cada evento individualmente
+      for (const event of selectedEvents) {
+        try {
+          // Buscar dados do orçamento e cliente
+          const { budget, client } = await getBudgetAndClientData(event.id);
+          
+          // Calcular horário de início e fim do evento
+          const eventDate = customEventDate;
+          const startTime = event.estimated_start_time;
+          const startDateTime = new Date(`${eventDate}T${startTime}`);
+          const endDateTime = new Date(startDateTime.getTime() + (event.duration * 60000));
+          
+          // Gerar nome do evento
+          const serviceEmoji = getServiceEmoji(event.service_name);
+          const statusText = ['RETIRAR', 'ENTREGAR'].includes(event.service_status) ? ` ${event.service_status}` : '';
+          const eventTitle = `${serviceEmoji}${statusText} ${event.client_name}`;
+          
+          // Formatar descrição
+          const description = formatEventDescription(budget, client, event);
+          
+          // Dados do evento para criar
+          const eventData = {
+            title: eventTitle,
+            description: description,
+            location: client.full_address || client.address || '',
+            start_date: eventDate,
+            start_time: startTime,
+            end_date: eventDate,
+            end_time: endDateTime.toTimeString().slice(0, 5),
+            duration: event.duration
+          };
+          
+          console.log(`📅 Criando evento: ${eventTitle} às ${startTime}`);
+          
+          // Criar evento usando API direct
+          const response = await agendaApi.createDirectEvent(eventData);
+          createdEvents.push(response.data);
+          
+        } catch (eventError) {
+          console.error(`Erro ao criar evento para ${event.client_name}:`, eventError);
+          toast({
+            title: "Erro parcial!",
+            description: `Erro ao criar evento para ${event.client_name}`,
+            variant: "destructive",
+          });
+        }
+      }
+      
+      if (createdEvents.length > 0) {
+        toast({
+          title: "Sucesso!",
+          description: `${createdEvents.length} de ${selectedEvents.length} eventos criados no Google Calendar.`,
+          variant: "default",
+        });
+        
+        // Clear selection
+        setSelectedStops(new Set());
+        
+        // Recarregar eventos do calendário
+        loadCalendarEvents();
+      } else {
+        throw new Error('Nenhum evento foi criado com sucesso');
+      }
       
     } catch (error) {
       console.error('Erro ao criar eventos:', error);
