@@ -2644,7 +2644,7 @@ async def migrate_budget_item_status():
 
 # Additional endpoint for updating budget item status
 @api_router.put("/budget-items/{item_id}/status")
-async def update_budget_item_status(item_id: str, status: str):
+async def update_budget_item_status(item_id: str, status: str = Query(...)):
     """Update the status of a specific budget item"""
     try:
         # Validate status
@@ -2667,6 +2667,8 @@ async def update_budget_item_status(item_id: str, status: str):
         
         return {"success": True, "item_id": item_id, "new_status": status}
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating budget item status: {str(e)}")
 
