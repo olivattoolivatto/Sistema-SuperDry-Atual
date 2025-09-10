@@ -1236,7 +1236,7 @@ export function Agenda() {
                       )}
                     </div>
                     <div>
-                      <h3 className="font-medium text-gray-900">{route.route_alias || route.id}</h3>
+                      <h3 className="font-medium text-gray-900">{route.alias || route.id}</h3>
                       <p className="text-sm text-gray-600">
                         {route.planned_date} às {route.planned_start_time} • {route.vehicle_type} • {route.stops?.length || 0} paradas
                       </p>
