@@ -945,9 +945,13 @@ export function Agenda() {
   // Função auxiliar para buscar dados do orçamento e cliente
   const getBudgetAndClientData = async (budgetItemId) => {
     try {
+      console.log(`🔍 Buscando dados para item: ${budgetItemId}`);
+      
       // Buscar todos os orçamentos para encontrar o que contém este item
       const budgetsResponse = await budgetsApi.getAll();
       const budgets = budgetsResponse.data;
+      
+      console.log(`📊 Total de orçamentos encontrados: ${budgets.length}`);
       
       // Encontrar o orçamento que contém este item
       const budget = budgets.find(b => 
@@ -955,16 +959,25 @@ export function Agenda() {
       );
       
       if (!budget) {
-        throw new Error('Orçamento não encontrado para o item');
+        console.error(`❌ Orçamento não encontrado para item: ${budgetItemId}`);
+        console.log('📋 Itens disponíveis:', budgets.map(b => ({
+          id: b.id,
+          items: b.items?.map(i => i.id) || []
+        })));
+        throw new Error(`Orçamento não encontrado para o item ${budgetItemId}`);
       }
+      
+      console.log(`✅ Orçamento encontrado: ${budget.id} para item: ${budgetItemId}`);
       
       // Buscar dados completos do cliente
       const clientResponse = await clientsApi.getById(budget.client_id);
       const client = clientResponse.data;
       
+      console.log(`✅ Cliente encontrado: ${client.name} (${client.id})`);
+      
       return { budget, client };
     } catch (error) {
-      console.error('Erro ao buscar dados do orçamento/cliente:', error);
+      console.error('❌ Erro ao buscar dados do orçamento/cliente:', error);
       throw error;
     }
   };
