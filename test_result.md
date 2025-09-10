@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Na tela Rotas, seção Serviços disponíveis para Rota, adicione um checkbox chamado 'Ver Status', que ao ser marcado, acrescenta uma coluna ao final de cada item tornando visível o status de cada item."
+user_problem_statement: "Na tela Rotas, seção Serviços disponíveis para Rota, que esses status se tornem selecionáveis, através de uma 'lista suspensa' (traga todos os status disponíveis para essa lista) e com um botão 'Aplicar' que irá mudar o status atual para o status selecionado. E, como temos uma regra que apenas serviços com status EXECUTAR_NO_LOCAL, RETIRAR, ENTREGAR aparecem nessa lista de 'Serviços Disponíveis para Rota', os que receberem status fora dessas opções, automaticamente devem sair dessa lista."
 
 backend:
   - task: "SRV-0162 Critical Bug Investigation"
