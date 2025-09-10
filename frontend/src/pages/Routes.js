@@ -1586,19 +1586,38 @@ export function Routes() {
                   </td>
                   {showStatus && (
                     <td className="px-2 sm:px-4 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        item.status === 'EXECUTAR_NO_LOCAL' 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : item.status === 'RETIRAR'
-                          ? 'bg-blue-100 text-blue-800'
-                          : item.status === 'ENTREGAR'
-                          ? 'bg-green-100 text-green-800'
-                          : item.status === 'CLIENTE_TROUXE'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {item.status}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <select
+                          value={editingStatus[item.budget_item_id] || item.status}
+                          onChange={(e) => handleStatusChange(item.budget_item_id, e.target.value)}
+                          className={`text-xs font-semibold rounded px-2 py-1 border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            item.status === 'EXECUTAR_NO_LOCAL' 
+                              ? 'bg-purple-100 text-purple-800 border-purple-300' 
+                              : item.status === 'RETIRAR'
+                              ? 'bg-blue-100 text-blue-800 border-blue-300'
+                              : item.status === 'ENTREGAR'
+                              ? 'bg-green-100 text-green-800 border-green-300'
+                              : item.status === 'CLIENTE_TROUXE'
+                              ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                              : 'bg-gray-100 text-gray-800 border-gray-300'
+                          }`}
+                        >
+                          {statusOptions.map(option => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        {editingStatus[item.budget_item_id] && editingStatus[item.budget_item_id] !== item.status && (
+                          <button
+                            onClick={() => applyStatusChange(item)}
+                            className="inline-flex items-center px-2 py-1 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                            title="Aplicar mudança de status"
+                          >
+                            <Check className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>
