@@ -39,6 +39,7 @@ export function Routes() {
   const [showStatus, setShowStatus] = useState(false);
   const [statusOptions, setStatusOptions] = useState([]);
   const [editingStatus, setEditingStatus] = useState({});
+
   // Load status options when showStatus is enabled
   const loadStatusOptions = async () => {
     try {
@@ -123,11 +124,9 @@ export function Routes() {
       });
     }
   };
-    const logs = localStorage.getItem('routesDebugLogs') || '';
-    console.log('📋 DEBUG LOGS EXPORT:');
-    console.log('='.repeat(80));
-    console.log(logs);
-    console.log('='.repeat(80));
+
+  // Debug tools
+  const extractDebugLogs = () => {
     return logs;
   };
 
