@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Implementar funcionalidade 'Criar Evento' na tela Agenda. O usuário solicitou um botão para criar eventos manualmente no Google Calendar com duração padrão de 2 horas (120 minutos), com campos convencionais: título, descrição, local, data/hora início e fim."
+user_problem_statement: "Na tela Rotas, seção Serviços disponíveis para Rota, adicione um checkbox chamado 'Ver Status', que ao ser marcado, acrescenta uma coluna ao final de cada item tornando visível o status de cada item."
 
 backend:
   - task: "SRV-0162 Critical Bug Investigation"
