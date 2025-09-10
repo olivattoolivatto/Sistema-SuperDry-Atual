@@ -197,7 +197,7 @@ frontend:
     status_history:
         -working: false
         -agent: "main"
-        -comment: "SEGUNDA CORREÇÃO: Identificado que o problema persistia porque: 1) Events.sort() após criação quebrava a correspondência índice-horário, 2) order_sequence usava valor original do backend em vez do índice no array ordenado. CORREÇÕES: Removido sort() desnecessário após criação dos eventos, alterado order_sequence para usar (index + 1) baseado na ordem já corrigida. Adicionados logs detalhados para depuração. Precisa testar novamente."
+        -comment: "TERCEIRA CORREÇÃO: Usuário confirmou que horários estão corretos, mas ordenação ainda segue 'Priorização de Rota' em vez da ordem do mapa. CAUSA: Estava usando delivery_order (priorização manual) como fallback em vez de APENAS order_sequence (ordem otimizada do OSRM/mapa). CORREÇÃO: Alterado ordenação para usar EXCLUSIVAMENTE order_sequence em ambas as funções (handleRouteSelect e calculateEstimatedTime). Agora eventos seguem ordem das paradas no mapa com horários sincronizados. Precisa testar."
 
   - task: "Route Alias and Total Value Display Bug Fix"
     implemented: true
