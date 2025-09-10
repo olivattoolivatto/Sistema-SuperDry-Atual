@@ -197,7 +197,7 @@ frontend:
     status_history:
         -working: false
         -agent: "main"
-        -comment: "Reimplementado botão 'LANÇAR NA AGENDA' para criar eventos individuais com formato completo: nome (emoji + status + cliente), descrição HTML detalhada do orçamento, endereço do cliente do cadastro, horários dos eventos da rota, cor amarelo banana. Implementadas funções auxiliares getBudgetAndClientData(), getServiceEmoji(), formatEventDescription(). Usa agendaApi.createDirectEvent() para cada evento selecionado. Precisa testar funcionamento."
+        -comment: "CORREÇÃO DE BUGS NA API: Identificado que eventos não apareciam devido a incompatibilidade de dados com API. PROBLEMAS: 1) API espera 'summary' não 'title', 2) API espera 'start_datetime/end_datetime' em ISO format não campos separados. CORREÇÕES: Alterado eventData para usar summary, start_datetime/end_datetime em formato ISO, melhorado logs de debug, tratamento de erros detalhado, debug na busca de orçamentos. Precisa testar novamente."
 
   - task: "Event Time Sequence Bug Fix in Agenda"
     implemented: true
