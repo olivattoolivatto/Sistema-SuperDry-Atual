@@ -17,7 +17,7 @@ import {
   Trash2,
   Plus
 } from 'lucide-react';
-import { routesApi, placesApi } from '../services/api';
+import { routesApi, placesApi, clientsApi, budgetsApi, agendaApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
