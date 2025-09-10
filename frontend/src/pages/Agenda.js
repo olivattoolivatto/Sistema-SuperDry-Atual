@@ -1066,16 +1066,13 @@ export function Agenda() {
           // Formatar descrição
           const description = formatEventDescription(budget, client, event);
           
-          // Dados do evento para criar
+          // Dados do evento para criar (formato correto para API)
           const eventData = {
-            title: eventTitle,
+            summary: eventTitle,  // API espera 'summary', não 'title'
             description: description,
             location: client.full_address || client.address || '',
-            start_date: eventDate,
-            start_time: startTime,
-            end_date: eventDate,
-            end_time: endDateTime.toTimeString().slice(0, 5),
-            duration: event.duration
+            start_datetime: startDateTime.toISOString(),  // ISO format
+            end_datetime: endDateTime.toISOString()       // ISO format
           };
           
           console.log(`📅 Criando evento: ${eventTitle} às ${startTime}`);
