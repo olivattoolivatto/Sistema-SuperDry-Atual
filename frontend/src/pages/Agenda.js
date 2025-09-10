@@ -1076,9 +1076,11 @@ export function Agenda() {
           };
           
           console.log(`📅 Criando evento: ${eventTitle} às ${startTime}`);
+          console.log('📋 Dados do evento:', eventData);
           
           // Criar evento usando API direct
           const response = await agendaApi.createDirectEvent(eventData);
+          console.log('✅ Evento criado com sucesso:', response.data);
           createdEvents.push(response.data);
           
         } catch (eventError) {
