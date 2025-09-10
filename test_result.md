@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Na tela Rotas, seção Serviços disponíveis para Rota, que esses status se tornem selecionáveis, através de uma 'lista suspensa' (traga todos os status disponíveis para essa lista) e com um botão 'Aplicar' que irá mudar o status atual para o status selecionado. E, como temos uma regra que apenas serviços com status EXECUTAR_NO_LOCAL, RETIRAR, ENTREGAR aparecem nessa lista de 'Serviços Disponíveis para Rota', os que receberem status fora dessas opções, automaticamente devem sair dessa lista."
+user_problem_statement: "Corrigir bugs na tela Agenda, seção Rotas Salvas: 1) Rotas não estão exibindo o alias correto (apenas 'RTE-0000001'), 2) Valor total da rota está aparecendo como 0,00 em vez do valor correto dos stops."
 
 backend:
   - task: "Budget Item Status Update API"
