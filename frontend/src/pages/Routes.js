@@ -39,8 +39,90 @@ export function Routes() {
   const [showStatus, setShowStatus] = useState(false);
   const [statusOptions, setStatusOptions] = useState([]);
   const [editingStatus, setEditingStatus] = useState({});
-  // Debug tools
-  const extractDebugLogs = () => {
+  // Load status options when showStatus is enabled
+  const loadStatusOptions = async () => {
+    try {
+      const response = await budgetItemsApi.getStatusOptions();
+      setStatusOptions(response.data.status_options);
+    } catch (error) {
+      console.error('Error loading status options:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar opções de status",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Effect to load status options when showStatus is enabled
+  useEffect(() => {
+    if (showStatus && statusOptions.length === 0) {
+      loadStatusOptions();
+    }
+  }, [showStatus]);
+
+  // Handle status change
+  const handleStatusChange = (itemId, newStatus) => {
+    setEditingStatus(prev => ({
+      ...prev,
+      [itemId]: newStatus
+    }));
+  };
+
+  // Apply status change
+  const applyStatusChange = async (item) => {
+    const newStatus = editingStatus[item.budget_item_id];
+    if (!newStatus || newStatus === item.status) {
+      return; // No change needed
+    }
+
+    try {
+      await budgetItemsApi.updateStatus(item.budget_item_id, newStatus);
+      
+      // Update the item in availableItems
+      setAvailableItems(prev => {
+        const updatedItems = prev.map(i => 
+          i.budget_item_id === item.budget_item_id 
+            ? { ...i, status: newStatus }
+            : i
+        );
+        
+        // Filter out items that should not appear in routes
+        const validStatuses = ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'];
+        return updatedItems.filter(i => validStatuses.includes(i.status));
+      });
+
+      // Clear editing status
+      setEditingStatus(prev => {
+        const updated = { ...prev };
+        delete updated[item.budget_item_id];
+        return updated;
+      });
+
+      toast({
+        title: "Sucesso",
+        description: `Status atualizado para ${newStatus}`,
+        variant: "default"
+      });
+
+      // If the new status is not valid for routes, show removal message
+      const validStatuses = ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'];
+      if (!validStatuses.includes(newStatus)) {
+        toast({
+          title: "Item removido",
+          description: "Item removido da lista pois o status não permite rotas",
+          variant: "default"
+        });
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar status",
+        variant: "destructive"
+      });
+    }
+  };
     const logs = localStorage.getItem('routesDebugLogs') || '';
     console.log('📋 DEBUG LOGS EXPORT:');
     console.log('='.repeat(80));
