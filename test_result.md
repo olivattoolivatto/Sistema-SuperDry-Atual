@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Corrigir inconsistência na tela Agenda, seção 'Eventos da Rota': os itens estão ordenados corretamente pela API do mapa, mas os horários estão seguindo a ordem original (antes da otimização). Fazer com que tanto os serviços quanto os horários sigam a sequência de paradas definida pela API dos mapas."
+user_problem_statement: "Terceira correção: A questão dos horários foi resolvida, mas a ordenação dos eventos ainda está incorreta - seguindo sequência de 'Priorização de Rota' em vez da ordenação das paradas no mapa. Corrigir ordenação para seguir ordem do mapa com horários sincronizados."
 
 backend:
   - task: "Budget Item Status Update API"
