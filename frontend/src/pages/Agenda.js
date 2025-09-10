@@ -275,23 +275,20 @@ export function Agenda() {
     const baseTime = new Date(`${route.planned_date}T${route.planned_start_time}`);
     let currentTime = new Date(baseTime);
     
-    // CORREÇÃO CRÍTICA: Ordenar stops por delivery_order para cálculo temporal correto
-    // delivery_order é a sequência real de entrega (com prioridades)
-    // order_sequence é apenas a otimização geográfica do OSRM
+    // Ordenar stops pela mesma lógica usada na criação dos eventos
     const sortedStops = [...route.stops].sort((a, b) => {
       const aOrder = a.delivery_order || a.order_sequence || 0;
       const bOrder = b.delivery_order || b.order_sequence || 0;
       return aOrder - bOrder;
     });
     
-    console.log('⏰ Calculando horário - ordenação corrigida:', {
+    console.log('⏰ Calculando horário sequencial:', {
       stopIndex,
-      originalOrder: route.stops.map(s => s.client_name),
-      sortedOrder: sortedStops.map(s => s.client_name),
+      clientName: sortedStops[stopIndex]?.client_name,
       baseTime: route.planned_start_time
     });
     
-    // Add cumulative time for previous stops (baseado na ordem correta de entrega)
+    // Add cumulative time for previous stops (na ordem correta)
     for (let i = 0; i < stopIndex; i++) {
       const stop = sortedStops[i];
       const duration = calculateDuration(stop.service_status);
