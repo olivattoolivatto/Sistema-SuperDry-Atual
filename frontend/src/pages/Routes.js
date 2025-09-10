@@ -1495,6 +1495,23 @@ export function Routes() {
                   <td className="px-2 sm:px-4 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
                     R$ {item.service_value.toFixed(2)}
                   </td>
+                  {showStatus && (
+                    <td className="px-2 sm:px-4 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        item.status === 'EXECUTAR_NO_LOCAL' 
+                          ? 'bg-purple-100 text-purple-800' 
+                          : item.status === 'RETIRAR'
+                          ? 'bg-blue-100 text-blue-800'
+                          : item.status === 'ENTREGAR'
+                          ? 'bg-green-100 text-green-800'
+                          : item.status === 'CLIENTE_TROUXE'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
