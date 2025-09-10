@@ -105,6 +105,18 @@
 user_problem_statement: "Na tela Rotas, seção Serviços disponíveis para Rota, que esses status se tornem selecionáveis, através de uma 'lista suspensa' (traga todos os status disponíveis para essa lista) e com um botão 'Aplicar' que irá mudar o status atual para o status selecionado. E, como temos uma regra que apenas serviços com status EXECUTAR_NO_LOCAL, RETIRAR, ENTREGAR aparecem nessa lista de 'Serviços Disponíveis para Rota', os que receberem status fora dessas opções, automaticamente devem sair dessa lista."
 
 backend:
+  - task: "Budget Item Status Update API"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "Implementado endpoint PUT /api/budget-items/{item_id}/status para atualizar status de itens individuais e GET /api/service-status/options para obter todas as opções de status. Precisa testar funcionalidade."
+
   - task: "SRV-0162 Critical Bug Investigation"
     implemented: true
     working: false
