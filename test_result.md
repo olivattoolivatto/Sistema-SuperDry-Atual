@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Terceira correção: A questão dos horários foi resolvida, mas a ordenação dos eventos ainda está incorreta - seguindo sequência de 'Priorização de Rota' em vez da ordenação das paradas no mapa. Corrigir ordenação para seguir ordem do mapa com horários sincronizados."
+user_problem_statement: "Implementar funcionalidade completa do botão 'LANÇAR NA AGENDA' para criar eventos individuais no Google Calendar usando dados dos 'Eventos da Rota' selecionados, com formato específico para nome (emoji + status + cliente), descrição detalhada do orçamento, endereço do cliente, cor amarelo banana e horários baseados nos eventos da rota."
 
 backend:
   - task: "Budget Item Status Update API"
