@@ -204,16 +204,18 @@ export function Agenda() {
     }
     
     // Transform route stops into event format com cópia profunda
-    // CORREÇÃO CRÍTICA: Ordenar stops antes de criar eventos para que o índice corresponda à ordem real
+    // CORREÇÃO CRÍTICA: Ordenar stops APENAS por order_sequence (ordem otimizada do mapa)
+    // order_sequence = ordem otimizada pela API do mapa (OSRM)
+    // delivery_order = ordem de priorização manual (não queremos esta)
     const sortedStops = [...route.stops].sort((a, b) => {
-      const aOrder = a.delivery_order || a.order_sequence || 0;
-      const bOrder = b.delivery_order || b.order_sequence || 0;
+      const aOrder = a.order_sequence || 0;
+      const bOrder = b.order_sequence || 0;
       return aOrder - bOrder;
     });
 
-    console.log('📋 Ordem corrigida dos stops:', {
-      originalOrder: route.stops.map(s => `${s.client_name} (${s.order_sequence || 0})`),
-      sortedOrder: sortedStops.map(s => `${s.client_name} (${s.delivery_order || s.order_sequence || 0})`)
+    console.log('📋 Ordem corrigida dos stops (APENAS por order_sequence do mapa):', {
+      originalOrder: route.stops.map(s => `${s.client_name} (order_seq: ${s.order_sequence}, delivery: ${s.delivery_order})`),
+      sortedOrder: sortedStops.map(s => `${s.client_name} (order_seq: ${s.order_sequence})`)
     });
 
     const events = sortedStops.map((stop, index) => {
