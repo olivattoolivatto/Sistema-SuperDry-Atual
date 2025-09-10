@@ -643,7 +643,7 @@ test_plan:
 
 agent_communication:
     -agent: "main"
-    -message: "✅ CHECKBOX 'VER STATUS' IMPLEMENTADO: Adicionado checkbox na seção Serviços Disponíveis para Rota. Quando marcado, mostra coluna adicional com status de cada item usando badges coloridos (roxo para EXECUTAR_NO_LOCAL, azul para RETIRAR, verde para ENTREGAR, amarelo para CLIENTE_TROUXE). Estado controlado por showStatus. Precisa testar funcionamento no frontend."
+    -message: "✅ STATUS EDITÁVEIS IMPLEMENTADOS: Expandido funcionalidade 'Ver Status' com dropdowns selecionáveis, carregamento dinâmico de opções via GET /api/service-status/options, botão 'Aplicar' com ícone Check, e lógica de remoção automática de itens quando status não for EXECUTAR_NO_LOCAL/RETIRAR/ENTREGAR. Backend: endpoints PUT /api/budget-items/{item_id}/status e GET /api/service-status/options. Frontend: dropdowns coloridos, estados editingStatus, e integração completa com toast notifications. Precisa testar funcionamento end-to-end."
     -agent: "testing"
     -message: "✅ ENDPOINT POST /api/calendar/events/direct FUNCIONANDO PERFEITAMENTE: Todos os testes passaram (100% sucesso). Correção aplicada no CalendarEvent model para suportar eventos diretos. Google Calendar integração completa - eventos sendo criados e salvos corretamente. Frontend pode usar o endpoint sem problemas. MINOR FIX APLICADO: route_id e stop_id agora são Optional no modelo CalendarEvent."
     -agent: "testing"
