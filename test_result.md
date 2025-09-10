@@ -608,7 +608,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "ORC-0000005 Specific Migration - URGENT"
+    - "Ver Status Checkbox in Routes Section"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
