@@ -1443,18 +1443,26 @@ export function Agenda() {
                 </button>
                 
                 {selectedStops.size > 0 && (
-                  <button
-                    onClick={createCalendarEvents}
-                    disabled={creatingEvents || !isGoogleAuthenticated}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
-                  >
-                    {creatingEvents ? (
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4 mr-2" />
-                    )}
-                    {creatingEvents ? 'Criando...' : 'Lançar na Agenda'}
-                  </button>
+                  <>
+                    <button
+                      onClick={debugEventData}
+                      className="flex items-center px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors text-sm mr-2"
+                    >
+                      🔍 Debug Dados
+                    </button>
+                    <button
+                      onClick={createCalendarEvents}
+                      disabled={creatingEvents || !isGoogleAuthenticated}
+                      className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
+                    >
+                      {creatingEvents ? (
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4 mr-2" />
+                      )}
+                      {creatingEvents ? 'Criando...' : 'Lançar na Agenda'}
+                    </button>
+                  </>
                 )}
               </div>
             </div>
