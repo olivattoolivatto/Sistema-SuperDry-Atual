@@ -197,7 +197,7 @@ frontend:
     status_history:
         -working: false
         -agent: "main"
-        -comment: "Corrigido bug de inconsistência entre ordem dos eventos e horários na seção 'Eventos da Rota'. Modificado handleRouteSelect() para ordenar stops por delivery_order/order_sequence ANTES de criar eventos, garantindo que o índice usado em calculateEstimatedTime() corresponda à ordem otimizada da rota. Simplificado calculateEstimatedTime() para cálculo sequencial direto. Precisa testar funcionamento."
+        -comment: "SEGUNDA CORREÇÃO: Identificado que o problema persistia porque: 1) Events.sort() após criação quebrava a correspondência índice-horário, 2) order_sequence usava valor original do backend em vez do índice no array ordenado. CORREÇÕES: Removido sort() desnecessário após criação dos eventos, alterado order_sequence para usar (index + 1) baseado na ordem já corrigida. Adicionados logs detalhados para depuração. Precisa testar novamente."
 
   - task: "Route Alias and Total Value Display Bug Fix"
     implemented: true
