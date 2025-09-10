@@ -256,12 +256,15 @@ export function Agenda() {
       });
     }
     
-    console.log('✅ Eventos finais criados:', events.map(e => ({
+    console.log('✅ Eventos finais criados:', events.map((e, i) => ({
+      index: i,
       id: e.id,
       client: e.client_name,
       order: e.order_sequence,
       time: e.estimated_start_time,
-      duration: e.duration
+      duration: e.duration,
+      delivery_order: e.delivery_order,
+      original_order_sequence: e.order_sequence
     })));
     
     // Não precisamos mais reordenar - os eventos já foram criados na ordem correta
