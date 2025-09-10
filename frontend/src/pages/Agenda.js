@@ -281,26 +281,27 @@ export function Agenda() {
     const baseTime = new Date(`${route.planned_date}T${route.planned_start_time}`);
     let currentTime = new Date(baseTime);
     
-    // Ordenar stops pela mesma lógica usada na criação dos eventos
+    // Ordenar stops APENAS por order_sequence (ordem do mapa)
     const sortedStops = [...route.stops].sort((a, b) => {
-      const aOrder = a.delivery_order || a.order_sequence || 0;
-      const bOrder = b.delivery_order || b.order_sequence || 0;
+      const aOrder = a.order_sequence || 0;
+      const bOrder = b.order_sequence || 0;
       return aOrder - bOrder;
     });
     
-    console.log('⏰ Calculando horário sequencial:', {
+    console.log('⏰ Calculando horário sequencial (ordem do mapa):', {
       stopIndex,
       clientName: sortedStops[stopIndex]?.client_name,
+      orderSequence: sortedStops[stopIndex]?.order_sequence,
       baseTime: route.planned_start_time
     });
     
-    // Add cumulative time for previous stops (na ordem correta)
+    // Add cumulative time for previous stops (na ordem do mapa)
     for (let i = 0; i < stopIndex; i++) {
       const stop = sortedStops[i];
       const duration = calculateDuration(stop.service_status);
       currentTime = new Date(currentTime.getTime() + duration * 60000); // Convert to milliseconds
       
-      console.log(`  ⏱️ Stop ${i + 1}: ${stop.client_name} (+${duration}min) = ${currentTime.toTimeString().slice(0, 5)}`);
+      console.log(`  ⏱️ Stop ${i + 1}: ${stop.client_name} (order_seq: ${stop.order_sequence}) (+${duration}min) = ${currentTime.toTimeString().slice(0, 5)}`);
     }
     
     return currentTime.toTimeString().slice(0, 5); // Return HH:MM format
