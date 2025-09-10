@@ -219,14 +219,16 @@ export function Agenda() {
     });
 
     const events = sortedStops.map((stop, index) => {
-      // Garantir ID único usando múltiplas fontes
-      const eventId = stop.id || stop.budget_item_id || `${route.id}-stop-${index}-${Date.now()}`;
+      // CORREÇÃO: Priorizar budget_item_id se disponível
+      const eventId = stop.budget_item_id || stop.id || `${route.id}-stop-${index}-${Date.now()}`;
       
       console.log(`📋 Criando evento ${index + 1}:`, {
         id: eventId,
+        budget_item_id: stop.budget_item_id,
+        stop_id: stop.id,
         client: stop.client_name,
         status: stop.service_status,
-        originalStop: stop
+        note: 'Usando budget_item_id como prioridade'
       });
       
       // Criar objeto completamente novo (deep copy)
