@@ -650,7 +650,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Editable Status Dropdowns in Routes Section"
+    - "Route Alias and Total Value Display Bug Fix"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
