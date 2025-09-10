@@ -1262,7 +1262,7 @@ export function Agenda() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900">
-              Eventos da Rota: {selectedRoute.route_alias || selectedRoute.id}
+              Eventos da Rota: {selectedRoute.alias || selectedRoute.id}
             </h2>
             
             <div className="flex items-center space-x-3">
