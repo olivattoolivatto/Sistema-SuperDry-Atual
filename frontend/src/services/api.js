@@ -105,6 +105,8 @@ export const agendaApi = {
       start_date: startDate, 
       start_time: startTime 
     }),
+  getDirectEvent: (eventId) => api.get(`/calendar/events/direct/${eventId}`),
+  createDirectEvent: (eventData) => api.post('/calendar/events/direct', eventData),
   getEventsByRoute: (routeId) => api.get(`/calendar/events/${routeId}`),
   getAllEvents: (startDate, endDate) => api.get('/calendar/events', {
     params: { start_date: startDate, end_date: endDate }
@@ -112,6 +114,14 @@ export const agendaApi = {
   getEventDetail: (eventId) => api.get(`/calendar/events/detail/${eventId}`),
   updateEvent: (eventId, eventData) => api.put(`/calendar/events/${eventId}`, eventData),
   deleteEvent: (eventId) => api.delete(`/calendar/events/${eventId}`)
+};
+
+// Budget Items API
+export const budgetItemsApi = {
+  updateStatus: (itemId, status) => api.put(`/budget-items/${itemId}/status`, null, {
+    params: { status }
+  }),
+  getStatusOptions: () => api.get('/service-status/options')
 };
 
 export default api;
