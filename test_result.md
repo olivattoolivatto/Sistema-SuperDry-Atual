@@ -187,6 +187,18 @@ backend:
         -comment: "✅ ENDPOINT FUNCIONANDO PERFEITAMENTE: POST /api/calendar/events/direct testado com 100% de sucesso (9/9 testes). 🔧 CORREÇÃO APLICADA: CalendarEvent model - route_id e stop_id alterados para Optional para suportar eventos diretos (não associados a rotas). ✅ TODOS OS CENÁRIOS TESTADOS: 1) Criação básica com campos obrigatórios, 2) Criação completa com todos os campos, 3) Validação de dados incompletos, 4) Formatos de datetime corretos/incorretos, 5) Armazenamento no banco verificado, 6) Criação real no Google Calendar confirmada. ✅ INTEGRAÇÃO COMPLETA: Google Calendar autenticado e conectado, eventos criados com sucesso e salvos na collection calendar_events com route_id=null e stop_id=null (correto para eventos diretos). ✅ DADOS DE TESTE APROVADOS: Testado com dados exatos da solicitação - título, descrição, local, duração de 2 horas funcionando perfeitamente."
 
 frontend:
+  - task: "Calendar Event Creation Enhancement"
+    implemented: true
+    working: false
+    file: "pages/Agenda.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "Reimplementado botão 'LANÇAR NA AGENDA' para criar eventos individuais com formato completo: nome (emoji + status + cliente), descrição HTML detalhada do orçamento, endereço do cliente do cadastro, horários dos eventos da rota, cor amarelo banana. Implementadas funções auxiliares getBudgetAndClientData(), getServiceEmoji(), formatEventDescription(). Usa agendaApi.createDirectEvent() para cada evento selecionado. Precisa testar funcionamento."
+
   - task: "Event Time Sequence Bug Fix in Agenda"
     implemented: true
     working: false
