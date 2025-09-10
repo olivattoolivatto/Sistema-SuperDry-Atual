@@ -1401,9 +1401,23 @@ export function Routes() {
 
       {/* Section 1: Available Items */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center mb-6">
-          <MapPin className="w-5 h-5 text-green-600 mr-2" />
-          <h2 className="text-xl font-semibold text-gray-900">Serviços Disponíveis para Rota</h2>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center">
+            <MapPin className="w-5 h-5 text-green-600 mr-2" />
+            <h2 className="text-xl font-semibold text-gray-900">Serviços Disponíveis para Rota</h2>
+          </div>
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="showStatus"
+              checked={showStatus}
+              onChange={(e) => setShowStatus(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="showStatus" className="text-sm font-medium text-gray-700">
+              Ver Status
+            </label>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
