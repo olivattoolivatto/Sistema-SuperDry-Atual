@@ -37,6 +37,8 @@ export function Routes() {
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [showStatus, setShowStatus] = useState(false);
+  const [statusOptions, setStatusOptions] = useState([]);
+  const [editingStatus, setEditingStatus] = useState({});
   // Debug tools
   const extractDebugLogs = () => {
     const logs = localStorage.getItem('routesDebugLogs') || '';
