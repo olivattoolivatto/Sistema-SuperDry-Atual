@@ -259,11 +259,12 @@ export function Agenda() {
     console.log('✅ Eventos finais criados:', events.map(e => ({
       id: e.id,
       client: e.client_name,
+      order: e.order_sequence,
+      time: e.estimated_start_time,
       duration: e.duration
     })));
     
-    // Sort by order_sequence
-    events.sort((a, b) => a.order_sequence - b.order_sequence);
+    // Não precisamos mais reordenar - os eventos já foram criados na ordem correta
     setRouteEvents([...events]); // Force new array
     
     // Load calendar events for this route
