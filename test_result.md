@@ -662,7 +662,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Route Alias and Total Value Display Bug Fix"
+    - "Event Time Sequence Bug Fix in Agenda"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
