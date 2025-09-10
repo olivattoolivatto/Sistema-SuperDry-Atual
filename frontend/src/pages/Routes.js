@@ -127,6 +127,11 @@ export function Routes() {
 
   // Debug tools
   const extractDebugLogs = () => {
+    const logs = localStorage.getItem('routesDebugLogs') || '';
+    console.log('📋 DEBUG LOGS EXPORT:');
+    console.log('='.repeat(80));
+    console.log(logs);
+    console.log('='.repeat(80));
     return logs;
   };
 
