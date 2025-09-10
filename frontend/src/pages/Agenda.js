@@ -1022,6 +1022,32 @@ export function Agenda() {
     return description;
   };
 
+  // Função de debug para testar dados antes de criar eventos
+  const debugEventData = async () => {
+    if (!selectedRoute || selectedStops.size === 0) return;
+    
+    console.log('🔍 === DEBUG: DADOS DOS EVENTOS SELECIONADOS ===');
+    
+    const selectedEvents = routeEvents.filter(event => selectedStops.has(event.id));
+    
+    for (const event of selectedEvents) {
+      console.log(`\n📋 Evento: ${event.client_name}`);
+      console.log('   - ID do evento:', event.id);
+      console.log('   - Dados completos:', event);
+      
+      // Tentar buscar orçamento
+      try {
+        const { budget, client } = await getBudgetAndClientData(event.id);
+        console.log('   ✅ Orçamento encontrado:', budget.id);
+        console.log('   ✅ Cliente encontrado:', client.name);
+      } catch (error) {
+        console.log('   ❌ Erro ao buscar orçamento:', error.message);
+      }
+    }
+    
+    console.log('🔍 === FIM DEBUG ===');
+  };
+
   const createCalendarEvents = async () => {
     if (!selectedRoute || selectedStops.size === 0) {
       toast({
