@@ -143,7 +143,7 @@ export function Agenda() {
         },
         body: JSON.stringify({
           code: code,
-          redirect_uri: 'https://superdry-routes.preview.emergentagent.com/agenda'
+          redirect_uri: 'https://laundry-agenda-1.preview.emergentagent.com/agenda'
         })
       });
 
