@@ -1111,7 +1111,7 @@ export function Agenda() {
           const eventData = {
             summary: eventTitle,  // API espera 'summary', não 'title'
             description: description,
-            location: client.full_address || client.address || '',
+            location: String(client.full_address || client.address || client.name || ''), // Garantir que seja string
             start_datetime: startDateTime.toISOString(),  // ISO format
             end_datetime: endDateTime.toISOString()       // ISO format
           };
