@@ -489,6 +489,15 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
     const service = services.find(s => s.id === itemData.service_id);
     if (!service) return;
 
+    // Debug: verificar se o serviço tem default_service_status
+    console.log('🔍 Serviço selecionado:', {
+      id: service.id,
+      name: service.name,
+      execution_location: service.execution_location,
+      default_service_status: service.default_service_status,
+      hasDefaultStatus: !!service.default_service_status
+    });
+
     // Ensure numeric values
     const quantity = parseFloat(itemData.quantity) || 1;
     const area_m2 = parseFloat(itemData.area_m2) || 0;
