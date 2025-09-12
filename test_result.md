@@ -734,7 +734,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Update Service Emoji Function with Specific Mappings"
+    - "Multi-Service Event Title Generation"
   stuck_tasks: []
   test_all: false
   test_priority: "medium"
