@@ -1237,10 +1237,8 @@ export function Agenda() {
           const startDateTime = new Date(`${eventDate}T${startTime}`);
           const endDateTime = new Date(startDateTime.getTime() + (event.duration * 60000));
           
-          // Gerar nome do evento
-          const serviceEmoji = getServiceEmoji(event.service_name);
-          const statusText = ['RETIRAR', 'ENTREGAR'].includes(event.service_status) ? ` ${event.service_status}` : '';
-          const eventTitle = `${serviceEmoji}${statusText} ${event.client_name}`;
+          // Gerar nome do evento com múltiplos serviços
+          const eventTitle = generateEventTitle(budget, event.client_name);
           
           // Formatar descrição
           const description = formatEventDescription(budget, client, event);
