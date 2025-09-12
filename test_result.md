@@ -197,7 +197,7 @@ frontend:
     status_history:
         -working: false
         -agent: "main"
-        -comment: "CORREÇÃO CRÍTICA BASEADA EM LOGS: Identificado através dos logs do usuário que erro HTTP 422 era causado por campo location sendo enviado como objeto em vez de string. CORREÇÃO: Forçado location para String() garantindo formato correto. Melhorados logs para capturar erros específicos da API com parsing do detail array. Debugs mostram dados corretos sendo encontrados (orçamento ORC-0000002, cliente Daiana), problema estava no formato do campo location. Precisa testar novamente."
+        -comment: "CORREÇÃO DO ENDEREÇO [object Object]: Usuário confirmou que eventos funcionam mas endereço aparece como [object Object]. CAUSA: client.address é objeto Address com full_address dentro. CORREÇÃO: Criadas funções getClientAddress() e getClientComplement() para extrair corretamente client.address.full_address e client.address.complement. Atualizado location do evento e descrição para usar essas funções. Adicionados logs de debug da estrutura do endereço. Precisa testar novamente."
 
   - task: "Event Time Sequence Bug Fix in Agenda"
     implemented: true
