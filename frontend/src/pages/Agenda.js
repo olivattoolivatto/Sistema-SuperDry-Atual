@@ -1026,15 +1026,29 @@ export function Agenda() {
     }
   };
 
-  // Função para gerar emoji do serviço (placeholder até receber a lista)
+  // Função para gerar emoji do serviço baseado nas palavras-chave
   const getServiceEmoji = (serviceName) => {
-    // Por enquanto retorna emoji genérico, será atualizado com lista específica
-    if (serviceName.toLowerCase().includes('lavagem')) return '🧽';
-    if (serviceName.toLowerCase().includes('limpeza')) return '🧹';
-    if (serviceName.toLowerCase().includes('tapete')) return '🏠';
-    if (serviceName.toLowerCase().includes('sofá')) return '🛋️';
-    if (serviceName.toLowerCase().includes('cadeira')) return '🪑';
-    return '✨'; // Emoji padrão
+    if (!serviceName) return '✨'; // Emoji padrão
+    
+    const name = serviceName.toLowerCase();
+    
+    // Verificar palavras-chave específicas
+    if (name.includes('impermeabilização')) return '💦';
+    if (name.includes('carro') || name.includes('veiculo') || name.includes('veículo')) return '🚘';
+    if (name.includes('pagamento') || name.includes('cartão') || name.includes('credito') || name.includes('débito') || name.includes('debito')) return '💳';
+    if (name.includes('colchao') || name.includes('colchão') || name.includes('box') || name.includes('cabeceira')) return '🛏️';
+    if (name.includes('cortina')) return '🪟';
+    if (name.includes('tapete')) return '🗞️';
+    if (name.includes('persiana')) return '📜';
+    if (name.includes('cadeira') || name.includes('cadeirão') || name.includes('cadeirao')) return '🪑';
+    if (name.includes('sofa') || name.includes('sofá') || name.includes('namoradeira') || name.includes('chaise') || name.includes('cheise')) return '🛋️';
+    if (name.includes('poltrona')) return '💺';
+    if (name.includes('edredom') || name.includes('colcha') || name.includes('pillowtop')) return '🧺';
+    if (name.includes('almofada') || name.includes('puff') || name.includes('outros')) return '📦';
+    if (name.includes('carpete')) return '⬜';
+    if (name.includes('carrinho') || name.includes('cadeirinha') || name.includes('bebe') || name.includes('bebê')) return '🛒👶';
+    
+    return '✨'; // Emoji padrão para serviços não mapeados
   };
 
   // Função para formatar a descrição do evento
