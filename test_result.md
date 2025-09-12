@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Atualizar função getServiceEmoji com lista específica de emojis fornecida pelo usuário para aparecer no título dos agendamentos conforme palavras-chave dos itens do orçamento."
+user_problem_statement: "Melhorar títulos dos eventos para mostrar múltiplos emojis quando há serviços diferentes no orçamento, com palavras RETIRAR/ENTREGAR próximas aos emojis correspondentes. Formato: '🗞️RETIRAR e 🛋️ Fulano de Tal'."
 
 backend:
   - task: "Budget Item Status Update API"
