@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Adicionar observações de cada item do orçamento na descrição dos eventos do Google Calendar quando houver observações nos itens."
+user_problem_statement: "Adicionar campo 'STATUS' no quadro 'Informações do Serviço' ao adicionar item a um orçamento, logo abaixo da informação 'Local de Execução'."
 
 backend:
   - task: "Budget Item Status Update API"
