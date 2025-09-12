@@ -1042,8 +1042,8 @@ export function Agenda() {
     let description = `Código do Orçamento: ${budget.id}\n`;
     description += `<b>Cliente: ${client.name}</b>\n`;
     description += `Atendente: ${budget.salesperson || 'Não informado'}\n`;
-    description += `Endereço: ${client.full_address || client.address || 'Não informado'}\n`;
-    description += `Complemento: ${client.address_complement || 'NENHUM'}\n`;
+    description += `Endereço: ${getClientAddress(client)}\n`;
+    description += `Complemento: ${getClientComplement(client)}\n`;
     description += `Data do Orçamento: ${new Date(budget.updated_at || budget.created_at).toLocaleDateString('pt-BR')}\n`;
     description += `Forma de Pagamento: ${budget.payment_method || 'Não informado'}\n`;
     description += `<i>Observações Internas:</i> ${budget.internal_observations || 'Nenhuma observação'}\n\n`;
