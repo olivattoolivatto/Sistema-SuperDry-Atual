@@ -1383,6 +1383,7 @@ const ItemFormModal = ({ services, editingItem, onSave, onCancel }) => {
                 <p><strong>Categoria:</strong> {selectedService.category}</p>
                 <p><strong>Tipo de Medida:</strong> {selectedService.measure_type}</p>
                 <p><strong>Local de Execução:</strong> {selectedService.execution_location}</p>
+                <p><strong>Status:</strong> {selectedService.default_service_status}</p>
                 <p><strong>Preço do Catálogo:</strong> R$ {selectedService.sale_price.toFixed(2)}</p>
               </div>
             </div>
