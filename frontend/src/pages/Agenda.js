@@ -1126,10 +1126,22 @@ export function Agenda() {
           
         } catch (eventError) {
           console.error(`❌ Erro ao criar evento para ${event.client_name}:`, eventError);
-          console.error('📋 Erro detalhado:', eventError.response?.data || eventError.message);
+          console.error('📋 Erro detalhado da API:', eventError.response?.data);
+          console.error('📋 Dados que causaram erro:', eventData);
+          
+          // Tentar extrair mensagens específicas do erro
+          const errorDetail = eventError.response?.data?.detail;
+          let errorMessage = eventError.message;
+          
+          if (Array.isArray(errorDetail) && errorDetail.length > 0) {
+            errorMessage = errorDetail.map(err => `${err.loc?.join('.')}: ${err.msg}`).join(', ');
+          } else if (typeof errorDetail === 'string') {
+            errorMessage = errorDetail;
+          }
+          
           toast({
             title: "Erro parcial!",
-            description: `Erro ao criar evento para ${event.client_name}: ${eventError.response?.data?.detail || eventError.message}`,
+            description: `Erro ao criar evento para ${event.client_name}: ${errorMessage}`,
             variant: "destructive",
           });
         }
