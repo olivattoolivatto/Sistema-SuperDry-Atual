@@ -197,7 +197,7 @@ frontend:
     status_history:
         -working: false
         -agent: "main"
-        -comment: "CORREÇÃO DE BUGS NA API: Identificado que eventos não apareciam devido a incompatibilidade de dados com API. PROBLEMAS: 1) API espera 'summary' não 'title', 2) API espera 'start_datetime/end_datetime' em ISO format não campos separados. CORREÇÕES: Alterado eventData para usar summary, start_datetime/end_datetime em formato ISO, melhorado logs de debug, tratamento de erros detalhado, debug na busca de orçamentos. Precisa testar novamente."
+        -comment: "CORREÇÃO CRÍTICA BASEADA EM LOGS: Identificado através dos logs do usuário que erro HTTP 422 era causado por campo location sendo enviado como objeto em vez de string. CORREÇÃO: Forçado location para String() garantindo formato correto. Melhorados logs para capturar erros específicos da API com parsing do detail array. Debugs mostram dados corretos sendo encontrados (orçamento ORC-0000002, cliente Daiana), problema estava no formato do campo location. Precisa testar novamente."
 
   - task: "Event Time Sequence Bug Fix in Agenda"
     implemented: true
