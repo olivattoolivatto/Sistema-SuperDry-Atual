@@ -1057,7 +1057,15 @@ export function Agenda() {
       budget.items.forEach(item => {
         const quantity = item.quantity || 1;
         const unitValue = parseFloat(item.total_value) || 0;
-        description += `<i>- ${item.service_name || 'Serviço'} - ${quantity} unid. - R$ ${unitValue.toFixed(2)}</i>\n`;
+        let itemLine = `<i>- ${item.service_name || 'Serviço'} - ${quantity} unid. - R$ ${unitValue.toFixed(2)}`;
+        
+        // Adicionar observações do item se houver
+        if (item.observations && item.observations.trim()) {
+          itemLine += ` (Obs: ${item.observations.trim()})`;
+        }
+        
+        itemLine += '</i>\n';
+        description += itemLine;
       });
     }
     
