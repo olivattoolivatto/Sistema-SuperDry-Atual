@@ -1153,7 +1153,7 @@ export function Agenda() {
           eventData = {
             summary: eventTitle,  // API espera 'summary', não 'title'
             description: description,
-            location: String(client.full_address || client.address || client.name || ''), // Garantir que seja string
+            location: getClientAddress(client), // Usar função para extrair endereço correto
             start_datetime: startDateTime.toISOString(),  // ISO format
             end_datetime: endDateTime.toISOString()       // ISO format
           };
