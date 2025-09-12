@@ -698,7 +698,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Item Observations in Event Description"
+    - "Add Status Field to Service Information Panel"
   stuck_tasks: []
   test_all: false
   test_priority: "medium"
