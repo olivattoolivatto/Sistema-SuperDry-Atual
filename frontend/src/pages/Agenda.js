@@ -1051,6 +1051,71 @@ export function Agenda() {
     return '✨'; // Emoji padrão para serviços não mapeados
   };
 
+  // Função para gerar título do evento com múltiplos serviços
+  const generateEventTitle = (budget, clientName) => {
+    if (!budget.items || budget.items.length === 0) {
+      return `✨ ${clientName}`;
+    }
+
+    // Agrupar itens por emoji (serviço similar) e coletar status
+    const serviceGroups = {};
+    
+    budget.items.forEach(item => {
+      const emoji = getServiceEmoji(item.service_name);
+      const status = item.status || 'EXECUTAR_NO_LOCAL';
+      
+      if (!serviceGroups[emoji]) {
+        serviceGroups[emoji] = {
+          emoji,
+          statuses: new Set(),
+          services: new Set()
+        };
+      }
+      
+      serviceGroups[emoji].statuses.add(status);
+      serviceGroups[emoji].services.add(item.service_name);
+    });
+
+    console.log('🎨 Grupos de serviços para título:', serviceGroups);
+
+    // Construir partes do título
+    const titleParts = [];
+    
+    Object.values(serviceGroups).forEach(group => {
+      let part = group.emoji;
+      
+      // Verificar se tem RETIRAR ou ENTREGAR
+      const hasRetirar = group.statuses.has('RETIRAR');
+      const hasEntregar = group.statuses.has('ENTREGAR');
+      
+      if (hasRetirar && hasEntregar) {
+        part += 'RETIRAR/ENTREGAR';
+      } else if (hasRetirar) {
+        part += 'RETIRAR';
+      } else if (hasEntregar) {
+        part += 'ENTREGAR';
+      }
+      // Se for apenas EXECUTAR_NO_LOCAL, não adiciona texto
+      
+      titleParts.push(part);
+    });
+
+    // Juntar partes com "e" e adicionar nome do cliente
+    let title;
+    if (titleParts.length === 1) {
+      title = `${titleParts[0]} ${clientName}`;
+    } else if (titleParts.length === 2) {
+      title = `${titleParts[0]} e ${titleParts[1]} ${clientName}`;
+    } else {
+      // Mais de 2 serviços: usar vírgulas e "e" no final
+      const lastPart = titleParts.pop();
+      title = `${titleParts.join(', ')} e ${lastPart} ${clientName}`;
+    }
+
+    console.log('🎯 Título gerado:', title);
+    return title;
+  };
+
   // Função para formatar a descrição do evento
   const formatEventDescription = (budget, client, eventData) => {
     const totalItems = budget.items ? budget.items.length : 0;
