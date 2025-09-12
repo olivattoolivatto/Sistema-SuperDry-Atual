@@ -187,6 +187,18 @@ backend:
         -comment: "✅ ENDPOINT FUNCIONANDO PERFEITAMENTE: POST /api/calendar/events/direct testado com 100% de sucesso (9/9 testes). 🔧 CORREÇÃO APLICADA: CalendarEvent model - route_id e stop_id alterados para Optional para suportar eventos diretos (não associados a rotas). ✅ TODOS OS CENÁRIOS TESTADOS: 1) Criação básica com campos obrigatórios, 2) Criação completa com todos os campos, 3) Validação de dados incompletos, 4) Formatos de datetime corretos/incorretos, 5) Armazenamento no banco verificado, 6) Criação real no Google Calendar confirmada. ✅ INTEGRAÇÃO COMPLETA: Google Calendar autenticado e conectado, eventos criados com sucesso e salvos na collection calendar_events com route_id=null e stop_id=null (correto para eventos diretos). ✅ DADOS DE TESTE APROVADOS: Testado com dados exatos da solicitação - título, descrição, local, duração de 2 horas funcionando perfeitamente."
 
 frontend:
+  - task: "Multi-Service Event Title Generation"
+    implemented: true
+    working: false
+    file: "pages/Agenda.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "Implementada função generateEventTitle() para títulos com múltiplos serviços. FUNCIONALIDADES: 1) Agrupa itens por emoji (sem repetir), 2) Adiciona RETIRAR/ENTREGAR após emoji quando aplicável, 3) Junta múltiplos serviços com 'e', 4) Formatos: '🗞️RETIRAR Fulano', '🗞️RETIRAR e 🛋️ Fulano', '🗞️, 🛋️ e 🪑 Fulano'. Analisa todos os itens do orçamento, não apenas o item atual. Logs de debug incluídos. Precisa testar funcionamento."
+
   - task: "Update Service Emoji Function with Specific Mappings"
     implemented: true
     working: false
