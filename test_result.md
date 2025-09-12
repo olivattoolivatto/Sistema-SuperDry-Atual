@@ -686,10 +686,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Calendar Event Creation Enhancement"
+    - "Item Observations in Event Description"
   stuck_tasks: []
   test_all: false
-  test_priority: "high_first"
+  test_priority: "medium"
 
 agent_communication:
     -agent: "main"
