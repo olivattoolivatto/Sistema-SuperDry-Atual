@@ -514,7 +514,7 @@ const BudgetForm = ({ budget, preSelectedClient, onSave, onCancel }) => {
       linear_meters: linear_meters,
       total_value: finalQuantity * unit_price,
       observations: itemData.observations || '',
-      status: editingItem ? editingItem.status : 'RETIRAR',
+      status: editingItem ? editingItem.status : (service.default_service_status || 'RETIRAR'),
       execution_location: service.execution_location || 'RETIRADA',
       is_retoque: editingItem ? editingItem.is_retoque : false,
       created_at: editingItem ? editingItem.created_at : new Date().toISOString()
