@@ -1089,6 +1089,9 @@ export function Agenda() {
       
       // Criar cada evento individualmente
       for (const event of selectedEvents) {
+        // Criar cada evento individualmente
+        let eventData = {}; // Declarar fora do try para acesso no catch
+        
         try {
           // Buscar dados do orçamento e cliente
           const { budget, client } = await getBudgetAndClientData(event.id);
@@ -1108,7 +1111,7 @@ export function Agenda() {
           const description = formatEventDescription(budget, client, event);
           
           // Dados do evento para criar (formato correto para API)
-          const eventData = {
+          eventData = {
             summary: eventTitle,  // API espera 'summary', não 'title'
             description: description,
             location: String(client.full_address || client.address || client.name || ''), // Garantir que seja string
