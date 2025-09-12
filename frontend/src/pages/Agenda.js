@@ -1015,6 +1015,9 @@ export function Agenda() {
       const client = clientResponse.data;
       
       console.log(`✅ Cliente encontrado: ${client.name} (${client.id})`);
+      console.log('📍 Estrutura do endereço:', client.address);
+      console.log('📍 Endereço extraído:', getClientAddress(client));
+      console.log('📍 Complemento extraído:', getClientComplement(client));
       
       return { budget, client };
     } catch (error) {
