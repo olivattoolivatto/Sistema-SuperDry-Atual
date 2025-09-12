@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Implementar funcionalidade completa do botão 'LANÇAR NA AGENDA' para criar eventos individuais no Google Calendar usando dados dos 'Eventos da Rota' selecionados, com formato específico para nome (emoji + status + cliente), descrição detalhada do orçamento, endereço do cliente, cor amarelo banana e horários baseados nos eventos da rota."
+user_problem_statement: "Adicionar observações de cada item do orçamento na descrição dos eventos do Google Calendar quando houver observações nos itens."
 
 backend:
   - task: "Budget Item Status Update API"
