@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Adicionar campo 'STATUS' no quadro 'Informações do Serviço' ao adicionar item a um orçamento, logo abaixo da informação 'Local de Execução'."
+user_problem_statement: "Correção de inconsistência no campo STATUS: ao escolher item aparece 'EXECUTAR_NO_LOCAL' mas na lista do orçamento aparece 'RETIRAR'. Investigar se há múltiplos campos STATUS e garantir que o status do cadastro do serviço tenha prioridade."
 
 backend:
   - task: "Budget Item Status Update API"
