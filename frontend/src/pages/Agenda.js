@@ -1054,6 +1054,12 @@ export function Agenda() {
     
     // Adicionar itens do orçamento
     if (budget.items && budget.items.length > 0) {
+      console.log('📋 Itens do orçamento:', budget.items.map(item => ({
+        name: item.service_name,
+        observations: item.observations,
+        hasObs: !!item.observations
+      })));
+      
       budget.items.forEach(item => {
         const quantity = item.quantity || 1;
         const unitValue = parseFloat(item.total_value) || 0;
