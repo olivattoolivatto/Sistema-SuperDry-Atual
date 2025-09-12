@@ -710,10 +710,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Add Status Field to Service Information Panel"
+    - "Fix Status Field Inconsistency Bug"
   stuck_tasks: []
   test_all: false
-  test_priority: "medium"
+  test_priority: "high"
 
 agent_communication:
     -agent: "main"
