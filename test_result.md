@@ -780,9 +780,10 @@ metadata:
 test_plan:
   current_focus:
     - "Multi-Service Event Title Generation"
-  stuck_tasks: []
+  stuck_tasks:
+    - "Multi-Service Event Title Generation"
   test_all: false
-  test_priority: "medium"
+  test_priority: "high"
 
 agent_communication:
     -agent: "main"
