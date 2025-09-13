@@ -1318,10 +1318,10 @@ export function Agenda() {
   };
 
   const createCalendarEvents = async () => {
-    if (!selectedRoute || selectedStops.size === 0) {
+    if (selectedStops.size === 0) {
       toast({
         title: "Aviso!",
-        description: "Selecione pelo menos um item para criar na agenda.",
+        description: "Selecione pelo menos um evento para lançar na agenda.",
         variant: "default",
       });
       return;
@@ -1330,17 +1330,8 @@ export function Agenda() {
     if (!customEventDate) {
       toast({
         title: "Aviso!",
-        description: "Selecione uma data para lançar os eventos na agenda.",
+        description: "Selecione uma data para os eventos.",
         variant: "default",
-      });
-      return;
-    }
-
-    if (!isGoogleAuthenticated) {
-      toast({
-        title: "Autenticação necessária!",
-        description: "Conecte-se ao Google Calendar primeiro.",
-        variant: "destructive",
       });
       return;
     }
@@ -1348,94 +1339,114 @@ export function Agenda() {
     setCreatingEvents(true);
     
     try {
-      // Filtrar eventos selecionados
       const selectedEvents = routeEvents.filter(event => selectedStops.has(event.id));
       const createdEvents = [];
-      
-      console.log(`🗓️ Criando ${selectedEvents.length} eventos individuais...`);
-      
-      // Criar cada evento individualmente
+
+      console.log('🎯 Lançando', selectedEvents.length, 'eventos na agenda:');
+
       for (const event of selectedEvents) {
-        // Criar cada evento individualmente
-        let eventData = {}; // Declarar fora do try para acesso no catch
-        
         try {
-          // Buscar dados do orçamento e cliente
+          console.log(`📋 Processando evento: ${event.id} - ${event.client_name}`);
+          
+          // Buscar dados do orçamento e cliente para criar descrição rica
           const { budget, client } = await getBudgetAndClientData(event.id);
           
-          // Calcular horário de início e fim do evento
-          const eventDate = customEventDate;
-          const startTime = event.estimated_start_time;
-          const startDateTime = new Date(`${eventDate}T${startTime}`);
-          const endDateTime = new Date(startDateTime.getTime() + (event.duration * 60000));
+          // Gerar título inteligente do evento baseado em todos os itens do orçamento
+          const eventTitle = generateEventTitle(budget, client.name);
           
-          // Gerar nome do evento com múltiplos serviços
-          const eventTitle = generateEventTitle(budget, event.client_name);
+          // Extrair endereço correto do cliente
+          const clientAddress = getClientAddress(client);
+          const clientComplement = getClientComplement(client);
           
-          // Formatar descrição
-          const description = formatEventDescription(budget, client, event);
+          console.log(`📍 Dados do cliente para evento ${event.id}:`, {
+            name: client.name,
+            address: clientAddress,
+            complement: clientComplement
+          });
           
-          // Dados do evento para criar (formato correto para API)
-          eventData = {
-            summary: eventTitle,  // API espera 'summary', não 'title'
-            description: description,
-            location: getClientAddress(client), // Usar função para extrair endereço correto
-            start_datetime: startDateTime.toISOString(),  // ISO format
-            end_datetime: endDateTime.toISOString()       // ISO format
+          // Criar descrição rica em HTML com informações detalhadas
+          const eventDescription = formatEventDescription(budget, client, event);
+          
+          console.log(`📝 Descrição criada para ${event.id}:`, eventDescription.substring(0, 200) + '...');
+          
+          // Calcular horário de início e fim baseado na data personalizada
+          const startDateTime = new Date(`${customEventDate}T${event.estimated_start_time}:00`);
+          const endDateTime = new Date(startDateTime.getTime() + event.duration * 60000);
+
+          const eventData = {
+            summary: eventTitle,
+            description: eventDescription,
+            location: clientAddress,
+            start_datetime: startDateTime.toISOString(),
+            end_datetime: endDateTime.toISOString()
           };
+
+          console.log(`🕒 Horários calculados para ${event.client_name}:`, {
+            start: startDateTime.toISOString(),
+            end: endDateTime.toISOString(),
+            duration: event.duration
+          });
+
+          // Criar evento via API direta
+          const response = await fetch(`${BACKEND_URL}/api/calendar/events/direct`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(eventData)
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Erro ao criar evento');
+          }
+
+          const result = await response.json();
+          console.log(`✅ Evento criado: ${result.event.id} - ${result.event.summary}`);
           
-          console.log(`📅 Criando evento: ${eventTitle} às ${startTime}`);
-          console.log('📋 Dados do evento:', eventData);
-          
-          // Criar evento usando API direct
-          const response = await agendaApi.createDirectEvent(eventData);
-          console.log('✅ Evento criado com sucesso:', response.data);
-          createdEvents.push(response.data);
-          
+          createdEvents.push({
+            ...result.event,
+            client_name: event.client_name,
+            original_event_id: event.id
+          });
+
         } catch (eventError) {
           console.error(`❌ Erro ao criar evento para ${event.client_name}:`, eventError);
-          console.error('📋 Erro detalhado da API:', eventError.response?.data);
-          console.error('📋 Dados que causaram erro:', eventData);
-          
-          // Tentar extrair mensagens específicas do erro
-          const errorDetail = eventError.response?.data?.detail;
-          let errorMessage = eventError.message;
-          
-          if (Array.isArray(errorDetail) && errorDetail.length > 0) {
-            errorMessage = errorDetail.map(err => `${err.loc?.join('.')}: ${err.msg}`).join(', ');
-          } else if (typeof errorDetail === 'string') {
-            errorMessage = errorDetail;
-          }
-          
           toast({
-            title: "Erro parcial!",
-            description: `Erro ao criar evento para ${event.client_name}: ${errorMessage}`,
+            title: "Erro!",
+            description: `Erro ao criar evento para ${event.client_name}: ${eventError.message}`,
             variant: "destructive",
           });
         }
       }
-      
+
       if (createdEvents.length > 0) {
+        console.log(`🎉 Total de ${createdEvents.length} eventos criados com sucesso`);
+        
         toast({
           title: "Sucesso!",
-          description: `${createdEvents.length} de ${selectedEvents.length} eventos criados no Google Calendar.`,
+          description: `${createdEvents.length} evento(s) criado(s) na agenda com títulos inteligentes!`,
           variant: "default",
         });
-        
+
         // CORREÇÃO: NÃO limpar seleções automaticamente - manter selecionados
         // setSelectedStops(new Set());
         
-        // Recarregar eventos do calendário
-        loadCalendarEvents();
+        // Recarregar eventos do Google Calendar
+        await loadCalendarEvents();
       } else {
-        throw new Error('Nenhum evento foi criado com sucesso');
+        toast({
+          title: "Aviso!",
+          description: "Nenhum evento foi criado devido a erros.",
+          variant: "default",
+        });
       }
-      
+
     } catch (error) {
-      console.error('Erro ao criar eventos:', error);
+      console.error('❌ Erro geral ao lançar na agenda:', error);
       toast({
         title: "Erro!",
-        description: "Erro ao criar eventos no Google Calendar.",
+        description: "Erro ao lançar eventos na agenda. Tente novamente.",
         variant: "destructive",
       });
     } finally {
