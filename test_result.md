@@ -105,6 +105,18 @@
 user_problem_statement: "Melhorar títulos dos eventos para mostrar múltiplos emojis quando há serviços diferentes no orçamento, com palavras RETIRAR/ENTREGAR próximas aos emojis correspondentes. Formato: '🗞️RETIRAR e 🛋️ Fulano de Tal'."
 
 backend:
+  - task: "Technician Assignment Deletion Endpoints"
+    implemented: false
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: false
+        -agent: "testing"
+        -comment: "🔍 INVESTIGAÇÃO COMPLETA DOS ENDPOINTS DE TECHNICIAN ASSIGNMENTS: Testado conforme review request para verificar se existe endpoint para deletar technician assignments. ✅ ENDPOINTS EXISTENTES FUNCIONANDO: 1) POST /api/technician/assign-events: Funciona perfeitamente para criar assignments, 2) GET /api/technician/{id}/daily-tasks: Retorna estrutura híbrida correta com assignments, status_items e agenda_events, 3) PUT /api/technician/assignment/{id}/status: Funciona para atualizar status incluindo CANCELLED. ❌ ENDPOINT DELETE NÃO EXISTE: DELETE /api/technician/assignment/{id} retorna 404 Not Found - endpoint não foi implementado no backend. ✅ ALTERNATIVA FUNCIONAL: PUT com status 'CANCELLED' aceito e funciona como alternativa para 'deletar' assignments. 🎯 CONCLUSÃO: Backend NÃO suporta exclusão direta de assignments via DELETE, mas oferece alternativa via status CANCELLED. Para implementar funcionalidade de 'Apagar' serviços enviados ao técnico na interface, deve-se usar PUT para marcar como CANCELLED ou implementar endpoint DELETE no backend."
+
   - task: "Budget Item Status Update API"
     implemented: true
     working: true
