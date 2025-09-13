@@ -1995,14 +1995,27 @@ export function Agenda() {
                         service.status === 'ASSIGNED' ? 'bg-yellow-100 text-yellow-800' :
                         service.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
                         service.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                        service.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {service.status}
                       </span>
                     </div>
                     
-                    <div className="text-sm text-gray-500">
-                      {new Date(service.assigned_date).toLocaleDateString('pt-BR')}
+                    <div className="flex items-center space-x-3">
+                      <div className="text-sm text-gray-500">
+                        {new Date(service.assigned_date).toLocaleDateString('pt-BR')}
+                      </div>
+                      
+                      {/* Botão Apagar */}
+                      <button
+                        onClick={() => handleDeleteAssignment(service.id)}
+                        className="flex items-center space-x-1 px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                        title="Apagar serviço enviado ao técnico"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Apagar</span>
+                      </button>
                     </div>
                   </div>
                   
