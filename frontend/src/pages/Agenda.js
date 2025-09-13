@@ -1303,6 +1303,7 @@ export function Agenda() {
       // setSelectedStops(new Set());
       
       // Atualizar lista de serviços enviados
+      console.log('🔄 Atualizando lista de serviços enviados...');
       await loadSentServices();
       
     } catch (error) {
