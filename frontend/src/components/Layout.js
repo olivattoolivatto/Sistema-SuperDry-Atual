@@ -9,7 +9,8 @@ import {
   X,
   Settings,
   Cog,
-  Route
+  Route,
+  Smartphone
 } from 'lucide-react';
 
 const menuItems = [
