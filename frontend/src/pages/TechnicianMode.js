@@ -127,6 +127,7 @@ function StreetMode({ onBack }) {
   const [activeTab, setActiveTab] = useState('agenda');
   const [dailyClients, setDailyClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showOnlyToday, setShowOnlyToday] = useState(true); // Novo filtro por data
 
   useEffect(() => {
     loadDailyAgenda();
