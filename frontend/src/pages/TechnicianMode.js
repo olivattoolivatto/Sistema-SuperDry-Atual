@@ -15,6 +15,7 @@ import {
   Truck,
   User
 } from 'lucide-react';
+import { routesApi, budgetItemsApi, technicianApi } from '../services/api';
 
 // Componente principal do Modo Técnico
 export function TechnicianMode() {
