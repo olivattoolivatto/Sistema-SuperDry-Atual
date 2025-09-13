@@ -280,7 +280,7 @@ function StreetMode({ onBack }) {
         console.log(`🔍 Processando assignment ${assignment.id} com eventos:`, assignment.event_ids);
         
         try {
-          // Para cada assignment, vamos buscar dados dos eventos e criar um título bonito
+          // Buscar dados reais dos eventos para gerar títulos bonitos
           const eventTitles = [];
           let totalValue = 0;
           let clientName = 'Cliente';
@@ -292,39 +292,82 @@ function StreetMode({ onBack }) {
             try {
               // Buscar dados do primeiro evento para gerar título
               const firstEventId = assignment.event_ids[0];
-              const { budget, client } = await getBudgetAndClientData(firstEventId);
               
-              // Gerar título bonito usando as mesmas funções da agenda
-              const beautifulTitle = generateEventTitle(budget, client.name);
-              
-              console.log(`🎨 Título bonito gerado para assignment ${assignment.id}: "${beautifulTitle}"`);
-              
-              // Usar dados reais do cliente
-              clientName = client.name;
-              clientAddress = `${client.address}, ${client.neighborhood} - ${client.city}/${client.state}`;
-              clientPhone = client.phone || '(65) 99999-9999';
-              
-              // Calcular valor total dos itens do orçamento
-              totalValue = budget.items.reduce((sum, item) => sum + parseFloat(item.service_value || 0), 0);
-              
-              // Usar o título bonito
-              eventTitles.push(beautifulTitle);
+              // CORREÇÃO: Verificar se é um budget_item_id válido (ITM-XXXXXXX) ou event_id fictício (EVT-XXX)
+              if (firstEventId.startsWith('ITM-')) {
+                console.log(`✅ Usando budget_item_id válido: ${firstEventId}`);
+                
+                // Usar função original para budget_item_ids válidos
+                const { budget, client } = await getBudgetAndClientData(firstEventId);
+                
+                // Gerar título bonito usando as mesmas funções da agenda
+                const beautifulTitle = generateEventTitle(budget, client.name);
+                
+                console.log(`🎨 Título bonito gerado para assignment ${assignment.id}: "${beautifulTitle}"`);
+                
+                // Usar dados reais do cliente
+                clientName = client.name;
+                clientAddress = `${client.address} - ${client.neighborhood}, ${client.city}/${client.state}`;
+                clientPhone = client.phone || '(65) 99999-9999';
+                
+                // Calcular valor total dos itens do orçamento
+                totalValue = budget.items.reduce((sum, item) => sum + parseFloat(item.service_value || 0), 0);
+                
+                // Usar o título bonito
+                eventTitles.push(beautifulTitle);
+                
+              } else {
+                console.log(`⚠️ Event ID fictício detectado: ${firstEventId} - usando fallback`);
+                
+                // FALLBACK para event_ids fictícios (EVT-XXX): 
+                // Buscar dados da rota associada para obter informações do cliente
+                if (assignment.route_id) {
+                  try {
+                    const routeResponse = await fetch(`${BACKEND_URL}/api/routes/${assignment.route_id}`);
+                    if (routeResponse.ok) {
+                      const routeData = await routeResponse.json();
+                      const stops = routeData.stops || [];
+                      
+                      if (stops.length > 0) {
+                        // Usar dados do primeiro stop como representação
+                        const firstStop = stops[0];
+                        clientName = firstStop.client_name || 'Cliente da Rota';
+                        clientAddress = `${firstStop.address?.street || 'Endereço'} - ${firstStop.neighborhood || 'Bairro'}, ${firstStop.address?.city || 'Cidade'}`;
+                        totalValue = stops.reduce((sum, stop) => sum + parseFloat(stop.service_value || 0), 0);
+                        
+                        // Gerar título simples com nome do cliente
+                        const simpleTitle = `✨ ${clientName}`;
+                        eventTitles.push(simpleTitle);
+                        
+                        console.log(`🔄 Fallback aplicado para ${assignment.id}: "${simpleTitle}"`);
+                      }
+                    }
+                  } catch (routeError) {
+                    console.error(`❌ Erro ao buscar dados da rota ${assignment.route_id}:`, routeError);
+                  }
+                }
+                
+                // Se não conseguiu dados da rota, usar título genérico
+                if (eventTitles.length === 0) {
+                  eventTitles.push(`📋 Assignment ${assignment.id.slice(-8)}`);
+                }
+              }
               
             } catch (eventError) {
               console.error(`❌ Erro ao buscar dados do evento ${assignment.event_ids[0]}:`, eventError);
               // Fallback para o event_id se não conseguir buscar dados
-              eventTitles.push(`Evento ${assignment.event_ids[0]}`);
+              eventTitles.push(`📋 Assignment ${assignment.id.slice(-8)}`);
             }
           }
           
           // Usar o primeiro título gerado ou fallback
-          const displayTitle = eventTitles.length > 0 ? eventTitles[0] : `Assignment ${assignment.id}`;
+          const displayTitle = eventTitles.length > 0 ? eventTitles[0] : `📋 Assignment ${assignment.id.slice(-8)}`;
           
           const assignmentId = assignment.id;
           
           unifiedClients[assignmentId] = {
             id: assignmentId,
-            name: displayTitle, // Usar título bonito ao invés de "Assignment TASS-xxx"
+            name: displayTitle, // Usar título bonito ou fallback inteligente
             address: clientAddress,
             phone: clientPhone,
             scheduledTime: '08:00', // TODO: Calcular horário baseado nos eventos
