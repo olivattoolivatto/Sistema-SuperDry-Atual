@@ -5,15 +5,15 @@ Interface mobile-friendly dividida em **2 modos operacionais** para técnicos de
 
 ---
 
-## 🚗 MODO RUA - Atendimento Externo
+## 🚗 MODO RUA - Atendimento Externo (ATUALIZADO)
 
 ### 📋 Status Atendidos (Conforme enum ServiceStatus)
 - `RETIRAR` - Itens para coleta na casa do cliente
 - `EXECUTAR_NO_LOCAL` - Serviços executados na residência
 - `ENTREGAR` - Itens para entrega na casa do cliente
 
-### 🏠 Interface Principal - Lista de Clientes
-**Layout:** Cards de clientes do dia
+### 🏠 Interface Principal - Agenda Diária
+**Layout:** Cards de clientes do dia com acesso rápido
 ```
 ┌─────────────────────────────────────┐
 │ 📍 João Silva - 08:30               │
@@ -21,73 +21,156 @@ Interface mobile-friendly dividida em **2 modos operacionais** para técnicos de
 │ 🛋️ Sofá 3 lugares • 🪑 2 Cadeiras   │
 │ Status: EXECUTAR_NO_LOCAL           │
 │ ──────────────────────────────────  │
-│         [ATENDER CLIENTE]           │
+│ [🗺️ WAZE/MAPS] [ATENDER CLIENTE]    │
 └─────────────────────────────────────┘
 ```
 
-### 📱 Tela do Cliente (Detalhada)
-**Seções:**
-1. **Dados do Cliente**
-   - Nome, telefone, endereço completo
-   - Observações internas do orçamento
+### 📱 Tela do Cliente (Completa)
 
-2. **Lista de Itens/Serviços**
-   - Nome do serviço, quantidade, valor
-   - Observações específicas de cada item
-   - Status atual de cada item
+#### **1. Dados do Cliente + Navegação**
+- Nome, telefone, endereço completo
+- **Link direto Waze/Maps** para navegação
+- Observações internas do orçamento
 
-3. **Campo de Observações do Técnico**
-   - Texto livre para anotações do técnico
-   - Salvo por item ou geral do cliente
+#### **2. Lista de Itens com Seleção Individual**
+```
+┌─────────────────────────────────────┐
+│ ☐ Sofá 3 Lugares - R$ 320,00       │
+│   Status: EXECUTAR_NO_LOCAL         │
+│   Obs: Mancha no braço direito      │
+├─────────────────────────────────────┤
+│ ☐ Cadeira Presidencial - R$ 80,00  │
+│   Status: EXECUTAR_NO_LOCAL         │
+│   Obs: Nenhuma observação          │
+└─────────────────────────────────────┘
+```
 
-### 📸 Fluxo de Fotos Obrigatórias
+#### **3. Campo de Observações do Técnico**
+- Texto livre para anotações do técnico
+- Possibilidade de **adicionar novos itens** ao orçamento
+
+### 📸 Fluxo de Fotos Obrigatórias (DETALHADO)
 
 #### **ANTES do Serviço (Obrigatório)**
 ```
 ┌─────────────────────────────────────┐
-│ 📸 FOTOS ANTES DO SERVIÇO           │
+│ 📸 FOTOS ANTES - Sofá 3 Lugares     │
 │                                     │
-│ Item: Sofá 3 Lugares                │
 │ Mínimo: 2 fotos obrigatórias        │
+│ [📷 Foto 1] [📷 Foto 2]             │
 │                                     │
 │ ❓ O item apresenta danos visíveis?  │
 │    [ SIM ]  [ NÃO ]                 │
 │                                     │
-│ Se SIM: Tirar fotos específicas     │
-│ dos danos para documentação         │
+│ Se SIM: Fotos específicas dos danos │
+│ [📷 Dano 1] [📷 Dano 2] [+ Mais]    │
 └─────────────────────────────────────┘
 ```
 
-#### **DURANTE o Serviço (Opcional)**
-- Fotos do processo de execução
-- Documentação de progresso
-
-#### **DEPOIS do Serviço (Obrigatório)**
+#### **DEPOIS do Serviço (Obrigatório + Assinatura)**
 ```
 ┌─────────────────────────────────────┐
 │ 📸 FOTOS FINAIS DO SERVIÇO          │
-│                                     │
-│ Resultado final do trabalho         │
-│ Mínimo: 2 fotos do resultado        │
+│ [📷 Resultado 1] [📷 Resultado 2]   │
 │                                     │
 │ ✍️ ASSINATURA DIGITAL               │
 │ ──────────────────────────────────  │
 │ Nome: ________________________     │
-│ Assinatura: [TELA TOUCH]            │
+│ [    ÁREA DE ASSINATURA TOUCH    ]  │
 │                                     │
-│ 💰 PAGAMENTO                        │
-│ Forma: [ PIX ] [ Cartão ] [ $$ ]    │
-│ Valor Recebido: R$ _______          │
-│ Status: [ Pago ] [ Pendente ]       │
+│ 📄 Comprovante PDF será enviado     │
+│    automaticamente via WhatsApp    │
+└─────────────────────────────────────┘
+```
+
+### 🔄 Botões de Finalização por Item
+
+#### **Botões Específicos por Status:**
+```
+┌─────────────────────────────────────┐
+│ Para itens EXECUTAR_NO_LOCAL:       │
+│         [✅ SERVIÇO CONCLUÍDO]       │
+│                                     │
+│ Para itens RETIRAR:                 │
+│         [📦 RETIRADA EFETUADA]       │
+│                                     │
+│ Para itens ENTREGAR:                │
+│         [🚚 ENTREGA EFETUADA]        │
+│                                     │
+│ Para itens AGUARDANDO_BUSCAR:       │
+│         [👤 CLIENTE BUSCOU]          │
+│                                     │
+│ Opções adicionais:                  │
+│ [❌ CANCELADO PELO CLIENTE]         │
+│ [📅 REAGENDAR]                      │
+└─────────────────────────────────────┘
+```
+
+### 💰 Sistema de Pagamento Completo
+
+#### **Interface de Pagamento**
+```
+┌─────────────────────────────────────┐
+│ 💰 PAGAMENTO - R$ 400,00            │
+│                                     │
+│ Valor Restante: R$ 400,00           │
+│                                     │
+│ Forma de Pagamento:                 │
+│ [PIX ▼] [CNPJ: 25995295000104 ▼]   │
+│ Valor: R$ [_______] [+ ADICIONAR]   │
+│                                     │
+│ 💸 DESCONTO (Opcional)              │
+│ R$ [_______]                        │
+│ ⚠️ Informar desconto à administração │
+│                                     │
+│ Pagamentos Adicionados:             │
+│ • PIX (CNPJ-104) - R$ 300,00       │
+│ • DINHEIRO - R$ 100,00              │
+│                                     │
+│ [💾 CONFIRMAR PAGAMENTO]            │
+└─────────────────────────────────────┘
+```
+
+#### **Formas de Pagamento Disponíveis:**
+- **PIX:** 2 CNPJs (25995295000104 / 30369419000186)
+- **DINHEIRO**
+- **CRÉDITO:** x1 até x8 parcelas
+- **DÉBITO**
+- **BOLETO**
+- **LINK_PAGAMENTO**
+- **TRANSFERÊNCIA**
+- **PERMUTA**
+
+### 🎫 Sistema de Chamados/Comunicação
+```
+┌─────────────────────────────────────┐
+│ 📞 CRIAR CHAMADO                    │
+│                                     │
+│ Tipo: [Manutenção ▼] [Compra ▼]    │
+│ Destinatário: [Admin ▼] [João ▼]   │
+│                                     │
+│ Descrição:                          │
+│ ________________________________   │
+│ ________________________________   │
+│                                     │
+│ [📤 ENVIAR CHAMADO]                 │
 └─────────────────────────────────────┘
 ```
 
 ### 🔄 Evolução de Status (Modo Rua)
 ```
-RETIRAR → COLETADO
-EXECUTAR_NO_LOCAL → EXECUTADO  
-ENTREGAR → ENTREGUE
+RETIRAR → [📦 RETIRADA EFETUADA] → COLETADO
+EXECUTAR_NO_LOCAL → [✅ SERVIÇO CONCLUÍDO] → EXECUTADO  
+ENTREGAR → [🚚 ENTREGA EFETUADA] → ENTREGUE
+AGUARDANDO_BUSCAR → [👤 CLIENTE BUSCOU] → BUSCOU
 ```
+
+### 🔍 Auditoria de Alterações
+**Registra automaticamente:**
+- Usuário responsável pela alteração
+- Data/hora da modificação
+- Valores antes e depois
+- Tipo de alteração (pagamento/desconto/reagendamento)
 
 ---
 
