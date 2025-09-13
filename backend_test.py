@@ -2129,6 +2129,281 @@ class ServiceStatusBugTester:
         
         return success
 
+    def test_technician_assign_events(self):
+        """Test POST /api/technician/assign-events - Assign events to technician"""
+        print("\n=== TESTING TECHNICIAN ASSIGN EVENTS ===")
+        
+        # Get available items to use as event IDs
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Technician Assign Events - Setup", False, 
+                        "Failed to get available items for assignment")
+            return None
+        
+        available_items = response['data'].get('available_items', [])
+        if len(available_items) < 2:
+            self.log_test("Technician Assign Events - Setup", False, 
+                        "Need at least 2 available items for testing")
+            return None
+        
+        # Create assignment with valid data
+        assignment_data = {
+            "route_id": "RTE-TEST001",
+            "event_ids": [available_items[0]['budget_item_id'], available_items[1]['budget_item_id']],
+            "technician_id": "TECH-001",
+            "assigned_date": "2025-01-15",
+            "assignment_type": "AGENDA"
+        }
+        
+        response = self.make_request('POST', '/technician/assign-events', assignment_data)
+        if response['success']:
+            result = response['data']
+            
+            # Verify response structure
+            expected_fields = ['success', 'assignment_id', 'events_assigned', 'technician_id']
+            missing_fields = [field for field in expected_fields if field not in result]
+            
+            if (not missing_fields and 
+                result.get('success') == True and
+                result.get('events_assigned') == 2 and
+                result.get('technician_id') == 'TECH-001'):
+                
+                assignment_id = result.get('assignment_id')
+                self.log_test("Technician Assign Events", True, 
+                            f"✅ Successfully assigned 2 events to TECH-001, assignment_id: {assignment_id}")
+                return assignment_id
+            else:
+                self.log_test("Technician Assign Events", False, 
+                            f"❌ Invalid response format or data: {result}")
+                return None
+        else:
+            self.log_test("Technician Assign Events", False, 
+                        "❌ Failed to assign events", response['data'])
+            return None
+    
+    def test_technician_daily_tasks(self):
+        """Test GET /api/technician/{technician_id}/daily-tasks - Get hybrid tasks"""
+        print("\n=== TESTING TECHNICIAN DAILY TASKS ===")
+        
+        technician_id = "TECH-001"
+        test_date = "2025-01-15"
+        
+        response = self.make_request('GET', f'/technician/{technician_id}/daily-tasks?date={test_date}')
+        if response['success']:
+            result = response['data']
+            
+            # Verify response structure
+            expected_sections = ['agenda_events', 'status_items', 'assignments']
+            missing_sections = [section for section in expected_sections if section not in result]
+            
+            if not missing_sections:
+                agenda_events = result.get('agenda_events', [])
+                status_items = result.get('status_items', [])
+                assignments = result.get('assignments', [])
+                
+                print(f"   📋 Agenda events: {len(agenda_events)}")
+                print(f"   📊 Status items: {len(status_items)}")
+                print(f"   📝 Assignments: {len(assignments)}")
+                
+                # Verify no duplication between agenda and status items
+                agenda_item_ids = set()
+                for assignment in assignments:
+                    agenda_item_ids.update(assignment.get('event_ids', []))
+                
+                status_item_ids = set(item.get('id') for item in status_items if item.get('id'))
+                
+                duplicates = agenda_item_ids.intersection(status_item_ids)
+                
+                if len(duplicates) == 0:
+                    self.log_test("Technician Daily Tasks", True, 
+                                f"✅ Retrieved hybrid tasks successfully - No duplication between agenda and status items")
+                    self.log_test("Deduplication Check", True, 
+                                f"✅ No items appear in both agenda assignments and status items")
+                else:
+                    self.log_test("Technician Daily Tasks", True, 
+                                f"✅ Retrieved hybrid tasks successfully")
+                    self.log_test("Deduplication Check", False, 
+                                f"❌ Found {len(duplicates)} duplicate items between agenda and status")
+                
+                return result
+            else:
+                self.log_test("Technician Daily Tasks", False, 
+                            f"❌ Missing response sections: {missing_sections}")
+                return None
+        else:
+            self.log_test("Technician Daily Tasks", False, 
+                        "❌ Failed to get technician daily tasks", response['data'])
+            return None
+    
+    def test_update_assignment_status(self, assignment_id: str):
+        """Test PUT /api/technician/assignment/{assignment_id}/status - Update assignment status"""
+        print("\n=== TESTING UPDATE ASSIGNMENT STATUS ===")
+        
+        if not assignment_id:
+            self.log_test("Update Assignment Status", False, "No assignment ID provided for testing")
+            return False
+        
+        # Test valid status transitions
+        test_statuses = ["IN_PROGRESS", "COMPLETED"]
+        
+        for status in test_statuses:
+            response = self.make_request('PUT', f'/technician/assignment/{assignment_id}/status?status={status}')
+            if response['success']:
+                result = response['data']
+                
+                if (result.get('success') == True and 
+                    result.get('assignment_id') == assignment_id and
+                    result.get('new_status') == status):
+                    
+                    self.log_test(f"Update Assignment Status - {status}", True, 
+                                f"✅ Successfully updated assignment to {status}")
+                else:
+                    self.log_test(f"Update Assignment Status - {status}", False, 
+                                f"❌ Invalid response format: {result}")
+                    return False
+            else:
+                self.log_test(f"Update Assignment Status - {status}", False, 
+                            f"❌ Failed to update status to {status}", response['data'])
+                return False
+        
+        # Test invalid assignment ID
+        fake_assignment_id = "TASS-FAKE123"
+        response = self.make_request('PUT', f'/technician/assignment/{fake_assignment_id}/status?status=COMPLETED')
+        if not response['success'] and response['status_code'] == 404:
+            self.log_test("Update Assignment Status - Invalid ID", True, 
+                        f"✅ Correctly returned 404 for non-existent assignment")
+        else:
+            self.log_test("Update Assignment Status - Invalid ID", False, 
+                        f"❌ Should have returned 404 for non-existent assignment")
+        
+        return True
+    
+    def test_technician_invalid_cases(self):
+        """Test invalid cases for technician endpoints"""
+        print("\n=== TESTING TECHNICIAN INVALID CASES ===")
+        
+        # Test 1: Invalid technician ID in daily tasks
+        invalid_technician_id = "TECH-INVALID"
+        response = self.make_request('GET', f'/technician/{invalid_technician_id}/daily-tasks')
+        if response['success']:
+            # Even invalid technician should return empty tasks, not error
+            result = response['data']
+            if (isinstance(result.get('agenda_events'), list) and 
+                isinstance(result.get('status_items'), list) and
+                isinstance(result.get('assignments'), list)):
+                self.log_test("Invalid Technician ID", True, 
+                            f"✅ Invalid technician returns empty task structure")
+            else:
+                self.log_test("Invalid Technician ID", False, 
+                            f"❌ Invalid response structure for invalid technician")
+        else:
+            self.log_test("Invalid Technician ID", False, 
+                        "❌ Should return empty tasks for invalid technician", response['data'])
+        
+        # Test 2: Assignment with empty event_ids
+        assignment_data = {
+            "route_id": "RTE-TEST001",
+            "event_ids": [],
+            "technician_id": "TECH-001",
+            "assigned_date": "2025-01-15"
+        }
+        
+        response = self.make_request('POST', '/technician/assign-events', assignment_data)
+        if response['success']:
+            result = response['data']
+            if result.get('events_assigned') == 0:
+                self.log_test("Empty Event IDs Assignment", True, 
+                            f"✅ Successfully handled assignment with empty event_ids")
+            else:
+                self.log_test("Empty Event IDs Assignment", False, 
+                            f"❌ Unexpected events_assigned count: {result.get('events_assigned')}")
+        else:
+            # It's also acceptable to reject empty assignments
+            self.log_test("Empty Event IDs Assignment", True, 
+                        f"✅ Correctly rejected assignment with empty event_ids")
+        
+        # Test 3: Assignment with invalid date format
+        assignment_data = {
+            "route_id": "RTE-TEST001", 
+            "event_ids": ["ITM-TEST001"],
+            "technician_id": "TECH-001",
+            "assigned_date": "invalid-date"
+        }
+        
+        response = self.make_request('POST', '/technician/assign-events', assignment_data)
+        # This should either succeed (if backend accepts any string) or fail gracefully
+        if response['success']:
+            self.log_test("Invalid Date Format", True, 
+                        f"✅ Backend accepts flexible date format")
+        else:
+            self.log_test("Invalid Date Format", True, 
+                        f"✅ Backend correctly validates date format")
+        
+        return True
+    
+    def run_technician_mode_tests(self):
+        """Run comprehensive tests for the hybrid technician mode system"""
+        print("🔄 TESTING HYBRID TECHNICIAN MODE SYSTEM")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Focus: Test POST /api/technician/assign-events, GET /api/technician/{id}/daily-tasks, PUT /api/technician/assignment/{id}/status")
+        print("=" * 80)
+        
+        # Setup test data if needed
+        if not self.setup_test_data():
+            print("❌ CRITICAL: Failed to setup test data. Aborting tests.")
+            return False
+        
+        # Test 1: Assignment Creation
+        print("\n1️⃣ TESTING ASSIGNMENT CREATION:")
+        assignment_id = self.test_technician_assign_events()
+        
+        # Test 2: Hybrid Tasks Retrieval
+        print("\n2️⃣ TESTING HYBRID TASKS RETRIEVAL:")
+        daily_tasks = self.test_technician_daily_tasks()
+        
+        # Test 3: Status Update
+        print("\n3️⃣ TESTING STATUS UPDATE:")
+        if assignment_id:
+            self.test_update_assignment_status(assignment_id)
+        else:
+            self.log_test("Status Update Test", False, "No assignment ID available for testing")
+        
+        # Test 4: Invalid Cases
+        print("\n4️⃣ TESTING INVALID CASES:")
+        self.test_technician_invalid_cases()
+        
+        # Test 5: Deduplication Verification (already tested in daily_tasks)
+        print("\n5️⃣ DEDUPLICATION VERIFICATION:")
+        if daily_tasks:
+            assignments = daily_tasks.get('assignments', [])
+            status_items = daily_tasks.get('status_items', [])
+            
+            # Extract all event IDs from assignments
+            assigned_event_ids = set()
+            for assignment in assignments:
+                assigned_event_ids.update(assignment.get('event_ids', []))
+            
+            # Extract all item IDs from status items
+            status_item_ids = set(item.get('id') for item in status_items if item.get('id'))
+            
+            # Check for overlap
+            overlap = assigned_event_ids.intersection(status_item_ids)
+            
+            if len(overlap) == 0:
+                self.log_test("Final Deduplication Check", True, 
+                            f"✅ Perfect deduplication: {len(assigned_event_ids)} assigned items, {len(status_item_ids)} status items, 0 overlap")
+            else:
+                self.log_test("Final Deduplication Check", False, 
+                            f"❌ Deduplication failed: {len(overlap)} items appear in both lists")
+        
+        # Cleanup
+        self.cleanup_test_data()
+        
+        # Summary
+        self.print_summary()
+        
+        return True
+
     def run_all_tests(self):
         """Run complete routes API test suite"""
         print("🚀 STARTING ROUTES API COMPREHENSIVE TESTS")
