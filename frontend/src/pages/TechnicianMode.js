@@ -366,11 +366,35 @@ function AgendaTab({ clients, loading, generateNavigationLink }) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">
-        Agenda do Dia - {clients.length} clientes
-      </h3>
+      {/* Filtros */}
+      <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Agenda do Dia - {filteredClients.length} cliente(s)
+          </h3>
+          
+          <div className="flex items-center space-x-4">
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={showOnlyToday}
+                onChange={(e) => setShowOnlyToday(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm text-gray-700">Apenas hoje</span>
+            </label>
+            
+            <div className="text-sm text-gray-500">
+              {showOnlyToday 
+                ? `Hoje (${new Date().toLocaleDateString('pt-BR')})` 
+                : 'Todos os pendentes'
+              }
+            </div>
+          </div>
+        </div>
+      </div>
       
-      {clients.map(client => (
+      {filteredClients.map(client => (
         <ClientCard 
           key={client.id} 
           client={client} 
