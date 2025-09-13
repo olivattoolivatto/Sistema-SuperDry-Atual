@@ -774,10 +774,25 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
           </button>
           <button
             onClick={onClick}
-            className="flex-1 bg-gray-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
+            className="flex-1 bg-gray-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors flex items-center justify-center space-x-1"
           >
-            Atender
+            <User className="w-4 h-4" />
+            <span>Atender</span>
           </button>
+          
+          {/* Botão Remover para assignments da agenda */}
+          {client.source === 'AGENDA_ASSIGNMENT' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRemoveAssignment(client.id);
+              }}
+              className="bg-red-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-red-700 transition-colors flex items-center justify-center"
+              title="Remover da minha agenda"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>
