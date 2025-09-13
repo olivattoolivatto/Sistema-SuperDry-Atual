@@ -1915,6 +1915,104 @@ export function Agenda() {
         </div>
       )}
 
+      {/* Seção de Serviços Enviados ao Técnico */}
+      {isGoogleAuthenticated && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Serviços Enviados ao Técnico
+            </h2>
+            
+            <div className="flex items-center space-x-3">
+              <span className="text-sm text-gray-600">
+                {sentServices.length} assignment(s)
+              </span>
+              
+              <button
+                onClick={updateSentServiceStatus}
+                disabled={loadingSentServices}
+                className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${loadingSentServices ? 'animate-spin' : ''}`} />
+                <span>Atualizar Status</span>
+              </button>
+            </div>
+          </div>
+
+          {loadingSentServices ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Carregando serviços enviados...</p>
+            </div>
+          ) : sentServices.length > 0 ? (
+            <div className="space-y-4">
+              {sentServices.map((service) => (
+                <div 
+                  key={service.id}
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <span className="font-medium text-gray-900">
+                        Assignment {service.id}
+                      </span>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        service.status === 'ASSIGNED' ? 'bg-yellow-100 text-yellow-800' :
+                        service.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
+                        service.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {service.status}
+                      </span>
+                    </div>
+                    
+                    <div className="text-sm text-gray-500">
+                      {new Date(service.assigned_date).toLocaleDateString('pt-BR')}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-700">Rota:</span>
+                      <p className="text-gray-600">{service.route_id || 'N/A'}</p>
+                    </div>
+                    
+                    <div>
+                      <span className="font-medium text-gray-700">Eventos:</span>
+                      <p className="text-gray-600">{service.event_ids.length} item(s)</p>
+                    </div>
+                    
+                    <div>
+                      <span className="font-medium text-gray-700">Técnico:</span>
+                      <p className="text-gray-600">{service.technician_id}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Status detalhado (placeholder para implementação futura) */}
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <div className="flex items-center space-x-4 text-xs text-gray-500">
+                      <span>👁️ Visualizado: -</span>
+                      <span>📍 Localização: -</span>
+                      <span>📞 Atendeu: -</span>
+                      <span>📷 Fotos: -</span>
+                      <span>📝 Observações: -</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Smartphone className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-500">Nenhum serviço foi enviado ao técnico ainda.</p>
+              <p className="text-sm text-gray-400 mt-1">
+                Selecione eventos de uma rota e use o botão "Enviar para Técnico"
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Visualização do Calendário */}
       {isGoogleAuthenticated && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
