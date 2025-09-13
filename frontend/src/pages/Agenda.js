@@ -1743,7 +1743,7 @@ export function Agenda() {
                       🔍 Debug Dados
                     </button>
                     <button
-                      onClick={handleSendToTechnician}
+                      onClick={sendToTechnician}
                       disabled={sendingToTechnician}
                       className="flex items-center px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors mr-2"
                     >
@@ -1755,7 +1755,7 @@ export function Agenda() {
                       {sendingToTechnician ? 'Enviando...' : 'Enviar para Técnico'}
                     </button>
                     <button
-                      onClick={handleLancarNaAgenda}
+                      onClick={createCalendarEvents}
                       disabled={creatingEvents || !isGoogleAuthenticated}
                       className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
                     >
