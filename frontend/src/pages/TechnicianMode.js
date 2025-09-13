@@ -333,6 +333,17 @@ function StreetMode({ onBack }) {
 // Componente da Tab Agenda
 function AgendaTab({ clients, loading, generateNavigationLink }) {
   const [selectedClient, setSelectedClient] = useState(null);
+  const [showOnlyToday, setShowOnlyToday] = useState(true);
+  
+  // Filtrar clientes por data
+  const filteredClients = clients.filter(client => {
+    if (!showOnlyToday) return true; // Mostrar todos
+    
+    const today = new Date().toISOString().split('T')[0];
+    const clientDate = client.assigned_date || today;
+    
+    return clientDate === today;
+  });
 
   if (loading) {
     return (
