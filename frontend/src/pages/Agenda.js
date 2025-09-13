@@ -1231,6 +1231,9 @@ export function Agenda() {
       // CORREÇÃO: NÃO limpar seleções automaticamente - manter selecionados
       // setSelectedStops(new Set());
       
+      // Atualizar lista de serviços enviados
+      await loadSentServices();
+      
     } catch (error) {
       console.error('Erro ao enviar para técnico:', error);
       toast({
