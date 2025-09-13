@@ -651,6 +651,32 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
   
   const totalValue = client.items.reduce((sum, item) => sum + item.value, 0);
   
+  const handleRemoveAssignment = async (assignmentId) => {
+    try {
+      console.log(`🗑️ Removendo assignment ${assignmentId} da agenda`);
+      
+      // TODO: Implementar chamada para API para remover assignment
+      const response = await fetch(`${BACKEND_URL}/api/technician/assignments/${assignmentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response.ok) {
+        console.log(`✅ Assignment ${assignmentId} removido com sucesso`);
+        // TODO: Atualizar lista de clientes ou recarregar dados
+        window.location.reload(); // Solução temporária
+      } else {
+        console.error(`❌ Erro ao remover assignment ${assignmentId}`);
+        alert('Erro ao remover da agenda. Tente novamente.');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao remover assignment:', error);
+      alert('Erro ao remover da agenda. Tente novamente.');
+    }
+  };
+  
   return (
     <div className="bg-white rounded-lg shadow-md border border-gray-200">
       {/* Header do card */}
