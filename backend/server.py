@@ -1269,11 +1269,28 @@ async def get_technician_daily_tasks(
         }
         
         # 1. Buscar assignments da agenda para o técnico
-        assignments = await db.technician_assignments.find({
+        assignments_cursor = await db.technician_assignments.find({
             "technician_id": technician_id,
             "assigned_date": date,
             "status": {"$in": ["ASSIGNED", "IN_PROGRESS"]}
         }).to_list(None)
+        
+        # Convert MongoDB documents to JSON-serializable format
+        assignments = []
+        for assignment in assignments_cursor:
+            # Remove MongoDB ObjectId fields and convert to dict
+            assignment_dict = {
+                "id": assignment.get("id"),
+                "route_id": assignment.get("route_id"),
+                "event_ids": assignment.get("event_ids", []),
+                "technician_id": assignment.get("technician_id"),
+                "assigned_date": assignment.get("assigned_date"),
+                "assignment_type": assignment.get("assignment_type", "AGENDA"),
+                "status": assignment.get("status"),
+                "created_at": assignment.get("created_at"),
+                "updated_at": assignment.get("updated_at")
+            }
+            assignments.append(assignment_dict)
         
         tasks["assignments"] = assignments
         
