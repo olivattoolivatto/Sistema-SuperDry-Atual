@@ -239,6 +239,7 @@ export function Agenda() {
       // Criar objeto completamente novo (deep copy)
       const newEvent = {
         id: String(eventId), // Garantir que é string
+        budget_item_id: stop.budget_item_id, // CRÍTICO: Preservar budget_item_id para assignments
         order_sequence: Number(index + 1), // Usar posição atual no array ordenado
         client_name: String(stop.client_name || ''),
         service_name: String(stop.service_name || ''),
