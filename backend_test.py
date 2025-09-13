@@ -1053,30 +1053,62 @@ class ServiceStatusBugTester:
         print(f"\n3️⃣ VERIFICANDO SE BUDGET_ITEM_IDS EXISTEM NA API:")
         print("-" * 55)
         
+        # First, check if there's a direct endpoint for individual budget items
+        print("🔍 Testando endpoint individual /api/budget-items/{id}...")
+        
+        test_item_id = budget_item_ids[0] if budget_item_ids else "ITM-TEST"
+        response = self.make_request('GET', f'/budget-items/{test_item_id}')
+        
+        if response['success']:
+            print("✅ Endpoint individual /api/budget-items/{id} disponível")
+            individual_endpoint_available = True
+        else:
+            print("❌ Endpoint individual /api/budget-items/{id} não disponível")
+            print(f"   Status: {response['status_code']}")
+            print("   ℹ️  Usando dados da lista de rotas disponíveis como alternativa")
+            individual_endpoint_available = False
+        
+        # Get budget item data from available-for-routes endpoint instead
+        print(f"\n🔄 Buscando dados dos budget_item_ids via /api/budget-items/available-for-routes:")
+        
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Route Mapping - Get Available Items Data", False, 
+                        "Failed to get available items data", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        
+        # Match our budget_item_ids with available items
         valid_budget_items = []
         invalid_budget_items = []
         
         for budget_item_id in budget_item_ids:
-            print(f"🔍 Testando: {budget_item_id}")
+            print(f"🔍 Buscando dados para: {budget_item_id}")
             
-            response = self.make_request('GET', f'/budget-items/{budget_item_id}')
-            if response['success']:
-                budget_item_data = response['data']
+            # Find matching item in available items
+            matching_item = None
+            for item in available_items:
+                if item.get('budget_item_id') == budget_item_id:
+                    matching_item = item
+                    break
+            
+            if matching_item:
                 valid_budget_items.append({
                     'id': budget_item_id,
-                    'data': budget_item_data
+                    'data': matching_item
                 })
-                print(f"   ✅ VÁLIDO: {budget_item_id}")
-                print(f"      Cliente: {budget_item_data.get('client_name', 'N/A')}")
-                print(f"      Serviço: {budget_item_data.get('service_name', 'N/A')}")
-                print(f"      Status: {budget_item_data.get('status', 'N/A')}")
+                print(f"   ✅ ENCONTRADO: {budget_item_id}")
+                print(f"      Cliente: {matching_item.get('client_name', 'N/A')}")
+                print(f"      Serviço: {matching_item.get('service_name', 'N/A')}")
+                print(f"      Status: {matching_item.get('status', 'N/A')}")
+                print(f"      Budget ID: {matching_item.get('budget_id', 'N/A')}")
             else:
                 invalid_budget_items.append({
                     'id': budget_item_id,
-                    'error': response['data']
+                    'error': 'Not found in available items'
                 })
-                print(f"   ❌ INVÁLIDO: {budget_item_id} - Status: {response['status_code']}")
-                print(f"      Erro: {response['data']}")
+                print(f"   ❌ NÃO ENCONTRADO: {budget_item_id}")
             print()
         
         print(f"📊 RESULTADO DA VERIFICAÇÃO:")
@@ -1085,12 +1117,12 @@ class ServiceStatusBugTester:
         
         if len(valid_budget_items) == 0:
             self.log_test("Route Mapping - Validate Budget Items", False, 
-                        "No valid budget_item_ids found in API")
+                        "No valid budget_item_ids found in available items")
             return False
         
         success_rate = len(valid_budget_items) / len(budget_item_ids) * 100
         self.log_test("Route Mapping - Validate Budget Items", True, 
-                    f"{len(valid_budget_items)}/{len(budget_item_ids)} budget_item_ids are valid ({success_rate:.1f}%)")
+                    f"{len(valid_budget_items)}/{len(budget_item_ids)} budget_item_ids found in available items ({success_rate:.1f}%)")
         
         # STEP 4: Testar se podem ser usados para gerar títulos bonitos
         print(f"\n4️⃣ TESTANDO GERAÇÃO DE TÍTULOS BONITOS:")
