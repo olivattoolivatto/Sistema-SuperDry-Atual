@@ -1284,10 +1284,17 @@ export function Agenda() {
       
       console.log(`📱 Enviando ${selectedEvents.length} eventos para técnico...`);
       
-      // Preparar dados para assignment
+      // Preparar dados para assignment usando budget_item_ids corretos
       const assignmentData = {
         route_id: selectedRoute.id,
-        event_ids: selectedEvents.map(event => event.id),
+        event_ids: selectedEvents.map(event => {
+          // CORREÇÃO CRÍTICA: Usar budget_item_id se disponível, senão usar event.id
+          // Isto resolve o problema onde event_ids como EVT-003 causavam 404 errors
+          // no TechnicianMode ao tentar buscar dados de orçamento
+          const budget_item_id = event.budget_item_id || event.id;
+          console.log(`📋 Mapeando evento ${event.id} → budget_item_id: ${budget_item_id}`);
+          return budget_item_id;
+        }),
         technician_id: 'TECH-001', // TODO: Permitir seleção do técnico
         assigned_date: customEventDate || new Date().toISOString().split('T')[0],
         assignment_type: 'AGENDA'
