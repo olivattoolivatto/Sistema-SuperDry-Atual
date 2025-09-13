@@ -721,6 +721,39 @@ export function Agenda() {
     }
   };
 
+  const handleDeleteAssignment = async (assignmentId) => {
+    try {
+      console.log('🗑️ Apagando assignment:', assignmentId);
+      
+      // Confirmar ação com o usuário
+      if (!window.confirm('Tem certeza que deseja apagar este serviço enviado ao técnico? Esta ação não pode ser desfeita.')) {
+        return;
+      }
+      
+      // Marcar assignment como CANCELLED (não existe endpoint DELETE) 
+      const response = await technicianApi.updateAssignmentStatus(assignmentId, 'CANCELLED');
+      
+      console.log('✅ Assignment marcado como cancelado:', response.data);
+      
+      toast({
+        title: "Sucesso!",
+        description: "Serviço removido da lista do técnico.",
+        variant: "default",
+      });
+      
+      // Recarregar lista de serviços enviados (assignments cancelados serão filtrados)
+      await loadSentServices();
+      
+    } catch (error) {
+      console.error('❌ Erro ao apagar assignment:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao apagar serviço. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getCurrentDateRange = () => {
     const start = new Date(currentDate);
     let end = new Date(currentDate);
