@@ -1654,6 +1654,18 @@ export function Agenda() {
                       🔍 Debug Dados
                     </button>
                     <button
+                      onClick={sendToTechnician}
+                      disabled={sendingToTechnician}
+                      className="flex items-center px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors mr-2"
+                    >
+                      {sendingToTechnician ? (
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Smartphone className="w-4 h-4 mr-2" />
+                      )}
+                      {sendingToTechnician ? 'Enviando...' : 'Enviar para Técnico'}
+                    </button>
+                    <button
                       onClick={createCalendarEvents}
                       disabled={creatingEvents || !isGoogleAuthenticated}
                       className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
