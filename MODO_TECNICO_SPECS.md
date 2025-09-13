@@ -174,51 +174,155 @@ AGUARDANDO_BUSCAR → [👤 CLIENTE BUSCOU] → BUSCOU
 
 ---
 
-## 🏢 MODO EMPRESA - Operação Interna
+## 🏢 MODO EMPRESA - Operação Interna (ATUALIZADO)
 
 ### 📋 Status Atendidos (Conforme enum ServiceStatus)
-**Entrada:**
+
+#### **🔄 Fluxo Físico Detalhado:**
+```
+RECEPÇÃO → LAVAGEM → SECAGEM → MEDIÇÃO → DEPÓSITO SAÍDA → FINALIZAÇÃO
+```
+
+**Por Etapa Física:**
+
+**1. 📥 RECEPÇÃO (Armazenamento Inicial)**
 - `CLIENTE_TROUXE` - Item trazido pelo cliente
 - `COLETADO` - Item coletado pelo técnico
 
-**Em Processo:**
+**2. 🧽 LAVAGEM/PROCESSO**
 - `EM_LAVAGEM` - Item sendo processado internamente
 - `EM_LAVAGEM_PARCEIRO` - Item terceirizado
 
-**Finalizado:**
-- `AGUARDANDO_ENTREGA` - Pronto para entrega
-- `AGUARDANDO_BUSCAR` - Pronto para busca pelo cliente
+**3. 📏 MEDIÇÃO E RECOLHIMENTO**
+- Status mantém-se durante secagem no varal
+- Processo de medição com auditoria
+- Recolhimento para depósito de saída
 
-**Concluído:**
+**4. 📦 DEPÓSITO DE SAÍDA (Escritório)**
+- `AGUARDANDO_ENTREGA` - Pronto para entrega (itens nossos)
+- `AGUARDANDO_BUSCAR` - Pronto para busca (itens de parceiros)
+
+**5. 🚚 ENTREGA/RETIRADA**
+- `ENTREGAR` - Item em processo de rota para entrega
 - `ENTREGUE` - Item entregue ao cliente
 - `BUSCOU` - Cliente buscou o item
 
-### 🏭 Interface Principal - Controle Produtivo
-**Layout:** Lista por status com contadores
+### 🏭 Interface Principal - Controle Produtivo por Etapas
+
+#### **Dashboard por Localização Física:**
 ```
 ┌─────────────────────────────────────┐
-│ 📥 ENTRADA (5 itens)                │
-│ • CLIENTE_TROUXE (2)                │
-│ • COLETADO (3)                      │
+│ 📥 RECEPÇÃO (5 itens)               │
+│ • CLIENTE_TROUXE (2) - Parceiros    │
+│ • COLETADO (3) - Rota               │
 ├─────────────────────────────────────┤
-│ 🔄 EM PROCESSO (8 itens)            │
-│ • EM_LAVAGEM (5)                    │
-│ • EM_LAVAGEM_PARCEIRO (3)           │
+│ 🧽 LAVAGEM (8 itens)                │
+│ • EM_LAVAGEM (5) - Interno          │
+│ • EM_LAVAGEM_PARCEIRO (3) - Tercei. │
 ├─────────────────────────────────────┤
-│ ✅ FINALIZADO (12 itens)            │
-│ • AGUARDANDO_ENTREGA (7)            │
-│ • AGUARDANDO_BUSCAR (5)             │
+│ 🌬️ SECAGEM/VARAL (4 itens)          │
+│ • Aguardando secagem completa       │
+├─────────────────────────────────────┤
+│ 📏 MEDIÇÃO PENDENTE (2 itens)       │
+│ • Prontos para medição              │
+├─────────────────────────────────────┤
+│ 📦 DEPÓSITO SAÍDA (12 itens)        │
+│ • AGUARDANDO_ENTREGA (7) - Nossos   │
+│ • AGUARDANDO_BUSCAR (5) - Parceiros │
+└─────────────────────────────────────┘
+```
+
+### 🏷️ Sistema de Identificação para Parceiros
+
+#### **Campo Especial para Etiquetas:**
+```
+┌─────────────────────────────────────┐
+│ 🏷️ IDENTIFICAÇÃO DO ITEM            │
+│                                     │
+│ Cliente: João Silva                 │
+│ Item: Tapete Persa 2x3m             │
+│                                     │
+│ É item de PARCEIRO?                 │
+│ [ SIM ] [ NÃO ]                     │
+│                                     │
+│ Se SIM - Etiqueta:                  │
+│ [AZUL-224    ] [🔍 Buscar]          │
+│                                     │
+│ Exemplos: AZUL-224, ROSA-335,       │
+│          VERDE-101, AMAR-067        │
+└─────────────────────────────────────┘
+```
+
+### 📏 Sistema de Medição com Auditoria
+
+#### **Interface de Medição:**
+```
+┌─────────────────────────────────────┐
+│ 📏 MEDIÇÃO - Tapete Persa           │
+│                                     │
+│ Medidas Originais (Orçamento):      │
+│ • Largura: 2,00m                    │
+│ • Altura: 3,00m                     │
+│ • Área: 6,00m²                      │
+│                                     │
+│ Medidas Reais (Pós-Lavagem):        │
+│ • Largura: [1,95] m                 │
+│ • Altura: [2,98] m                  │
+│ • Área: 5,82m² (calc. automático)   │
+│                                     │
+│ ⚠️ Diferença detectada: -0,18m²      │
+│                                     │
+│ Motivo da alteração:                │
+│ [Encolhimento natural da lavagem]   │
+│                                     │
+│ [💾 SALVAR COM AUDITORIA]           │
+└─────────────────────────────────────┘
+```
+
+### 📊 Relatório Mensal para Parceiros
+
+#### **Geração Automática:**
+```
+┌─────────────────────────────────────┐
+│ 📊 RELATÓRIO - Setembro 2025        │
+│                                     │
+│ Parceiro: Lavanderia Azul           │
+│ Etiquetas: AZUL-001 a AZUL-350      │
+│                                     │
+│ Resumo do Mês:                      │
+│ • Itens Recebidos: 45               │
+│ • Itens Finalizados: 42             │
+│ • Itens Pendentes: 3                │
+│ • Valor Total: R$ 2.340,00          │
+│                                     │
+│ Status Detalhado:                   │
+│ • EM_LAVAGEM_PARCEIRO: 3            │
+│ • AGUARDANDO_BUSCAR: 0              │
+│ • BUSCOU: 42                        │
+│                                     │
+│ [📄 GERAR PDF] [📧 ENVIAR EMAIL]    │
 └─────────────────────────────────────┘
 ```
 
 ### 🔄 Evolução de Status (Modo Empresa)
-```
-CLIENTE_TROUXE → EM_LAVAGEM → AGUARDANDO_BUSCAR → BUSCOU
-COLETADO → EM_LAVAGEM → AGUARDANDO_ENTREGA → ENTREGUE
 
-Variação com parceiro:
-→ EM_LAVAGEM_PARCEIRO → AGUARDANDO_ENTREGA/BUSCAR
+#### **Fluxo Completo Detalhado:**
 ```
+CLIENTE_TROUXE → EM_LAVAGEM → (Secagem) → (Medição) → AGUARDANDO_BUSCAR → BUSCOU
+
+COLETADO → EM_LAVAGEM → (Secagem) → (Medição) → AGUARDANDO_ENTREGA → ENTREGAR → ENTREGUE
+
+Com Parceiro:
+COLETADO → EM_LAVAGEM_PARCEIRO → (Retorno) → AGUARDANDO_ENTREGA → ENTREGAR → ENTREGUE
+```
+
+### 🔍 Auditoria Completa
+
+#### **Registro de Alterações:**
+- **Medições:** Quem alterou, quando, valores antes/depois, motivo
+- **Status:** Transições com timestamp e responsável
+- **Localização:** Movimentação física dos itens
+- **Parceiros:** Controle de entrada/saída com etiquetas
 
 ---
 
