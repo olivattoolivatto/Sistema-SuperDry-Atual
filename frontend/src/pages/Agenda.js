@@ -663,17 +663,19 @@ export function Agenda() {
       
       console.log('📋 Assignments encontrados:', assignments?.length || 0);
       
-      // Processar assignments para exibição
-      const processedServices = assignments.map(assignment => ({
-        id: assignment.id,
-        route_id: assignment.route_id,
-        event_ids: assignment.event_ids,
-        technician_id: assignment.technician_id,
-        assigned_date: assignment.assigned_date,
-        status: assignment.status,
-        created_at: assignment.created_at,
-        updated_at: assignment.updated_at
-      }));
+      // Processar assignments para exibição (filtrar cancelados)
+      const processedServices = assignments
+        .filter(assignment => assignment.status !== 'CANCELLED') // Filtrar assignments cancelados
+        .map(assignment => ({
+          id: assignment.id,
+          route_id: assignment.route_id,
+          event_ids: assignment.event_ids,
+          technician_id: assignment.technician_id,
+          assigned_date: assignment.assigned_date,
+          status: assignment.status,
+          created_at: assignment.created_at,
+          updated_at: assignment.updated_at
+        }));
       
       console.log('✅ Serviços processados:', processedServices);
       
