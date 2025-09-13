@@ -1186,6 +1186,57 @@ export function Agenda() {
     console.log('🔍 === FIM DEBUG ===');
   };
 
+  // Função para enviar eventos selecionados para o técnico
+  const sendToTechnician = async () => {
+    if (!selectedRoute || selectedStops.size === 0) {
+      toast({
+        title: "Aviso!",
+        description: "Selecione pelo menos um item para enviar ao técnico.",
+        variant: "default",
+      });
+      return;
+    }
+
+    setSendingToTechnician(true);
+    
+    try {
+      // Filtrar eventos selecionados
+      const selectedEvents = routeEvents.filter(event => selectedStops.has(event.id));
+      
+      console.log(`📱 Enviando ${selectedEvents.length} eventos para técnico...`);
+      
+      // TODO: Implementar API real
+      // await agendaApi.sendToTechnician({
+      //   route_id: selectedRoute.id,
+      //   events: selectedEvents,
+      //   technician_id: 'TECH-001', // Por enquanto fixo
+      //   assigned_date: customEventDate || new Date().toISOString().split('T')[0]
+      // });
+
+      // Mock para desenvolvimento
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      toast({
+        title: "Sucesso!",
+        description: `${selectedEvents.length} eventos enviados para o técnico.`,
+        variant: "default",
+      });
+
+      // Limpar seleção
+      setSelectedStops(new Set());
+      
+    } catch (error) {
+      console.error('Erro ao enviar para técnico:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao enviar eventos para o técnico.",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingToTechnician(false);
+    }
+  };
+
   const createCalendarEvents = async () => {
     if (!selectedRoute || selectedStops.size === 0) {
       toast({
