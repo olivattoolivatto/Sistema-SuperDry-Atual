@@ -1348,8 +1348,8 @@ export function Agenda() {
           variant: "default",
         });
         
-        // Clear selection
-        setSelectedStops(new Set());
+        // CORREÇÃO: NÃO limpar seleções automaticamente - manter selecionados
+        // setSelectedStops(new Set());
         
         // Recarregar eventos do calendário
         loadCalendarEvents();
