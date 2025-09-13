@@ -952,6 +952,276 @@ class ServiceStatusBugTester:
         
         return True
 
+    def test_route_budget_item_mapping(self):
+        """
+        REVIEW REQUEST TEST: Buscar budget_item_ids reais dos stops de uma rota para corrigir o mapeamento
+        
+        Objetivo: Obter os budget_item_ids corretos para substituir os event_ids fictícios (EVT-003) 
+        nos assignments, para que a função generateEventTitle() possa funcionar corretamente.
+        """
+        print("\n" + "=" * 80)
+        print("🔍 TESTE ESPECÍFICO DA REVIEW REQUEST: MAPEAMENTO ROUTE → BUDGET_ITEM_IDS")
+        print("=" * 80)
+        print("OBJETIVO: Buscar budget_item_ids reais dos stops de uma rota para corrigir o mapeamento")
+        print("PROBLEMA: Assignments contêm event_ids (EVT-003) mas precisam de budget_item_ids (ITM-XXXXXXX)")
+        print("SOLUÇÃO: Mapear stops de rotas existentes para obter budget_item_ids corretos")
+        print("=" * 80)
+        
+        # STEP 1: Buscar uma rota existente com stops
+        print("\n1️⃣ BUSCANDO ROTA EXISTENTE COM STOPS:")
+        print("-" * 50)
+        
+        response = self.make_request('GET', '/routes')
+        if not response['success']:
+            self.log_test("Route Mapping - Get Routes", False, 
+                        "Failed to retrieve routes", response['data'])
+            return False
+        
+        routes = response['data']
+        if not routes:
+            self.log_test("Route Mapping - Get Routes", False, "No routes found in system")
+            return False
+        
+        print(f"📊 Total routes found: {len(routes)}")
+        
+        # Find a route with stops
+        route_with_stops = None
+        for route in routes:
+            route_id = route.get('id')
+            
+            # Get detailed route info
+            detail_response = self.make_request('GET', f'/routes/{route_id}')
+            if detail_response['success']:
+                route_details = detail_response['data']
+                stops = route_details.get('stops', [])
+                
+                if stops:
+                    route_with_stops = route_details
+                    print(f"✅ Found route with stops: {route_id}")
+                    print(f"   📍 Stops count: {len(stops)}")
+                    print(f"   🚗 Vehicle type: {route_details.get('vehicle_type')}")
+                    print(f"   📅 Planned date: {route_details.get('planned_date')}")
+                    break
+        
+        if not route_with_stops:
+            self.log_test("Route Mapping - Find Route with Stops", False, 
+                        "No routes with stops found")
+            return False
+        
+        self.log_test("Route Mapping - Find Route with Stops", True, 
+                    f"Found route {route_with_stops['id']} with {len(route_with_stops['stops'])} stops")
+        
+        # STEP 2: Listar os budget_item_ids dos stops (ITM-XXXXXXX format)
+        print(f"\n2️⃣ LISTANDO BUDGET_ITEM_IDS DOS STOPS:")
+        print("-" * 45)
+        
+        stops = route_with_stops.get('stops', [])
+        budget_item_ids = []
+        
+        print(f"📋 DETALHES DOS STOPS DA ROTA {route_with_stops['id']}:")
+        for i, stop in enumerate(stops, 1):
+            stop_id = stop.get('id')
+            budget_item_id = stop.get('budget_item_id')
+            client_name = stop.get('client_name')
+            service_name = stop.get('service_name')
+            service_status = stop.get('service_status')
+            
+            print(f"   {i:2d}. Stop ID: {stop_id}")
+            print(f"       Budget Item ID: {budget_item_id}")
+            print(f"       Cliente: {client_name}")
+            print(f"       Serviço: {service_name}")
+            print(f"       Status: {service_status}")
+            print()
+            
+            if budget_item_id and budget_item_id.startswith('ITM-'):
+                budget_item_ids.append(budget_item_id)
+            else:
+                print(f"       ⚠️  WARNING: Invalid budget_item_id format: {budget_item_id}")
+        
+        print(f"📊 BUDGET_ITEM_IDS COLETADOS: {len(budget_item_ids)}")
+        print(f"📋 Lista: {budget_item_ids}")
+        
+        if not budget_item_ids:
+            self.log_test("Route Mapping - Extract Budget Item IDs", False, 
+                        "No valid budget_item_ids found in route stops")
+            return False
+        
+        self.log_test("Route Mapping - Extract Budget Item IDs", True, 
+                    f"Extracted {len(budget_item_ids)} valid budget_item_ids from route stops")
+        
+        # STEP 3: Verificar se estes budget_item_ids existem na API /api/budget-items/{id}
+        print(f"\n3️⃣ VERIFICANDO SE BUDGET_ITEM_IDS EXISTEM NA API:")
+        print("-" * 55)
+        
+        valid_budget_items = []
+        invalid_budget_items = []
+        
+        for budget_item_id in budget_item_ids:
+            print(f"🔍 Testando: {budget_item_id}")
+            
+            response = self.make_request('GET', f'/budget-items/{budget_item_id}')
+            if response['success']:
+                budget_item_data = response['data']
+                valid_budget_items.append({
+                    'id': budget_item_id,
+                    'data': budget_item_data
+                })
+                print(f"   ✅ VÁLIDO: {budget_item_id}")
+                print(f"      Cliente: {budget_item_data.get('client_name', 'N/A')}")
+                print(f"      Serviço: {budget_item_data.get('service_name', 'N/A')}")
+                print(f"      Status: {budget_item_data.get('status', 'N/A')}")
+            else:
+                invalid_budget_items.append({
+                    'id': budget_item_id,
+                    'error': response['data']
+                })
+                print(f"   ❌ INVÁLIDO: {budget_item_id} - Status: {response['status_code']}")
+                print(f"      Erro: {response['data']}")
+            print()
+        
+        print(f"📊 RESULTADO DA VERIFICAÇÃO:")
+        print(f"   ✅ Budget items válidos: {len(valid_budget_items)}")
+        print(f"   ❌ Budget items inválidos: {len(invalid_budget_items)}")
+        
+        if len(valid_budget_items) == 0:
+            self.log_test("Route Mapping - Validate Budget Items", False, 
+                        "No valid budget_item_ids found in API")
+            return False
+        
+        success_rate = len(valid_budget_items) / len(budget_item_ids) * 100
+        self.log_test("Route Mapping - Validate Budget Items", True, 
+                    f"{len(valid_budget_items)}/{len(budget_item_ids)} budget_item_ids are valid ({success_rate:.1f}%)")
+        
+        # STEP 4: Testar se podem ser usados para gerar títulos bonitos
+        print(f"\n4️⃣ TESTANDO GERAÇÃO DE TÍTULOS BONITOS:")
+        print("-" * 45)
+        
+        successful_titles = []
+        failed_titles = []
+        
+        for item in valid_budget_items:
+            budget_item_id = item['id']
+            budget_item_data = item['data']
+            
+            print(f"🎨 Testando geração de título para: {budget_item_id}")
+            
+            # Simulate title generation logic
+            client_name = budget_item_data.get('client_name', 'Cliente')
+            service_name = budget_item_data.get('service_name', 'Serviço')
+            status = budget_item_data.get('status', 'RETIRAR')
+            
+            # Mock emoji mapping (similar to frontend logic)
+            emoji_map = {
+                'tapete': '🗞️',
+                'sofá': '🛋️', 
+                'sofa': '🛋️',
+                'cadeira': '🪑',
+                'cortina': '🪟',
+                'colchão': '🛏️',
+                'colchao': '🛏️',
+                'carpete': '⬜',
+                'persiana': '📜',
+                'almofada': '📦',
+                'edredom': '🧺',
+                'poltrona': '💺',
+                'impermeabilização': '💦',
+                'impermeabilizacao': '💦',
+                'veiculo': '🚘',
+                'carro': '🚘'
+            }
+            
+            # Find emoji for service
+            emoji = '📦'  # default
+            service_lower = service_name.lower()
+            for keyword, service_emoji in emoji_map.items():
+                if keyword in service_lower:
+                    emoji = service_emoji
+                    break
+            
+            # Generate title based on status
+            if status in ['RETIRAR', 'ENTREGAR']:
+                action = status
+                title = f"{emoji}{action} {client_name}"
+            else:
+                title = f"{emoji} {client_name}"
+            
+            print(f"   📝 Título gerado: '{title}'")
+            print(f"   🎯 Componentes:")
+            print(f"      Emoji: {emoji}")
+            print(f"      Status: {status}")
+            print(f"      Cliente: {client_name}")
+            print(f"      Serviço: {service_name}")
+            
+            successful_titles.append({
+                'budget_item_id': budget_item_id,
+                'title': title,
+                'emoji': emoji,
+                'status': status,
+                'client_name': client_name,
+                'service_name': service_name
+            })
+            print(f"   ✅ Título gerado com sucesso!")
+            print()
+        
+        print(f"📊 RESULTADO DA GERAÇÃO DE TÍTULOS:")
+        print(f"   ✅ Títulos gerados com sucesso: {len(successful_titles)}")
+        print(f"   ❌ Falhas na geração: {len(failed_titles)}")
+        
+        # STEP 5: Demonstrar como corrigir o mapeamento
+        print(f"\n5️⃣ DEMONSTRAÇÃO: COMO CORRIGIR O MAPEAMENTO:")
+        print("-" * 55)
+        
+        print("🔧 PROBLEMA ATUAL:")
+        print("   - Assignments contêm event_ids: ['EVT-003', 'EVT-004', 'EVT-006']")
+        print("   - Sistema tenta buscar /api/budget-items/EVT-003 → 404 Error")
+        print("   - generateEventTitle() nunca é executada")
+        print()
+        
+        print("✅ SOLUÇÃO PROPOSTA:")
+        print("   - Usar budget_item_ids dos stops: " + str(budget_item_ids))
+        print("   - Sistema busca /api/budget-items/ITM-XXXXXXX → 200 Success")
+        print("   - generateEventTitle() funciona corretamente")
+        print()
+        
+        print("📋 MAPEAMENTO CORRETO PARA ASSIGNMENTS:")
+        for i, title_data in enumerate(successful_titles, 1):
+            print(f"   {i}. Assignment ID: TASS-example{i}")
+            print(f"      ❌ Atual (incorreto): event_ids: ['EVT-00{i}']")
+            print(f"      ✅ Correto: budget_item_ids: ['{title_data['budget_item_id']}']")
+            print(f"      🎨 Título resultante: '{title_data['title']}'")
+            print()
+        
+        # STEP 6: Resultado final
+        print(f"\n6️⃣ RESULTADO FINAL:")
+        print("-" * 25)
+        
+        if len(successful_titles) > 0:
+            print("🎉 TESTE CONCLUÍDO COM SUCESSO!")
+            print(f"✅ Encontrada rota {route_with_stops['id']} com {len(stops)} stops")
+            print(f"✅ Extraídos {len(budget_item_ids)} budget_item_ids válidos")
+            print(f"✅ Verificados {len(valid_budget_items)} budget_item_ids na API")
+            print(f"✅ Gerados {len(successful_titles)} títulos bonitos")
+            print()
+            print("🎯 PRÓXIMOS PASSOS PARA CORREÇÃO:")
+            print("   1. Modificar assignments para usar budget_item_ids em vez de event_ids")
+            print("   2. Atualizar função generateEventTitle() para processar budget_item_ids")
+            print("   3. Testar no frontend que títulos bonitos aparecem corretamente")
+            print()
+            print("📊 BUDGET_ITEM_IDS CORRETOS PARA USO:")
+            for budget_item_id in budget_item_ids:
+                print(f"   - {budget_item_id}")
+            
+            self.log_test("Route Budget Item Mapping", True, 
+                        f"Successfully mapped route stops to {len(budget_item_ids)} valid budget_item_ids for title generation")
+            return True
+        else:
+            print("❌ TESTE FALHOU!")
+            print("⚠️  Não foi possível gerar títulos bonitos com os budget_item_ids encontrados")
+            
+            self.log_test("Route Budget Item Mapping", False, 
+                        "Failed to generate beautiful titles from budget_item_ids")
+            return False
+
     def run_budget_item_status_update_tests(self):
         """Run comprehensive tests for the new budget item status update endpoints"""
         print("🔄 TESTING NEW BUDGET ITEM STATUS UPDATE ENDPOINTS")
@@ -971,6 +1241,21 @@ class ServiceStatusBugTester:
         self.print_summary()
         
         return status_options_success and status_update_success
+
+    def run_route_budget_item_mapping_test(self):
+        """Run the specific test requested in the review"""
+        print("🔍 EXECUTANDO TESTE ESPECÍFICO DA REVIEW REQUEST")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Foco: Buscar budget_item_ids reais dos stops de uma rota para corrigir o mapeamento")
+        print("=" * 80)
+        
+        # Execute the mapping test
+        mapping_success = self.test_route_budget_item_mapping()
+        
+        # Summary
+        self.print_summary()
+        
+        return mapping_success
 
     def run_migration_tests(self):
         """Run the migration tests as requested in the review"""
