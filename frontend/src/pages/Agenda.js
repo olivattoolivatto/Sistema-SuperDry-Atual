@@ -1228,8 +1228,8 @@ export function Agenda() {
         variant: "default",
       });
 
-      // Limpar seleção
-      setSelectedStops(new Set());
+      // CORREÇÃO: NÃO limpar seleções automaticamente - manter selecionados
+      // setSelectedStops(new Set());
       
     } catch (error) {
       console.error('Erro ao enviar para técnico:', error);
