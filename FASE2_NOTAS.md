@@ -154,68 +154,29 @@ Módulo para gestão de projetos pessoais e empresariais com ferramentas integra
 
 ---
 
-### 🚨 VERIFICAÇÃO DE CADASTRO DE CLIENTE
+## 🚨 VERIFICAÇÃO DE CADASTRO DE CLIENTE (IMPLEMENTADO)
 
-**CRÍTICO**: Ao implementar o sistema de rotas na Fase 2, o sistema deve verificar se o cadastro do cliente está completo antes de permitir o envio para rota.
+**STATUS**: ✅ IMPLEMENTADO E VALIDADO
 
-#### Campos obrigatórios para rota:
+Validação completa implementada para verificar cadastro antes do envio para rota:
+
+#### Campos obrigatórios validados:
 - ✅ **Nome** (sempre preenchido)
-- ⚠️ **Telefone primário** (não pode ser "A COMPLETAR")
-- ⚠️ **Endereço completo** (não pode ser "Endereço a completar")
-- ⚠️ **Bairro** (não pode ser "Bairro a completar") 
-- ⚠️ **Cidade** (não pode ser "Cidade a completar")
-- ⚠️ **Coordenadas GPS** (latitude/longitude não podem ser 0)
+- ✅ **Telefone primário** (não pode ser "A COMPLETAR")
+- ✅ **Endereço completo** (não pode ser "Endereço a completar")
+- ✅ **Bairro** (não pode ser "Bairro a completar") 
+- ✅ **Cidade** (não pode ser "Cidade a completar")
+- ✅ **Coordenadas GPS** (latitude/longitude não podem ser 0)
 
-#### Implementação sugerida:
-```javascript
-// Função de validação para verificar se cliente pode ir para rota
-const validateClientForRoute = (client) => {
-  const incompleteFields = [];
-  
-  if (client.phone_primary === "A COMPLETAR" || !client.phone_primary) {
-    incompleteFields.push("Telefone");
-  }
-  
-  if (client.address.full_address === "Endereço a completar" || !client.address.full_address) {
-    incompleteFields.push("Endereço");
-  }
-  
-  if (client.address.neighborhood === "Bairro a completar" || !client.address.neighborhood) {
-    incompleteFields.push("Bairro");
-  }
-  
-  if (client.address.city === "Cidade a completar" || !client.address.city) {
-    incompleteFields.push("Cidade");
-  }
-  
-  if (!client.address.latitude || !client.address.longitude) {
-    incompleteFields.push("Localização GPS");
-  }
-  
-  return {
-    isComplete: incompleteFields.length === 0,
-    missingFields: incompleteFields
-  };
-};
-```
-
-#### Comportamento esperado:
-1. **Se cliente completo**: Permitir envio para rota normalmente
-2. **Se cliente incompleto**: 
-   - Mostrar modal/alerta listando campos pendentes
-   - Oferecer botão "Completar Cadastro" que abre edição do cliente
-   - Não permitir envio para rota até completar
-
-#### Origem do problema:
-- Sistema de "Adição rápida de cliente" implementado em 24/08/2025
-- Permite criar clientes com dados mínimos para agilizar criação de orçamentos
-- Campos placeholder precisam ser completados antes do envio para rota
+**Comportamento atual:**
+1. **Cliente completo**: Envio para rota permitido
+2. **Cliente incompleto**: Modal com campos pendentes + botão "Completar Cadastro"
 
 ---
 
 ## ✅ Funcionalidades Implementadas com Sucesso:
 
-### ✅ Rotas - COMPLETO
+### ✅ Rotas - COMPLETO + MELHORIAS
 - ✅ Visualização de mapa interativo com Leaflet
 - ✅ Otimização de rotas com OSRM + timeout 60s
 - ✅ **Validação de cadastro completo** implementada e testada
@@ -224,8 +185,10 @@ const validateClientForRoute = (client) => {
 - ✅ Loading modal durante otimização
 - ✅ Priorização de paradas (PRIMEIRA/AUTOMÁTICA/ÚLTIMA)
 - ✅ Persistência completa no MongoDB
+- ✅ **Status editáveis** com dropdowns e aplicação em tempo real
+- ✅ **Remoção automática** de itens inválidos para rotas
 
-### ✅ Agenda - COMPLETO
+### ✅ Agenda - COMPLETO + MELHORIAS AVANÇADAS
 - ✅ Integração Google Calendar OAuth2 completa
 - ✅ Criação automática de eventos baseados em rotas
 - ✅ Visualização completa (lista + calendar grid)
@@ -235,11 +198,22 @@ const validateClientForRoute = (client) => {
 - ✅ Múltiplas visualizações (dia, 3 dias, semana)
 - ✅ Tema Google-like com cores diferenciadas
 - ✅ Edição completa de eventos (título, descrição, local)
+- ✅ **Títulos inteligentes** com múltiplos emojis
+- ✅ **Observações dos itens** na descrição
+- ✅ **Endereços legíveis** extraídos corretamente
+- ✅ **Sequência temporal** alinhada com ordem do mapa
+
+### ✅ Orçamentos - MELHORIAS IMPLEMENTADAS  
+- ✅ **Campo STATUS** nas Informações do Serviço
+- ✅ **Correção de inconsistência** de status entre visualização e lista
+- ✅ **Status padrão** baseado no cadastro do serviço
+- ✅ **Debug logs** para validação
 
 ### 🔄 FASE 3 - PRÓXIMA
 - **WhatsApp Integration** - Envio de rotas para técnicos
 - **Lavagem/Execução** - Controle produtivo
 - **Modo Técnico** - Interface para técnicos
+- **📋 Módulo PROJETOS** - Planejamento com notas, planilhas e desenhos
 
 ---
 
