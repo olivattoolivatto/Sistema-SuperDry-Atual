@@ -1262,10 +1262,10 @@ export function Agenda() {
 
   // Função para enviar eventos selecionados para o técnico
   const sendToTechnician = async () => {
-    if (!selectedRoute || selectedStops.size === 0) {
+    if (selectedStops.size === 0) {
       toast({
         title: "Aviso!",
-        description: "Selecione pelo menos um item para enviar ao técnico.",
+        description: "Selecione pelo menos um evento para enviar ao técnico.",
         variant: "default",
       });
       return;
