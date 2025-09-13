@@ -1724,6 +1724,16 @@ export function Agenda() {
                   Reset Horários
                 </button>
                 
+                <button
+                  onClick={clearAllSelections}
+                  disabled={selectedStops.size === 0}
+                  className="flex items-center px-3 py-2 bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors text-sm"
+                  title="Limpar todas as seleções"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Limpar Seleções
+                </button>
+                
                 {selectedStops.size > 0 && (
                   <>
                     <button
