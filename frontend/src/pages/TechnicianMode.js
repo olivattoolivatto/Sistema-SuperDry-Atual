@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { routesApi, budgetItemsApi, technicianApi } from '../services/api';
 
+const BACKEND_URL = import.meta.env.VITE_REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
+
 // Componente principal do Modo Técnico
 export function TechnicianMode() {
   const [currentMode, setCurrentMode] = useState('selection'); // selection | street | company
