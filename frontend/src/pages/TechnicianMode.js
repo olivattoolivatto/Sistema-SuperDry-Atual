@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { routesApi, budgetItemsApi, technicianApi } from '../services/api';
 
-const BACKEND_URL = import.meta.env.VITE_REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Função para gerar emoji do serviço baseado nas palavras-chave
 const getServiceEmoji = (serviceName) => {
