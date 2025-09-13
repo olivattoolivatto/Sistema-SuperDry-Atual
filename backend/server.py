@@ -1222,6 +1222,123 @@ async def create_calendar_events(event_request: CalendarEventCreate):
         logger.error(f"Error creating calendar events: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Additional endpoint for updating budget item status
+class TechnicianAssignment(BaseModel):
+    id: str = Field(default_factory=lambda: f"TASS-{str(uuid.uuid4())[:8]}")
+    route_id: Optional[str] = None
+    event_ids: List[str] = []
+    technician_id: str
+    assigned_date: str
+    assignment_type: str = "AGENDA"  # "AGENDA" | "STATUS_BASED" | "MANUAL"
+    status: str = "ASSIGNED"  # "ASSIGNED" | "IN_PROGRESS" | "COMPLETED"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+@api_router.post("/technician/assign-events")
+async def assign_events_to_technician(assignment: TechnicianAssignment):
+    """Assign events/items to technician"""
+    try:
+        # Salvar assignment no MongoDB
+        assignment_dict = assignment.dict()
+        assignment_dict['created_at'] = assignment.created_at.isoformat()
+        assignment_dict['updated_at'] = assignment.updated_at.isoformat()
+        
+        result = await db.technician_assignments.insert_one(assignment_dict)
+        
+        return {
+            "success": True,
+            "assignment_id": assignment.id,
+            "events_assigned": len(assignment.event_ids),
+            "technician_id": assignment.technician_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error assigning events: {str(e)}")
+
+@api_router.get("/technician/{technician_id}/daily-tasks")
+async def get_technician_daily_tasks(
+    technician_id: str,
+    date: str = Query(default=datetime.now().strftime('%Y-%m-%d'))
+):
+    """Get hybrid tasks for technician (agenda + status-based)"""
+    try:
+        tasks = {
+            "agenda_events": [],
+            "status_items": [],
+            "assignments": []
+        }
+        
+        # 1. Buscar assignments da agenda para o técnico
+        assignments = await db.technician_assignments.find({
+            "technician_id": technician_id,
+            "assigned_date": date,
+            "status": {"$in": ["ASSIGNED", "IN_PROGRESS"]}
+        }).to_list(None)
+        
+        tasks["assignments"] = assignments
+        
+        # 2. Buscar itens por status (modo híbrido)
+        # Itens com status de rua que não foram atribuídos via agenda
+        assigned_event_ids = []
+        for assignment in assignments:
+            assigned_event_ids.extend(assignment.get("event_ids", []))
+        
+        # Buscar budget items com status RETIRAR, EXECUTAR_NO_LOCAL, ENTREGAR
+        # que não estão em assignments
+        budgets = await db.budgets.find({}).to_list(None)
+        
+        for budget in budgets:
+            if not budget.get('items'):
+                continue
+                
+            for item in budget['items']:
+                if (item.get('status') in ['RETIRAR', 'EXECUTAR_NO_LOCAL', 'ENTREGAR'] and
+                    item.get('id') not in assigned_event_ids):
+                    
+                    # Buscar dados do cliente
+                    client = await db.clients.find_one({"id": budget.get('client_id')})
+                    
+                    status_item = {
+                        "id": item.get('id'),
+                        "budget_id": budget.get('id'),
+                        "client_id": budget.get('client_id'),
+                        "client_name": client.get('name') if client else 'Cliente não encontrado',
+                        "client_address": client.get('address', {}).get('full_address') if client else '',
+                        "client_phone": client.get('phone_primary') if client else '',
+                        "service_name": item.get('service_name'),
+                        "service_value": item.get('total_value', 0),
+                        "status": item.get('status'),
+                        "observations": item.get('observations', ''),
+                        "internal_observations": budget.get('internal_observations', '')
+                    }
+                    
+                    tasks["status_items"].append(status_item)
+        
+        return tasks
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting technician tasks: {str(e)}")
+
+@api_router.put("/technician/assignment/{assignment_id}/status")
+async def update_assignment_status(assignment_id: str, status: str):
+    """Update technician assignment status"""
+    try:
+        result = await db.technician_assignments.update_one(
+            {"id": assignment_id},
+            {"$set": {
+                "status": status,
+                "updated_at": datetime.utcnow().isoformat()
+            }}
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+        
+        return {"success": True, "assignment_id": assignment_id, "new_status": status}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating assignment: {str(e)}")
+
 @api_router.post("/calendar/events/direct")
 async def create_direct_calendar_event(event_request: DirectEventCreate):
     """Create a direct calendar event (not from route)"""
