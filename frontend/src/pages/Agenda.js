@@ -1206,16 +1206,19 @@ export function Agenda() {
       
       console.log(`📱 Enviando ${selectedEvents.length} eventos para técnico...`);
       
-      // TODO: Implementar API real
-      // await agendaApi.sendToTechnician({
-      //   route_id: selectedRoute.id,
-      //   events: selectedEvents,
-      //   technician_id: 'TECH-001', // Por enquanto fixo
-      //   assigned_date: customEventDate || new Date().toISOString().split('T')[0]
-      // });
-
-      // Mock para desenvolvimento
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Preparar dados para assignment
+      const assignmentData = {
+        route_id: selectedRoute.id,
+        event_ids: selectedEvents.map(event => event.id),
+        technician_id: 'TECH-001', // TODO: Permitir seleção do técnico
+        assigned_date: customEventDate || new Date().toISOString().split('T')[0],
+        assignment_type: 'AGENDA'
+      };
+      
+      // Enviar para API
+      const response = await technicianApi.assignEvents(assignmentData);
+      
+      console.log('✅ Assignment criado:', response.data);
       
       toast({
         title: "Sucesso!",
