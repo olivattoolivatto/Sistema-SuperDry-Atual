@@ -27,6 +27,7 @@ function App() {
             <Route path="/budget-config" element={<BudgetConfig />} />
             <Route path="/system-config" element={<SystemConfig />} />
             <Route path="/agenda" element={<Agenda />} />
+          <Route path="/technician" element={<TechnicianMode />} />
           </Routes>
         </Layout>
       </BrowserRouter>
