@@ -13,7 +13,8 @@ import {
   CheckCircle,
   Package,
   Truck,
-  User
+  User,
+  Trash2
 } from 'lucide-react';
 import { routesApi, budgetItemsApi, technicianApi } from '../services/api';
 
