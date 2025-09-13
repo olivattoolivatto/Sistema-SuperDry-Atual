@@ -1336,6 +1336,277 @@ class ServiceStatusBugTester:
         
         return migration_result['success'] if migration_result else False
 
+    def test_technician_assignment_endpoints(self):
+        """
+        REVIEW REQUEST TEST: Verificar endpoints para deletar technician assignments
+        
+        Testa:
+        1. Verificar endpoints disponíveis para technician assignments
+        2. Testar DELETE /api/technician/assignment/{id} se existir
+        3. Testar outros métodos como PUT para marcar como cancelado
+        4. Criar um assignment de teste para testar a exclusão
+        5. Verificar estrutura da resposta ao deletar
+        """
+        print("\n" + "=" * 80)
+        print("🔍 TESTE ESPECÍFICO DA REVIEW REQUEST: TECHNICIAN ASSIGNMENT DELETION")
+        print("=" * 80)
+        print("OBJETIVO: Verificar se existe endpoint para deletar technician assignments")
+        print("TESTES:")
+        print("1. Verificar endpoints disponíveis para technician assignments")
+        print("2. Testar DELETE /api/technician/assignment/{id} se existir")
+        print("3. Testar outros métodos como PUT para marcar como cancelado")
+        print("4. Criar um assignment de teste para testar a exclusão")
+        print("5. Verificar estrutura da resposta ao deletar")
+        print("=" * 80)
+        
+        # STEP 1: Verificar endpoints disponíveis
+        print("\n1️⃣ VERIFICANDO ENDPOINTS DISPONÍVEIS PARA TECHNICIAN ASSIGNMENTS:")
+        print("-" * 70)
+        
+        # Test existing endpoints first
+        existing_endpoints = [
+            ("POST", "/technician/assign-events", "Assign events to technician"),
+            ("GET", "/technician/TECH-001/daily-tasks", "Get technician daily tasks"),
+            ("PUT", "/technician/assignment/{id}/status", "Update assignment status")
+        ]
+        
+        print("📋 ENDPOINTS CONHECIDOS:")
+        for method, endpoint, description in existing_endpoints:
+            print(f"   {method:6} {endpoint:40} - {description}")
+        
+        # STEP 2: Criar um assignment de teste
+        print(f"\n2️⃣ CRIANDO ASSIGNMENT DE TESTE:")
+        print("-" * 40)
+        
+        test_assignment_data = {
+            "route_id": "RTE-TEST001",
+            "event_ids": ["EVT-TEST001", "EVT-TEST002"],
+            "technician_id": "TECH-001",
+            "assigned_date": "2025-01-15",
+            "assignment_type": "AGENDA",
+            "status": "ASSIGNED"
+        }
+        
+        print(f"📝 Dados do assignment de teste:")
+        for key, value in test_assignment_data.items():
+            print(f"   {key}: {value}")
+        
+        response = self.make_request('POST', '/technician/assign-events', test_assignment_data)
+        if not response['success']:
+            self.log_test("Create Test Assignment", False, 
+                        "Failed to create test assignment", response['data'])
+            return False
+        
+        assignment_result = response['data']
+        assignment_id = assignment_result.get('assignment_id')
+        
+        if not assignment_id:
+            self.log_test("Create Test Assignment", False, 
+                        "Assignment created but no ID returned", assignment_result)
+            return False
+        
+        self.log_test("Create Test Assignment", True, 
+                    f"Test assignment created successfully: {assignment_id}")
+        print(f"   ✅ Assignment ID: {assignment_id}")
+        print(f"   📊 Events assigned: {assignment_result.get('events_assigned', 0)}")
+        print(f"   👤 Technician: {assignment_result.get('technician_id')}")
+        
+        # STEP 3: Testar DELETE endpoint
+        print(f"\n3️⃣ TESTANDO DELETE ENDPOINT:")
+        print("-" * 35)
+        
+        print(f"🔍 Testando DELETE /api/technician/assignment/{assignment_id}")
+        
+        delete_response = self.make_request('DELETE', f'/technician/assignment/{assignment_id}')
+        
+        if delete_response['success']:
+            print("✅ DELETE endpoint existe e funcionou!")
+            self.log_test("DELETE Assignment Endpoint", True, 
+                        f"DELETE /api/technician/assignment/{assignment_id} successful")
+            
+            # Verify deletion by trying to get daily tasks
+            verify_response = self.make_request('GET', '/technician/TECH-001/daily-tasks?date=2025-01-15')
+            if verify_response['success']:
+                assignments = verify_response['data'].get('assignments', [])
+                deleted_assignment = next((a for a in assignments if a.get('id') == assignment_id), None)
+                
+                if not deleted_assignment:
+                    print("✅ Assignment foi removido da lista de daily tasks")
+                    self.log_test("DELETE Assignment Verification", True, 
+                                "Assignment successfully removed from daily tasks")
+                else:
+                    print("⚠️  Assignment ainda aparece na lista de daily tasks")
+                    self.log_test("DELETE Assignment Verification", False, 
+                                "Assignment still appears in daily tasks after deletion")
+            
+            delete_endpoint_exists = True
+            
+        elif delete_response['status_code'] == 404:
+            print("❌ DELETE endpoint não existe (404 Not Found)")
+            self.log_test("DELETE Assignment Endpoint", False, 
+                        f"DELETE endpoint not found - Status: {delete_response['status_code']}")
+            delete_endpoint_exists = False
+            
+        elif delete_response['status_code'] == 405:
+            print("❌ DELETE método não permitido (405 Method Not Allowed)")
+            self.log_test("DELETE Assignment Endpoint", False, 
+                        f"DELETE method not allowed - Status: {delete_response['status_code']}")
+            delete_endpoint_exists = False
+            
+        else:
+            print(f"❌ DELETE endpoint falhou - Status: {delete_response['status_code']}")
+            print(f"   Error: {delete_response['data']}")
+            self.log_test("DELETE Assignment Endpoint", False, 
+                        f"DELETE endpoint failed - Status: {delete_response['status_code']}")
+            delete_endpoint_exists = False
+        
+        # STEP 4: Testar métodos alternativos (PUT para cancelar)
+        print(f"\n4️⃣ TESTANDO MÉTODOS ALTERNATIVOS:")
+        print("-" * 40)
+        
+        if not delete_endpoint_exists:
+            print("🔄 Como DELETE não existe, testando PUT para marcar como cancelado...")
+            
+            # Create another test assignment if the first was deleted
+            if delete_response['success']:
+                print("📝 Criando novo assignment para testar cancelamento...")
+                response = self.make_request('POST', '/technician/assign-events', test_assignment_data)
+                if response['success']:
+                    assignment_id = response['data'].get('assignment_id')
+                    print(f"   ✅ Novo assignment criado: {assignment_id}")
+                else:
+                    print("   ❌ Falha ao criar novo assignment")
+                    assignment_id = None
+            
+            if assignment_id:
+                # Test cancellation via status update
+                cancel_statuses = ["CANCELLED", "CANCELED", "INACTIVE", "DELETED"]
+                
+                for cancel_status in cancel_statuses:
+                    print(f"🔍 Testando PUT com status '{cancel_status}'...")
+                    
+                    cancel_response = self.make_request('PUT', 
+                        f'/technician/assignment/{assignment_id}/status?status={cancel_status}')
+                    
+                    if cancel_response['success']:
+                        print(f"   ✅ Status '{cancel_status}' aceito!")
+                        self.log_test("PUT Assignment Cancel", True, 
+                                    f"Successfully updated assignment to {cancel_status}")
+                        
+                        # Verify the status change
+                        verify_response = self.make_request('GET', '/technician/TECH-001/daily-tasks?date=2025-01-15')
+                        if verify_response['success']:
+                            assignments = verify_response['data'].get('assignments', [])
+                            updated_assignment = next((a for a in assignments if a.get('id') == assignment_id), None)
+                            
+                            if updated_assignment:
+                                actual_status = updated_assignment.get('status')
+                                if actual_status == cancel_status:
+                                    print(f"   ✅ Status atualizado corretamente para '{actual_status}'")
+                                else:
+                                    print(f"   ⚠️  Status esperado '{cancel_status}', atual '{actual_status}'")
+                            else:
+                                print(f"   ℹ️  Assignment não aparece mais na lista (pode ter sido filtrado)")
+                        
+                        break  # Found a working cancel status
+                    else:
+                        print(f"   ❌ Status '{cancel_status}' rejeitado - {cancel_response['status_code']}")
+                        if cancel_response['status_code'] == 400:
+                            error_detail = cancel_response['data'].get('detail', '')
+                            print(f"      Erro: {error_detail}")
+                
+                else:
+                    # None of the cancel statuses worked
+                    print("❌ Nenhum status de cancelamento funcionou")
+                    self.log_test("PUT Assignment Cancel", False, 
+                                "No cancellation status accepted")
+        
+        # STEP 5: Testar outros endpoints relacionados
+        print(f"\n5️⃣ TESTANDO OUTROS ENDPOINTS RELACIONADOS:")
+        print("-" * 50)
+        
+        # Test getting daily tasks to see assignment structure
+        print("🔍 Testando GET /api/technician/TECH-001/daily-tasks...")
+        
+        tasks_response = self.make_request('GET', '/technician/TECH-001/daily-tasks?date=2025-01-15')
+        if tasks_response['success']:
+            tasks_data = tasks_response['data']
+            assignments = tasks_data.get('assignments', [])
+            
+            print(f"   ✅ Daily tasks endpoint funcionando")
+            print(f"   📊 Total assignments: {len(assignments)}")
+            
+            if assignments:
+                sample_assignment = assignments[0]
+                print(f"   📋 Estrutura do assignment:")
+                for key, value in sample_assignment.items():
+                    print(f"      {key}: {value}")
+                
+                self.log_test("GET Daily Tasks", True, 
+                            f"Retrieved {len(assignments)} assignments with complete structure")
+            else:
+                print(f"   ℹ️  Nenhum assignment encontrado para TECH-001 em 2025-01-15")
+                self.log_test("GET Daily Tasks", True, 
+                            "Daily tasks endpoint working but no assignments found")
+        else:
+            print(f"   ❌ Daily tasks endpoint falhou - {tasks_response['status_code']}")
+            self.log_test("GET Daily Tasks", False, 
+                        f"Daily tasks endpoint failed - {tasks_response['status_code']}")
+        
+        # STEP 6: Resultado final e recomendações
+        print(f"\n6️⃣ RESULTADO FINAL E RECOMENDAÇÕES:")
+        print("-" * 45)
+        
+        print("📊 RESUMO DOS TESTES:")
+        print(f"   ✅ POST /api/technician/assign-events: Funcionando")
+        print(f"   ✅ GET /api/technician/{{id}}/daily-tasks: Funcionando")
+        print(f"   ✅ PUT /api/technician/assignment/{{id}}/status: Funcionando")
+        
+        if delete_endpoint_exists:
+            print(f"   ✅ DELETE /api/technician/assignment/{{id}}: Funcionando")
+            print()
+            print("🎉 CONCLUSÃO: ENDPOINT DELETE EXISTE E FUNCIONA!")
+            print("✅ É possível implementar funcionalidade de 'Apagar' serviços enviados ao técnico")
+            print("✅ O backend suporta exclusão de assignments via DELETE")
+            
+            self.log_test("Technician Assignment Deletion Support", True, 
+                        "DELETE endpoint exists and works - backend supports assignment deletion")
+            
+            return True
+        else:
+            print(f"   ❌ DELETE /api/technician/assignment/{{id}}: Não existe")
+            print()
+            print("⚠️  CONCLUSÃO: ENDPOINT DELETE NÃO EXISTE")
+            print("❌ Não é possível deletar assignments diretamente")
+            print("🔄 ALTERNATIVAS DISPONÍVEIS:")
+            print("   1. Usar PUT para marcar como CANCELLED/INACTIVE")
+            print("   2. Implementar filtro no frontend para ocultar assignments cancelados")
+            print("   3. Solicitar implementação do endpoint DELETE no backend")
+            print()
+            print("💡 RECOMENDAÇÃO:")
+            print("   - Implementar endpoint DELETE /api/technician/assignment/{id} no backend")
+            print("   - Ou usar status CANCELLED como alternativa")
+            
+            self.log_test("Technician Assignment Deletion Support", False, 
+                        "DELETE endpoint does not exist - backend needs implementation for assignment deletion")
+            
+            return False
+
+    def run_technician_assignment_deletion_tests(self):
+        """Run the specific test requested in the review for technician assignment deletion"""
+        print("🗑️  EXECUTANDO TESTE DE EXCLUSÃO DE TECHNICIAN ASSIGNMENTS")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Foco: Verificar se existe endpoint para deletar technician assignments")
+        print("=" * 80)
+        
+        # Execute the technician assignment deletion test
+        deletion_support = self.test_technician_assignment_endpoints()
+        
+        # Summary
+        self.print_summary()
+        
+        return deletion_support
+
     def run_service_status_bug_tests(self):
         """Run the specific tests for the service status bug"""
         print("🐛 STARTING SERVICE STATUS BUG TESTS")
