@@ -8783,8 +8783,11 @@ if __name__ == "__main__":
                 print("🔍 RUNNING TECHNICIAN ASSIGNMENT INVESTIGATION")
                 tech_tester = TechnicianAssignmentTester()
                 success = tech_tester.run_technician_assignment_investigation()
+            elif test_type == "calendar-events":
+                print("🔍 RUNNING CALENDAR EVENTS STRUCTURE INVESTIGATION")
+                success = tester.run_calendar_events_investigation()
             else:
-                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction, srv0162, orc-0000005, budget-status-update, technician, technician-investigation")
+                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction, srv0162, orc-0000005, budget-status-update, technician, technician-investigation, calendar-events")
                 sys.exit(1)
     else:
         print("🔍 RUNNING DEFAULT: TECHNICIAN ASSIGNMENT INVESTIGATION")
