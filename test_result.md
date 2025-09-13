@@ -186,6 +186,21 @@ backend:
         -agent: "testing"
         -comment: "✅ ENDPOINT FUNCIONANDO PERFEITAMENTE: POST /api/calendar/events/direct testado com 100% de sucesso (9/9 testes). 🔧 CORREÇÃO APLICADA: CalendarEvent model - route_id e stop_id alterados para Optional para suportar eventos diretos (não associados a rotas). ✅ TODOS OS CENÁRIOS TESTADOS: 1) Criação básica com campos obrigatórios, 2) Criação completa com todos os campos, 3) Validação de dados incompletos, 4) Formatos de datetime corretos/incorretos, 5) Armazenamento no banco verificado, 6) Criação real no Google Calendar confirmada. ✅ INTEGRAÇÃO COMPLETA: Google Calendar autenticado e conectado, eventos criados com sucesso e salvos na collection calendar_events com route_id=null e stop_id=null (correto para eventos diretos). ✅ DADOS DE TESTE APROVADOS: Testado com dados exatos da solicitação - título, descrição, local, duração de 2 horas funcionando perfeitamente."
 
+  - task: "Hybrid Technician Mode System Implementation"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Implementado sistema híbrido do Modo Técnico com 3 novos endpoints: 1) POST /api/technician/assign-events - Atribui eventos específicos para técnico, 2) GET /api/technician/{technician_id}/daily-tasks - Busca tarefas híbridas (agenda + status), 3) PUT /api/technician/assignment/{assignment_id}/status - Atualiza status de assignments. Inclui deduplicação entre agenda e status items, collection technician_assignments criada automaticamente."
+        -working: true
+        -agent: "testing"
+        -comment: "🎉 SISTEMA HÍBRIDO TÉCNICO FUNCIONANDO 100% PERFEITAMENTE: Testado com 20/20 testes aprovados (100% sucesso). ✅ ENDPOINT 1 - POST /api/technician/assign-events: Funciona perfeitamente para atribuir eventos específicos a técnicos. Testa assignment com 2 eventos válidos para TECH-001, retorna assignment_id correto, events_assigned=2, technician_id correto. Salva na collection technician_assignments automaticamente. ✅ ENDPOINT 2 - GET /api/technician/{technician_id}/daily-tasks: Funciona perfeitamente para buscar tarefas híbridas. Combina assignments da agenda + itens por status não atribuídos. Retorna estrutura correta {agenda_events, status_items, assignments}. Deduplicação funcionando 100% - nenhum item aparece em ambas as listas. Testado com TECH-001 e data 2025-01-15. ✅ ENDPOINT 3 - PUT /api/technician/assignment/{assignment_id}/status: Funciona perfeitamente para atualizar status. Testa transições ASSIGNED→IN_PROGRESS→COMPLETED com sucesso. Retorna 404 correto para assignment inexistente. Atualiza timestamp updated_at corretamente. ✅ CENÁRIOS ESPECIAIS TESTADOS: Técnico inválido retorna estrutura vazia correta, assignment com event_ids vazios aceito, formato de data flexível aceito. ✅ CORREÇÕES APLICADAS DURANTE TESTE: Corrigido serialização ObjectId para JSON, corrigido exception handling para preservar 404 responses. ✅ DEDUPLICAÇÃO PERFEITA: 2 assigned items, 8 status items, 0 overlap confirmado. Sistema híbrido funcionando exatamente conforme especificado na review request."
+
 frontend:
   - task: "Multi-Service Event Title Generation"
     implemented: true
