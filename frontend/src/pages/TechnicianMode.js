@@ -19,6 +19,128 @@ import { routesApi, budgetItemsApi, technicianApi } from '../services/api';
 
 const BACKEND_URL = import.meta.env.VITE_REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
 
+// Função para gerar emoji do serviço baseado nas palavras-chave
+const getServiceEmoji = (serviceName) => {
+  if (!serviceName) return '✨'; // Emoji padrão
+  
+  const name = serviceName.toLowerCase();
+  
+  // Verificar palavras-chave específicas
+  if (name.includes('impermeabilização')) return '💦';
+  if (name.includes('carro') || name.includes('veiculo') || name.includes('veículo')) return '🚘';
+  if (name.includes('pagamento') || name.includes('cartão') || name.includes('credito') || name.includes('débito') || name.includes('debito')) return '💳';
+  if (name.includes('colchao') || name.includes('colchão') || name.includes('box') || name.includes('cabeceira')) return '🛏️';
+  if (name.includes('cortina')) return '🪟';
+  if (name.includes('sofa') || name.includes('sofá')) return '🛋️';
+  if (name.includes('poltrona')) return '💺';
+  if (name.includes('edredom') || name.includes('colcha') || name.includes('pillowtop')) return '🧺';
+  if (name.includes('almofada') || name.includes('puff') || name.includes('outros')) return '📦';
+  if (name.includes('carpete')) return '⬜';
+  if (name.includes('carrinho') || name.includes('cadeirinha') || name.includes('bebe') || name.includes('bebê')) return '🛒👶';
+  
+  return '✨'; // Emoji padrão para serviços não mapeados
+};
+
+// Função para gerar título do evento com múltiplos serviços
+const generateEventTitle = (budget, clientName) => {
+  if (!budget.items || budget.items.length === 0) {
+    return `✨ ${clientName}`;
+  }
+
+  // Agrupar itens por emoji (serviço similar) e coletar status
+  const serviceGroups = {};
+  
+  budget.items.forEach(item => {
+    const emoji = getServiceEmoji(item.service_name);
+    const status = item.status || 'EXECUTAR_NO_LOCAL';
+    
+    if (!serviceGroups[emoji]) {
+      serviceGroups[emoji] = {
+        emoji,
+        statuses: new Set(),
+        services: new Set()
+      };
+    }
+    
+    serviceGroups[emoji].statuses.add(status);
+    serviceGroups[emoji].services.add(item.service_name);
+  });
+
+  console.log('🎨 Grupos de serviços para título:', serviceGroups);
+
+  // Construir partes do título
+  const titleParts = [];
+  
+  Object.values(serviceGroups).forEach(group => {
+    let part = group.emoji;
+    
+    // Verificar se tem RETIRAR ou ENTREGAR
+    const hasRetirar = group.statuses.has('RETIRAR');
+    const hasEntregar = group.statuses.has('ENTREGAR');
+    
+    if (hasRetirar && hasEntregar) {
+      part += 'RETIRAR/ENTREGAR';
+    } else if (hasRetirar) {
+      part += 'RETIRAR';
+    } else if (hasEntregar) {
+      part += 'ENTREGAR';
+    }
+    // Se for apenas EXECUTAR_NO_LOCAL, não adiciona texto
+    
+    titleParts.push(part);
+  });
+
+  // Juntar partes com "e" e adicionar nome do cliente
+  let title;
+  if (titleParts.length === 1) {
+    title = `${titleParts[0]} ${clientName}`;
+  } else if (titleParts.length === 2) {
+    title = `${titleParts[0]} e ${titleParts[1]} ${clientName}`;
+  } else {
+    // Mais de 2 serviços: usar vírgulas e "e" no final
+    const lastPart = titleParts.pop();
+    title = `${titleParts.join(', ')} e ${lastPart} ${clientName}`;
+  }
+
+  console.log('🎯 Título gerado:', title);
+  return title;
+};
+
+// Função para buscar dados do orçamento e cliente
+const getBudgetAndClientData = async (budgetItemId) => {
+  try {
+    console.log(`🔍 Buscando dados para budget item: ${budgetItemId}`);
+    
+    // Buscar dados do item do orçamento
+    const budgetItemResponse = await fetch(`${BACKEND_URL}/api/budget-items/${budgetItemId}`);
+    if (!budgetItemResponse.ok) {
+      throw new Error('Erro ao buscar item do orçamento');
+    }
+    const budgetItem = await budgetItemResponse.json();
+    
+    // Buscar orçamento completo
+    const budgetResponse = await fetch(`${BACKEND_URL}/api/budgets/${budgetItem.budget_id}`);
+    if (!budgetResponse.ok) {
+      throw new Error('Erro ao buscar orçamento');
+    }
+    const budget = await budgetResponse.json();
+    
+    // Buscar dados do cliente
+    const clientResponse = await fetch(`${BACKEND_URL}/api/clients/${budget.client_id}`);
+    if (!clientResponse.ok) {
+      throw new Error('Erro ao buscar cliente');
+    }
+    const client = await clientResponse.json();
+    
+    console.log(`✅ Dados encontrados - Cliente: ${client.name}, Orçamento: ${budget.code}, Itens: ${budget.items.length}`);
+    
+    return { budget, client };
+  } catch (error) {
+    console.error('❌ Erro ao buscar dados do orçamento/cliente:', error);
+    throw error;
+  }
+};
+
 // Componente principal do Modo Técnico
 export function TechnicianMode() {
   const [currentMode, setCurrentMode] = useState('selection'); // selection | street | company
