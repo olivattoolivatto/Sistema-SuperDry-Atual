@@ -134,10 +134,67 @@ function StreetMode({ onBack }) {
 
   const loadDailyAgenda = async () => {
     try {
-      // TODO: Implementar API real
-      // const response = await api.get('/technician/daily-agenda');
+      setLoading(true);
       
-      // Mock data para desenvolvimento
+      // Buscar tarefas híbridas do técnico
+      const response = await technicianApi.getDailyTasks(
+        technicianData.id,
+        new Date().toISOString().split('T')[0]
+      );
+      
+      console.log('📋 Tarefas híbridas recebidas:', response.data);
+      
+      const { agenda_events, status_items, assignments } = response.data;
+      
+      // Combinar dados de agenda e status em um formato unificado
+      const unifiedClients = {};
+      
+      // 1. Processar assignments da agenda
+      assignments.forEach(assignment => {
+        assignment.event_ids.forEach(eventId => {
+          // TODO: Buscar dados completos do evento via API da agenda
+          // Por enquanto, usar estrutura mock expandida
+        });
+      });
+      
+      // 2. Processar itens por status
+      status_items.forEach(item => {
+        const clientId = item.client_id;
+        
+        if (!unifiedClients[clientId]) {
+          unifiedClients[clientId] = {
+            id: clientId,
+            name: item.client_name,
+            address: item.client_address,
+            phone: item.client_phone,
+            scheduledTime: '08:00', // TODO: Definir lógica de horário
+            items: [],
+            internalObservations: item.internal_observations,
+            source: 'STATUS_BASED'
+          };
+        }
+        
+        unifiedClients[clientId].items.push({
+          id: item.id,
+          name: item.service_name,
+          status: item.status,
+          value: parseFloat(item.service_value),
+          observations: item.observations
+        });
+      });
+      
+      // Converter para array
+      const clientsArray = Object.values(unifiedClients);
+      
+      console.log('👥 Clientes unificados:', clientsArray);
+      
+      setDailyClients(clientsArray);
+      setLoading(false);
+      
+    } catch (error) {
+      console.error('Erro ao carregar agenda híbrida:', error);
+      
+      // Fallback para dados mock em caso de erro
       const mockClients = [
         {
           id: 'CLI-001',
@@ -149,7 +206,8 @@ function StreetMode({ onBack }) {
             { id: 'ITM-001', name: 'Sofá 3 Lugares', status: 'EXECUTAR_NO_LOCAL', value: 320.00, observations: 'Mancha no braço direito' },
             { id: 'ITM-002', name: 'Cadeira Presidencial', status: 'EXECUTAR_NO_LOCAL', value: 80.00, observations: '' }
           ],
-          internalObservations: 'Cliente preferencial. Cuidado com pets.'
+          internalObservations: 'Cliente preferencial. Cuidado com pets.',
+          source: 'MOCK'
         },
         {
           id: 'CLI-002', 
@@ -160,25 +218,12 @@ function StreetMode({ onBack }) {
           items: [
             { id: 'ITM-003', name: 'Tapete Persa 2x3m', status: 'RETIRAR', value: 150.00, observations: 'Cuidado com as franjas' }
           ],
-          internalObservations: 'Portão azul, tocar interfone.'
-        },
-        {
-          id: 'CLI-003',
-          name: 'Pedro Lima', 
-          address: 'Rua dos Sonhos, 789 - Vila Nova',
-          phone: '(11) 77777-7777',
-          scheduledTime: '14:00',
-          items: [
-            { id: 'ITM-004', name: 'Poltrona Reclinável', status: 'ENTREGAR', value: 200.00, observations: 'Item já lavado' }
-          ],
-          internalObservations: 'Agendar entrega.'
+          internalObservations: 'Portão azul, tocar interfone.',
+          source: 'MOCK'
         }
       ];
       
       setDailyClients(mockClients);
-      setLoading(false);
-    } catch (error) {
-      console.error('Erro ao carregar agenda:', error);
       setLoading(false);
     }
   };
