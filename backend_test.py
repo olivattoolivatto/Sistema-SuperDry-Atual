@@ -8347,8 +8347,11 @@ if __name__ == "__main__":
             elif test_type == "budget-status-update":
                 print("🔄 RUNNING BUDGET ITEM STATUS UPDATE ENDPOINT TESTS")
                 success = tester.run_budget_item_status_update_tests()
+            elif test_type == "technician":
+                print("👨‍🔧 RUNNING HYBRID TECHNICIAN MODE TESTS")
+                success = tester.run_technician_mode_tests()
             else:
-                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction, srv0162, orc-0000005, budget-status-update")
+                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction, srv0162, orc-0000005, budget-status-update, technician")
                 sys.exit(1)
     else:
         print("🔄 RUNNING DEFAULT: BUDGET ITEM STATUS UPDATE ENDPOINT TESTS")
