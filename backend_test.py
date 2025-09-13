@@ -8248,6 +8248,435 @@ class ClienteTrouxeReregistrationTester:
         
         return investigation_results
 
+class TechnicianAssignmentTester:
+    def __init__(self):
+        self.base_url = BASE_URL
+        self.headers = HEADERS
+        self.test_results = []
+        self.created_resources = {
+            'assignments': [],
+            'routes': [],
+            'budgets': [],
+            'clients': [],
+            'services': []
+        }
+    
+    def log_test(self, test_name: str, success: bool, message: str, details: Any = None):
+        """Log test results"""
+        result = {
+            'test': test_name,
+            'success': success,
+            'message': message,
+            'timestamp': datetime.now().isoformat(),
+            'details': details
+        }
+        self.test_results.append(result)
+        status = "✅ PASS" if success else "❌ FAIL"
+        print(f"{status} {test_name}: {message}")
+        if details and not success:
+            print(f"   Details: {details}")
+    
+    def make_request(self, method: str, endpoint: str, data: Dict = None) -> Dict:
+        """Make HTTP request with error handling"""
+        url = f"{self.base_url}{endpoint}"
+        try:
+            if method.upper() == 'GET':
+                response = requests.get(url, headers=self.headers)
+            elif method.upper() == 'POST':
+                response = requests.post(url, headers=self.headers, json=data)
+            elif method.upper() == 'PUT':
+                response = requests.put(url, headers=self.headers, json=data)
+            elif method.upper() == 'DELETE':
+                response = requests.delete(url, headers=self.headers)
+            
+            return {
+                'status_code': response.status_code,
+                'data': response.json() if response.content else {},
+                'success': 200 <= response.status_code < 300
+            }
+        except Exception as e:
+            return {
+                'status_code': 0,
+                'data': {'error': str(e)},
+                'success': False
+            }
+    
+    def test_assignment_creation_flow(self):
+        """Test complete assignment flow: POST /api/technician/assign-events"""
+        print("\n=== TESTING ASSIGNMENT CREATION FLOW ===")
+        
+        # Create assignment for TECH-001 with today's date (2025-09-13)
+        assignment_data = {
+            "route_id": None,  # Test assignment without route_id
+            "event_ids": ["EVT-001", "EVT-002"],  # Test with multiple event_ids
+            "technician_id": "TECH-001",
+            "assigned_date": "2025-09-13",
+            "assignment_type": "AGENDA",
+            "status": "ASSIGNED"
+        }
+        
+        response = self.make_request('POST', '/technician/assign-events', assignment_data)
+        if response['success']:
+            result = response['data']
+            assignment_id = result.get('assignment_id')
+            
+            # Verify response structure
+            expected_fields = ['success', 'assignment_id', 'events_assigned', 'technician_id']
+            missing_fields = [field for field in expected_fields if field not in result]
+            
+            if not missing_fields:
+                self.created_resources['assignments'].append(assignment_id)
+                self.log_test("Assignment Creation", True, 
+                            f"✅ Assignment created: {assignment_id} for TECH-001 with {result.get('events_assigned')} events")
+                return assignment_id
+            else:
+                self.log_test("Assignment Creation", False, 
+                            f"❌ Missing response fields: {missing_fields}")
+                return None
+        else:
+            self.log_test("Assignment Creation", False, 
+                        "❌ Failed to create assignment", response['data'])
+            return None
+    
+    def test_daily_tasks_retrieval(self, technician_id: str = "TECH-001", date: str = "2025-09-13"):
+        """Test GET /api/technician/{technician_id}/daily-tasks"""
+        print(f"\n=== TESTING DAILY TASKS RETRIEVAL FOR {technician_id} ===")
+        
+        response = self.make_request('GET', f'/technician/{technician_id}/daily-tasks?date={date}')
+        if response['success']:
+            data = response['data']
+            
+            # Verify response structure
+            expected_sections = ['agenda_events', 'status_items', 'assignments']
+            missing_sections = [section for section in expected_sections if section not in data]
+            
+            if not missing_sections:
+                assignments = data.get('assignments', [])
+                status_items = data.get('status_items', [])
+                agenda_events = data.get('agenda_events', [])
+                
+                print(f"   📊 Assignments found: {len(assignments)}")
+                print(f"   📊 Status items found: {len(status_items)}")
+                print(f"   📊 Agenda events found: {len(agenda_events)}")
+                
+                # Check assignment structure
+                if assignments:
+                    first_assignment = assignments[0]
+                    assignment_fields = ['id', 'technician_id', 'assigned_date', 'assignment_type', 'status']
+                    missing_assignment_fields = [field for field in assignment_fields if field not in first_assignment]
+                    
+                    if not missing_assignment_fields:
+                        self.log_test("Daily Tasks Structure", True, 
+                                    f"✅ Daily tasks retrieved with correct structure")
+                    else:
+                        self.log_test("Daily Tasks Structure", False, 
+                                    f"❌ Assignment missing fields: {missing_assignment_fields}")
+                else:
+                    self.log_test("Daily Tasks Structure", True, 
+                                f"✅ Daily tasks retrieved (no assignments found for {date})")
+                
+                return data
+            else:
+                self.log_test("Daily Tasks Structure", False, 
+                            f"❌ Missing response sections: {missing_sections}")
+                return data
+        else:
+            self.log_test("Daily Tasks Retrieval", False, 
+                        f"❌ Failed to retrieve daily tasks for {technician_id}", response['data'])
+            return None
+    
+    def test_assignment_data_structure(self, assignments: List[Dict]):
+        """Test if assignments contain required date/time information"""
+        print("\n=== TESTING ASSIGNMENT DATA STRUCTURE ===")
+        
+        if not assignments:
+            self.log_test("Assignment Data Structure", False, 
+                        "❌ No assignments to test data structure")
+            return False
+        
+        required_fields = ['assigned_date', 'created_at', 'updated_at']
+        optional_fields = ['route_id', 'event_ids']
+        
+        structure_issues = []
+        
+        for i, assignment in enumerate(assignments):
+            assignment_id = assignment.get('id', f'Assignment {i+1}')
+            
+            # Check required fields
+            for field in required_fields:
+                if field not in assignment or assignment[field] is None:
+                    structure_issues.append(f"{assignment_id}: missing {field}")
+            
+            # Check date format
+            assigned_date = assignment.get('assigned_date')
+            if assigned_date:
+                try:
+                    datetime.strptime(assigned_date, '%Y-%m-%d')
+                except ValueError:
+                    structure_issues.append(f"{assignment_id}: invalid assigned_date format")
+            
+            # Check created_at format
+            created_at = assignment.get('created_at')
+            if created_at:
+                try:
+                    # Try ISO format
+                    datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                except ValueError:
+                    structure_issues.append(f"{assignment_id}: invalid created_at format")
+        
+        if not structure_issues:
+            self.log_test("Assignment Data Structure", True, 
+                        f"✅ All {len(assignments)} assignments have correct date/time structure")
+            return True
+        else:
+            self.log_test("Assignment Data Structure", False, 
+                        f"❌ Structure issues found: {structure_issues}")
+            return False
+    
+    def test_assignment_scenarios(self):
+        """Test different assignment scenarios"""
+        print("\n=== TESTING DIFFERENT ASSIGNMENT SCENARIOS ===")
+        
+        scenarios = [
+            {
+                "name": "Assignment with route_id",
+                "data": {
+                    "route_id": "RTE-0000001",
+                    "event_ids": ["EVT-003"],
+                    "technician_id": "TECH-001",
+                    "assigned_date": "2025-09-13",
+                    "assignment_type": "AGENDA"
+                }
+            },
+            {
+                "name": "Assignment without route_id",
+                "data": {
+                    "route_id": None,
+                    "event_ids": ["EVT-004", "EVT-005"],
+                    "technician_id": "TECH-001",
+                    "assigned_date": "2025-09-13",
+                    "assignment_type": "STATUS_BASED"
+                }
+            },
+            {
+                "name": "Assignment with multiple event_ids",
+                "data": {
+                    "route_id": "RTE-0000002",
+                    "event_ids": ["EVT-006", "EVT-007", "EVT-008"],
+                    "technician_id": "TECH-001",
+                    "assigned_date": "2025-09-13",
+                    "assignment_type": "MANUAL"
+                }
+            }
+        ]
+        
+        successful_scenarios = 0
+        
+        for scenario in scenarios:
+            response = self.make_request('POST', '/technician/assign-events', scenario['data'])
+            if response['success']:
+                result = response['data']
+                assignment_id = result.get('assignment_id')
+                self.created_resources['assignments'].append(assignment_id)
+                
+                self.log_test(f"Scenario: {scenario['name']}", True, 
+                            f"✅ Created assignment {assignment_id}")
+                successful_scenarios += 1
+            else:
+                self.log_test(f"Scenario: {scenario['name']}", False, 
+                            f"❌ Failed to create assignment", response['data'])
+        
+        success_rate = successful_scenarios / len(scenarios)
+        if success_rate == 1.0:
+            self.log_test("Assignment Scenarios", True, 
+                        f"✅ All {len(scenarios)} scenarios successful")
+        else:
+            self.log_test("Assignment Scenarios", False, 
+                        f"❌ Only {successful_scenarios}/{len(scenarios)} scenarios successful")
+        
+        return success_rate >= 0.8  # 80% success rate acceptable
+    
+    def test_existing_assignments_in_database(self):
+        """Check existing assignments in database for date/time issues"""
+        print("\n=== TESTING EXISTING ASSIGNMENTS IN DATABASE ===")
+        
+        # Try to get assignments for different dates
+        test_dates = ["2025-09-13", "2025-09-12", "2025-09-11"]
+        
+        total_assignments_found = 0
+        assignments_with_issues = []
+        
+        for date in test_dates:
+            response = self.make_request('GET', f'/technician/TECH-001/daily-tasks?date={date}')
+            if response['success']:
+                data = response['data']
+                assignments = data.get('assignments', [])
+                total_assignments_found += len(assignments)
+                
+                print(f"   📅 {date}: {len(assignments)} assignments found")
+                
+                # Check each assignment for missing date/time info
+                for assignment in assignments:
+                    assignment_id = assignment.get('id')
+                    issues = []
+                    
+                    if not assignment.get('assigned_date'):
+                        issues.append('missing assigned_date')
+                    if not assignment.get('created_at'):
+                        issues.append('missing created_at')
+                    if not assignment.get('updated_at'):
+                        issues.append('missing updated_at')
+                    
+                    if issues:
+                        assignments_with_issues.append({
+                            'id': assignment_id,
+                            'issues': issues
+                        })
+        
+        print(f"   📊 Total assignments found: {total_assignments_found}")
+        print(f"   ⚠️  Assignments with issues: {len(assignments_with_issues)}")
+        
+        if assignments_with_issues:
+            print("   📋 Issues found:")
+            for assignment in assignments_with_issues:
+                print(f"      - {assignment['id']}: {', '.join(assignment['issues'])}")
+            
+            self.log_test("Existing Assignments Check", False, 
+                        f"❌ {len(assignments_with_issues)} assignments have date/time issues")
+        else:
+            self.log_test("Existing Assignments Check", True, 
+                        f"✅ All {total_assignments_found} existing assignments have correct date/time info")
+        
+        return len(assignments_with_issues) == 0
+    
+    def test_assignment_status_update(self, assignment_id: str):
+        """Test PUT /api/technician/assignment/{assignment_id}/status"""
+        print(f"\n=== TESTING ASSIGNMENT STATUS UPDATE ===")
+        
+        if not assignment_id:
+            self.log_test("Assignment Status Update", False, 
+                        "❌ No assignment ID provided for testing")
+            return False
+        
+        # Test status transitions: ASSIGNED -> IN_PROGRESS -> COMPLETED
+        status_transitions = [
+            ("IN_PROGRESS", "Assignment started"),
+            ("COMPLETED", "Assignment completed")
+        ]
+        
+        successful_updates = 0
+        
+        for new_status, description in status_transitions:
+            response = self.make_request('PUT', f'/technician/assignment/{assignment_id}/status?status={new_status}')
+            if response['success']:
+                result = response['data']
+                
+                if result.get('success') and result.get('new_status') == new_status:
+                    self.log_test(f"Status Update: {new_status}", True, 
+                                f"✅ {description}: {assignment_id} -> {new_status}")
+                    successful_updates += 1
+                else:
+                    self.log_test(f"Status Update: {new_status}", False, 
+                                f"❌ Invalid response format: {result}")
+            else:
+                self.log_test(f"Status Update: {new_status}", False, 
+                            f"❌ Failed to update status to {new_status}", response['data'])
+        
+        # Test invalid assignment ID
+        fake_assignment_id = "TASS-FAKE123"
+        response = self.make_request('PUT', f'/technician/assignment/{fake_assignment_id}/status?status=COMPLETED')
+        if not response['success'] and response['status_code'] == 404:
+            self.log_test("Status Update: Invalid ID", True, 
+                        f"✅ Correctly returned 404 for invalid assignment ID")
+            successful_updates += 1
+        else:
+            self.log_test("Status Update: Invalid ID", False, 
+                        f"❌ Should return 404 for invalid assignment ID")
+        
+        return successful_updates >= 2  # At least 2 out of 3 tests should pass
+    
+    def print_summary(self):
+        """Print test summary"""
+        print("\n" + "=" * 80)
+        print("🔍 TECHNICIAN ASSIGNMENT INVESTIGATION SUMMARY")
+        print("=" * 80)
+        
+        total_tests = len(self.test_results)
+        passed_tests = sum(1 for result in self.test_results if result['success'])
+        failed_tests = total_tests - passed_tests
+        
+        print(f"📊 Total Tests: {total_tests}")
+        print(f"✅ Passed: {passed_tests}")
+        print(f"❌ Failed: {failed_tests}")
+        print(f"📈 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        
+        if failed_tests > 0:
+            print(f"\n❌ FAILED TESTS:")
+            for result in self.test_results:
+                if not result['success']:
+                    print(f"   - {result['test']}: {result['message']}")
+        
+        print("\n" + "=" * 80)
+    
+    def run_technician_assignment_investigation(self):
+        """Run complete investigation of technician assignment system"""
+        print("🔍 INVESTIGAÇÃO: PROBLEMA COM 'SERVIÇOS ENVIADOS AO TÉCNICO'")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Focus: Investigar problema com assignments não atualizando")
+        print("=" * 80)
+        
+        print("\n📋 PROBLEMA REPORTADO:")
+        print("1. Serviços enviados não aparecem na seção 'Serviços Enviados ao Técnico'")
+        print("2. No Modo Técnico, faltam informações de data/horário para alguns serviços")
+        print("3. Testar com data de hoje: 2025-09-13")
+        
+        # Test 1: Assignment Creation Flow
+        print("\n1️⃣ TESTANDO FLUXO DE CRIAÇÃO DE ASSIGNMENT:")
+        assignment_id = self.test_assignment_creation_flow()
+        
+        # Test 2: Daily Tasks Retrieval
+        print("\n2️⃣ TESTANDO BUSCA DE TAREFAS DIÁRIAS:")
+        daily_tasks = self.test_daily_tasks_retrieval("TECH-001", "2025-09-13")
+        
+        # Test 3: Assignment Data Structure
+        if daily_tasks and daily_tasks.get('assignments'):
+            print("\n3️⃣ TESTANDO ESTRUTURA DOS ASSIGNMENTS:")
+            self.test_assignment_data_structure(daily_tasks['assignments'])
+        
+        # Test 4: Different Assignment Scenarios
+        print("\n4️⃣ TESTANDO DIFERENTES CENÁRIOS DE ASSIGNMENT:")
+        self.test_assignment_scenarios()
+        
+        # Test 5: Check Existing Assignments
+        print("\n5️⃣ VERIFICANDO ASSIGNMENTS EXISTENTES NO BANCO:")
+        self.test_existing_assignments_in_database()
+        
+        # Test 6: Assignment Status Update
+        if assignment_id:
+            print("\n6️⃣ TESTANDO ATUALIZAÇÃO DE STATUS:")
+            self.test_assignment_status_update(assignment_id)
+        
+        # Summary
+        self.print_summary()
+        
+        # Analysis and recommendations
+        print("\n🔍 ANÁLISE DOS RESULTADOS:")
+        failed_tests = [result for result in self.test_results if not result['success']]
+        
+        if not failed_tests:
+            print("✅ SISTEMA FUNCIONANDO CORRETAMENTE:")
+            print("   - Assignments são criados com sucesso")
+            print("   - Daily tasks retornam dados corretos")
+            print("   - Estrutura de dados está completa")
+            print("   - Status updates funcionam")
+        else:
+            print("❌ PROBLEMAS IDENTIFICADOS:")
+            for result in failed_tests:
+                print(f"   - {result['test']}: {result['message']}")
+        
+        return len(failed_tests) == 0
+
+
 if __name__ == "__main__":
     # Check command line arguments
     if len(sys.argv) > 1:
