@@ -210,37 +210,52 @@ Validação completa implementada para verificar cadastro antes do envio para ro
 - ✅ **Debug logs** para validação
 
 ### 🔄 FASE 3 - EM DESENVOLVIMENTO
-- **📱 Modo Técnico** - PRIMEIRA VERSÃO IMPLEMENTADA
-  - ✅ Interface de seleção entre Modo Rua e Modo Empresa  
-  - ✅ Modo Rua com agenda diária e detalhes de clientes
-  - ✅ Cards de clientes com navegação Waze/Maps
-  - ✅ Seleção individual de itens com checkboxes
-  - ✅ Botões de ação específicos por status
-  - ✅ Modo Empresa com dashboard de status produtivo
-  - ✅ Layout mobile-friendly responsivo
-  - 🔄 Tabs de Pagamentos, Chamados e Fotos (em desenvolvimento)
-- **WhatsApp Integration** - Envio de rotas para técnicos
-- **Lavagem/Execução** - Controle produtivo
+- **📱 Modo Técnico** - SISTEMA HÍBRIDO V2.0 IMPLEMENTADO
+  - ✅ **Sistema Híbrido**: Combina eventos da Agenda + itens por Status
+  - ✅ **Botão "Enviar para Técnico"** na tela Agenda 
+  - ✅ **APIs Backend**: Endpoints completos para assignments
+  - ✅ **Deduplicação**: Evita conflitos entre agenda e status
+  - ✅ **TechnicianAssignment**: Collection para controlar envios
+  - ✅ **Modo Rua**: Interface unificada com dados híbridos
+  - ✅ **Modo Empresa**: Dashboard de status produtivo
+  - 🔄 Sistema de fotos, assinaturas e pagamentos (próxima etapa)
+- **WhatsApp Integration** - Planejado
+- **Lavagem/Execução** - Planejado
 
-### 📱 MODO TÉCNICO - V1.0 IMPLEMENTADO
+### 📱 MODO TÉCNICO - V2.0 SISTEMA HÍBRIDO
 
-#### ✅ Funcionalidades Disponíveis:
-- **Seleção de Modo**: Interface inicial para escolher Rua ou Empresa
-- **Modo Rua**: Agenda diária com lista de clientes
-- **Navegação**: Links diretos para Waze e Google Maps
-- **Detalhes do Cliente**: Informações completas + observações
-- **Seleção de Itens**: Checkboxes individuais para cada serviço
-- **Botões de Ação**: Serviço Concluído, Retirada Efetuada, etc.
-- **Modo Empresa**: Dashboard de controle produtivo por status
-- **Layout Mobile**: Interface otimizada para smartphones
+#### ✅ INTEGRAÇÃO ORÇAMENTOS → TÉCNICO:
 
-#### 🔄 Em Desenvolvimento:
-- Sistema de fotos obrigatórias (antes/depois)
-- Assinatura digital
-- Sistema de pagamentos múltiplos
-- Geração de chamados
-- Comprovante PDF automático
-- APIs de backend integradas
+**🔄 Fluxo Híbrido Implementado:**
+```
+AGENDA: Orçamentos → Rotas → Agenda → "Enviar para Técnico" → Modo Técnico
+STATUS: Orçamentos → Status (RETIRAR/EXECUTAR_NO_LOCAL/ENTREGAR) → Modo Técnico
+```
+
+**📊 Deduplicação Inteligente:**
+- Itens enviados via Agenda não aparecem na lista de Status
+- Evita duplicação de tarefas para o técnico
+- Sistema de precedência: Agenda > Status
+
+#### ✅ FUNCIONALIDADES V2.0:
+- **Botão "Enviar para Técnico"**: Na tela Agenda, ao lado de "Lançar na Agenda"
+- **API Assignment**: Sistema completo de atribuição de tarefas
+- **Modo Híbrido**: Combina múltiplas fontes de dados automaticamente
+- **Interface Unificada**: Técnico vê todos os serviços independente da origem
+- **Status Tracking**: Controle de assignments (ASSIGNED → IN_PROGRESS → COMPLETED)
+
+#### 🛠️ APIS IMPLEMENTADAS:
+- `POST /api/technician/assign-events` - Atribuir eventos ao técnico
+- `GET /api/technician/{id}/daily-tasks` - Buscar tarefas híbridas do dia
+- `PUT /api/technician/assignment/{id}/status` - Atualizar status de assignment
+
+#### 🔄 PRÓXIMAS FUNCIONALIDADES:
+- Sistema de fotos obrigatórias (antes/depois/danos)
+- Assinatura digital com canvas touch
+- Pagamentos múltiplos (PIX CNPJs, cartão, dinheiro, etc.)
+- Geração de chamados para manutenção/compra
+- Comprovante PDF automático via WhatsApp
+- Auditoria completa de alterações
 
 ---
 
