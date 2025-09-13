@@ -655,24 +655,23 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
     try {
       console.log(`🗑️ Removendo assignment ${assignmentId} da agenda`);
       
-      // TODO: Implementar chamada para API para remover assignment
-      const response = await fetch(`${BACKEND_URL}/api/technician/assignments/${assignmentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      if (response.ok) {
-        console.log(`✅ Assignment ${assignmentId} removido com sucesso`);
-        // TODO: Atualizar lista de clientes ou recarregar dados
-        window.location.reload(); // Solução temporária
-      } else {
-        console.error(`❌ Erro ao remover assignment ${assignmentId}`);
-        alert('Erro ao remover da agenda. Tente novamente.');
+      // Confirmar ação com o usuário
+      if (!window.confirm('Tem certeza que deseja remover este serviço da sua agenda? Esta ação não pode ser desfeita.')) {
+        return;
       }
+      
+      // Marcar assignment como CANCELLED (não existe endpoint DELETE)
+      const response = await technicianApi.updateAssignmentStatus(assignmentId, 'CANCELLED');
+      
+      console.log(`✅ Assignment ${assignmentId} marcado como cancelado:`, response.data);
+      
+      alert('Serviço removido da sua agenda com sucesso!');
+      
+      // Recarregar dados da agenda
+      window.location.reload(); // Solução temporária - TODO: implementar reload otimizado
+      
     } catch (error) {
-      console.error('❌ Erro ao remover assignment:', error);
+      console.error(`❌ Erro ao remover assignment ${assignmentId}:`, error);
       alert('Erro ao remover da agenda. Tente novamente.');
     }
   };
