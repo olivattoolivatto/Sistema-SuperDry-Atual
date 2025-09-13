@@ -275,18 +275,89 @@ function StreetMode({ onBack }) {
       const unifiedClients = {};
       
       // 1. Processar assignments da agenda
-      assignments.forEach(assignment => {
-        // Cada assignment representa um conjunto de eventos enviados pela agenda
-        // Criar entrada unificada para cada assignment
-        const assignmentId = assignment.id;
+      for (const assignment of assignments) {
+        // Buscar dados reais dos eventos para gerar títulos bonitos
+        console.log(`🔍 Processando assignment ${assignment.id} com eventos:`, assignment.event_ids);
         
-        if (!unifiedClients[assignmentId]) {
+        try {
+          // Para cada assignment, vamos buscar dados dos eventos e criar um título bonito
+          const eventTitles = [];
+          let totalValue = 0;
+          let clientName = 'Cliente';
+          let clientAddress = assignment.route_id ? `Rota: ${assignment.route_id}` : 'Endereço não disponível';
+          let clientPhone = '(65) 99999-9999';
+          
+          // Se temos event_ids, vamos buscar os dados reais
+          if (assignment.event_ids && assignment.event_ids.length > 0) {
+            for (const eventId of assignment.event_ids) {
+              try {
+                // Buscar dados completos do evento através do budget item
+                const { budget, client } = await getBudgetAndClientData(eventId);
+                
+                // Gerar título bonito usando as mesmas funções da agenda
+                const eventTitle = generateEventTitle(budget, client.name);
+                eventTitles.push(eventTitle);
+                
+                // Usar dados do primeiro cliente encontrado
+                if (clientName === 'Cliente') {
+                  clientName = client.name;
+                  clientAddress = `${client.address}, ${client.neighborhood} - ${client.city}/${client.state}`;
+                  clientPhone = client.phone || '(65) 99999-9999';
+                }
+                
+                // Somar valores dos itens
+                totalValue += budget.items.reduce((sum, item) => sum + parseFloat(item.service_value), 0);
+                
+              } catch (eventError) {
+                console.error(`❌ Erro ao buscar dados do evento ${eventId}:`, eventError);
+                // Fallback para o event_id se não conseguir buscar dados
+                eventTitles.push(`Evento ${eventId}`);
+              }
+            }
+          }
+          
+          // Usar o primeiro título gerado ou fallback
+          const displayTitle = eventTitles.length > 0 ? eventTitles[0] : `Assignment ${assignment.id}`;
+          
+          const assignmentId = assignment.id;
+          
           unifiedClients[assignmentId] = {
             id: assignmentId,
-            name: `Assignment ${assignmentId}`,
-            address: assignment.route_id ? `Rota: ${assignment.route_id}` : 'Eventos diversos',
-            phone: '(65) 99999-9999', // TODO: Buscar telefone real
+            name: displayTitle, // Usar título bonito ao invés de "Assignment TASS-xxx"
+            address: clientAddress,
+            phone: clientPhone,
             scheduledTime: '08:00', // TODO: Calcular horário baseado nos eventos
+            items: [],
+            internalObservations: `Assignment criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
+            source: 'AGENDA_ASSIGNMENT',
+            assigned_date: assignment.assigned_date,
+            status: assignment.status,
+            event_ids: assignment.event_ids,
+            total_value: totalValue
+          };
+          
+          // Adicionar um item representativo para o assignment
+          unifiedClients[assignmentId].items.push({
+            id: `${assignmentId}-summary`,
+            name: `${assignment.event_ids.length} evento(s) da agenda`,
+            status: assignment.status,
+            value: totalValue,
+            observations: `Status: ${assignment.status} | Data: ${assignment.assigned_date}`
+          });
+          
+          console.log(`✅ Assignment ${assignment.id} processado como: "${displayTitle}"`);
+          
+        } catch (assignmentError) {
+          console.error(`❌ Erro ao processar assignment ${assignment.id}:`, assignmentError);
+          
+          // Fallback em caso de erro
+          const assignmentId = assignment.id;
+          unifiedClients[assignmentId] = {
+            id: assignmentId,
+            name: `Assignment ${assignment.id}`,
+            address: assignment.route_id ? `Rota: ${assignment.route_id}` : 'Eventos diversos',
+            phone: '(65) 99999-9999',
+            scheduledTime: '08:00',
             items: [],
             internalObservations: `Assignment do tipo ${assignment.assignment_type} criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
             source: 'AGENDA_ASSIGNMENT',
@@ -294,17 +365,16 @@ function StreetMode({ onBack }) {
             status: assignment.status,
             event_ids: assignment.event_ids
           };
+          
+          unifiedClients[assignmentId].items.push({
+            id: `${assignmentId}-summary`,
+            name: `${assignment.event_ids.length} evento(s) da agenda`,
+            status: assignment.status,
+            value: 0,
+            observations: `Status: ${assignment.status} | Data: ${assignment.assigned_date}`
+          });
         }
-        
-        // Adicionar um item representativo para o assignment
-        unifiedClients[assignmentId].items.push({
-          id: `${assignmentId}-summary`,
-          name: `${assignment.event_ids.length} evento(s) da agenda`,
-          status: assignment.status,
-          value: 0, // TODO: Calcular valor total dos eventos
-          observations: `Status: ${assignment.status} | Data: ${assignment.assigned_date}`
-        });
-      });
+      }
       
       // 2. Processar itens por status
       status_items.forEach(item => {
