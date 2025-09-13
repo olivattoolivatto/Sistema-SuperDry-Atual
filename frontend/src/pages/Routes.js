@@ -40,6 +40,7 @@ export function Routes() {
   const [showStatus, setShowStatus] = useState(false);
   const [statusOptions, setStatusOptions] = useState([]);
   const [editingStatus, setEditingStatus] = useState({});
+  const [sendingToTechnician, setSendingToTechnician] = useState(false);
 
   // Load status options when showStatus is enabled
   const loadStatusOptions = async () => {
