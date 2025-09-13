@@ -287,32 +287,33 @@ function StreetMode({ onBack }) {
           let clientAddress = assignment.route_id ? `Rota: ${assignment.route_id}` : 'Endereço não disponível';
           let clientPhone = '(65) 99999-9999';
           
-          // Se temos event_ids, vamos buscar os dados reais
+          // Se temos event_ids, vamos buscar os dados reais e gerar título bonito
           if (assignment.event_ids && assignment.event_ids.length > 0) {
-            for (const eventId of assignment.event_ids) {
-              try {
-                // Buscar dados completos do evento através do budget item
-                const { budget, client } = await getBudgetAndClientData(eventId);
-                
-                // Gerar título bonito usando as mesmas funções da agenda
-                const eventTitle = generateEventTitle(budget, client.name);
-                eventTitles.push(eventTitle);
-                
-                // Usar dados do primeiro cliente encontrado
-                if (clientName === 'Cliente') {
-                  clientName = client.name;
-                  clientAddress = `${client.address}, ${client.neighborhood} - ${client.city}/${client.state}`;
-                  clientPhone = client.phone || '(65) 99999-9999';
-                }
-                
-                // Somar valores dos itens
-                totalValue += budget.items.reduce((sum, item) => sum + parseFloat(item.service_value), 0);
-                
-              } catch (eventError) {
-                console.error(`❌ Erro ao buscar dados do evento ${eventId}:`, eventError);
-                // Fallback para o event_id se não conseguir buscar dados
-                eventTitles.push(`Evento ${eventId}`);
-              }
+            try {
+              // Buscar dados do primeiro evento para gerar título
+              const firstEventId = assignment.event_ids[0];
+              const { budget, client } = await getBudgetAndClientData(firstEventId);
+              
+              // Gerar título bonito usando as mesmas funções da agenda
+              const beautifulTitle = generateEventTitle(budget, client.name);
+              
+              console.log(`🎨 Título bonito gerado para assignment ${assignment.id}: "${beautifulTitle}"`);
+              
+              // Usar dados reais do cliente
+              clientName = client.name;
+              clientAddress = `${client.address}, ${client.neighborhood} - ${client.city}/${client.state}`;
+              clientPhone = client.phone || '(65) 99999-9999';
+              
+              // Calcular valor total dos itens do orçamento
+              totalValue = budget.items.reduce((sum, item) => sum + parseFloat(item.service_value || 0), 0);
+              
+              // Usar o título bonito
+              eventTitles.push(beautifulTitle);
+              
+            } catch (eventError) {
+              console.error(`❌ Erro ao buscar dados do evento ${assignment.event_ids[0]}:`, eventError);
+              // Fallback para o event_id se não conseguir buscar dados
+              eventTitles.push(`Evento ${assignment.event_ids[0]}`);
             }
           }
           
