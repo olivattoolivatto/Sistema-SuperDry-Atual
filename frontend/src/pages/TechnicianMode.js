@@ -207,10 +207,28 @@ function StreetMode({ onBack }) {
         });
       });
       
-      // Converter para array
+      // Converter para array e ordenar por data
       const clientsArray = Object.values(unifiedClients);
       
-      console.log('👥 Clientes unificados:', clientsArray);
+      // Ordenar por data e tipo de fonte (assignments da agenda primeiro, depois status items)
+      clientsArray.sort((a, b) => {
+        // Priorizar assignments da agenda
+        if (a.source === 'AGENDA_ASSIGNMENT' && b.source !== 'AGENDA_ASSIGNMENT') return -1;
+        if (b.source === 'AGENDA_ASSIGNMENT' && a.source !== 'AGENDA_ASSIGNMENT') return 1;
+        
+        // Ordenar por data (assignments têm assigned_date, status items usam data atual)
+        const dateA = a.assigned_date || new Date().toISOString().split('T')[0];
+        const dateB = b.assigned_date || new Date().toISOString().split('T')[0];
+        
+        if (dateA !== dateB) {
+          return dateA.localeCompare(dateB);
+        }
+        
+        // Se mesma data, ordenar por horário agendado
+        return a.scheduledTime.localeCompare(b.scheduledTime);
+      });
+      
+      console.log('👥 Clientes unificados (ordenados por data e tipo):', clientsArray);
       
       setDailyClients(clientsArray);
       setLoading(false);
