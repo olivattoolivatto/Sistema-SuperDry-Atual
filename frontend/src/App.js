@@ -9,6 +9,7 @@ import { Routes as RoutesPage } from "./pages/Routes";
 import { BudgetConfig } from "./pages/BudgetConfig";
 import { SystemConfig } from "./pages/SystemConfig";
 import { Agenda } from "./pages/Agenda";
+import TechnicianMode from "./pages/TechnicianMode";
 import { Toaster } from "./components/ui/sonner";
 import "./App.css";
 
