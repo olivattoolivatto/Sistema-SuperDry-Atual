@@ -275,8 +275,8 @@ function StreetMode({ onBack }) {
       // Combinar dados de agenda e status em um formato unificado
       const unifiedClients = {};
       
-      // 1. Processar assignments da agenda
-      for (const assignment of assignments) {
+      // 1. Processar assignments da agenda (filtrar cancelados)
+      for (const assignment of assignments.filter(a => a.status !== 'CANCELLED')) {
         // Buscar dados reais dos eventos para gerar títulos bonitos
         console.log(`🔍 Processando assignment ${assignment.id} com eventos:`, assignment.event_ids);
         
