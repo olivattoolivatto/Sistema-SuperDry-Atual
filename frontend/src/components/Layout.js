@@ -20,6 +20,7 @@ const menuItems = [
   { path: '/budgets', label: 'Orçamentos', icon: FileText },
   { path: '/routes', label: 'Rotas', icon: Route },
   { path: '/agenda', label: 'Agenda', icon: FileText },
+  { path: '/technician', label: 'Modo Técnico', icon: Smartphone },
   { path: '/budget-config', label: 'Config. Orçamento', icon: Settings },
   { path: '/system-config', label: 'Config. Sistema', icon: Cog }
 ];
