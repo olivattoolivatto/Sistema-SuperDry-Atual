@@ -8248,6 +8248,239 @@ class ClienteTrouxeReregistrationTester:
         
         return investigation_results
 
+    def test_calendar_events_structure_investigation(self):
+        """INVESTIGAÇÃO: Estrutura dos calendar events para mapear event IDs para budget item IDs"""
+        print("\n" + "=" * 80)
+        print("🔍 INVESTIGAÇÃO: ESTRUTURA DOS CALENDAR EVENTS")
+        print("=" * 80)
+        print("OBJETIVO: Encontrar como mapear calendar event IDs (EVT-003) para budget item IDs")
+        print("PROBLEMA: Assignments contêm event_ids mas precisamos budget_item_ids para títulos bonitos")
+        print("=" * 80)
+        
+        # STEP 1: Buscar estrutura de calendar events
+        print("\n1️⃣ BUSCANDO ESTRUTURA DE CALENDAR EVENTS:")
+        print("-" * 50)
+        
+        # Get calendar events for a date range
+        start_date = "2025-01-01"
+        end_date = "2025-12-31"
+        
+        response = self.make_request('GET', f'/calendar/events?start_date={start_date}&end_date={end_date}')
+        if response['success']:
+            events_data = response['data']
+            events = events_data.get('events', [])
+            
+            print(f"📊 Total events found: {len(events)}")
+            
+            if events:
+                # Analyze structure of first few events
+                print("\n📋 ESTRUTURA DOS EVENTOS ENCONTRADOS:")
+                for i, event in enumerate(events[:3]):  # Show first 3 events
+                    print(f"\n   Evento {i+1}:")
+                    for key, value in event.items():
+                        if isinstance(value, str) and len(value) > 100:
+                            value = value[:100] + "..."
+                        print(f"     {key}: {value}")
+                
+                # Look for events with system-generated IDs
+                system_events = [e for e in events if e.get('id', '').startswith('EVT-') or 'EVT-' in str(e)]
+                print(f"\n🎯 Eventos com IDs do sistema (EVT-): {len(system_events)}")
+                
+                if system_events:
+                    print("   Exemplos de eventos do sistema:")
+                    for event in system_events[:2]:
+                        print(f"     ID: {event.get('id')}")
+                        print(f"     Summary: {event.get('summary')}")
+                        print(f"     Description: {event.get('description', '')[:100]}...")
+                
+                self.log_test("Calendar Events Structure", True, 
+                            f"Found {len(events)} events, {len(system_events)} system events")
+            else:
+                print("⚠️  Nenhum evento encontrado no período especificado")
+                self.log_test("Calendar Events Structure", False, "No events found in date range")
+        else:
+            self.log_test("Calendar Events Structure", False, 
+                        "Failed to retrieve calendar events", response['data'])
+        
+        # STEP 2: Investigar relação com rotas e stops
+        print("\n2️⃣ INVESTIGANDO RELAÇÃO COM ROTAS E STOPS:")
+        print("-" * 50)
+        
+        # Get available routes
+        response = self.make_request('GET', '/routes')
+        if response['success']:
+            routes = response['data']
+            print(f"📊 Rotas disponíveis: {len(routes)}")
+            
+            if routes:
+                # Analyze first route structure
+                first_route = routes[0]
+                route_id = first_route.get('id')
+                stops = first_route.get('stops', [])
+                
+                print(f"\n📋 ESTRUTURA DA ROTA {route_id}:")
+                print(f"     ID: {route_id}")
+                print(f"     Stops: {len(stops)}")
+                print(f"     Vehicle Type: {first_route.get('vehicle_type')}")
+                print(f"     Planned Date: {first_route.get('planned_date')}")
+                
+                if stops:
+                    print(f"\n📋 ESTRUTURA DOS STOPS:")
+                    first_stop = stops[0]
+                    for key, value in first_stop.items():
+                        if isinstance(value, dict):
+                            print(f"     {key}: {type(value).__name__} with {len(value)} fields")
+                        else:
+                            print(f"     {key}: {value}")
+                    
+                    # Look for budget_item_id in stops
+                    stops_with_budget_items = [s for s in stops if s.get('budget_item_id')]
+                    print(f"\n🔗 Stops com budget_item_id: {len(stops_with_budget_items)}")
+                    
+                    if stops_with_budget_items:
+                        print("   Exemplos de mapeamento stop → budget_item:")
+                        for stop in stops_with_budget_items[:3]:
+                            print(f"     Stop ID: {stop.get('id')} → Budget Item: {stop.get('budget_item_id')}")
+                
+                self.log_test("Routes and Stops Investigation", True, 
+                            f"Analyzed {len(routes)} routes with stops structure")
+        else:
+            self.log_test("Routes and Stops Investigation", False, 
+                        "Failed to retrieve routes", response['data'])
+        
+        # STEP 3: Investigar technician assignments
+        print("\n3️⃣ INVESTIGANDO TECHNICIAN ASSIGNMENTS:")
+        print("-" * 45)
+        
+        # Try to get technician assignments for a specific technician
+        technician_id = "TECH-001"
+        date = "2025-01-15"
+        
+        response = self.make_request('GET', f'/technician/{technician_id}/daily-tasks?date={date}')
+        if response['success']:
+            tasks = response['data']
+            assignments = tasks.get('assignments', [])
+            status_items = tasks.get('status_items', [])
+            
+            print(f"📊 Assignments encontrados: {len(assignments)}")
+            print(f"📊 Status items encontrados: {len(status_items)}")
+            
+            if assignments:
+                print(f"\n📋 ESTRUTURA DOS ASSIGNMENTS:")
+                first_assignment = assignments[0]
+                for key, value in first_assignment.items():
+                    print(f"     {key}: {value}")
+                
+                # Look for event_ids in assignments
+                assignments_with_events = [a for a in assignments if a.get('event_ids')]
+                print(f"\n🔗 Assignments com event_ids: {len(assignments_with_events)}")
+                
+                if assignments_with_events:
+                    print("   Exemplos de event_ids em assignments:")
+                    for assignment in assignments_with_events[:3]:
+                        event_ids = assignment.get('event_ids', [])
+                        print(f"     Assignment: {assignment.get('id')} → Event IDs: {event_ids}")
+            
+            if status_items:
+                print(f"\n📋 ESTRUTURA DOS STATUS ITEMS:")
+                first_status_item = status_items[0]
+                for key, value in first_status_item.items():
+                    print(f"     {key}: {value}")
+                
+                # Status items should have budget_item_ids directly
+                status_items_with_budget = [s for s in status_items if s.get('id')]
+                print(f"\n🔗 Status items com IDs: {len(status_items_with_budget)}")
+            
+            self.log_test("Technician Assignments Investigation", True, 
+                        f"Found {len(assignments)} assignments and {len(status_items)} status items")
+        else:
+            self.log_test("Technician Assignments Investigation", False, 
+                        "Failed to retrieve technician tasks", response['data'])
+        
+        # STEP 4: Tentar buscar evento específico
+        print("\n4️⃣ TENTANDO BUSCAR EVENTO ESPECÍFICO:")
+        print("-" * 45)
+        
+        # Try to get specific event (EVT-003 mentioned in the review)
+        event_id = "EVT-003"
+        response = self.make_request('GET', f'/calendar/events/{event_id}')
+        if response['success']:
+            event_detail = response['data']
+            print(f"📋 DETALHES DO EVENTO {event_id}:")
+            for key, value in event_detail.items():
+                print(f"     {key}: {value}")
+            
+            self.log_test("Specific Event Lookup", True, 
+                        f"Successfully retrieved event {event_id}")
+        else:
+            print(f"⚠️  Evento {event_id} não encontrado ou endpoint não disponível")
+            self.log_test("Specific Event Lookup", False, 
+                        f"Event {event_id} not found", response['data'])
+        
+        # STEP 5: Investigar se há endpoint para buscar eventos por route
+        print("\n5️⃣ INVESTIGANDO EVENTOS POR ROTA:")
+        print("-" * 40)
+        
+        # Try to get events for a specific route
+        if 'routes' in locals() and routes:
+            test_route_id = routes[0].get('id')
+            response = self.make_request('GET', f'/calendar/events/{test_route_id}')
+            if response['success']:
+                route_events = response['data'].get('events', [])
+                print(f"📊 Eventos para rota {test_route_id}: {len(route_events)}")
+                
+                if route_events:
+                    print("   Estrutura dos eventos da rota:")
+                    first_route_event = route_events[0]
+                    for key, value in first_route_event.items():
+                        print(f"     {key}: {value}")
+                
+                self.log_test("Route Events Lookup", True, 
+                            f"Found {len(route_events)} events for route {test_route_id}")
+            else:
+                print(f"⚠️  Nenhum evento encontrado para rota {test_route_id}")
+                self.log_test("Route Events Lookup", False, 
+                            f"No events found for route {test_route_id}")
+        
+        # STEP 6: Conclusões e recomendações
+        print("\n6️⃣ CONCLUSÕES E RECOMENDAÇÕES:")
+        print("-" * 40)
+        
+        print("📊 ANÁLISE REALIZADA:")
+        print("   ✅ Estrutura de calendar events investigada")
+        print("   ✅ Relação com rotas e stops analisada")
+        print("   ✅ Technician assignments examinados")
+        print("   ✅ Tentativa de busca de evento específico")
+        
+        print("\n🎯 POSSÍVEIS SOLUÇÕES PARA MAPEAMENTO:")
+        print("   1. Se events têm route_id + stop_id → usar stops para encontrar budget_item_id")
+        print("   2. Se events são criados de stops → manter referência budget_item_id no event")
+        print("   3. Criar endpoint específico para mapear event_id → budget_item_id")
+        print("   4. Modificar assignments para incluir budget_item_ids além de event_ids")
+        
+        print("\n💡 RECOMENDAÇÃO:")
+        print("   - Verificar se calendar events têm campos route_id/stop_id")
+        print("   - Usar esses campos para buscar o stop correspondente")
+        print("   - Do stop, extrair o budget_item_id para buscar dados do orçamento")
+        print("   - Implementar função de mapeamento no backend se necessário")
+        
+        return True
+
+    def run_calendar_events_investigation(self):
+        """Run the calendar events investigation as requested in the review"""
+        print("🔍 INVESTIGAÇÃO: ESTRUTURA DOS CALENDAR EVENTS PARA MAPEAMENTO")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Objetivo: Mapear event IDs (EVT-003) para budget item IDs para títulos bonitos")
+        print("=" * 80)
+        
+        # Run the investigation
+        investigation_success = self.test_calendar_events_structure_investigation()
+        
+        # Summary
+        self.print_summary()
+        
+        return investigation_success
+
 class TechnicianAssignmentTester:
     def __init__(self):
         self.base_url = BASE_URL
