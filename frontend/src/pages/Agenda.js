@@ -81,6 +81,7 @@ export function Agenda() {
   useEffect(() => {
     if (isGoogleAuthenticated) {
       loadCalendarEvents();
+      loadSentServices(); // Carregar serviços enviados ao técnico
     }
   }, [currentDate, calendarView, isGoogleAuthenticated]);
 
