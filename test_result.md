@@ -220,14 +220,17 @@ frontend:
   - task: "Multi-Service Event Title Generation"
     implemented: true
     working: false
-    file: "pages/Agenda.js"
-    stuck_count: 0
-    priority: "medium"
-    needs_retesting: true
+    file: "pages/TechnicianMode.js"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
     status_history:
         -working: false
         -agent: "main"
         -comment: "Implementada função generateEventTitle() para títulos com múltiplos serviços. FUNCIONALIDADES: 1) Agrupa itens por emoji (sem repetir), 2) Adiciona RETIRAR/ENTREGAR após emoji quando aplicável, 3) Junta múltiplos serviços com 'e', 4) Formatos: '🗞️RETIRAR Fulano', '🗞️RETIRAR e 🛋️ Fulano', '🗞️, 🛋️ e 🪑 Fulano'. Analisa todos os itens do orçamento, não apenas o item atual. Logs de debug incluídos. Precisa testar funcionamento."
+        -working: false
+        -agent: "testing"
+        -comment: "🚨 PROBLEMA CRÍTICO IDENTIFICADO NO MODO TÉCNICO: Testado navegação para Modo Técnico e ativação do 'Modo Rua' conforme solicitado na review request. ❌ CAUSA RAIZ ENCONTRADA: Sistema está tentando buscar dados de orçamento usando IDs de eventos do calendário (EVT-003, EVT-004, etc.) como se fossem IDs de budget items. ❌ ERRO ESPECÍFICO: API /api/budget-items/EVT-003 retorna 404 porque EVT-003 é um calendar event ID, não um budget item ID. ❌ LOGS CONFIRMAM PROBLEMA: Console mostra '🔍 Buscando dados para budget item: EVT-003' seguido de 'Failed to load resource: 404'. ❌ FALLBACK ATIVADO: Sistema cai no fallback e exibe 'Evento EVT-003' ao invés de títulos bonitos com emojis. ✅ FUNÇÕES IMPLEMENTADAS CORRETAMENTE: getServiceEmoji(), generateEventTitle(), getBudgetAndClientData() estão implementadas e funcionais. ✅ STATUS ITEMS FUNCIONANDO: Clientes como 'Gabriela', 'Diego Olivatto' aparecem corretamente com emojis (🛋️) porque usam budget item IDs reais. 🎯 SOLUÇÃO NECESSÁRIA: Assignments precisam conter budget item IDs ao invés de calendar event IDs, OU criar endpoint para mapear calendar events para budget items. Sistema híbrido funciona para status_items mas falha para assignments da agenda."
 
   - task: "Update Service Emoji Function with Specific Mappings"
     implemented: true
