@@ -418,15 +418,56 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
       <div className="p-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <MapPin className="w-4 h-4 text-blue-600" />
+            {/* Ícone específico por tipo de source */}
+            {client.source === 'AGENDA_ASSIGNMENT' ? (
+              <Calendar className="w-4 h-4 text-purple-600" />
+            ) : (
+              <MapPin className="w-4 h-4 text-blue-600" />
+            )}
             <span className="font-semibold text-gray-800">{client.name}</span>
             <span className="text-blue-600 font-medium">{client.scheduledTime}</span>
+            
+            {/* Badge do tipo de source */}
+            {client.source === 'AGENDA_ASSIGNMENT' ? (
+              <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
+                Agenda
+              </span>
+            ) : (
+              <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                Status
+              </span>
+            )}
           </div>
           <div className="text-right">
             <p className="text-sm font-medium text-green-600">R$ {totalValue.toFixed(2)}</p>
+            {/* Mostrar data se for assignment da agenda */}
+            {client.assigned_date && (
+              <p className="text-xs text-gray-500">
+                {new Date(client.assigned_date).toLocaleDateString('pt-BR')}
+              </p>
+            )}
           </div>
         </div>
         <p className="text-sm text-gray-600 mt-1">{client.address}</p>
+        
+        {/* Status do assignment se for da agenda */}
+        {client.source === 'AGENDA_ASSIGNMENT' && (
+          <div className="mt-2 flex items-center space-x-2">
+            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+              client.status === 'ASSIGNED' ? 'bg-yellow-100 text-yellow-800' :
+              client.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
+              client.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>
+              {client.status}
+            </span>
+            {client.event_ids && (
+              <span className="text-xs text-gray-500">
+                {client.event_ids.length} evento(s) da agenda
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Items summary */}
