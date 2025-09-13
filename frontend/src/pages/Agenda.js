@@ -15,7 +15,8 @@ import {
   ChevronDown,
   ChevronRight,
   Trash2,
-  Plus
+  Plus,
+  Smartphone
 } from 'lucide-react';
 import { routesApi, placesApi, clientsApi, budgetsApi, agendaApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
