@@ -362,68 +362,147 @@ COLETADO → EM_LAVAGEM_PARCEIRO → (Retorno) → AGUARDANDO_ENTREGA → ENTREG
 }
 ```
 
-#### **DigitalSignature (Nova collection)**
+#### **PaymentRecord (Nova collection)**
 ```javascript
 {
-  id: "SIGN-000001",
-  item_id: "ITM-001", 
-  client_name: "João Silva",
-  signature_data: "base64_svg_signature",
-  payment_method: "PIX",
-  amount_received: 150.00,
-  payment_status: "PAGO",
-  signed_at: "2025-09-15T11:45:00Z"
+  id: "PAY-000001",
+  item_ids: ["ITM-001", "ITM-002"],
+  total_amount: 400.00,
+  payments: [
+    {
+      method: "PIX",
+      cnpj: "25995295000104",
+      amount: 300.00,
+      timestamp: "2025-09-15T11:30:00Z"
+    },
+    {
+      method: "DINHEIRO", 
+      amount: 100.00,
+      timestamp: "2025-09-15T11:30:00Z"
+    }
+  ],
+  discount: {
+    amount: 0.00,
+    reason: "",
+    approved_by: null
+  },
+  audit_trail: [{
+    user: "TECH-001",
+    action: "payment_added",
+    old_value: null,
+    new_value: "PIX-300.00",
+    timestamp: "2025-09-15T11:30:00Z"
+  }]
 }
 ```
 
-### 📱 Interface Mobile
-
-#### **Design Responsivo**
-- **Viewport:** Mobile-first (375px+)
-- **Navegação:** Tab bar inferior
-- **Cards:** Touch-friendly (min 44px)
-- **Fotos:** Compressão automática (<500KB)
-
-#### **Tabs de Navegação**
+#### **ServiceTicket (Nova collection)**
+```javascript
+{
+  id: "TICKET-000001",
+  type: "MANUTENCAO", // MANUTENCAO | COMPRA
+  title: "Aspirador com problema",
+  description: "Aspirador perdendo sucção",
+  created_by: "TECH-001",
+  assigned_to: "ADM-001",
+  priority: "MEDIA", // BAIXA | MEDIA | ALTA | URGENTE
+  status: "ABERTO", // ABERTO | EM_ANDAMENTO | RESOLVIDO | FECHADO
+  created_at: "2025-09-15T11:45:00Z"
+}
 ```
-[ 🏠 Clientes ] [ 📋 Produção ] [ 📊 Status ] [ ⚙️ Config ]
+
+#### **MeasurementAudit (Nova collection)**
+```javascript
+{
+  id: "MEAS-000001",
+  item_id: "ITM-001",
+  original_measurements: {
+    width: 2.00,
+    height: 3.00,
+    area: 6.00
+  },
+  new_measurements: {
+    width: 1.95,
+    height: 2.98,
+    area: 5.82
+  },
+  difference: -0.18,
+  reason: "Encolhimento natural da lavagem",
+  measured_by: "TECH-002",
+  timestamp: "2025-09-15T14:20:00Z"
+}
 ```
 
-### 🔧 APIs Necessárias
+#### **PartnerItem (Nova collection)**
+```javascript
+{
+  id: "PART-000001", 
+  item_id: "ITM-001",
+  partner_tag: "AZUL-224",
+  partner_name: "Lavanderia Azul",
+  entry_date: "2025-09-01T09:00:00Z",
+  expected_return: "2025-09-05T17:00:00Z",
+  actual_return: null,
+  monthly_report_included: false
+}
+```
 
-#### **GET /api/technician/daily-schedule**
-- Retorna clientes do dia com status RUA
-- Filtro por técnico e data
+### 📱 Interface Mobile (ATUALIZADA)
 
-#### **GET /api/technician/production-queue**  
-- Retorna itens por status EMPRESA
-- Contadores por categoria
+#### **Navegação Principal**
+```
+[ 🚗 Rua ] [ 🏢 Empresa ] [ 📊 Relatórios ] [ ⚙️ Config ]
+```
 
-#### **POST /api/technician/photos**
-- Upload de fotos com compressão
-- Associação automática com item
+#### **Modo Rua - Tabs Secundárias**
+```
+[ 📅 Agenda ] [ 💰 Pagamentos ] [ 📞 Chamados ] [ 📸 Fotos ]
+```
 
-#### **POST /api/technician/signature**
-- Salva assinatura + dados de pagamento
-- Atualiza status do item
+#### **Modo Empresa - Tabs Secundárias**  
+```
+[ 📥 Recepção ] [ 🧽 Lavagem ] [ 📏 Medição ] [ 📦 Saída ]
+```
 
-#### **PUT /api/technician/item-status**
-- Atualiza status conforme modo de operação
-- Valida transições permitidas
+### 🔧 APIs Necessárias (EXPANDIDAS)
 
-### 📦 Otimizações Técnicas
+#### **Modo Rua - APIs**
+- `GET /api/technician/daily-agenda` - Agenda do técnico
+- `POST /api/technician/photos` - Upload fotos antes/depois  
+- `POST /api/technician/signature` - Assinatura + dados pagamento
+- `PUT /api/technician/item-status` - Atualizar status individual
+- `POST /api/technician/payment` - Registrar pagamento múltiplo
+- `POST /api/technician/ticket` - Criar chamado manutenção/compra
+- `POST /api/technician/add-item` - Adicionar item ao orçamento
+- `GET /api/technician/navigation-link` - Link Waze/Maps
+- `POST /api/technician/discount` - Aplicar desconto com auditoria
 
-#### **Fotos Leves**
-- **Formato:** WebP ou JPEG otimizado
-- **Resolução:** Máx 1080x720
-- **Compressão:** 70-80% quality
-- **Tamanho:** < 500KB por foto
+#### **Modo Empresa - APIs**
+- `GET /api/production/status-overview` - Dashboard por etapas
+- `PUT /api/production/move-item` - Mover item entre etapas  
+- `POST /api/production/measurement` - Registrar medição
+- `POST /api/production/partner-tag` - Associar etiqueta parceiro
+- `GET /api/production/partner-report` - Relatório mensal parceiro
+- `GET /api/production/audit-trail` - Histórico de alterações
 
-#### **Sincronização Offline**
-- **localStorage** para dados pendentes
-- **IndexedDB** para fotos base64
-- **Auto-sync** quando conecta à internet
-- **Indicadores visuais** de sync status
+#### **Notificações - APIs**
+- `POST /api/notifications/whatsapp-receipt` - Enviar comprovante PDF
+- `POST /api/notifications/admin-alert` - Alertar desconto/alteração
+- `POST /api/notifications/ticket-created` - Notificar chamado
+
+### 📦 Recursos Adicionais
+
+#### **Geração de PDF Automática**
+- **Comprovante de serviço** com fotos antes/depois
+- **Dados do pagamento** e formas utilizadas
+- **Assinatura digital** incorporada
+- **Envio automático** via WhatsApp
+
+#### **Sistema de Auditoria Completa**
+- **Todas as alterações** registradas com usuário/timestamp
+- **Valores antes/depois** para pagamentos e medições
+- **Justificativas obrigatórias** para descontos
+- **Relatórios de auditoria** para administração
 
 ---
 
