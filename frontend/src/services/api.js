@@ -124,4 +124,15 @@ export const budgetItemsApi = {
   getStatusOptions: () => api.get('/service-status/options')
 };
 
+// Technician API
+export const technicianApi = {
+  assignEvents: (assignment) => api.post('/technician/assign-events', assignment),
+  getDailyTasks: (technicianId, date) => api.get(`/technician/${technicianId}/daily-tasks`, {
+    params: { date }
+  }),
+  updateAssignmentStatus: (assignmentId, status) => api.put(`/technician/assignment/${assignmentId}/status`, null, {
+    params: { status }
+  })
+};
+
 export default api;
