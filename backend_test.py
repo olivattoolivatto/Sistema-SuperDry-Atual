@@ -9304,13 +9304,16 @@ if __name__ == "__main__":
             elif test_type == "calendar-events":
                 print("🔍 RUNNING CALENDAR EVENTS STRUCTURE INVESTIGATION")
                 success = tester.run_calendar_events_investigation()
+            elif test_type == "mapping":
+                print("🔍 RUNNING ROUTE BUDGET ITEM MAPPING TEST")
+                success = tester.run_route_budget_item_mapping_test()
             else:
-                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction, srv0162, orc-0000005, budget-status-update, technician, technician-investigation, calendar-events")
+                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction, srv0162, orc-0000005, budget-status-update, technician, technician-investigation, calendar-events, mapping")
                 sys.exit(1)
     else:
-        print("🔍 RUNNING DEFAULT: TECHNICIAN ASSIGNMENT INVESTIGATION")
-        tech_tester = TechnicianAssignmentTester()
-        success = tech_tester.run_technician_assignment_investigation()
+        print("🔍 RUNNING DEFAULT: ROUTE BUDGET ITEM MAPPING TEST (for review request)")
+        tester = ServiceStatusBugTester()
+        success = tester.run_route_budget_item_mapping_test()
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
