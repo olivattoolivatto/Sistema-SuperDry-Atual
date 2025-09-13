@@ -645,6 +645,76 @@ export function Agenda() {
     }
   };
 
+  const loadSentServices = async () => {
+    try {
+      setLoadingSentServices(true);
+      
+      // Buscar assignments para o técnico atual
+      const response = await technicianApi.getDailyTasks(
+        'TECH-001', // TODO: Usar técnico logado
+        new Date().toISOString().split('T')[0]
+      );
+      
+      console.log('📋 Serviços enviados ao técnico:', response.data);
+      
+      const { assignments } = response.data;
+      
+      // Processar assignments para exibição
+      const processedServices = assignments.map(assignment => ({
+        id: assignment.id,
+        route_id: assignment.route_id,
+        event_ids: assignment.event_ids,
+        technician_id: assignment.technician_id,
+        assigned_date: assignment.assigned_date,
+        status: assignment.status,
+        created_at: assignment.created_at,
+        updated_at: assignment.updated_at
+      }));
+      
+      setSentServices(processedServices);
+      
+    } catch (error) {
+      console.error('Erro ao carregar serviços enviados:', error);
+      setSentServices([]);
+    } finally {
+      setLoadingSentServices(false);
+    }
+  };
+
+  const clearAllSelections = () => {
+    console.log('🧹 Limpando todas as seleções');
+    setSelectedStops(new Set());
+    
+    toast({
+      title: "Seleções Limpas!",
+      description: "Todas as seleções foram removidas.",
+      variant: "default",
+    });
+  };
+
+  const updateSentServiceStatus = async (assignmentId) => {
+    try {
+      console.log('🔄 Atualizando status do assignment:', assignmentId);
+      
+      // Recarregar dados atualizados
+      await loadSentServices();
+      
+      toast({
+        title: "Status Atualizado!",
+        description: "Status dos serviços enviados foi atualizado.",
+        variant: "default",
+      });
+      
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao atualizar status. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getCurrentDateRange = () => {
     const start = new Date(currentDate);
     let end = new Date(currentDate);
