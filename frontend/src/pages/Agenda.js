@@ -648,6 +648,7 @@ export function Agenda() {
   const loadSentServices = async () => {
     try {
       setLoadingSentServices(true);
+      console.log('🔄 Iniciando carregamento de serviços enviados...');
       
       // Buscar assignments para o técnico atual
       const response = await technicianApi.getDailyTasks(
@@ -655,9 +656,11 @@ export function Agenda() {
         new Date().toISOString().split('T')[0]
       );
       
-      console.log('📋 Serviços enviados ao técnico:', response.data);
+      console.log('📋 Resposta API getDailyTasks:', response.data);
       
       const { assignments } = response.data;
+      
+      console.log('📋 Assignments encontrados:', assignments?.length || 0);
       
       // Processar assignments para exibição
       const processedServices = assignments.map(assignment => ({
@@ -671,10 +674,12 @@ export function Agenda() {
         updated_at: assignment.updated_at
       }));
       
+      console.log('✅ Serviços processados:', processedServices);
+      
       setSentServices(processedServices);
       
     } catch (error) {
-      console.error('Erro ao carregar serviços enviados:', error);
+      console.error('❌ Erro ao carregar serviços enviados:', error);
       setSentServices([]);
     } finally {
       setLoadingSentServices(false);
