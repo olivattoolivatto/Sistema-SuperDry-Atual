@@ -138,7 +138,7 @@ function StreetMode({ onBack }) {
       
       // Buscar tarefas híbridas do técnico
       const response = await technicianApi.getDailyTasks(
-        technicianData.id,
+        'TECH-001', // TODO: Usar technicianData.id quando disponível
         new Date().toISOString().split('T')[0]
       );
       
