@@ -1353,6 +1353,9 @@ async def update_assignment_status(assignment_id: str, status: str):
         
         return {"success": True, "assignment_id": assignment_id, "new_status": status}
         
+    except HTTPException:
+        # Re-raise HTTPExceptions (like 404) without wrapping them
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating assignment: {str(e)}")
 
