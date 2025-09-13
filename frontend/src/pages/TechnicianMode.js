@@ -151,9 +151,33 @@ function StreetMode({ onBack }) {
       
       // 1. Processar assignments da agenda
       assignments.forEach(assignment => {
-        assignment.event_ids.forEach(eventId => {
-          // TODO: Buscar dados completos do evento via API da agenda
-          // Por enquanto, usar estrutura mock expandida
+        // Cada assignment representa um conjunto de eventos enviados pela agenda
+        // Criar entrada unificada para cada assignment
+        const assignmentId = assignment.id;
+        
+        if (!unifiedClients[assignmentId]) {
+          unifiedClients[assignmentId] = {
+            id: assignmentId,
+            name: `Assignment ${assignmentId}`,
+            address: assignment.route_id ? `Rota: ${assignment.route_id}` : 'Eventos diversos',
+            phone: '(65) 99999-9999', // TODO: Buscar telefone real
+            scheduledTime: '08:00', // TODO: Calcular horário baseado nos eventos
+            items: [],
+            internalObservations: `Assignment do tipo ${assignment.assignment_type} criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
+            source: 'AGENDA_ASSIGNMENT',
+            assigned_date: assignment.assigned_date,
+            status: assignment.status,
+            event_ids: assignment.event_ids
+          };
+        }
+        
+        // Adicionar um item representativo para o assignment
+        unifiedClients[assignmentId].items.push({
+          id: `${assignmentId}-summary`,
+          name: `${assignment.event_ids.length} evento(s) da agenda`,
+          status: assignment.status,
+          value: 0, // TODO: Calcular valor total dos eventos
+          observations: `Status: ${assignment.status} | Data: ${assignment.assigned_date}`
         });
       });
       
