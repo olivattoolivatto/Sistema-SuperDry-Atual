@@ -2992,6 +2992,280 @@ class ServiceStatusBugTester:
         
         return True
 
+    def test_technician_sync_investigation(self):
+        """
+        REVIEW REQUEST TEST: Investigar inconsistência de sincronização entre Modo Técnico e seção "Serviços Enviados ao Técnico"
+        
+        Testa:
+        1. Buscar dados do técnico TECH-001 via GET /api/technician/TECH-001/daily-tasks
+        2. Analisar estrutura de assignments vs status_items - ver qual está sendo usado onde
+        3. Verificar quantidade e IDs dos assignments vs. dados exibidos
+        4. Testar criação de novo assignment e verificar se aparece em ambos locais
+        5. Comparar data/horário nos assignments com o que deveria ser exibido
+        """
+        print("\n" + "=" * 80)
+        print("🔍 INVESTIGAÇÃO: SINCRONIZAÇÃO MODO TÉCNICO vs SERVIÇOS ENVIADOS AO TÉCNICO")
+        print("=" * 80)
+        print("PROBLEMA REPORTADO:")
+        print("1. Serviços aparecem no Modo Técnico mas não na seção 'Serviços Enviados ao Técnico'")
+        print("2. Dados não estão sincronizados entre as duas visualizações")
+        print("")
+        print("TESTES A EXECUTAR:")
+        print("1. Buscar dados do técnico TECH-001 via GET /api/technician/TECH-001/daily-tasks")
+        print("2. Analisar estrutura de assignments vs status_items")
+        print("3. Verificar quantidade e IDs dos assignments vs. dados exibidos")
+        print("4. Testar criação de novo assignment e verificar se aparece em ambos locais")
+        print("5. Comparar data/horário nos assignments com o que deveria ser exibido")
+        print("=" * 80)
+        
+        # STEP 1: Buscar dados do técnico TECH-001
+        print("\n1️⃣ BUSCANDO DADOS DO TÉCNICO TECH-001:")
+        print("-" * 50)
+        
+        test_date = "2025-01-15"
+        response = self.make_request('GET', f'/technician/TECH-001/daily-tasks?date={test_date}')
+        
+        if not response['success']:
+            self.log_test("Technician Data Fetch", False, 
+                        f"Failed to fetch TECH-001 daily tasks - Status: {response['status_code']}", 
+                        response['data'])
+            return False
+        
+        daily_tasks = response['data']
+        
+        # Extract data structures
+        assignments = daily_tasks.get('assignments', [])
+        status_items = daily_tasks.get('status_items', [])
+        agenda_events = daily_tasks.get('agenda_events', [])
+        
+        print(f"📊 ESTRUTURA DOS DADOS RETORNADOS:")
+        print(f"   📋 Assignments: {len(assignments)} items")
+        print(f"   📋 Status Items: {len(status_items)} items")
+        print(f"   📋 Agenda Events: {len(agenda_events)} items")
+        
+        self.log_test("Technician Data Fetch", True, 
+                    f"Successfully fetched TECH-001 daily tasks: {len(assignments)} assignments, {len(status_items)} status_items, {len(agenda_events)} agenda_events")
+        
+        # STEP 2: Analisar estrutura detalhada
+        print(f"\n2️⃣ ANÁLISE DETALHADA DA ESTRUTURA:")
+        print("-" * 45)
+        
+        print("🔍 ASSIGNMENTS (Serviços Enviados ao Técnico):")
+        if assignments:
+            for i, assignment in enumerate(assignments, 1):
+                assignment_id = assignment.get('id')
+                event_ids = assignment.get('event_ids', [])
+                route_id = assignment.get('route_id')
+                status = assignment.get('status')
+                assignment_type = assignment.get('assignment_type')
+                assigned_date = assignment.get('assigned_date')
+                created_at = assignment.get('created_at')
+                
+                print(f"   {i:2d}. Assignment ID: {assignment_id}")
+                print(f"       Event IDs: {event_ids}")
+                print(f"       Route ID: {route_id}")
+                print(f"       Status: {status}")
+                print(f"       Type: {assignment_type}")
+                print(f"       Assigned Date: {assigned_date}")
+                print(f"       Created At: {created_at}")
+                print()
+        else:
+            print("   ❌ Nenhum assignment encontrado")
+        
+        print("🔍 STATUS_ITEMS (Modo Técnico - Itens por Status):")
+        if status_items:
+            for i, item in enumerate(status_items, 1):
+                item_id = item.get('id')
+                budget_id = item.get('budget_id')
+                client_name = item.get('client_name')
+                service_name = item.get('service_name')
+                status = item.get('status')
+                
+                print(f"   {i:2d}. Item ID: {item_id}")
+                print(f"       Budget ID: {budget_id}")
+                print(f"       Cliente: {client_name}")
+                print(f"       Serviço: {service_name}")
+                print(f"       Status: {status}")
+                print()
+        else:
+            print("   ❌ Nenhum status_item encontrado")
+        
+        # STEP 3: Verificar sobreposição entre assignments e status_items
+        print(f"\n3️⃣ VERIFICANDO SOBREPOSIÇÃO DE DADOS:")
+        print("-" * 40)
+        
+        # Extract IDs from assignments (event_ids)
+        assignment_event_ids = set()
+        for assignment in assignments:
+            event_ids = assignment.get('event_ids', [])
+            assignment_event_ids.update(event_ids)
+        
+        # Extract IDs from status_items
+        status_item_ids = set(item.get('id') for item in status_items if item.get('id'))
+        
+        print(f"📊 ANÁLISE DE IDs:")
+        print(f"   Assignment Event IDs: {list(assignment_event_ids)}")
+        print(f"   Status Item IDs: {list(status_item_ids)}")
+        
+        # Check for overlap
+        overlap = assignment_event_ids.intersection(status_item_ids)
+        assignment_only = assignment_event_ids - status_item_ids
+        status_only = status_item_ids - assignment_event_ids
+        
+        print(f"   🔄 Sobreposição: {list(overlap)}")
+        print(f"   📋 Apenas em Assignments: {list(assignment_only)}")
+        print(f"   📋 Apenas em Status Items: {list(status_only)}")
+        
+        if overlap:
+            self.log_test("Data Overlap Check", False, 
+                        f"Found {len(overlap)} overlapping IDs between assignments and status_items: {list(overlap)}")
+        else:
+            self.log_test("Data Overlap Check", True, 
+                        f"No overlap found - assignments and status_items are properly separated")
+        
+        # STEP 4: Testar criação de novo assignment
+        print(f"\n4️⃣ TESTANDO CRIAÇÃO DE NOVO ASSIGNMENT:")
+        print("-" * 45)
+        
+        new_assignment_data = {
+            "route_id": "RTE-TEST-SYNC",
+            "event_ids": ["EVT-SYNC-001", "EVT-SYNC-002"],
+            "technician_id": "TECH-001",
+            "assigned_date": test_date,
+            "assignment_type": "AGENDA",
+            "status": "ASSIGNED"
+        }
+        
+        response = self.make_request('POST', '/technician/assign-events', new_assignment_data)
+        
+        if response['success']:
+            assignment_result = response['data']
+            new_assignment_id = assignment_result.get('assignment_id')
+            
+            print(f"✅ Assignment criado com sucesso:")
+            print(f"   Assignment ID: {new_assignment_id}")
+            print(f"   Events Assigned: {assignment_result.get('events_assigned')}")
+            print(f"   Technician ID: {assignment_result.get('technician_id')}")
+            
+            self.log_test("New Assignment Creation", True, 
+                        f"Successfully created assignment {new_assignment_id} with {assignment_result.get('events_assigned')} events")
+            
+            # STEP 5: Verificar se o novo assignment aparece na busca
+            print(f"\n5️⃣ VERIFICANDO SE NOVO ASSIGNMENT APARECE:")
+            print("-" * 50)
+            
+            response = self.make_request('GET', f'/technician/TECH-001/daily-tasks?date={test_date}')
+            
+            if response['success']:
+                updated_tasks = response['data']
+                updated_assignments = updated_tasks.get('assignments', [])
+                
+                # Check if new assignment is present
+                new_assignment_found = False
+                for assignment in updated_assignments:
+                    if assignment.get('id') == new_assignment_id:
+                        new_assignment_found = True
+                        print(f"✅ Novo assignment encontrado na lista:")
+                        print(f"   ID: {assignment.get('id')}")
+                        print(f"   Event IDs: {assignment.get('event_ids')}")
+                        print(f"   Status: {assignment.get('status')}")
+                        print(f"   Created At: {assignment.get('created_at')}")
+                        break
+                
+                if new_assignment_found:
+                    self.log_test("New Assignment Visibility", True, 
+                                f"New assignment {new_assignment_id} appears in daily tasks")
+                else:
+                    self.log_test("New Assignment Visibility", False, 
+                                f"New assignment {new_assignment_id} NOT found in daily tasks")
+                
+                print(f"📊 CONTAGEM ATUALIZADA:")
+                print(f"   Total Assignments: {len(updated_assignments)} (anterior: {len(assignments)})")
+                print(f"   Incremento: +{len(updated_assignments) - len(assignments)}")
+                
+            else:
+                self.log_test("New Assignment Visibility", False, 
+                            "Failed to fetch updated daily tasks")
+            
+            # STEP 6: Testar atualização de status do assignment
+            print(f"\n6️⃣ TESTANDO ATUALIZAÇÃO DE STATUS:")
+            print("-" * 40)
+            
+            status_updates = ["IN_PROGRESS", "COMPLETED"]
+            
+            for new_status in status_updates:
+                response = self.make_request('PUT', f'/technician/assignment/{new_assignment_id}/status?status={new_status}')
+                
+                if response['success']:
+                    print(f"✅ Status atualizado para {new_status}")
+                    self.log_test(f"Assignment Status Update - {new_status}", True, 
+                                f"Successfully updated assignment {new_assignment_id} to {new_status}")
+                else:
+                    print(f"❌ Falha ao atualizar status para {new_status}")
+                    self.log_test(f"Assignment Status Update - {new_status}", False, 
+                                f"Failed to update assignment {new_assignment_id} to {new_status}")
+            
+        else:
+            self.log_test("New Assignment Creation", False, 
+                        f"Failed to create new assignment", response['data'])
+        
+        # STEP 7: Análise final e diagnóstico
+        print(f"\n7️⃣ ANÁLISE FINAL E DIAGNÓSTICO:")
+        print("-" * 40)
+        
+        print("🔍 ESTRUTURA DE DADOS IDENTIFICADA:")
+        print("   📋 assignments: Contém event_ids (EVT-XXX) - usado para 'Serviços Enviados ao Técnico'")
+        print("   📋 status_items: Contém budget_item_ids (ITM-XXX) - usado para 'Modo Técnico'")
+        print("   📋 agenda_events: Eventos da agenda (se houver)")
+        
+        print(f"\n🎯 POSSÍVEIS CAUSAS DA INCONSISTÊNCIA:")
+        print("   1. Frontend pode estar usando fontes de dados diferentes:")
+        print("      - 'Serviços Enviados ao Técnico' → assignments")
+        print("      - 'Modo Técnico' → status_items")
+        print("   2. assignments contêm event_ids que podem não corresponder a budget_item_ids")
+        print("   3. Pode haver problema na conversão entre event_ids e budget_item_ids")
+        
+        print(f"\n📊 ESTATÍSTICAS FINAIS:")
+        print(f"   Assignments encontrados: {len(assignments)}")
+        print(f"   Status items encontrados: {len(status_items)}")
+        print(f"   Event IDs únicos em assignments: {len(assignment_event_ids)}")
+        print(f"   Item IDs únicos em status_items: {len(status_item_ids)}")
+        print(f"   Sobreposição entre as duas listas: {len(overlap)}")
+        
+        # Determine if there's a synchronization issue
+        sync_issue_detected = False
+        
+        if len(assignments) > 0 and len(status_items) > 0 and len(overlap) == 0:
+            print(f"\n⚠️  POSSÍVEL PROBLEMA DE SINCRONIZAÇÃO DETECTADO:")
+            print("   - Existem assignments E status_items")
+            print("   - Mas não há sobreposição de IDs entre eles")
+            print("   - Isso pode explicar por que dados aparecem em um local mas não no outro")
+            sync_issue_detected = True
+        
+        if sync_issue_detected:
+            self.log_test("Synchronization Issue Detection", True, 
+                        "Detected potential synchronization issue: assignments and status_items have no overlapping IDs")
+        else:
+            self.log_test("Synchronization Issue Detection", False, 
+                        "No clear synchronization issue detected in data structure")
+        
+        return True
+
+    def run_technician_sync_investigation(self):
+        """Run the specific synchronization investigation requested in the review"""
+        print("🔍 EXECUTANDO INVESTIGAÇÃO DE SINCRONIZAÇÃO TÉCNICO")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Foco: Investigar inconsistência entre Modo Técnico e Serviços Enviados ao Técnico")
+        print("=" * 80)
+        
+        # Execute the synchronization investigation
+        sync_success = self.test_technician_sync_investigation()
+        
+        # Summary
+        self.print_summary()
+        
+        return sync_success
+
     def run_all_tests(self):
         """Run complete routes API test suite"""
         print("🚀 STARTING ROUTES API COMPREHENSIVE TESTS")
