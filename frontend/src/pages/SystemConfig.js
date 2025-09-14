@@ -57,13 +57,6 @@ export const SystemConfig = () => {
     loadConfig();
   }, []);
 
-  const toggleSection = (sectionName) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [sectionName]: !prev[sectionName]
-    }));
-  };
-
   const loadConfig = async () => {
     try {
       const response = await systemConfigApi.get();
