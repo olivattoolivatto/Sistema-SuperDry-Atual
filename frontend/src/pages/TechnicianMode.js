@@ -400,12 +400,13 @@ function StreetMode({ onBack }) {
           const assignmentId = assignment.id;
           unifiedClients[assignmentId] = {
             id: assignmentId,
-            name: `Assignment ${assignment.id}`,
+            name: `📋 Agendamento ${assignment.id.slice(-8)}`,
             address: assignment.route_id ? `Rota: ${assignment.route_id}` : 'Eventos diversos',
             phone: '(65) 99999-9999',
-            scheduledTime: '08:00',
+            scheduledTime: assignment.assigned_time || '08:00',
+            scheduledDate: assignment.assigned_date,
             items: [],
-            internalObservations: `Assignment do tipo ${assignment.assignment_type} criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
+            internalObservations: `Agendamento do tipo ${assignment.assignment_type} criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
             source: 'AGENDA_ASSIGNMENT',
             assigned_date: assignment.assigned_date,
             status: assignment.status,
