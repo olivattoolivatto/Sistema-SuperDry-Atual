@@ -275,145 +275,139 @@ function StreetMode({ onBack }) {
       // Combinar dados de agenda e status em um formato unificado
       const unifiedClients = {};
       
-      // 1. Processar assignments da agenda (filtrar cancelados)
+      // 1. Processar assignments da agenda (filtrar cancelados) - DESENCAPSULAR
       for (const assignment of assignments.filter(a => a.status !== 'CANCELLED')) {
-        // Buscar dados reais dos eventos para gerar títulos bonitos
-        console.log(`🔍 Processando assignment ${assignment.id} com eventos:`, assignment.event_ids);
+        // Buscar dados reais dos eventos para gerar CARDS INDIVIDUAIS por cliente
+        console.log(`🔍 Desencapsulando assignment ${assignment.id} com eventos:`, assignment.event_ids);
         
         try {
-          // Buscar dados reais dos eventos para gerar títulos bonitos
-          const eventTitles = [];
-          let totalValue = 0;
-          let clientName = 'Cliente';
-          let clientAddress = assignment.route_id ? `Rota: ${assignment.route_id}` : 'Endereço não disponível';
-          let clientPhone = '(65) 99999-9999';
-          
-          // Se temos event_ids, vamos buscar os dados reais e gerar título bonito
-          if (assignment.event_ids && assignment.event_ids.length > 0) {
+          // OPÇÃO A: Para cada event_id, criar um CARD INDIVIDUAL
+          for (let i = 0; i < assignment.event_ids.length; i++) {
+            const eventId = assignment.event_ids[i];
+            
             try {
-              // Buscar dados do primeiro evento para gerar título
-              const firstEventId = assignment.event_ids[0];
+              let clientName = 'Cliente';
+              let clientAddress = 'Endereço não disponível';
+              let clientPhone = '(65) 99999-9999';
+              let totalValue = 0;
+              let displayTitle = `📋 Agendamento ${assignment.id.slice(-8)}`;
               
               // CORREÇÃO: Verificar se é um budget_item_id válido (ITM-XXXXXXX) ou event_id fictício (EVT-XXX)
-              if (firstEventId.startsWith('ITM-')) {
-                console.log(`✅ Usando budget_item_id válido: ${firstEventId}`);
+              if (eventId.startsWith('ITM-')) {
+                console.log(`✅ Processando budget_item_id individual: ${eventId}`);
                 
                 try {
-                  // Usar função original para budget_item_ids válidos
-                  const { budget, client } = await getBudgetAndClientData(firstEventId);
+                  // Buscar dados do budget item específico
+                  const { budget, client } = await getBudgetAndClientData(eventId);
                   
-                  console.log(`📊 Dados obtidos para ${firstEventId}:`, {
+                  console.log(`📊 Dados obtidos para ${eventId}:`, {
                     budget_code: budget.code,
                     client_name: client.name,
                     items_count: budget.items?.length || 0
                   });
                   
-                  // Gerar título bonito usando as mesmas funções da agenda
-                  const beautifulTitle = generateEventTitle(budget, client.name);
+                  // Encontrar o item específico no orçamento
+                  const specificItem = budget.items.find(item => item.id === eventId);
                   
-                  console.log(`🎨 Título bonito gerado para agendamento ${assignment.id}: "${beautifulTitle}"`);
-                  
-                  // Usar dados reais do cliente
-                  clientName = client.name;
-                  clientAddress = `${client.address} - ${client.neighborhood}, ${client.city}/${client.state}`;
-                  clientPhone = client.phone || '(65) 99999-9999';
-                  
-                  // Calcular valor total dos itens do orçamento
-                  totalValue = budget.items.reduce((sum, item) => sum + parseFloat(item.service_value || 0), 0);
-                  
-                  // Usar o título bonito
-                  eventTitles.push(beautifulTitle);
+                  if (specificItem) {
+                    // Gerar título bonito INDIVIDUAL para este item específico
+                    const itemEmoji = getServiceEmoji(specificItem.service_name);
+                    const itemStatus = specificItem.status || 'EXECUTAR_NO_LOCAL';
+                    
+                    let statusText = '';
+                    if (itemStatus === 'RETIRAR') statusText = 'RETIRAR';
+                    else if (itemStatus === 'ENTREGAR') statusText = 'ENTREGAR';
+                    // Para EXECUTAR_NO_LOCAL, não adicionar texto extra
+                    
+                    displayTitle = statusText ? 
+                      `${itemEmoji}${statusText} ${client.name}` : 
+                      `${itemEmoji} ${client.name}`;
+                    
+                    console.log(`🎨 Título individual gerado: "${displayTitle}"`);
+                    
+                    // Usar dados reais do cliente
+                    clientName = client.name;
+                    clientAddress = `${client.address} - ${client.neighborhood}, ${client.city}/${client.state}`;
+                    clientPhone = client.phone || '(65) 99999-9999';
+                    
+                    // Usar valor do item específico
+                    totalValue = parseFloat(specificItem.service_value || 0);
+                    
+                  } else {
+                    console.warn(`⚠️ Item ${eventId} não encontrado no orçamento ${budget.code}`);
+                  }
                   
                 } catch (budgetError) {
-                  console.error(`❌ Erro ao buscar dados do orçamento ${firstEventId}:`, budgetError);
+                  console.error(`❌ Erro ao buscar dados do orçamento ${eventId}:`, budgetError);
                   
                   // Fallback: usar nome simples
-                  eventTitles.push(`🔧 Serviço ${firstEventId.slice(-6)}`);
+                  displayTitle = `🔧 Serviço ${eventId.slice(-6)}`;
                 }
                 
               } else {
-                console.log(`⚠️ Event ID fictício detectado: ${firstEventId} - usando fallback`);
-                
-                // FALLBACK para event_ids fictícios (EVT-XXX): 
-                // Buscar dados da rota associada para obter informações do cliente
-                if (assignment.route_id) {
-                  try {
-                    const routeResponse = await fetch(`${BACKEND_URL}/api/routes/${assignment.route_id}`);
-                    if (routeResponse.ok) {
-                      const routeData = await routeResponse.json();
-                      const stops = routeData.stops || [];
-                      
-                      if (stops.length > 0) {
-                        // Usar dados do primeiro stop como representação
-                        const firstStop = stops[0];
-                        clientName = firstStop.client_name || 'Cliente da Rota';
-                        clientAddress = `${firstStop.address?.street || 'Endereço'} - ${firstStop.neighborhood || 'Bairro'}, ${firstStop.address?.city || 'Cidade'}`;
-                        totalValue = stops.reduce((sum, stop) => sum + parseFloat(stop.service_value || 0), 0);
-                        
-                        // Gerar título simples com nome do cliente
-                        const simpleTitle = `✨ ${clientName}`;
-                        eventTitles.push(simpleTitle);
-                        
-                        console.log(`🔄 Fallback aplicado para ${assignment.id}: "${simpleTitle}"`);
-                      }
-                    }
-                  } catch (routeError) {
-                    console.error(`❌ Erro ao buscar dados da rota ${assignment.route_id}:`, routeError);
-                  }
-                }
-                
-                // Se não conseguiu dados da rota, usar título genérico
-                if (eventTitles.length === 0) {
-                  eventTitles.push(`📋 Agendamento ${assignment.id.slice(-8)}`);
-                }
+                console.log(`⚠️ Event ID fictício detectado: ${eventId} - usando fallback`);
+                displayTitle = `🔧 Evento ${eventId}`;
               }
               
+              // Criar ID único para este card individual
+              const individualCardId = `${assignment.id}-${i}`;
+              
+              unifiedClients[individualCardId] = {
+                id: individualCardId,
+                name: displayTitle, // Título individual por cliente
+                address: clientAddress,
+                phone: clientPhone,
+                scheduledTime: assignment.assigned_time || '08:00',
+                scheduledDate: assignment.assigned_date,
+                items: [{
+                  id: `${individualCardId}-item`,
+                  name: displayTitle,
+                  status: assignment.status,
+                  value: totalValue,
+                  observations: `Evento ${i + 1}/${assignment.event_ids.length} do agendamento ${assignment.id}`
+                }],
+                internalObservations: `Agendamento criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
+                source: 'AGENDA_ASSIGNMENT',
+                assigned_date: assignment.assigned_date,
+                status: assignment.status,
+                event_ids: [eventId], // Apenas este event_id específico
+                total_value: totalValue,
+                original_assignment_id: assignment.id // Referência ao assignment original
+              };
+              
+              console.log(`✅ Card individual ${individualCardId} criado: "${displayTitle}"`);
+              
             } catch (eventError) {
-              console.error(`❌ Erro ao buscar dados do evento ${assignment.event_ids[0]}:`, eventError);
-              // Fallback para o event_id se não conseguir buscar dados
-              eventTitles.push(`📋 Assignment ${assignment.id.slice(-8)}`);
+              console.error(`❌ Erro ao processar evento individual ${eventId}:`, eventError);
+              
+              // Fallback para evento com erro
+              const fallbackCardId = `${assignment.id}-${i}-fallback`;
+              unifiedClients[fallbackCardId] = {
+                id: fallbackCardId,
+                name: `🔧 Serviço ${eventId.slice(-6)}`,
+                address: assignment.route_id ? `Rota: ${assignment.route_id}` : 'Eventos diversos',
+                phone: '(65) 99999-9999',
+                scheduledTime: assignment.assigned_time || '08:00',
+                scheduledDate: assignment.assigned_date,
+                items: [],
+                internalObservations: `Agendamento criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
+                source: 'AGENDA_ASSIGNMENT',
+                assigned_date: assignment.assigned_date,
+                status: assignment.status,
+                event_ids: [eventId],
+                total_value: 0,
+                original_assignment_id: assignment.id
+              };
             }
           }
           
-          // Usar o primeiro título gerado ou fallback
-          const displayTitle = eventTitles.length > 0 ? eventTitles[0] : `📋 Agendamento ${assignment.id.slice(-8)}`;
-          
-          const assignmentId = assignment.id;
-          
-          unifiedClients[assignmentId] = {
-            id: assignmentId,
-            name: displayTitle, // Usar título bonito ou fallback inteligente
-            address: clientAddress,
-            phone: clientPhone,
-            scheduledTime: assignment.assigned_time || '08:00', // CORREÇÃO: Usar horário do assignment
-            scheduledDate: assignment.assigned_date, // NOVO: Incluir data do assignment
-            items: [],
-            internalObservations: `Agendamento criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
-            source: 'AGENDA_ASSIGNMENT',
-            assigned_date: assignment.assigned_date,
-            status: assignment.status,
-            event_ids: assignment.event_ids,
-            total_value: totalValue
-          };
-          
-          // Adicionar um item representativo para o assignment
-          unifiedClients[assignmentId].items.push({
-            id: `${assignmentId}-summary`,
-            name: `${assignment.event_ids.length} evento(s) da agenda`,
-            status: assignment.status,
-            value: totalValue,
-            observations: `Status: ${assignment.status} | Data: ${assignment.assigned_date}`
-          });
-          
-          console.log(`✅ Agendamento ${assignment.id} processado como: "${displayTitle}"`);
-          
         } catch (assignmentError) {
-          console.error(`❌ Erro ao processar agendamento ${assignment.id}:`, assignmentError);
+          console.error(`❌ Erro ao desencapsular assignment ${assignment.id}:`, assignmentError);
           
-          // Fallback em caso de erro
-          const assignmentId = assignment.id;
-          unifiedClients[assignmentId] = {
-            id: assignmentId,
+          // Fallback para assignment inteiro com erro
+          const fallbackId = assignment.id;
+          unifiedClients[fallbackId] = {
+            id: fallbackId,
             name: `📋 Agendamento ${assignment.id.slice(-8)}`,
             address: assignment.route_id ? `Rota: ${assignment.route_id}` : 'Eventos diversos',
             phone: '(65) 99999-9999',
@@ -424,16 +418,9 @@ function StreetMode({ onBack }) {
             source: 'AGENDA_ASSIGNMENT',
             assigned_date: assignment.assigned_date,
             status: assignment.status,
-            event_ids: assignment.event_ids
+            event_ids: assignment.event_ids,
+            total_value: 0
           };
-          
-          unifiedClients[assignmentId].items.push({
-            id: `${assignmentId}-summary`,
-            name: `${assignment.event_ids.length} evento(s) da agenda`,
-            status: assignment.status,
-            value: 0,
-            observations: `Status: ${assignment.status} | Data: ${assignment.assigned_date}`
-          });
         }
       }
       
