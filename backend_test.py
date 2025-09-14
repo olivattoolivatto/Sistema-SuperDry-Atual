@@ -9900,3 +9900,334 @@ if __name__ == "__main__":
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
+
+# Add the new technician assignment test function to ServiceStatusBugTester class
+def test_technician_assignment_creation_and_retrieval(self):
+    """
+    REVIEW REQUEST TEST: Testar se a funcionalidade "Enviar para Técnico" está criando assignments corretamente
+    
+    Testa:
+    1. Criar um novo assignment via POST /api/technician/assign-events
+    2. Verificar se aparece em GET /api/technician/TECH-001/daily-tasks
+    3. Testar com diferentes dados de route_id e event_ids
+    4. Verificar se assignments antigos estão sendo filtrados por data
+    5. Testar com data de hoje (2025-09-14) vs. outras datas
+    """
+    print("\n" + "=" * 80)
+    print("🔍 TESTE ESPECÍFICO DA REVIEW REQUEST: FUNCIONALIDADE 'ENVIAR PARA TÉCNICO'")
+    print("=" * 80)
+    print("PROBLEMA IDENTIFICADO: assignments: Array(0) está vazio")
+    print("OBJETIVO: Confirmar se o endpoint de criação de assignments está funcionando")
+    print("TESTES:")
+    print("1. Criar um novo assignment via POST /api/technician/assign-events")
+    print("2. Verificar se aparece em GET /api/technician/TECH-001/daily-tasks")
+    print("3. Testar com diferentes dados de route_id e event_ids")
+    print("4. Verificar se assignments antigos estão sendo filtrados por data")
+    print("5. Testar com data de hoje (2025-09-14) vs. outras datas")
+    print("=" * 80)
+    
+    # STEP 1: Testar criação de assignment com data de hoje (2025-09-14)
+    print("\n1️⃣ CRIANDO ASSIGNMENT COM DATA DE HOJE (2025-09-14):")
+    print("-" * 60)
+    
+    today_assignment_data = {
+        "route_id": "RTE-TEST001",
+        "event_ids": ["EVT-001", "EVT-002"],
+        "technician_id": "TECH-001",
+        "assigned_date": "2025-09-14",
+        "assignment_type": "AGENDA",
+        "status": "ASSIGNED"
+    }
+    
+    print(f"📋 Dados do assignment:")
+    print(f"   Route ID: {today_assignment_data['route_id']}")
+    print(f"   Event IDs: {today_assignment_data['event_ids']}")
+    print(f"   Technician ID: {today_assignment_data['technician_id']}")
+    print(f"   Data: {today_assignment_data['assigned_date']}")
+    print(f"   Tipo: {today_assignment_data['assignment_type']}")
+    print(f"   Status: {today_assignment_data['status']}")
+    
+    response = self.make_request('POST', '/technician/assign-events', today_assignment_data)
+    if response['success']:
+        result = response['data']
+        assignment_id_today = result.get('assignment_id')
+        
+        print(f"✅ Assignment criado com sucesso!")
+        print(f"   Assignment ID: {assignment_id_today}")
+        print(f"   Events assigned: {result.get('events_assigned')}")
+        print(f"   Technician ID: {result.get('technician_id')}")
+        
+        self.log_test("Create Assignment - Today", True, 
+                    f"Assignment criado para data de hoje: {assignment_id_today}")
+    else:
+        print(f"❌ Falha ao criar assignment!")
+        print(f"   Status: {response['status_code']}")
+        print(f"   Error: {response['data']}")
+        
+        self.log_test("Create Assignment - Today", False, 
+                    f"Falha ao criar assignment para hoje", response['data'])
+        return False
+    
+    # STEP 2: Testar criação de assignment com data diferente
+    print(f"\n2️⃣ CRIANDO ASSIGNMENT COM DATA DIFERENTE (2025-09-15):")
+    print("-" * 65)
+    
+    other_date_assignment_data = {
+        "route_id": "RTE-TEST002",
+        "event_ids": ["EVT-003", "EVT-004", "EVT-005"],
+        "technician_id": "TECH-001",
+        "assigned_date": "2025-09-15",
+        "assignment_type": "AGENDA",
+        "status": "ASSIGNED"
+    }
+    
+    print(f"📋 Dados do assignment:")
+    print(f"   Route ID: {other_date_assignment_data['route_id']}")
+    print(f"   Event IDs: {other_date_assignment_data['event_ids']}")
+    print(f"   Data: {other_date_assignment_data['assigned_date']}")
+    
+    response = self.make_request('POST', '/technician/assign-events', other_date_assignment_data)
+    if response['success']:
+        result = response['data']
+        assignment_id_other = result.get('assignment_id')
+        
+        print(f"✅ Assignment criado com sucesso!")
+        print(f"   Assignment ID: {assignment_id_other}")
+        print(f"   Events assigned: {result.get('events_assigned')}")
+        
+        self.log_test("Create Assignment - Other Date", True, 
+                    f"Assignment criado para data diferente: {assignment_id_other}")
+    else:
+        print(f"❌ Falha ao criar assignment!")
+        self.log_test("Create Assignment - Other Date", False, 
+                    f"Falha ao criar assignment para data diferente", response['data'])
+    
+    # STEP 3: Verificar se assignment aparece em daily-tasks para data de hoje
+    print(f"\n3️⃣ VERIFICANDO DAILY-TASKS PARA DATA DE HOJE (2025-09-14):")
+    print("-" * 70)
+    
+    response = self.make_request('GET', '/technician/TECH-001/daily-tasks?date=2025-09-14')
+    if response['success']:
+        tasks = response['data']
+        assignments = tasks.get('assignments', [])
+        status_items = tasks.get('status_items', [])
+        agenda_events = tasks.get('agenda_events', [])
+        
+        print(f"📊 Estrutura da resposta:")
+        print(f"   Assignments: {len(assignments)} items")
+        print(f"   Status items: {len(status_items)} items")
+        print(f"   Agenda events: {len(agenda_events)} items")
+        
+        # Verificar se nosso assignment está presente
+        today_assignment_found = False
+        for assignment in assignments:
+            if assignment.get('assigned_date') == '2025-09-14':
+                today_assignment_found = True
+                print(f"✅ Assignment encontrado para data de hoje:")
+                print(f"   ID: {assignment.get('id')}")
+                print(f"   Route ID: {assignment.get('route_id')}")
+                print(f"   Event IDs: {assignment.get('event_ids')}")
+                print(f"   Status: {assignment.get('status')}")
+                break
+        
+        if today_assignment_found:
+            self.log_test("Daily Tasks - Today Assignment", True, 
+                        f"Assignment para data de hoje encontrado em daily-tasks")
+        else:
+            print(f"❌ Assignment para data de hoje NÃO encontrado!")
+            self.log_test("Daily Tasks - Today Assignment", False, 
+                        f"Assignment para data de hoje não encontrado em daily-tasks")
+        
+        # Verificar se assignment de data diferente NÃO está presente
+        other_date_assignment_found = False
+        for assignment in assignments:
+            if assignment.get('assigned_date') == '2025-09-15':
+                other_date_assignment_found = True
+                break
+        
+        if not other_date_assignment_found:
+            print(f"✅ Filtro por data funcionando: Assignment de 2025-09-15 não aparece")
+            self.log_test("Daily Tasks - Date Filter", True, 
+                        f"Filtro por data funcionando corretamente")
+        else:
+            print(f"❌ Filtro por data com problema: Assignment de 2025-09-15 aparece incorretamente")
+            self.log_test("Daily Tasks - Date Filter", False, 
+                        f"Filtro por data não funcionando corretamente")
+        
+    else:
+        print(f"❌ Falha ao buscar daily-tasks!")
+        self.log_test("Daily Tasks - Today Assignment", False, 
+                    f"Falha ao buscar daily-tasks", response['data'])
+        return False
+    
+    # STEP 4: Verificar daily-tasks para data diferente
+    print(f"\n4️⃣ VERIFICANDO DAILY-TASKS PARA DATA DIFERENTE (2025-09-15):")
+    print("-" * 75)
+    
+    response = self.make_request('GET', '/technician/TECH-001/daily-tasks?date=2025-09-15')
+    if response['success']:
+        tasks = response['data']
+        assignments = tasks.get('assignments', [])
+        
+        print(f"📊 Assignments para 2025-09-15: {len(assignments)} items")
+        
+        # Verificar se assignment de data diferente está presente
+        other_date_assignment_found = False
+        for assignment in assignments:
+            if assignment.get('assigned_date') == '2025-09-15':
+                other_date_assignment_found = True
+                print(f"✅ Assignment encontrado para data diferente:")
+                print(f"   ID: {assignment.get('id')}")
+                print(f"   Route ID: {assignment.get('route_id')}")
+                print(f"   Event IDs: {assignment.get('event_ids')}")
+                break
+        
+        if other_date_assignment_found:
+            self.log_test("Daily Tasks - Other Date Assignment", True, 
+                        f"Assignment para data diferente encontrado corretamente")
+        else:
+            print(f"❌ Assignment para data diferente NÃO encontrado!")
+            self.log_test("Daily Tasks - Other Date Assignment", False, 
+                        f"Assignment para data diferente não encontrado")
+        
+    else:
+        print(f"❌ Falha ao buscar daily-tasks para data diferente!")
+        self.log_test("Daily Tasks - Other Date Assignment", False, 
+                    f"Falha ao buscar daily-tasks para data diferente", response['data'])
+    
+    # STEP 5: Testar diferentes combinações de route_id e event_ids
+    print(f"\n5️⃣ TESTANDO DIFERENTES COMBINAÇÕES DE DADOS:")
+    print("-" * 50)
+    
+    test_combinations = [
+        {
+            "name": "Assignment sem route_id",
+            "data": {
+                "route_id": None,
+                "event_ids": ["EVT-SINGLE"],
+                "technician_id": "TECH-001",
+                "assigned_date": "2025-09-14",
+                "assignment_type": "MANUAL",
+                "status": "ASSIGNED"
+            }
+        },
+        {
+            "name": "Assignment com múltiplos event_ids",
+            "data": {
+                "route_id": "RTE-MULTI",
+                "event_ids": ["EVT-A", "EVT-B", "EVT-C", "EVT-D"],
+                "technician_id": "TECH-001",
+                "assigned_date": "2025-09-14",
+                "assignment_type": "AGENDA",
+                "status": "ASSIGNED"
+            }
+        },
+        {
+            "name": "Assignment com event_ids vazio",
+            "data": {
+                "route_id": "RTE-EMPTY",
+                "event_ids": [],
+                "technician_id": "TECH-001",
+                "assigned_date": "2025-09-14",
+                "assignment_type": "STATUS_BASED",
+                "status": "ASSIGNED"
+            }
+        }
+    ]
+    
+    successful_combinations = 0
+    
+    for i, combination in enumerate(test_combinations, 1):
+        print(f"\n   {i}. {combination['name']}:")
+        
+        response = self.make_request('POST', '/technician/assign-events', combination['data'])
+        if response['success']:
+            result = response['data']
+            print(f"      ✅ Sucesso: {result.get('assignment_id')}")
+            successful_combinations += 1
+        else:
+            print(f"      ❌ Falha: {response['data']}")
+    
+    if successful_combinations == len(test_combinations):
+        self.log_test("Assignment Combinations", True, 
+                    f"Todas as {len(test_combinations)} combinações funcionaram")
+    else:
+        self.log_test("Assignment Combinations", False, 
+                    f"Apenas {successful_combinations}/{len(test_combinations)} combinações funcionaram")
+    
+    # STEP 6: Testar atualização de status de assignment
+    print(f"\n6️⃣ TESTANDO ATUALIZAÇÃO DE STATUS DE ASSIGNMENT:")
+    print("-" * 55)
+    
+    if 'assignment_id_today' in locals():
+        # Test status transitions
+        status_transitions = ["IN_PROGRESS", "COMPLETED"]
+        
+        for new_status in status_transitions:
+            print(f"\n   Atualizando para status: {new_status}")
+            
+            response = self.make_request('PUT', f'/technician/assignment/{assignment_id_today}/status?status={new_status}')
+            if response['success']:
+                result = response['data']
+                print(f"   ✅ Status atualizado: {result.get('new_status')}")
+                self.log_test(f"Update Status - {new_status}", True, 
+                            f"Status atualizado para {new_status}")
+            else:
+                print(f"   ❌ Falha ao atualizar status: {response['data']}")
+                self.log_test(f"Update Status - {new_status}", False, 
+                            f"Falha ao atualizar status para {new_status}")
+    
+    # STEP 7: Resultado final
+    print(f"\n7️⃣ RESULTADO FINAL:")
+    print("-" * 25)
+    
+    # Verificar novamente daily-tasks para confirmar estado final
+    response = self.make_request('GET', '/technician/TECH-001/daily-tasks?date=2025-09-14')
+    if response['success']:
+        tasks = response['data']
+        assignments = tasks.get('assignments', [])
+        
+        print(f"📊 ESTADO FINAL PARA DATA 2025-09-14:")
+        print(f"   Total assignments: {len(assignments)}")
+        
+        if len(assignments) > 0:
+            print("✅ SUCESSO: Assignments estão sendo criados e aparecem em daily-tasks")
+            print("✅ Funcionalidade 'Enviar para Técnico' está funcionando")
+            
+            for assignment in assignments:
+                print(f"   - Assignment {assignment.get('id')}: {len(assignment.get('event_ids', []))} events")
+            
+            self.log_test("Enviar para Técnico - Final", True, 
+                        f"Funcionalidade funcionando: {len(assignments)} assignments encontrados")
+            return True
+        else:
+            print("❌ PROBLEMA: Nenhum assignment encontrado em daily-tasks")
+            print("❌ Funcionalidade 'Enviar para Técnico' pode ter problemas")
+            
+            self.log_test("Enviar para Técnico - Final", False, 
+                        f"Nenhum assignment encontrado em daily-tasks")
+            return False
+    else:
+        print("❌ Falha ao verificar estado final")
+        self.log_test("Enviar para Técnico - Final", False, 
+                    f"Falha ao verificar estado final")
+        return False
+
+def run_technician_assignment_tests(self):
+    """Run the specific technician assignment tests requested in the review"""
+    print("🔄 EXECUTANDO TESTES DA FUNCIONALIDADE 'ENVIAR PARA TÉCNICO'")
+    print(f"🔗 Testing against: {self.base_url}")
+    print("🎯 Foco: Verificar se assignments estão sendo criados e aparecem corretamente")
+    print("=" * 80)
+    
+    # Execute the technician assignment tests
+    assignment_success = self.test_technician_assignment_creation_and_retrieval()
+    
+    # Summary
+    self.print_summary()
+    
+    return assignment_success
+
+# Add the methods to the ServiceStatusBugTester class
+ServiceStatusBugTester.test_technician_assignment_creation_and_retrieval = test_technician_assignment_creation_and_retrieval
+ServiceStatusBugTester.run_technician_assignment_tests = run_technician_assignment_tests
