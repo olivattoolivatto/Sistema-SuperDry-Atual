@@ -29,6 +29,14 @@ export const SystemConfig = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
+  
+  // Estados para controlar expansão das seções
+  const [expandedSections, setExpandedSections] = useState({
+    company: false,      // Dados da Empresa - fechado por padrão
+    contact: false,      // Informações de Contato - fechado por padrão  
+    dataPolicy: false,   // Política de Retenção de Dados - fechado por padrão
+    futureFeatures: false // Funcionalidades Futuras - fechado por padrão
+  });
 
   useEffect(() => {
     loadConfig();
