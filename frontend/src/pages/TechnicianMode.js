@@ -690,7 +690,16 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
               <MapPin className="w-4 h-4 text-blue-600" />
             )}
             <span className="font-semibold text-gray-800">{client.name}</span>
-            <span className="text-blue-600 font-medium">{client.scheduledTime}</span>
+            
+            {/* CORREÇÃO: Mostrar data + horário ao invés de apenas horário */}
+            <div className="flex flex-col">
+              <span className="text-blue-600 font-medium text-sm">{client.scheduledTime}</span>
+              {client.scheduledDate && (
+                <span className="text-gray-500 text-xs">
+                  {new Date(client.scheduledDate).toLocaleDateString('pt-BR')}
+                </span>
+              )}
+            </div>
             
             {/* Badge do tipo de source */}
             {client.source === 'AGENDA_ASSIGNMENT' ? (
