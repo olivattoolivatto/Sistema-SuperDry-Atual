@@ -503,12 +503,26 @@ export const SystemConfig = () => {
           )}
         </div>
 
-        {/* Contact Information */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center mb-6">
-            <MapPin className="w-5 h-5 text-green-600 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Informações de Contato</h2>
+        {/* Contact Information - Retrátil */}
+        <div className="bg-white rounded-lg border border-gray-200">
+          <div 
+            className="flex items-center justify-between p-6 cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => toggleSection('contact')}
+          >
+            <div className="flex items-center">
+              <MapPin className="w-5 h-5 text-green-600 mr-2" />
+              <h2 className="text-xl font-semibold text-gray-900">Informações de Contato</h2>
+            </div>
+            {expandedSections.contact ? (
+              <ChevronDown className="w-5 h-5 text-gray-500" />
+            ) : (
+              <ChevronRight className="w-5 h-5 text-gray-500" />
+            )}
           </div>
+
+          {expandedSections.contact && (
+            <div className="px-6 pb-6 border-t border-gray-100">
+              <div className="pt-6">
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
