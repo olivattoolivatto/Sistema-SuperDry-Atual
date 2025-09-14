@@ -304,7 +304,7 @@ function StreetMode({ onBack }) {
                 // Gerar título bonito usando as mesmas funções da agenda
                 const beautifulTitle = generateEventTitle(budget, client.name);
                 
-                console.log(`🎨 Título bonito gerado para assignment ${assignment.id}: "${beautifulTitle}"`);
+                console.log(`🎨 Título bonito gerado para agendamento ${assignment.id}: "${beautifulTitle}"`);
                 
                 // Usar dados reais do cliente
                 clientName = client.name;
@@ -350,7 +350,7 @@ function StreetMode({ onBack }) {
                 
                 // Se não conseguiu dados da rota, usar título genérico
                 if (eventTitles.length === 0) {
-                  eventTitles.push(`📋 Assignment ${assignment.id.slice(-8)}`);
+                  eventTitles.push(`📋 Agendamento ${assignment.id.slice(-8)}`);
                 }
               }
               
