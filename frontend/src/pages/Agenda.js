@@ -2065,7 +2065,7 @@ export function Agenda() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-3">
                       <span className="font-medium text-gray-900">
-                        Assignment {service.id}
+                        Agendamento {service.id}
                       </span>
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                         service.status === 'ASSIGNED' ? 'bg-yellow-100 text-yellow-800' :
