@@ -662,22 +662,29 @@ export function Agenda() {
       const { assignments } = response.data;
       
       console.log('📋 Assignments encontrados:', assignments?.length || 0);
+      console.log('📋 Assignments detalhados:', assignments);
       
       // Processar assignments para exibição (filtrar cancelados)
       const processedServices = assignments
-        .filter(assignment => assignment.status !== 'CANCELLED') // Filtrar assignments cancelados
+        .filter(assignment => {
+          const isNotCancelled = assignment.status !== 'CANCELLED';
+          console.log(`📋 Assignment ${assignment.id}: Status ${assignment.status} → Incluir: ${isNotCancelled}`);
+          return isNotCancelled;
+        })
         .map(assignment => ({
           id: assignment.id,
           route_id: assignment.route_id,
           event_ids: assignment.event_ids,
           technician_id: assignment.technician_id,
           assigned_date: assignment.assigned_date,
+          assigned_time: assignment.assigned_time, // NOVO: Incluir horário
           status: assignment.status,
           created_at: assignment.created_at,
           updated_at: assignment.updated_at
         }));
       
-      console.log('✅ Serviços processados:', processedServices);
+      console.log('✅ Serviços processados para exibição:', processedServices.length);
+      console.log('✅ Serviços detalhados:', processedServices);
       
       setSentServices(processedServices);
       
