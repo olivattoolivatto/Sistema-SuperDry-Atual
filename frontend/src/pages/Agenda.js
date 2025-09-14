@@ -1315,12 +1315,35 @@ export function Agenda() {
     setSendingToTechnician(true);
     
     try {
-      // Filtrar eventos selecionados
+      // Filtrar eventos selecionados e calcular horários reais
       const selectedEvents = routeEvents.filter(event => selectedStops.has(event.id));
       
       console.log(`📱 Enviando ${selectedEvents.length} eventos para técnico...`);
       
-      // Preparar dados para assignment usando budget_item_ids corretos
+      // CORREÇÃO: Usar data e horários reais dos eventos (mesma lógica do "Lançar na Agenda")
+      const eventsWithDateTime = selectedEvents.map(event => {
+        // Calcular horário de início e fim baseado na data personalizada (igual ao "Lançar na Agenda")
+        const startDateTime = new Date(`${customEventDate}T${event.estimated_start_time}:00`);
+        const endDateTime = new Date(startDateTime.getTime() + event.duration * 60000);
+        
+        return {
+          ...event,
+          start_datetime: startDateTime.toISOString(),
+          end_datetime: endDateTime.toISOString(),
+          scheduled_date: customEventDate, // Data escolhida
+          scheduled_time: event.estimated_start_time // Horário calculado
+        };
+      });
+      
+      console.log('🕒 Eventos com horários calculados:', eventsWithDateTime.map(e => ({
+        client: e.client_name,
+        start: e.start_datetime,
+        end: e.end_datetime,
+        date: e.scheduled_date,
+        time: e.scheduled_time
+      })));
+      
+      // Preparar dados para assignment usando budget_item_ids corretos E data/horários reais
       const assignmentData = {
         route_id: selectedRoute.id,
         event_ids: selectedEvents.map(event => {
@@ -1332,8 +1355,19 @@ export function Agenda() {
           return budget_item_id;
         }),
         technician_id: 'TECH-001', // TODO: Permitir seleção do técnico
-        assigned_date: customEventDate || new Date().toISOString().split('T')[0],
-        assignment_type: 'AGENDA'
+        assigned_date: customEventDate, // Data escolhida para lançar na agenda
+        assigned_time: selectedEvents[0]?.estimated_start_time || '08:00', // Horário do primeiro evento
+        assignment_type: 'AGENDA',
+        // NOVO: Incluir dados de horários para sincronização
+        events_schedule: eventsWithDateTime.map(event => ({
+          event_id: event.budget_item_id || event.id,
+          client_name: event.client_name,
+          scheduled_date: event.scheduled_date,
+          scheduled_time: event.scheduled_time,
+          start_datetime: event.start_datetime,
+          end_datetime: event.end_datetime,
+          duration: event.duration
+        }))
       };
       
       // Enviar para API
