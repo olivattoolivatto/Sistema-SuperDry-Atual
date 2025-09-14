@@ -2036,7 +2036,7 @@ export function Agenda() {
             
             <div className="flex items-center space-x-3">
               <span className="text-sm text-gray-600">
-                {sentServices.length} assignment(s)
+                {sentServices.length} agendamento(s)
               </span>
               
               <button
