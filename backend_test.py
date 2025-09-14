@@ -9893,8 +9893,11 @@ if __name__ == "__main__":
             elif test_type == "assignment":
                 print("🔄 RUNNING TECHNICIAN ASSIGNMENT TESTS")
                 success = tester.run_technician_assignment_tests()
+            elif test_type == "technician-cleanup":
+                print("🧹 RUNNING TECHNICIAN ASSIGNMENT CLEANUP TESTS")
+                success = tester.run_technician_assignment_cleanup_test()
             else:
-                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction, srv0162, orc-0000005, budget-status-update, technician, technician-investigation, calendar-events, mapping, technician-deletion, sync-investigation, assignment")
+                print("❌ Invalid test type. Available options: reregistration, debug, migration, status, duplication, routes, route-bug, 422, route-corrections, calendar, direct-calendar, color, service-status-bug, duration, investigate-srv, critical, cliente-trouxe-scope, critical15, route_structure, srv0145, critical13, detailed-items, srv-0157-0162, direct-correction, srv0162, orc-0000005, budget-status-update, technician, technician-investigation, calendar-events, mapping, technician-deletion, sync-investigation, assignment, technician-cleanup")
                 sys.exit(1)
     else:
         print("🔍 RUNNING DEFAULT: TECHNICIAN SYNCHRONIZATION INVESTIGATION (for review request)")
