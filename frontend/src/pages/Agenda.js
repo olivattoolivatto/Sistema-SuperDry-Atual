@@ -2080,7 +2080,15 @@ export function Agenda() {
                     
                     <div className="flex items-center space-x-3">
                       <div className="text-sm text-gray-500">
-                        {new Date(service.assigned_date).toLocaleDateString('pt-BR')}
+                        {/* CORREÇÃO: Mostrar data e horário se disponível */}
+                        <div>
+                          {new Date(service.assigned_date).toLocaleDateString('pt-BR')}
+                        </div>
+                        {service.assigned_time && (
+                          <div className="text-xs text-blue-600">
+                            {service.assigned_time}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Botão Apagar */}
