@@ -30,6 +30,21 @@ export const SystemConfig = () => {
   const [saving, setSaving] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   
+  // Estados para seções retráteis
+  const [sectionsExpanded, setSectionsExpanded] = useState({
+    company: false,
+    contact: false,
+    dataPolicy: false,
+    futureFeatures: false
+  });
+
+  const toggleSection = (section) => {
+    setSectionsExpanded(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+  
   // Estados para controlar expansão das seções
   const [expandedSections, setExpandedSections] = useState({
     company: false,      // Dados da Empresa - fechado por padrão
