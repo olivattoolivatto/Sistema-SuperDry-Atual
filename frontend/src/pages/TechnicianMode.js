@@ -371,7 +371,8 @@ function StreetMode({ onBack }) {
             name: displayTitle, // Usar título bonito ou fallback inteligente
             address: clientAddress,
             phone: clientPhone,
-            scheduledTime: '08:00', // TODO: Calcular horário baseado nos eventos
+            scheduledTime: assignment.assigned_time || '08:00', // CORREÇÃO: Usar horário do assignment
+            scheduledDate: assignment.assigned_date, // NOVO: Incluir data do assignment
             items: [],
             internalObservations: `Assignment criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
             source: 'AGENDA_ASSIGNMENT',
