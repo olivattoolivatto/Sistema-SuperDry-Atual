@@ -311,14 +311,27 @@ export const SystemConfig = () => {
       </div>
 
       <div className="space-y-8">
-        {/* Company Information */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center mb-6">
-            <Building2 className="w-5 h-5 text-blue-600 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Dados da Empresa</h2>
+        {/* Company Information - Retrátil */}
+        <div className="bg-white rounded-lg border border-gray-200">
+          <div 
+            className="flex items-center justify-between p-6 cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => toggleSection('company')}
+          >
+            <div className="flex items-center">
+              <Building2 className="w-5 h-5 text-blue-600 mr-2" />
+              <h2 className="text-xl font-semibold text-gray-900">Dados da Empresa</h2>
+            </div>
+            {expandedSections.company ? (
+              <ChevronDown className="w-5 h-5 text-gray-500" />
+            ) : (
+              <ChevronRight className="w-5 h-5 text-gray-500" />
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {expandedSections.company && (
+            <div className="px-6 pb-6 border-t border-gray-100">
+              <div className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Nome da Empresa
