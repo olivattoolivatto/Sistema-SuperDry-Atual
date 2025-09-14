@@ -362,7 +362,7 @@ function StreetMode({ onBack }) {
           }
           
           // Usar o primeiro título gerado ou fallback
-          const displayTitle = eventTitles.length > 0 ? eventTitles[0] : `📋 Assignment ${assignment.id.slice(-8)}`;
+          const displayTitle = eventTitles.length > 0 ? eventTitles[0] : `📋 Agendamento ${assignment.id.slice(-8)}`;
           
           const assignmentId = assignment.id;
           
@@ -374,7 +374,7 @@ function StreetMode({ onBack }) {
             scheduledTime: assignment.assigned_time || '08:00', // CORREÇÃO: Usar horário do assignment
             scheduledDate: assignment.assigned_date, // NOVO: Incluir data do assignment
             items: [],
-            internalObservations: `Assignment criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
+            internalObservations: `Agendamento criado em ${new Date(assignment.created_at).toLocaleDateString('pt-BR')}`,
             source: 'AGENDA_ASSIGNMENT',
             assigned_date: assignment.assigned_date,
             status: assignment.status,
@@ -391,10 +391,10 @@ function StreetMode({ onBack }) {
             observations: `Status: ${assignment.status} | Data: ${assignment.assigned_date}`
           });
           
-          console.log(`✅ Assignment ${assignment.id} processado como: "${displayTitle}"`);
+          console.log(`✅ Agendamento ${assignment.id} processado como: "${displayTitle}"`);
           
         } catch (assignmentError) {
-          console.error(`❌ Erro ao processar assignment ${assignment.id}:`, assignmentError);
+          console.error(`❌ Erro ao processar agendamento ${assignment.id}:`, assignmentError);
           
           // Fallback em caso de erro
           const assignmentId = assignment.id;
