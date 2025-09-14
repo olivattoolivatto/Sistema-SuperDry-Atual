@@ -298,24 +298,38 @@ function StreetMode({ onBack }) {
               if (firstEventId.startsWith('ITM-')) {
                 console.log(`✅ Usando budget_item_id válido: ${firstEventId}`);
                 
-                // Usar função original para budget_item_ids válidos
-                const { budget, client } = await getBudgetAndClientData(firstEventId);
-                
-                // Gerar título bonito usando as mesmas funções da agenda
-                const beautifulTitle = generateEventTitle(budget, client.name);
-                
-                console.log(`🎨 Título bonito gerado para agendamento ${assignment.id}: "${beautifulTitle}"`);
-                
-                // Usar dados reais do cliente
-                clientName = client.name;
-                clientAddress = `${client.address} - ${client.neighborhood}, ${client.city}/${client.state}`;
-                clientPhone = client.phone || '(65) 99999-9999';
-                
-                // Calcular valor total dos itens do orçamento
-                totalValue = budget.items.reduce((sum, item) => sum + parseFloat(item.service_value || 0), 0);
-                
-                // Usar o título bonito
-                eventTitles.push(beautifulTitle);
+                try {
+                  // Usar função original para budget_item_ids válidos
+                  const { budget, client } = await getBudgetAndClientData(firstEventId);
+                  
+                  console.log(`📊 Dados obtidos para ${firstEventId}:`, {
+                    budget_code: budget.code,
+                    client_name: client.name,
+                    items_count: budget.items?.length || 0
+                  });
+                  
+                  // Gerar título bonito usando as mesmas funções da agenda
+                  const beautifulTitle = generateEventTitle(budget, client.name);
+                  
+                  console.log(`🎨 Título bonito gerado para agendamento ${assignment.id}: "${beautifulTitle}"`);
+                  
+                  // Usar dados reais do cliente
+                  clientName = client.name;
+                  clientAddress = `${client.address} - ${client.neighborhood}, ${client.city}/${client.state}`;
+                  clientPhone = client.phone || '(65) 99999-9999';
+                  
+                  // Calcular valor total dos itens do orçamento
+                  totalValue = budget.items.reduce((sum, item) => sum + parseFloat(item.service_value || 0), 0);
+                  
+                  // Usar o título bonito
+                  eventTitles.push(beautifulTitle);
+                  
+                } catch (budgetError) {
+                  console.error(`❌ Erro ao buscar dados do orçamento ${firstEventId}:`, budgetError);
+                  
+                  // Fallback: usar nome simples
+                  eventTitles.push(`🔧 Serviço ${firstEventId.slice(-6)}`);
+                }
                 
               } else {
                 console.log(`⚠️ Event ID fictício detectado: ${firstEventId} - usando fallback`);
