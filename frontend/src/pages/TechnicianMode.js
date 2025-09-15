@@ -263,9 +263,12 @@ function StreetMode({ onBack }) {
       setLoading(true);
       
       // Buscar tarefas híbridas do técnico
+      const today = new Date().toISOString().split('T')[0];
+      console.log(`📅 TechnicianMode: Buscando tarefas para a data: ${today}`);
+      
       const response = await technicianApi.getDailyTasks(
         'TECH-001', // TODO: Usar technicianData.id quando disponível
-        new Date().toISOString().split('T')[0]
+        today
       );
       
       console.log('📋 Tarefas híbridas recebidas:', response.data);
