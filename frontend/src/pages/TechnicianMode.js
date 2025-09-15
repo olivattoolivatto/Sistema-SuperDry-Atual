@@ -1247,6 +1247,9 @@ function TabButton({ active, onClick, icon, label }) {
 // Componente de Captura de Fotos
 function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadingPhotos, setUploadingPhotos, onProceed, allItemsHavePhotos }) {
   const [selectedFiles, setSelectedFiles] = useState({});
+  
+  // Backend URL
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
   const handleFileSelect = (itemId, files) => {
     const newSelectedFiles = { ...selectedFiles };
