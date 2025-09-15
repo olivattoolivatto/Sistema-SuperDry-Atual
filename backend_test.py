@@ -11459,3 +11459,27 @@ def run_assignment_sync_investigation(self):
 # Add the assignment sync methods to the ServiceStatusBugTester class
 ServiceStatusBugTester.test_assignment_synchronization_issue = test_assignment_synchronization_issue
 ServiceStatusBugTester.run_assignment_sync_investigation = run_assignment_sync_investigation
+if __name__ == "__main__":
+    import sys
+    
+    tester = ServiceStatusBugTester()
+    
+    # Check command line arguments for specific test
+    if len(sys.argv) > 1:
+        test_type = sys.argv[1].lower()
+        
+        if test_type == "getbudgetandclientdata":
+            print("🎯 RUNNING SPECIFIC TEST: getBudgetAndClientData Functionality")
+            success = tester.run_get_budget_and_client_data_test()
+        else:
+            print(f"❌ Unknown test type: {test_type}")
+            print("Available tests: getbudgetandclientdata")
+            sys.exit(1)
+    else:
+        # Default: run the specific test requested in the review
+        print("🎯 RUNNING DEFAULT TEST: getBudgetAndClientData Functionality")
+        success = tester.run_get_budget_and_client_data_test()
+    
+    # Exit with appropriate code
+    sys.exit(0 if success else 1)
+
