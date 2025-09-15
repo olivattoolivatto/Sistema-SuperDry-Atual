@@ -3266,6 +3266,318 @@ class ServiceStatusBugTester:
         
         return sync_success
 
+    def test_get_budget_and_client_data_functionality(self):
+        """
+        REVIEW REQUEST TEST: Testar se a função getBudgetAndClientData está funcionando corretamente
+        
+        O problema é que no TechnicianMode os serviços aparecem como "🔧 Serviço 392060" ao invés de nomes reais,
+        indicando que há erro ao buscar dados do orçamento.
+        
+        Testes necessários:
+        1. Buscar um budget_item_id específico que sabemos que existe (exemplo: ITM-5654216)
+        2. Testar endpoint GET /api/budget-items/{id} diretamente
+        3. Verificar se item existe e tem service_name
+        4. Testar endpoint GET /api/budgets/{budget_id} para buscar orçamento completo
+        5. Verificar se cliente existe via GET /api/clients/{client_id}
+        """
+        print("\n" + "=" * 80)
+        print("🔍 TESTE ESPECÍFICO DA REVIEW REQUEST: getBudgetAndClientData FUNCTIONALITY")
+        print("=" * 80)
+        print("PROBLEMA: No TechnicianMode os serviços aparecem como '🔧 Serviço 392060' ao invés de nomes reais")
+        print("CAUSA: Erro ao buscar dados do orçamento via getBudgetAndClientData")
+        print("OBJETIVO: Identificar se o problema está na API, nos dados, ou no código frontend")
+        print("=" * 80)
+        
+        # STEP 1: Buscar um budget_item_id específico que sabemos que existe
+        print("\n1️⃣ BUSCANDO BUDGET_ITEM_ID ESPECÍFICO (ITM-5654216):")
+        print("-" * 60)
+        
+        specific_item_id = "ITM-5654216"
+        print(f"🎯 Testando com item específico: {specific_item_id}")
+        
+        # First, check if this specific item exists in available items
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("getBudgetAndClientData - Get Available Items", False, 
+                        "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        specific_item = None
+        
+        for item in available_items:
+            if item.get('budget_item_id') == specific_item_id:
+                specific_item = item
+                break
+        
+        if specific_item:
+            print(f"✅ ITEM ENCONTRADO: {specific_item_id}")
+            print(f"   Cliente: {specific_item.get('client_name', 'N/A')}")
+            print(f"   Serviço: {specific_item.get('service_name', 'N/A')}")
+            print(f"   Status: {specific_item.get('status', 'N/A')}")
+            print(f"   Budget ID: {specific_item.get('budget_id', 'N/A')}")
+            print(f"   Client ID: {specific_item.get('client_id', 'N/A')}")
+            
+            self.log_test("getBudgetAndClientData - Find Specific Item", True, 
+                        f"Found specific item {specific_item_id} in available items")
+        else:
+            print(f"❌ ITEM NÃO ENCONTRADO: {specific_item_id}")
+            print("   Usando primeiro item disponível como alternativa...")
+            
+            if available_items:
+                specific_item = available_items[0]
+                specific_item_id = specific_item.get('budget_item_id')
+                print(f"   📋 Usando item alternativo: {specific_item_id}")
+                
+                self.log_test("getBudgetAndClientData - Find Specific Item", False, 
+                            f"Specific item ITM-5654216 not found, using {specific_item_id} instead")
+            else:
+                self.log_test("getBudgetAndClientData - Find Specific Item", False, 
+                            "No available items found for testing")
+                return False
+        
+        # STEP 2: Testar endpoint GET /api/budget-items/{id} diretamente
+        print(f"\n2️⃣ TESTANDO ENDPOINT GET /api/budget-items/{specific_item_id}:")
+        print("-" * 65)
+        
+        response = self.make_request('GET', f'/budget-items/{specific_item_id}')
+        
+        if response['success']:
+            item_data = response['data']
+            print(f"✅ ENDPOINT FUNCIONANDO: GET /api/budget-items/{specific_item_id}")
+            print(f"   📊 Dados retornados:")
+            print(f"      ID: {item_data.get('id', 'N/A')}")
+            print(f"      Service Name: {item_data.get('service_name', 'N/A')}")
+            print(f"      Service ID: {item_data.get('service_id', 'N/A')}")
+            print(f"      Status: {item_data.get('status', 'N/A')}")
+            print(f"      Total Value: {item_data.get('total_value', 'N/A')}")
+            
+            # Check if service_name exists and is not empty
+            service_name = item_data.get('service_name')
+            if service_name and service_name.strip():
+                self.log_test("getBudgetAndClientData - Individual Item API", True, 
+                            f"✅ Item {specific_item_id} has service_name: '{service_name}'")
+                individual_api_working = True
+            else:
+                self.log_test("getBudgetAndClientData - Individual Item API", False, 
+                            f"❌ Item {specific_item_id} missing or empty service_name")
+                individual_api_working = False
+        else:
+            print(f"❌ ENDPOINT NÃO DISPONÍVEL: GET /api/budget-items/{specific_item_id}")
+            print(f"   Status Code: {response['status_code']}")
+            print(f"   Error: {response['data']}")
+            
+            self.log_test("getBudgetAndClientData - Individual Item API", False, 
+                        f"Individual budget item endpoint not available (Status: {response['status_code']})")
+            individual_api_working = False
+            item_data = None
+        
+        # STEP 3: Verificar se item existe e tem service_name (usando dados disponíveis)
+        print(f"\n3️⃣ VERIFICANDO SE ITEM TEM SERVICE_NAME:")
+        print("-" * 45)
+        
+        # Use data from available items if individual API doesn't work
+        test_item_data = item_data if individual_api_working else specific_item
+        
+        if test_item_data:
+            service_name = test_item_data.get('service_name')
+            service_id = test_item_data.get('service_id')
+            
+            print(f"📋 DADOS DO ITEM {specific_item_id}:")
+            print(f"   Service Name: '{service_name}'")
+            print(f"   Service ID: '{service_id}'")
+            
+            if service_name and service_name.strip():
+                # Check if service_name looks like a real name or a fallback
+                if "Serviço" in service_name and any(char.isdigit() for char in service_name):
+                    print(f"⚠️  SERVICE_NAME PARECE SER FALLBACK: '{service_name}'")
+                    print("   Isso indica que o nome real do serviço não foi carregado corretamente")
+                    
+                    self.log_test("getBudgetAndClientData - Service Name Quality", False, 
+                                f"Service name appears to be fallback: '{service_name}'")
+                    service_name_quality = False
+                else:
+                    print(f"✅ SERVICE_NAME PARECE REAL: '{service_name}'")
+                    
+                    self.log_test("getBudgetAndClientData - Service Name Quality", True, 
+                                f"Service name appears to be real: '{service_name}'")
+                    service_name_quality = True
+            else:
+                print(f"❌ SERVICE_NAME AUSENTE OU VAZIO")
+                
+                self.log_test("getBudgetAndClientData - Service Name Quality", False, 
+                            "Service name is missing or empty")
+                service_name_quality = False
+        else:
+            print(f"❌ NÃO FOI POSSÍVEL OBTER DADOS DO ITEM")
+            service_name_quality = False
+        
+        # STEP 4: Testar endpoint GET /api/budgets/{budget_id} para buscar orçamento completo
+        print(f"\n4️⃣ TESTANDO ENDPOINT GET /api/budgets/{{budget_id}}:")
+        print("-" * 55)
+        
+        budget_id = specific_item.get('budget_id') if specific_item else None
+        
+        if budget_id:
+            print(f"🎯 Testando com budget: {budget_id}")
+            
+            response = self.make_request('GET', f'/budgets/{budget_id}')
+            
+            if response['success']:
+                budget_data = response['data']
+                print(f"✅ ENDPOINT FUNCIONANDO: GET /api/budgets/{budget_id}")
+                print(f"   📊 Dados do orçamento:")
+                print(f"      ID: {budget_data.get('id', 'N/A')}")
+                print(f"      Client ID: {budget_data.get('client_id', 'N/A')}")
+                print(f"      Client Name: {budget_data.get('client_name', 'N/A')}")
+                print(f"      Total Items: {len(budget_data.get('items', []))}")
+                
+                # Find our specific item in the budget
+                budget_items = budget_data.get('items', [])
+                our_item_in_budget = None
+                
+                for item in budget_items:
+                    if item.get('id') == specific_item_id:
+                        our_item_in_budget = item
+                        break
+                
+                if our_item_in_budget:
+                    print(f"   🎯 Item {specific_item_id} encontrado no orçamento:")
+                    print(f"      Service Name: '{our_item_in_budget.get('service_name', 'N/A')}'")
+                    print(f"      Service ID: '{our_item_in_budget.get('service_id', 'N/A')}'")
+                    print(f"      Status: '{our_item_in_budget.get('status', 'N/A')}'")
+                    
+                    self.log_test("getBudgetAndClientData - Budget API", True, 
+                                f"✅ Budget {budget_id} contains item {specific_item_id} with complete data")
+                    budget_api_working = True
+                else:
+                    print(f"   ❌ Item {specific_item_id} NÃO encontrado no orçamento")
+                    
+                    self.log_test("getBudgetAndClientData - Budget API", False, 
+                                f"Item {specific_item_id} not found in budget {budget_id}")
+                    budget_api_working = False
+            else:
+                print(f"❌ ENDPOINT COM PROBLEMA: GET /api/budgets/{budget_id}")
+                print(f"   Status Code: {response['status_code']}")
+                print(f"   Error: {response['data']}")
+                
+                self.log_test("getBudgetAndClientData - Budget API", False, 
+                            f"Budget API failed (Status: {response['status_code']})")
+                budget_api_working = False
+        else:
+            print(f"❌ BUDGET_ID NÃO DISPONÍVEL PARA TESTE")
+            
+            self.log_test("getBudgetAndClientData - Budget API", False, 
+                        "No budget_id available for testing")
+            budget_api_working = False
+        
+        # STEP 5: Verificar se cliente existe via GET /api/clients/{client_id}
+        print(f"\n5️⃣ TESTANDO ENDPOINT GET /api/clients/{{client_id}}:")
+        print("-" * 50)
+        
+        client_id = specific_item.get('client_id') if specific_item else None
+        
+        if client_id:
+            print(f"🎯 Testando com cliente: {client_id}")
+            
+            response = self.make_request('GET', f'/clients/{client_id}')
+            
+            if response['success']:
+                client_data = response['data']
+                print(f"✅ ENDPOINT FUNCIONANDO: GET /api/clients/{client_id}")
+                print(f"   📊 Dados do cliente:")
+                print(f"      ID: {client_data.get('id', 'N/A')}")
+                print(f"      Name: {client_data.get('name', 'N/A')}")
+                print(f"      Phone: {client_data.get('phone_primary', 'N/A')}")
+                print(f"      Address: {client_data.get('address', {}).get('full_address', 'N/A')}")
+                
+                self.log_test("getBudgetAndClientData - Client API", True, 
+                            f"✅ Client {client_id} found with complete data")
+                client_api_working = True
+            else:
+                print(f"❌ ENDPOINT COM PROBLEMA: GET /api/clients/{client_id}")
+                print(f"   Status Code: {response['status_code']}")
+                print(f"   Error: {response['data']}")
+                
+                self.log_test("getBudgetAndClientData - Client API", False, 
+                            f"Client API failed (Status: {response['status_code']})")
+                client_api_working = False
+        else:
+            print(f"❌ CLIENT_ID NÃO DISPONÍVEL PARA TESTE")
+            
+            self.log_test("getBudgetAndClientData - Client API", False, 
+                        "No client_id available for testing")
+            client_api_working = False
+        
+        # STEP 6: Diagnóstico final
+        print(f"\n6️⃣ DIAGNÓSTICO FINAL:")
+        print("-" * 30)
+        
+        print(f"📊 RESULTADOS DOS TESTES:")
+        print(f"   Individual Item API: {'✅ OK' if individual_api_working else '❌ FAIL'}")
+        print(f"   Service Name Quality: {'✅ OK' if service_name_quality else '❌ FAIL'}")
+        print(f"   Budget API: {'✅ OK' if budget_api_working else '❌ FAIL'}")
+        print(f"   Client API: {'✅ OK' if client_api_working else '❌ FAIL'}")
+        
+        # Determine the root cause
+        if not individual_api_working:
+            diagnosis = "❌ PROBLEMA NA API: Endpoint individual /api/budget-items/{id} não está funcionando"
+            recommendation = "Implementar ou corrigir endpoint individual para budget items"
+        elif not service_name_quality:
+            diagnosis = "❌ PROBLEMA NOS DADOS: Service names estão sendo retornados como fallback"
+            recommendation = "Verificar se os serviços têm nomes corretos no banco de dados"
+        elif not budget_api_working:
+            diagnosis = "❌ PROBLEMA NA API: Endpoint /api/budgets/{id} não está funcionando"
+            recommendation = "Verificar e corrigir endpoint de orçamentos"
+        elif not client_api_working:
+            diagnosis = "❌ PROBLEMA NA API: Endpoint /api/clients/{id} não está funcionando"
+            recommendation = "Verificar e corrigir endpoint de clientes"
+        else:
+            diagnosis = "✅ APIS FUNCIONANDO: Problema pode estar no código frontend getBudgetAndClientData"
+            recommendation = "Verificar implementação da função getBudgetAndClientData no frontend"
+        
+        print(f"\n🎯 DIAGNÓSTICO:")
+        print(f"   {diagnosis}")
+        print(f"\n💡 RECOMENDAÇÃO:")
+        print(f"   {recommendation}")
+        
+        # Overall success
+        overall_success = individual_api_working and service_name_quality and budget_api_working and client_api_working
+        
+        if overall_success:
+            self.log_test("getBudgetAndClientData - Overall", True, 
+                        "✅ All APIs working correctly - issue likely in frontend implementation")
+        else:
+            issues = []
+            if not individual_api_working:
+                issues.append("Individual Item API")
+            if not service_name_quality:
+                issues.append("Service Name Quality")
+            if not budget_api_working:
+                issues.append("Budget API")
+            if not client_api_working:
+                issues.append("Client API")
+            
+            self.log_test("getBudgetAndClientData - Overall", False, 
+                        f"❌ Issues found in: {', '.join(issues)}")
+        
+        return overall_success
+
+    def run_get_budget_and_client_data_test(self):
+        """Run the specific test requested in the review"""
+        print("🔍 EXECUTANDO TESTE ESPECÍFICO DA REVIEW REQUEST")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Foco: Testar se a função getBudgetAndClientData está funcionando corretamente")
+        print("=" * 80)
+        
+        # Execute the specific test
+        test_success = self.test_get_budget_and_client_data_functionality()
+        
+        # Summary
+        self.print_summary()
+        
+        return test_success
+
     def run_all_tests(self):
         """Run complete routes API test suite"""
         print("🚀 STARTING ROUTES API COMPREHENSIVE TESTS")
