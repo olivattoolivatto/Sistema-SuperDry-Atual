@@ -318,7 +318,7 @@ frontend:
     file: "pages/TechnicianMode.js"
     stuck_count: 1
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         -working: false
         -agent: "main"
@@ -332,6 +332,9 @@ frontend:
         -working: false
         -agent: "testing"
         -comment: "🔍 INVESTIGAÇÃO ESPECÍFICA DA REVIEW REQUEST EXECUTADA COM 100% DE SUCESSO: Teste de debugging específico realizado conforme solicitado para investigar por que 'Serviços Enviados ao Técnico' mostra '0 assignment(s)' enquanto Modo Técnico mostra dados corretos. ✅ NAVEGAÇÃO E CAPTURA: 1) Navegação para https://tech-laundry-hub.preview.emergentagent.com/agenda ✅, 2) Expansão de rota e localização da seção 'Serviços Enviados ao Técnico' ✅, 3) Captura de TODOS os logs do console ✅, 4) Verificação de network requests para /api/technician/TECH-001/daily-tasks ✅, 5) Clique no botão 'Atualizar Status' e captura da response ✅, 6) Comparação com dados do Modo Técnico ✅. 📊 LOGS CRÍTICOS CAPTURADOS NA AGENDA: - '🔄 Iniciando carregamento de serviços enviados...', - 'API Request: GET /technician/TECH-001/daily-tasks', - '📋 Resposta API getDailyTasks: {agenda_events: Array(0), status_items: Array(6), assignments: Array(0)}', - '📋 Assignments encontrados: 0', - '✅ Serviços processados para exibição: 0'. 📊 LOGS CRÍTICOS CAPTURADOS NO MODO TÉCNICO: - 'API Request: GET /technician/TECH-001/daily-tasks', - '📋 Tarefas híbridas recebidas: {agenda_events: Array(0), status_items: Array(6), assignments: Array(0)}', - '👥 Clientes unificados (ordenados por data e tipo): [Object, Object, Object, Object, Object]'. 🎯 CAUSA RAIZ IDENTIFICADA: A API /api/technician/TECH-001/daily-tasks retorna EXATAMENTE os mesmos dados em ambas as páginas: assignments: Array(0) (vazio), status_items: Array(6) (6 itens). O problema NÃO está na API call, filtering ou exibição - está na ausência de assignments reais no banco de dados. ✅ MODO TÉCNICO FUNCIONA: Mostra 5 clientes porque usa status_items (Array(6)) que contém dados reais. ❌ AGENDA NÃO FUNCIONA: Mostra '0 assignment(s)' porque usa assignments (Array(0)) que está vazio. 🔧 SOLUÇÃO NECESSÁRIA: Criar assignments reais no banco de dados através da funcionalidade 'Enviar para Técnico' na Agenda, ou verificar se assignments existentes estão sendo filtrados incorretamente no backend."
+        -working: false
+        -agent: "main"
+        -comment: "CORREÇÃO REALIZADA - PROBLEMA DOS ENDEREÇOS [object Object]: Corrigido problema de exibição de endereços que apareciam como '[object Object] - undefined, undefined/undefined' no Modo Técnico. CORREÇÕES APLICADAS: 1) Na função ClientCard (linha 792): Alterado generateNavigationLink(client.address) para generateNavigationLink(getClientAddress(client)), 2) Na exibição do endereço no card (linha 866): Alterado {client.address} para {getClientAddress(client)}, 3) Na exibição dos detalhes do cliente (linha 982): Alterado {client.address} para {getClientAddress(client)}, 4) No processamento de status_items (linha 574): Adicionada verificação para tratar client_address quando for objeto, extraindo full_address corretamente. As funções getClientAddress() e getClientComplement() já existiam no arquivo e foram aplicadas corretamente em todos os locais necessários. Precisa ser testado para confirmar que endereços agora são exibidos corretamente ao invés de '[object Object]'."
 
   - task: "Update Service Emoji Function with Specific Mappings"
     implemented: true
