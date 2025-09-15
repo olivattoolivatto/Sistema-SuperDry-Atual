@@ -262,14 +262,48 @@ function StreetMode({ onBack }) {
     try {
       setLoading(true);
       
-      // Buscar tarefas híbridas do técnico
+      // Buscar tarefas híbridas do técnico para múltiplas datas se necessário
       const today = new Date().toISOString().split('T')[0];
       console.log(`📅 TechnicianMode: Buscando tarefas para a data: ${today}`);
       
-      const response = await technicianApi.getDailyTasks(
+      let response = await technicianApi.getDailyTasks(
         'TECH-001', // TODO: Usar technicianData.id quando disponível
         today
       );
+      
+      // Se não encontrou assignments para hoje, tentar datas próximas
+      let allAssignments = response.data.assignments || [];
+      let allStatusItems = response.data.status_items || [];
+      let allAgendaEvents = response.data.agenda_events || [];
+      
+      if (allAssignments.length === 0) {
+        console.log('🔍 Nenhum assignment encontrado para hoje, buscando em datas próximas...');
+        
+        // Tentar ontem e amanhã
+        const dates = [
+          new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Ontem
+          new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Amanhã
+        ];
+        
+        for (const date of dates) {
+          console.log(`🔍 Tentando data: ${date}`);
+          const dateResponse = await technicianApi.getDailyTasks('TECH-001', date);
+          
+          if (dateResponse.data.assignments && dateResponse.data.assignments.length > 0) {
+            console.log(`✅ Encontrou ${dateResponse.data.assignments.length} assignments para ${date}`);
+            allAssignments = [...allAssignments, ...dateResponse.data.assignments];
+            allStatusItems = [...allStatusItems, ...dateResponse.data.status_items];
+            allAgendaEvents = [...allAgendaEvents, ...dateResponse.data.agenda_events];
+          }
+        }
+      }
+      
+      // Usar dados combinados
+      const combinedResponse = {
+        assignments: allAssignments,
+        status_items: allStatusItems,
+        agenda_events: allAgendaEvents
+      };
       
       console.log('📋 Tarefas híbridas recebidas:', response.data);
       
