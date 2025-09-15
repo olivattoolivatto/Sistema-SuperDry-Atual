@@ -568,10 +568,15 @@ function StreetMode({ onBack }) {
         const clientId = item.client_id;
         
         if (!unifiedClients[clientId]) {
+          // CORREÇÃO: Usar função helper para extrair endereço correto de status_items
+          const formattedAddress = item.client_address && typeof item.client_address === 'object' 
+            ? (item.client_address.full_address || 'Endereço não informado')
+            : item.client_address || 'Endereço não informado';
+            
           unifiedClients[clientId] = {
             id: clientId,
             name: item.client_name,
-            address: item.client_address,
+            address: formattedAddress,
             phone: item.client_phone,
             scheduledTime: '08:00', // TODO: Definir lógica de horário
             items: [],
