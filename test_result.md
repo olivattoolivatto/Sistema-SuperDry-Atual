@@ -868,14 +868,14 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Technician Assignment Cleanup - Remove Old Assignments"
+    - "Assignment Synchronization Issue Investigation"
   stuck_tasks: []
   test_all: false
   test_priority: "high"
 
 agent_communication:
     -agent: "testing"
-    -message: "🎉 LIMPEZA DE ASSIGNMENTS EXECUTADA COM 100% DE SUCESSO: Problema reportado pelo usuário foi completamente resolvido. Encontrados e cancelados 6 assignments antigos que estavam interferindo no funcionamento do sistema. Todos os assignments para TECH-001 foram marcados como CANCELLED usando o endpoint PUT /api/technician/assignment/{id}/status?status=CANCELLED. Sistema agora está limpo e funcionando sem interferências. Daily-tasks testado para múltiplas datas (2025-01-15, 2025-01-16, 2025-01-17, 2025-09-14, 2025-09-15) - todas as datas estão limpas com 0 assignments ativos restantes. Problema resolvido definitivamente."
+    -message: "🚨 INVESTIGAÇÃO CRÍTICA DE SINCRONIZAÇÃO DE ASSIGNMENTS COMPLETADA: Executada investigação detalhada conforme review request sobre assignment TASS-ffc9c894 não aparecer em daily-tasks. ❌ ASSIGNMENT ESPECÍFICO NÃO ENCONTRADO: TASS-ffc9c894 não foi encontrado em nenhuma das 6 datas testadas (2025-09-15, 2025-01-15, 2025-01-16, 2025-01-17, 2025-09-14, 2025-09-15), indicando que pode ter sido deletado ou nunca existiu. ✅ SISTEMA DE SINCRONIZAÇÃO FUNCIONA: Criado assignment de teste TASS-4d306145 com os mesmos event_ids (ITM-5654216, ITM-5763768, ITM-5799018) e verificado que aparece IMEDIATAMENTE em daily-tasks - sincronização está funcionando corretamente. 🔍 PROBLEMA DE FORMATO DE DATA IDENTIFICADO: Backend aceita APENAS formato YYYY-MM-DD (ISO 8601). Formatos alternativos (YYYY/MM/DD, DD-MM-YYYY, DD/MM/YYYY) retornam arrays vazios - possível causa do problema reportado pelo usuário. ⚠️ FILTRO DE STATUS CONFIRMADO: Assignments com status COMPLETED são automaticamente filtrados e não aparecem em daily-tasks (comportamento normal), mas ASSIGNED e IN_PROGRESS aparecem normalmente. 🎯 DIAGNÓSTICO FINAL: O assignment TASS-ffc9c894 específico não existe mais no sistema, mas a funcionalidade de sincronização está funcionando. Problema pode estar no frontend usando formato de data incorreto ou timezone diferente. 📋 RECOMENDAÇÕES: 1) Verificar se frontend usa formato YYYY-MM-DD, 2) Verificar timezone entre frontend/backend, 3) Verificar se assignments COMPLETED estão sendo filtrados corretamente, 4) Adicionar logs para debug de filtros de data."
     -agent: "main"
     -message: "✅ TÍTULOS COM MÚLTIPLOS SERVIÇOS IMPLEMENTADOS: Criada função generateEventTitle() que analisa TODOS os itens do orçamento para gerar títulos inteligentes. FUNCIONALIDADES: 1) MÚLTIPLOS EMOJIS: Agrupa por emoji sem repetir (🗞️tapete, 🛋️sofá, 🪑cadeira), 2) STATUS INTELIGENTE: Adiciona RETIRAR/ENTREGAR após emoji quando aplicável, 3) FORMATAÇÃO: Junta com 'e' para 2 serviços, vírgulas+e para 3+. EXEMPLOS: '🗞️RETIRAR Fulano', '🗞️RETIRAR e 🛋️ Fulano', '🗞️, 🛋️ e 🪑ENTREGAR Fulano'. Substituído lógica anterior que considerava apenas 1 item por lógica que analisa orçamento completo. Logs de debug implementados."
     -agent: "testing"
