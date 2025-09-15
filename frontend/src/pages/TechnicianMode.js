@@ -415,10 +415,12 @@ function StreetMode({ onBack }) {
                   
                   console.log(`🎨 Título com nome real gerado: "${displayTitle}"`);
                   
-                  // Usar dados reais do cliente
+                  // Usar dados reais do cliente COM ENDEREÇO CORRETO
                   clientName = client.name;
-                  clientAddress = `${client.address} - ${client.neighborhood}, ${client.city}/${client.state}`;
+                  clientAddress = getClientAddress(client); // CORREÇÃO: Usar função para extrair endereço correto
                   clientPhone = client.phone || '(65) 99999-9999';
+                  
+                  console.log(`📍 Endereço extraído corretamente: "${clientAddress}"`);
                   
                   // Usar valor do item específico
                   totalValue = parseFloat(specificItem.service_value || 0);
