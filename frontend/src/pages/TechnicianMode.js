@@ -1264,10 +1264,36 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
     setUploadingPhotos(true);
     
     try {
-      const uploadedPhotos = [];
+      const formData = new FormData();
+      formData.append('item_id', itemId);
+      formData.append('technician_id', 'TECH-001'); // TODO: Usar técnico logado
+      formData.append('photo_type', 'BEFORE');
       
+      if (client.original_assignment_id) {
+        formData.append('assignment_id', client.original_assignment_id);
+      }
+      
+      // Adicionar todas as fotos ao FormData
       for (let file of files) {
-        // Criar preview da foto
+        formData.append('files', file);
+      }
+      
+      // Upload real para o backend
+      const response = await fetch(`${BACKEND_URL}/api/technician/upload-photos`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erro no upload: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Upload realizado com sucesso:', result);
+      
+      // Criar previews locais das fotos
+      const uploadedPhotos = [];
+      for (let file of files) {
         const photoPreview = {
           id: Date.now() + Math.random(),
           file: file,
@@ -1277,15 +1303,7 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
           type: file.type,
           timestamp: new Date().toISOString()
         };
-        
         uploadedPhotos.push(photoPreview);
-        
-        // TODO: Implementar upload real para o backend
-        console.log(`📸 Foto capturada para item ${itemId}:`, {
-          fileName: file.name,
-          size: file.size,
-          type: file.type
-        });
       }
       
       // Atualizar estado das fotos
@@ -1301,11 +1319,11 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
       delete newSelectedFiles[itemId];
       setSelectedFiles(newSelectedFiles);
       
-      alert(`${uploadedPhotos.length} foto(s) adicionada(s) com sucesso!`);
+      alert(`${uploadedPhotos.length} foto(s) enviada(s) com sucesso!`);
       
     } catch (error) {
-      console.error('Erro ao fazer upload das fotos:', error);
-      alert('Erro ao fazer upload das fotos. Tente novamente.');
+      console.error('❌ Erro ao fazer upload das fotos:', error);
+      alert('Erro ao fazer upload das fotos. Verifique sua conexão e tente novamente.');
     } finally {
       setUploadingPhotos(false);
     }
