@@ -107,35 +107,53 @@ const generateEventTitle = (budget, clientName) => {
   return title;
 };
 
-// Função para buscar dados do orçamento e cliente
+// Função para buscar dados do orçamento e cliente - VERSÃO MELHORADA
 const getBudgetAndClientData = async (budgetItemId) => {
   try {
     console.log(`🔍 Buscando dados para budget item: ${budgetItemId}`);
     
-    // Buscar dados do item do orçamento
-    const budgetItemResponse = await fetch(`${BACKEND_URL}/api/budget-items/${budgetItemId}`);
-    if (!budgetItemResponse.ok) {
-      throw new Error('Erro ao buscar item do orçamento');
+    // NOVA ABORDAGEM: Usar endpoint available-for-routes para encontrar dados completos
+    const availableItemsResponse = await fetch(`${BACKEND_URL}/api/budget-items/available-for-routes`);
+    if (!availableItemsResponse.ok) {
+      throw new Error('Erro ao buscar itens disponíveis');
     }
-    const budgetItem = await budgetItemResponse.json();
+    const availableData = await availableItemsResponse.json();
     
-    // Buscar orçamento completo
-    const budgetResponse = await fetch(`${BACKEND_URL}/api/budgets/${budgetItem.budget_id}`);
+    // Procurar o item específico na lista de itens disponíveis
+    const specificItem = availableData.available_items.find(item => item.budget_item_id === budgetItemId);
+    
+    if (!specificItem) {
+      throw new Error(`Item ${budgetItemId} não encontrado nos itens disponíveis`);
+    }
+    
+    console.log(`✅ Item encontrado nos disponíveis: ${specificItem.client_name} - ${specificItem.service_name}`);
+    
+    // Buscar orçamento completo para ter todos os dados
+    const budgetResponse = await fetch(`${BACKEND_URL}/api/budgets/${specificItem.budget_id}`);
     if (!budgetResponse.ok) {
-      throw new Error('Erro ao buscar orçamento');
+      throw new Error('Erro ao buscar orçamento completo');
     }
     const budget = await budgetResponse.json();
     
     // Buscar dados do cliente
-    const clientResponse = await fetch(`${BACKEND_URL}/api/clients/${budget.client_id}`);
+    const clientResponse = await fetch(`${BACKEND_URL}/api/clients/${specificItem.client_id}`);
     if (!clientResponse.ok) {
       throw new Error('Erro ao buscar cliente');
     }
     const client = await clientResponse.json();
     
-    console.log(`✅ Dados encontrados - Cliente: ${client.name}, Orçamento: ${budget.code}, Itens: ${budget.items.length}`);
+    console.log(`✅ Dados completos encontrados - Cliente: ${client.name}, Orçamento: ${budget.code}, Serviço: ${specificItem.service_name}`);
     
-    return { budget, client };
+    // Retornar dados no formato esperado, incluindo o item específico
+    return { 
+      budget: {
+        ...budget,
+        // Filtrar apenas o item específico para generateEventTitle funcionar corretamente
+        items: budget.items.filter(item => item.id === budgetItemId)
+      }, 
+      client,
+      specificItem // Dados diretos do item para facilitar acesso
+    };
   } catch (error) {
     console.error('❌ Erro ao buscar dados do orçamento/cliente:', error);
     throw error;
