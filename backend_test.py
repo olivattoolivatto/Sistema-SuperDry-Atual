@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Backend Test Suite for SuperDry Lavanderia Management System
-Focus: Testing default service status bug fix and Routes API
+Focus: Testing getBudgetAndClientData functionality and backend APIs
 """
 
 import requests
@@ -67,6 +67,29 @@ class ServiceStatusBugTester:
                 'data': {'error': str(e)},
                 'success': False
             }
+    
+    def print_summary(self):
+        """Print test summary"""
+        print("\n" + "=" * 80)
+        print("📊 TEST SUMMARY")
+        print("=" * 80)
+        
+        total_tests = len(self.test_results)
+        passed_tests = sum(1 for result in self.test_results if result['success'])
+        failed_tests = total_tests - passed_tests
+        
+        print(f"Total Tests: {total_tests}")
+        print(f"✅ Passed: {passed_tests}")
+        print(f"❌ Failed: {failed_tests}")
+        print(f"Success Rate: {(passed_tests/total_tests*100):.1f}%" if total_tests > 0 else "No tests run")
+        
+        if failed_tests > 0:
+            print(f"\n❌ FAILED TESTS:")
+            for result in self.test_results:
+                if not result['success']:
+                    print(f"   - {result['test']}: {result['message']}")
+        
+        print("=" * 80)
     
     def setup_test_data_for_status_bug(self):
         """Create test data specifically for testing service status bug"""
