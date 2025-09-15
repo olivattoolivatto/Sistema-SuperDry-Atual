@@ -789,7 +789,7 @@ function AgendaTab({ clients, loading, generateNavigationLink }) {
 
 // Card do Cliente
 function ClientCard({ client, onClick, generateNavigationLink }) {
-  const { wazeUrl, mapsUrl } = generateNavigationLink(client.address);
+  const { wazeUrl, mapsUrl } = generateNavigationLink(getClientAddress(client));
   
   const totalValue = client.items.reduce((sum, item) => sum + item.value, 0);
   
