@@ -1244,4 +1244,247 @@ function TabButton({ active, onClick, icon, label }) {
   );
 }
 
+// Componente de Captura de Fotos
+function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadingPhotos, setUploadingPhotos, onProceed, allItemsHavePhotos }) {
+  const [selectedFiles, setSelectedFiles] = useState({});
+
+  const handleFileSelect = (itemId, files) => {
+    const newSelectedFiles = { ...selectedFiles };
+    newSelectedFiles[itemId] = files;
+    setSelectedFiles(newSelectedFiles);
+  };
+
+  const handlePhotoUpload = async (itemId) => {
+    const files = selectedFiles[itemId];
+    if (!files || files.length === 0) {
+      alert('Selecione pelo menos uma foto para este item.');
+      return;
+    }
+
+    setUploadingPhotos(true);
+    
+    try {
+      const uploadedPhotos = [];
+      
+      for (let file of files) {
+        // Criar preview da foto
+        const photoPreview = {
+          id: Date.now() + Math.random(),
+          file: file,
+          url: URL.createObjectURL(file),
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          timestamp: new Date().toISOString()
+        };
+        
+        uploadedPhotos.push(photoPreview);
+        
+        // TODO: Implementar upload real para o backend
+        console.log(`📸 Foto capturada para item ${itemId}:`, {
+          fileName: file.name,
+          size: file.size,
+          type: file.type
+        });
+      }
+      
+      // Atualizar estado das fotos
+      const newItemPhotos = { ...itemPhotos };
+      if (!newItemPhotos[itemId]) {
+        newItemPhotos[itemId] = [];
+      }
+      newItemPhotos[itemId] = [...newItemPhotos[itemId], ...uploadedPhotos];
+      setItemPhotos(newItemPhotos);
+      
+      // Limpar seleção de arquivos
+      const newSelectedFiles = { ...selectedFiles };
+      delete newSelectedFiles[itemId];
+      setSelectedFiles(newSelectedFiles);
+      
+      alert(`${uploadedPhotos.length} foto(s) adicionada(s) com sucesso!`);
+      
+    } catch (error) {
+      console.error('Erro ao fazer upload das fotos:', error);
+      alert('Erro ao fazer upload das fotos. Tente novamente.');
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
+  const removePhoto = (itemId, photoId) => {
+    const newItemPhotos = { ...itemPhotos };
+    newItemPhotos[itemId] = newItemPhotos[itemId].filter(photo => photo.id !== photoId);
+    setItemPhotos(newItemPhotos);
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center mb-4">
+        <button onClick={onBack} className="mr-3 text-blue-600">
+          <span className="text-xl">←</span>
+        </button>
+        <h3 className="text-lg font-semibold text-gray-800">Registro Fotográfico - {client.name}</h3>
+      </div>
+
+      {/* Instruções */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <div className="flex items-start space-x-2">
+          <Camera className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h4 className="font-medium text-yellow-800 mb-2">Antes de iniciar o serviço registre a situação inicial do Item:</h4>
+            <p className="text-sm text-yellow-700">
+              Capture fotos do estado atual de cada item antes de iniciar o trabalho. 
+              É obrigatório registrar pelo menos uma foto para cada item listado abaixo.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Lista de Items para Fotografar */}
+      <div className="space-y-4 mb-6">
+        {client.items.map(item => {
+          const itemPhotosArray = itemPhotos[item.id] || [];
+          const hasPhotos = itemPhotosArray.length > 0;
+          
+          return (
+            <div key={item.id} className="bg-white rounded-lg shadow-md border border-gray-200">
+              {/* Header do Item */}
+              <div className={`p-4 border-b border-gray-100 ${hasPhotos ? 'bg-green-50' : 'bg-red-50'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    {hasPhotos ? (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <Camera className="w-5 h-5 text-red-600" />
+                    )}
+                    <div>
+                      <h5 className="font-medium text-gray-800">{item.name}</h5>
+                      <p className="text-sm text-gray-600">Status: {item.status} • R$ {item.value.toFixed(2)}</p>
+                      {item.observations && (
+                        <p className="text-sm text-gray-500 italic">Obs: {item.observations}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      hasPhotos 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {hasPhotos ? `${itemPhotosArray.length} foto(s)` : 'Sem fotos'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload de Fotos */}
+              <div className="p-4">
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Selecionar fotos para este item:
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => handleFileSelect(item.id, Array.from(e.target.files))}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                </div>
+
+                {selectedFiles[item.id] && selectedFiles[item.id].length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-sm text-gray-600 mb-2">
+                      {selectedFiles[item.id].length} arquivo(s) selecionado(s):
+                    </p>
+                    <div className="text-xs text-gray-500 space-y-1">
+                      {Array.from(selectedFiles[item.id]).map((file, index) => (
+                        <div key={index}>• {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => handlePhotoUpload(item.id)}
+                      disabled={uploadingPhotos}
+                      className="mt-2 bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    >
+                      {uploadingPhotos ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Enviando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-4 h-4" />
+                          <span>Adicionar Fotos</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Preview das Fotos */}
+                {hasPhotos && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Fotos capturadas:</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {itemPhotosArray.map(photo => (
+                        <div key={photo.id} className="relative">
+                          <img
+                            src={photo.url}
+                            alt={`Foto ${photo.name}`}
+                            className="w-full h-24 object-cover rounded-md border border-gray-200"
+                          />
+                          <button
+                            onClick={() => removePhoto(item.id, photo.id)}
+                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
+                          >
+                            ×
+                          </button>
+                          <div className="text-xs text-gray-500 mt-1 truncate">
+                            {photo.name}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Botão para Prosseguir */}
+      <div className="bg-white rounded-lg shadow-md p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">
+              Progresso: {Object.values(itemPhotos).filter(photos => photos.length > 0).length} de {client.items.length} itens fotografados
+            </p>
+            {!allItemsHavePhotos() && (
+              <p className="text-sm text-red-600 mt-1">
+                Registre fotos para todos os itens antes de prosseguir.
+              </p>
+            )}
+          </div>
+          <button
+            onClick={onProceed}
+            disabled={!allItemsHavePhotos()}
+            className={`py-2 px-6 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
+              allItemsHavePhotos()
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            <CheckCircle className="w-4 h-4" />
+            <span>Prosseguir para Atendimento</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default TechnicianMode;
