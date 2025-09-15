@@ -863,7 +863,7 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
             )}
           </div>
         </div>
-        <p className="text-sm text-gray-600 mt-1">{client.address}</p>
+        <p className="text-sm text-gray-600 mt-1">{getClientAddress(client)}</p>
         
         {/* Status do assignment se for da agenda */}
         {client.source === 'AGENDA_ASSIGNMENT' && (
