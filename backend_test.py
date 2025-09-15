@@ -10536,3 +10536,298 @@ def run_technician_assignment_cleanup_test(self):
 ServiceStatusBugTester.test_technician_assignment_cleanup = test_technician_assignment_cleanup
 ServiceStatusBugTester.create_test_assignments_for_cleanup = create_test_assignments_for_cleanup
 ServiceStatusBugTester.run_technician_assignment_cleanup_test = run_technician_assignment_cleanup_test
+
+# Add assignment synchronization investigation methods
+def test_assignment_synchronization_issue(self):
+    """
+    CRITICAL INVESTIGATION: Test assignment synchronization issue reported by user
+    
+    User reports:
+    1. Assignment TASS-ffc9c894 created successfully with 3 events (ITM-5654216, ITM-5763768, ITM-5799018)
+    2. Immediately after creation, GET /technician/TECH-001/daily-tasks returns empty arrays
+    3. Assignment doesn't appear in Technician Mode
+    4. Assignment doesn't appear in "Serviços Enviados" section
+    
+    Investigation needed:
+    1. Check if assignment was actually created in database
+    2. Test GET /technician/TECH-001/daily-tasks with different dates
+    3. Verify assigned_date format and timezone issues
+    4. Check if assignment status is being filtered
+    5. Test with real assignment creation and immediate retrieval
+    """
+    print("\n" + "=" * 80)
+    print("🚨 CRITICAL INVESTIGATION: ASSIGNMENT SYNCHRONIZATION ISSUE")
+    print("=" * 80)
+    print("PROBLEMA REPORTADO PELO USUÁRIO:")
+    print("1. Assignment TASS-ffc9c894 criado com sucesso com 3 eventos")
+    print("2. Imediatamente após criação: GET /technician/TECH-001/daily-tasks retorna arrays vazios")
+    print("3. Não aparece no Modo Técnico")
+    print("4. Não aparece na seção 'Serviços Enviados'")
+    print("")
+    print("INVESTIGAÇÃO NECESSÁRIA:")
+    print("1. Verificar se assignment foi realmente criado no banco")
+    print("2. Testar GET /technician/TECH-001/daily-tasks com diferentes datas")
+    print("3. Verificar formato assigned_date e problemas de timezone")
+    print("4. Verificar se status do assignment está sendo filtrado")
+    print("5. Testar criação e busca imediata de assignment")
+    print("=" * 80)
+    
+    # STEP 1: Search for the specific assignment TASS-ffc9c894
+    print("\n1️⃣ BUSCANDO ASSIGNMENT ESPECÍFICO TASS-ffc9c894:")
+    print("-" * 60)
+    
+    # Try to find the assignment by searching daily tasks for different dates
+    test_dates = [
+        datetime.now().strftime('%Y-%m-%d'),  # Today
+        "2025-01-15",  # Common test date
+        "2025-01-16",  # Tomorrow from test date
+        "2025-01-17",  # Day after tomorrow
+        "2025-09-14",  # Another common date
+        "2025-09-15"   # Day after
+    ]
+    
+    assignment_found = False
+    assignment_data = None
+    found_date = None
+    
+    for test_date in test_dates:
+        print(f"🔍 Testando data: {test_date}")
+        
+        response = self.make_request('GET', f'/technician/TECH-001/daily-tasks?date={test_date}')
+        if response['success']:
+            data = response['data']
+            assignments = data.get('assignments', [])
+            
+            print(f"   📊 Assignments encontrados: {len(assignments)}")
+            
+            # Look for the specific assignment
+            for assignment in assignments:
+                assignment_id = assignment.get('id')
+                if assignment_id == 'TASS-ffc9c894':
+                    assignment_found = True
+                    assignment_data = assignment
+                    found_date = test_date
+                    print(f"   ✅ ENCONTRADO! Assignment TASS-ffc9c894 na data {test_date}")
+                    break
+            
+            if assignment_found:
+                break
+            else:
+                print(f"   ❌ Assignment TASS-ffc9c894 não encontrado na data {test_date}")
+        else:
+            print(f"   ❌ Erro ao buscar daily-tasks para {test_date}: {response['data']}")
+    
+    if assignment_found:
+        self.log_test("Assignment Search - TASS-ffc9c894", True, 
+                    f"Assignment TASS-ffc9c894 encontrado na data {found_date}")
+        
+        print(f"\n📋 DETALHES DO ASSIGNMENT ENCONTRADO:")
+        print(f"   ID: {assignment_data.get('id')}")
+        print(f"   Route ID: {assignment_data.get('route_id')}")
+        print(f"   Event IDs: {assignment_data.get('event_ids')}")
+        print(f"   Technician ID: {assignment_data.get('technician_id')}")
+        print(f"   Assigned Date: {assignment_data.get('assigned_date')}")
+        print(f"   Assignment Type: {assignment_data.get('assignment_type')}")
+        print(f"   Status: {assignment_data.get('status')}")
+        print(f"   Created At: {assignment_data.get('created_at')}")
+        print(f"   Updated At: {assignment_data.get('updated_at')}")
+    else:
+        self.log_test("Assignment Search - TASS-ffc9c894", False, 
+                    "Assignment TASS-ffc9c894 não encontrado em nenhuma das datas testadas")
+    
+    # STEP 2: Create a test assignment and immediately check if it appears
+    print(f"\n2️⃣ CRIANDO ASSIGNMENT DE TESTE E VERIFICANDO SINCRONIZAÇÃO:")
+    print("-" * 65)
+    
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    test_assignment_data = {
+        "route_id": "RTE-TEST001",
+        "event_ids": ["ITM-5654216", "ITM-5763768", "ITM-5799018"],  # Using the same IDs from user report
+        "technician_id": "TECH-001",
+        "assigned_date": today,
+        "assignment_type": "AGENDA",
+        "status": "ASSIGNED"
+    }
+    
+    print(f"📝 Criando assignment com dados:")
+    print(f"   Route ID: {test_assignment_data['route_id']}")
+    print(f"   Event IDs: {test_assignment_data['event_ids']}")
+    print(f"   Technician ID: {test_assignment_data['technician_id']}")
+    print(f"   Assigned Date: {test_assignment_data['assigned_date']}")
+    print(f"   Assignment Type: {test_assignment_data['assignment_type']}")
+    print(f"   Status: {test_assignment_data['status']}")
+    
+    # Create the assignment
+    response = self.make_request('POST', '/technician/assign-events', test_assignment_data)
+    if response['success']:
+        result = response['data']
+        new_assignment_id = result.get('assignment_id')
+        
+        print(f"✅ Assignment criado com sucesso!")
+        print(f"   Assignment ID: {new_assignment_id}")
+        print(f"   Events Assigned: {result.get('events_assigned')}")
+        print(f"   Technician ID: {result.get('technician_id')}")
+        
+        self.log_test("Assignment Creation", True, 
+                    f"Assignment {new_assignment_id} criado com sucesso")
+        
+        # STEP 3: Immediately check if it appears in daily-tasks
+        print(f"\n3️⃣ VERIFICAÇÃO IMEDIATA - ASSIGNMENT APARECE EM DAILY-TASKS?")
+        print("-" * 65)
+        
+        response = self.make_request('GET', f'/technician/TECH-001/daily-tasks?date={today}')
+        if response['success']:
+            data = response['data']
+            assignments = data.get('assignments', [])
+            status_items = data.get('status_items', [])
+            agenda_events = data.get('agenda_events', [])
+            
+            print(f"📊 RESULTADO DA BUSCA IMEDIATA:")
+            print(f"   Assignments: {len(assignments)}")
+            print(f"   Status Items: {len(status_items)}")
+            print(f"   Agenda Events: {len(agenda_events)}")
+            
+            # Check if our new assignment appears
+            new_assignment_found = False
+            for assignment in assignments:
+                if assignment.get('id') == new_assignment_id:
+                    new_assignment_found = True
+                    print(f"   ✅ SUCESSO: Assignment {new_assignment_id} aparece na lista!")
+                    print(f"      Status: {assignment.get('status')}")
+                    print(f"      Event IDs: {assignment.get('event_ids')}")
+                    break
+            
+            if new_assignment_found:
+                self.log_test("Assignment Immediate Sync", True, 
+                            f"Assignment {new_assignment_id} aparece imediatamente em daily-tasks")
+            else:
+                self.log_test("Assignment Immediate Sync", False, 
+                            f"Assignment {new_assignment_id} NÃO aparece em daily-tasks - PROBLEMA DE SINCRONIZAÇÃO!")
+                
+                print(f"   ❌ PROBLEMA: Assignment {new_assignment_id} não aparece na lista!")
+                print(f"   🔍 Assignments encontrados:")
+                for i, assignment in enumerate(assignments, 1):
+                    print(f"      {i}. {assignment.get('id')} - Status: {assignment.get('status')} - Date: {assignment.get('assigned_date')}")
+            
+            # STEP 4: Test with different date formats
+            print(f"\n4️⃣ TESTANDO COM DIFERENTES FORMATOS DE DATA:")
+            print("-" * 55)
+            
+            date_formats_to_test = [
+                today,  # YYYY-MM-DD
+                today.replace('-', '/'),  # YYYY/MM/DD
+                datetime.now().strftime('%d-%m-%Y'),  # DD-MM-YYYY
+                datetime.now().strftime('%d/%m/%Y'),  # DD/MM/YYYY
+            ]
+            
+            for date_format in date_formats_to_test:
+                print(f"🔍 Testando formato de data: {date_format}")
+                
+                response = self.make_request('GET', f'/technician/TECH-001/daily-tasks?date={date_format}')
+                if response['success']:
+                    data = response['data']
+                    assignments = data.get('assignments', [])
+                    
+                    assignment_found_in_format = any(
+                        assignment.get('id') == new_assignment_id 
+                        for assignment in assignments
+                    )
+                    
+                    if assignment_found_in_format:
+                        print(f"   ✅ Assignment encontrado com formato: {date_format}")
+                    else:
+                        print(f"   ❌ Assignment NÃO encontrado com formato: {date_format}")
+                else:
+                    print(f"   ❌ Erro ao buscar com formato: {date_format}")
+            
+            # STEP 5: Check assignment status filtering
+            print(f"\n5️⃣ VERIFICANDO FILTROS DE STATUS:")
+            print("-" * 40)
+            
+            # Test if changing status affects visibility
+            status_transitions = ["IN_PROGRESS", "COMPLETED", "ASSIGNED"]
+            
+            for new_status in status_transitions:
+                print(f"🔄 Testando mudança de status para: {new_status}")
+                
+                # Update assignment status
+                status_response = self.make_request('PUT', f'/technician/assignment/{new_assignment_id}/status?status={new_status}')
+                if status_response['success']:
+                    print(f"   ✅ Status atualizado para: {new_status}")
+                    
+                    # Check if it still appears in daily-tasks
+                    response = self.make_request('GET', f'/technician/TECH-001/daily-tasks?date={today}')
+                    if response['success']:
+                        data = response['data']
+                        assignments = data.get('assignments', [])
+                        
+                        assignment_visible = any(
+                            assignment.get('id') == new_assignment_id 
+                            for assignment in assignments
+                        )
+                        
+                        if assignment_visible:
+                            print(f"   ✅ Assignment visível com status: {new_status}")
+                        else:
+                            print(f"   ❌ Assignment NÃO visível com status: {new_status}")
+                            if new_status == "COMPLETED":
+                                print(f"      ℹ️  Isso pode ser normal - assignments COMPLETED podem ser filtrados")
+                            else:
+                                print(f"      ⚠️  Isso pode indicar problema de filtro de status")
+                    else:
+                        print(f"   ❌ Erro ao verificar visibilidade com status: {new_status}")
+                else:
+                    print(f"   ❌ Erro ao atualizar status para: {new_status}")
+            
+        else:
+            self.log_test("Assignment Immediate Sync", False, 
+                        f"Erro ao buscar daily-tasks após criação do assignment")
+            print(f"❌ Erro ao buscar daily-tasks: {response['data']}")
+    
+    else:
+        self.log_test("Assignment Creation", False, 
+                    f"Falha ao criar assignment de teste")
+        print(f"❌ Erro ao criar assignment: {response['data']}")
+    
+    # STEP 6: Final diagnosis
+    print(f"\n6️⃣ DIAGNÓSTICO FINAL:")
+    print("-" * 30)
+    
+    if assignment_found:
+        print("✅ ASSIGNMENT ESPECÍFICO ENCONTRADO:")
+        print(f"   - TASS-ffc9c894 existe no sistema na data {found_date}")
+        print(f"   - Problema pode estar no filtro de data ou timezone")
+        print(f"   - Verificar se frontend está usando a data correta")
+    else:
+        print("❌ ASSIGNMENT ESPECÍFICO NÃO ENCONTRADO:")
+        print("   - TASS-ffc9c894 pode ter sido deletado ou não existe")
+        print("   - Problema pode estar na criação do assignment")
+    
+    print("\n🎯 RECOMENDAÇÕES PARA CORREÇÃO:")
+    print("1. Verificar formato de data usado no frontend vs backend")
+    print("2. Verificar timezone - frontend pode estar usando UTC vs local time")
+    print("3. Verificar filtros de status - assignments COMPLETED podem ser ocultos")
+    print("4. Verificar se assigned_date está sendo salvo corretamente")
+    print("5. Adicionar logs no backend para debug de filtros de data")
+    
+    return assignment_found
+
+def run_assignment_sync_investigation(self):
+    """Run the assignment synchronization investigation"""
+    print("🚨 INVESTIGAÇÃO CRÍTICA: PROBLEMA DE SINCRONIZAÇÃO DE ASSIGNMENTS")
+    print(f"🔗 Testing against: {self.base_url}")
+    print("🎯 Foco: Investigar por que assignments criados não aparecem imediatamente na consulta daily-tasks")
+    print("=" * 80)
+    
+    # Execute the synchronization investigation
+    sync_success = self.test_assignment_synchronization_issue()
+    
+    # Summary
+    self.print_summary()
+    
+    return sync_success
+
+# Add the assignment sync methods to the ServiceStatusBugTester class
+ServiceStatusBugTester.test_assignment_synchronization_issue = test_assignment_synchronization_issue
+ServiceStatusBugTester.run_assignment_sync_investigation = run_assignment_sync_investigation
