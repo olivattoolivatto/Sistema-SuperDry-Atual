@@ -651,10 +651,16 @@ export function Agenda() {
       setLoadingSentServices(true);
       console.log('🔄 Iniciando carregamento de serviços enviados...');
       
+      // CORREÇÃO CRÍTICA: Usar a mesma data que foi usada para criar assignments
+      // Se há customEventDate definido, usar essa data, senão usar data atual
+      const queryDate = customEventDate || new Date().toISOString().split('T')[0];
+      
+      console.log(`📅 Buscando assignments para a data: ${queryDate}`);
+      
       // Buscar assignments para o técnico atual
       const response = await technicianApi.getDailyTasks(
         'TECH-001', // TODO: Usar técnico logado
-        new Date().toISOString().split('T')[0]
+        queryDate
       );
       
       console.log('📋 Resposta API getDailyTasks:', response.data);
