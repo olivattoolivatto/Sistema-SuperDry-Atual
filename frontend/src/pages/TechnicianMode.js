@@ -454,9 +454,35 @@ function StreetMode({ onBack }) {
               
               // Fallback para evento com erro
               const fallbackCardId = `${assignment.id}-${i}-fallback`;
+              
+              // FALLBACK MELHORADO: Tentar buscar nome real do serviço
+              let fallbackTitle = `🔧 Serviço de Cliente (${eventId.slice(-6)})`;
+              let fallbackValue = 0;
+              let fallbackName = 'Cliente';
+              
+              try {
+                console.log(`🔄 Tentando buscar dados para fallback do evento ${eventId}...`);
+                
+                const availableItemsResponse = await fetch(`${BACKEND_URL}/api/budget-items/available-for-routes`);
+                if (availableItemsResponse.ok) {
+                  const availableData = await availableItemsResponse.json();
+                  const fallbackItem = availableData.available_items.find(item => item.budget_item_id === eventId);
+                  
+                  if (fallbackItem) {
+                    fallbackTitle = `${getServiceEmoji(fallbackItem.service_name)} ${fallbackItem.client_name} - ${fallbackItem.service_name}`;
+                    fallbackValue = parseFloat(fallbackItem.service_value || 0);
+                    fallbackName = fallbackItem.client_name;
+                    
+                    console.log(`✅ Fallback com nome real funcionou: "${fallbackTitle}"`);
+                  }
+                }
+              } catch (fallbackError) {
+                console.error(`❌ Fallback para nomes reais falhou:`, fallbackError);
+              }
+              
               unifiedClients[fallbackCardId] = {
                 id: fallbackCardId,
-                name: `🔧 Serviço ${eventId.slice(-6)}`,
+                name: fallbackTitle,
                 address: assignment.route_id ? `Rota: ${assignment.route_id}` : 'Eventos diversos',
                 phone: '(65) 99999-9999',
                 scheduledTime: assignment.assigned_time || '08:00',
@@ -467,7 +493,7 @@ function StreetMode({ onBack }) {
                 assigned_date: assignment.assigned_date,
                 status: assignment.status,
                 event_ids: [eventId],
-                total_value: 0,
+                total_value: fallbackValue,
                 original_assignment_id: assignment.id
               };
             }
