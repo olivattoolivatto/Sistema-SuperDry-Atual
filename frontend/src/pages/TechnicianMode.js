@@ -979,7 +979,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
         <div className="space-y-2">
           <div className="flex items-center space-x-2">
             <MapPin className="w-4 h-4 text-blue-600" />
-            <span className="text-sm text-gray-700">{client.address}</span>
+            <span className="text-sm text-gray-700">{getClientAddress(client)}</span>
           </div>
           <div className="flex items-center space-x-2">
             <Phone className="w-4 h-4 text-green-600" />
