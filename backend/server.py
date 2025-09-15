@@ -2814,6 +2814,122 @@ async def get_service_status_options():
     """Get all available service status options"""
     return {"status_options": [{"value": status.value, "label": status.value} for status in ServiceStatus]}
 
+# Photo upload model
+class PhotoUpload(BaseModel):
+    id: str = Field(default_factory=lambda: f"PHT-{str(uuid.uuid4().int)[:7].zfill(7)}")
+    assignment_id: Optional[str] = None
+    item_id: str
+    technician_id: str
+    filename: str
+    file_size: int
+    file_type: str
+    photo_type: str = "BEFORE"  # "BEFORE", "AFTER", "DAMAGE"
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+@api_router.post("/technician/upload-photos")
+async def upload_technician_photos(
+    item_id: str = Form(...),
+    technician_id: str = Form(...),
+    assignment_id: Optional[str] = Form(None),
+    photo_type: str = Form("BEFORE"),
+    files: List[UploadFile] = File(...)
+):
+    """Upload photos for technician service items"""
+    try:
+        # Create uploads directory if it doesn't exist
+        upload_dir = Path("/app/uploads/photos")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        uploaded_photos = []
+        
+        for file in files:
+            # Validate file type
+            if not file.content_type.startswith('image/'):
+                raise HTTPException(status_code=400, detail=f"File {file.filename} is not an image")
+            
+            # Generate unique filename
+            file_extension = Path(file.filename).suffix.lower()
+            unique_filename = f"{item_id}_{photo_type}_{uuid.uuid4().hex[:8]}{file_extension}"
+            file_path = upload_dir / unique_filename
+            
+            # Save file
+            file_content = await file.read()
+            with open(file_path, "wb") as f:
+                f.write(file_content)
+            
+            # Create photo record
+            photo = PhotoUpload(
+                assignment_id=assignment_id,
+                item_id=item_id,
+                technician_id=technician_id,
+                filename=unique_filename,
+                file_size=len(file_content),
+                file_type=file.content_type,
+                photo_type=photo_type
+            )
+            
+            # Save to database
+            await db.technician_photos.insert_one(photo.dict())
+            uploaded_photos.append(photo.dict())
+        
+        return {
+            "success": True,
+            "uploaded_count": len(uploaded_photos),
+            "photos": uploaded_photos
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error uploading photos: {str(e)}")
+
+@api_router.get("/technician/photos/{item_id}")
+async def get_technician_photos(item_id: str):
+    """Get all photos for a specific item"""
+    try:
+        photos = await db.technician_photos.find({"item_id": item_id}).to_list(None)
+        return {"photos": photos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting photos: {str(e)}")
+
+@api_router.get("/technician/photos/file/{filename}")
+async def get_photo_file(filename: str):
+    """Serve photo files"""
+    try:
+        file_path = Path(f"/app/uploads/photos/{filename}")
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Photo not found")
+        
+        return FileResponse(
+            path=file_path,
+            media_type="image/jpeg",
+            filename=filename
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error serving photo: {str(e)}")
+
+@api_router.delete("/technician/photos/{photo_id}")
+async def delete_technician_photo(photo_id: str):
+    """Delete a technician photo"""
+    try:
+        # Find photo in database
+        photo = await db.technician_photos.find_one({"id": photo_id})
+        if not photo:
+            raise HTTPException(status_code=404, detail="Photo not found")
+        
+        # Delete file from filesystem
+        file_path = Path(f"/app/uploads/photos/{photo['filename']}")
+        if file_path.exists():
+            file_path.unlink()
+        
+        # Delete from database
+        result = await db.technician_photos.delete_one({"id": photo_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Photo not found in database")
+        
+        return {"success": True, "message": "Photo deleted successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting photo: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
