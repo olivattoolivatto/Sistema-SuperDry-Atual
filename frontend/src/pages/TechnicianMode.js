@@ -932,7 +932,7 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
             className="flex-1 bg-gray-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors flex items-center justify-center space-x-1"
           >
             <User className="w-4 h-4" />
-            <span>Atender</span>
+            <span>Iniciar Atendimento</span>
           </button>
           
           {/* Botão Remover para assignments da agenda */}
