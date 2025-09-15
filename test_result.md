@@ -105,6 +105,18 @@
 user_problem_statement: "Investigar problema crítico de sincronização de assignments. O usuário reporta que: 1. Assignment criado com sucesso: TASS-ffc9c894 com 3 eventos (ITM-5654216, ITM-5763768, ITM-5799018), 2. Imediatamente após criação: GET /technician/TECH-001/daily-tasks retorna arrays vazios, 3. Não aparece no Modo Técnico: Os serviços não chegam para o técnico, 4. Não aparece na seção 'Serviços Enviados': Lista vazia na Agenda. Investigação necessária: 1. Verificar se assignment foi realmente criado: Buscar TASS-ffc9c894 diretamente no banco, 2. Testar GET /technician/TECH-001/daily-tasks: Ver se há filtros de data impedindo retorno, 3. Verificar assigned_date: Se a data do assignment está correta para consulta de hoje, 4. Testar com diferentes datas: Verificar se é problema de timezone ou formato de data, 5. Verificar status do assignment: Se não está sendo filtrado por status. Objetivo: Identificar por que assignments criados não aparecem imediatamente na consulta daily-tasks."
 
 backend:
+  - task: "getBudgetAndClientData Functionality Investigation"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: false
+        -agent: "testing"
+        -comment: "🚨 PROBLEMA CRÍTICO IDENTIFICADO NO getBudgetAndClientData: Investigação completa executada conforme review request sobre serviços aparecendo como '🔧 Serviço 392060' ao invés de nomes reais no TechnicianMode. ❌ CAUSA RAIZ ENCONTRADA: Endpoint individual GET /api/budget-items/{id} NÃO EXISTE (retorna 404). Frontend tenta buscar dados via /api/budget-items/ITM-1392060 mas recebe 404 Not Found. ✅ OUTROS ENDPOINTS FUNCIONANDO: GET /api/budgets/{budget_id} funciona perfeitamente e contém todos os dados necessários (service_name: 'Lavagem de Sofá 3 e 2 Lugares', service_id: 'SRV-0007', status: 'EXECUTAR_NO_LOCAL'). GET /api/clients/{client_id} também funciona corretamente. ✅ DADOS CORRETOS: Service names são reais e não fallbacks - 'Lavagem de Sofá 3 e 2 Lugares' é um nome válido. ✅ TESTE ESPECÍFICO: Item ITM-5654216 não encontrado, testado com ITM-1392060 alternativo. 🎯 SOLUÇÃO NECESSÁRIA: Implementar endpoint GET /api/budget-items/{id} no backend OU modificar frontend para usar GET /api/budgets/{budget_id} e extrair dados do item específico. 📊 RESULTADO: 3/4 testes aprovados (75% sucesso) - problema está na ausência do endpoint individual de budget items."
+
   - task: "Assignment Synchronization Issue Investigation"
     implemented: true
     working: false
