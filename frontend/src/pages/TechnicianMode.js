@@ -958,6 +958,9 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
 function ClientDetails({ client, onBack, generateNavigationLink }) {
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [technicianNotes, setTechnicianNotes] = useState('');
+  const [showPhotoCapture, setShowPhotoCapture] = useState(true); // Iniciar com captura de fotos
+  const [itemPhotos, setItemPhotos] = useState({}); // {itemId: [photos]}
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   const handleItemSelect = (itemId, checked) => {
     const newSelected = new Set(selectedItems);
@@ -968,6 +971,39 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
     }
     setSelectedItems(newSelected);
   };
+
+  // Verificar se todos os itens têm pelo menos uma foto
+  const allItemsHavePhotos = () => {
+    return client.items.every(item => {
+      const photos = itemPhotos[item.id] || [];
+      return photos.length > 0;
+    });
+  };
+
+  // Prosseguir para o atendimento após captura de fotos
+  const proceedToService = () => {
+    if (!allItemsHavePhotos()) {
+      alert('Por favor, registre pelo menos uma foto para cada item antes de prosseguir.');
+      return;
+    }
+    setShowPhotoCapture(false);
+  };
+
+  // Se ainda está na fase de captura de fotos
+  if (showPhotoCapture) {
+    return (
+      <PhotoCaptureScreen 
+        client={client}
+        onBack={onBack}
+        itemPhotos={itemPhotos}
+        setItemPhotos={setItemPhotos}
+        uploadingPhotos={uploadingPhotos}
+        setUploadingPhotos={setUploadingPhotos}
+        onProceed={proceedToService}
+        allItemsHavePhotos={allItemsHavePhotos}
+      />
+    );
+  }
 
   return (
     <div>
