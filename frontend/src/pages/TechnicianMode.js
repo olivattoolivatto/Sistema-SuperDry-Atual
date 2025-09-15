@@ -305,9 +305,9 @@ function StreetMode({ onBack }) {
         agenda_events: allAgendaEvents
       };
       
-      console.log('📋 Tarefas híbridas recebidas:', response.data);
+      console.log('📋 Tarefas híbridas recebidas:', combinedResponse);
       
-      const { agenda_events, status_items, assignments } = response.data;
+      const { agenda_events, status_items, assignments } = combinedResponse;
       
       // Combinar dados de agenda e status em um formato unificado
       const unifiedClients = {};
