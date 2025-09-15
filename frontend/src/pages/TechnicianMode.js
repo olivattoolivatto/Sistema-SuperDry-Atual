@@ -352,51 +352,68 @@ function StreetMode({ onBack }) {
                 console.log(`✅ Processando budget_item_id individual: ${eventId}`);
                 
                 try {
-                  // Buscar dados do budget item específico
-                  const { budget, client } = await getBudgetAndClientData(eventId);
+                  // Buscar dados do budget item específico usando nova abordagem
+                  const { budget, client, specificItem } = await getBudgetAndClientData(eventId);
                   
                   console.log(`📊 Dados obtidos para ${eventId}:`, {
                     budget_code: budget.code,
                     client_name: client.name,
+                    service_name: specificItem.service_name,
                     items_count: budget.items?.length || 0
                   });
                   
-                  // Encontrar o item específico no orçamento
-                  const specificItem = budget.items.find(item => item.id === eventId);
+                  // USAR NOME REAL DO SERVIÇO diretamente do specificItem
+                  const realServiceName = specificItem.service_name;
+                  const serviceEmoji = getServiceEmoji(realServiceName);
+                  const serviceStatus = specificItem.status || 'EXECUTAR_NO_LOCAL';
                   
-                  if (specificItem) {
-                    // Gerar título bonito INDIVIDUAL para este item específico
-                    const itemEmoji = getServiceEmoji(specificItem.service_name);
-                    const itemStatus = specificItem.status || 'EXECUTAR_NO_LOCAL';
-                    
-                    let statusText = '';
-                    if (itemStatus === 'RETIRAR') statusText = 'RETIRAR';
-                    else if (itemStatus === 'ENTREGAR') statusText = 'ENTREGAR';
-                    // Para EXECUTAR_NO_LOCAL, não adicionar texto extra
-                    
-                    displayTitle = statusText ? 
-                      `${itemEmoji}${statusText} ${client.name}` : 
-                      `${itemEmoji} ${client.name}`;
-                    
-                    console.log(`🎨 Título individual gerado: "${displayTitle}"`);
-                    
-                    // Usar dados reais do cliente
-                    clientName = client.name;
-                    clientAddress = `${client.address} - ${client.neighborhood}, ${client.city}/${client.state}`;
-                    clientPhone = client.phone || '(65) 99999-9999';
-                    
-                    // Usar valor do item específico
-                    totalValue = parseFloat(specificItem.service_value || 0);
-                    
-                  } else {
-                    console.warn(`⚠️ Item ${eventId} não encontrado no orçamento ${budget.code}`);
-                  }
+                  // Gerar título bonito com nome real do serviço
+                  let statusText = '';
+                  if (serviceStatus === 'RETIRAR') statusText = 'RETIRAR ';
+                  else if (serviceStatus === 'ENTREGAR') statusText = 'ENTREGAR ';
+                  
+                  displayTitle = `${serviceEmoji}${statusText}${client.name} - ${realServiceName}`;
+                  
+                  console.log(`🎨 Título com nome real gerado: "${displayTitle}"`);
+                  
+                  // Usar dados reais do cliente
+                  clientName = client.name;
+                  clientAddress = `${client.address} - ${client.neighborhood}, ${client.city}/${client.state}`;
+                  clientPhone = client.phone || '(65) 99999-9999';
+                  
+                  // Usar valor do item específico
+                  totalValue = parseFloat(specificItem.service_value || 0);
                   
                 } catch (budgetError) {
                   console.error(`❌ Erro ao buscar dados do orçamento ${eventId}:`, budgetError);
                   
-                  // Fallback: usar nome simples
-                  displayTitle = `🔧 Serviço ${eventId.slice(-6)}`;
+                  // FALLBACK MELHORADO: Tentar buscar da lista de itens disponíveis diretamente
+                  try {
+                    console.log(`🔄 Tentando fallback direto para ${eventId}...`);
+                    
+                    const availableItemsResponse = await fetch(`${BACKEND_URL}/api/budget-items/available-for-routes`);
+                    if (availableItemsResponse.ok) {
+                      const availableData = await availableItemsResponse.json();
+                      const directItem = availableData.available_items.find(item => item.budget_item_id === eventId);
+                      
+                      if (directItem) {
+                        displayTitle = `${getServiceEmoji(directItem.service_name)} ${directItem.client_name} - ${directItem.service_name}`;
+                        clientName = directItem.client_name;
+                        totalValue = parseFloat(directItem.service_value || 0);
+                        
+                        console.log(`✅ Fallback direto funcionou: "${displayTitle}"`);
+                      } else {
+                        throw new Error('Item não encontrado no fallback direto');
+                      }
+                    } else {
+                      throw new Error('Fallback direto falhou');
+                    }
+                  } catch (fallbackError) {
+                    console.error(`❌ Fallback direto também falhou:`, fallbackError);
+                    
+                    // ÚLTIMO FALLBACK: Nome mais descritivo
+                    displayTitle = `🔧 Serviço de Cliente (${eventId.slice(-6)})`;
+                  }
                 }
                 
               } else {
