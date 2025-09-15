@@ -20,6 +20,45 @@ import { routesApi, budgetItemsApi, technicianApi } from '../services/api';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Função para extrair endereço legível do objeto cliente (COPIADA DA AGENDA)
+const getClientAddress = (client) => {
+  if (!client) return 'Endereço não informado';
+  
+  // Se address é um objeto
+  if (client.address && typeof client.address === 'object') {
+    return client.address.full_address || 'Endereço não informado';
+  }
+  
+  // Se full_address existe diretamente no cliente
+  if (client.full_address) {
+    return client.full_address;
+  }
+  
+  // Fallback para endereço simples
+  if (client.address && typeof client.address === 'string') {
+    return client.address;
+  }
+  
+  return 'Endereço não informado';
+};
+
+// Função para extrair complemento do endereço (COPIADA DA AGENDA)
+const getClientComplement = (client) => {
+  if (!client) return 'NENHUM';
+  
+  // Se address é um objeto
+  if (client.address && typeof client.address === 'object' && client.address.complement) {
+    return client.address.complement;
+  }
+  
+  // Se complement existe diretamente no cliente
+  if (client.address_complement || client.complement) {
+    return client.address_complement || client.complement;
+  }
+  
+  return 'NENHUM';
+};
+
 // Função para gerar emoji do serviço baseado nas palavras-chave
 const getServiceEmoji = (serviceName) => {
   if (!serviceName) return '✨'; // Emoji padrão
