@@ -12235,29 +12235,28 @@ def run_assignment_sync_investigation(self):
 ServiceStatusBugTester.test_assignment_synchronization_issue = test_assignment_synchronization_issue
 ServiceStatusBugTester.run_assignment_sync_investigation = run_assignment_sync_investigation
 if __name__ == "__main__":
-    import sys
-    
     tester = ServiceStatusBugTester()
     
-    # Check command line arguments for specific test
-    if len(sys.argv) > 1:
-        test_type = sys.argv[1].lower()
-        
-        if test_type == "synchronization":
-            print("🎯 RUNNING SPECIFIC TEST: Technician Synchronization")
-            success = tester.run_technician_synchronization_test()
-        elif test_type == "getbudgetandclientdata":
-            print("🎯 RUNNING SPECIFIC TEST: getBudgetAndClientData Functionality")
-            success = tester.run_get_budget_and_client_data_test()
-        else:
-            print(f"❌ Unknown test type: {test_type}")
-            print("Available tests: synchronization, getbudgetandclientdata")
-            sys.exit(1)
-    else:
-        # Default: run the specific synchronization test requested in the review
-        print("🎯 RUNNING DEFAULT TEST: Technician Synchronization")
-        success = tester.run_technician_synchronization_test()
+    # Run the specific edit and delete tests requested in the review
+    print("🚀 STARTING EDIT AND DELETE FUNCTIONALITY TESTS")
+    print("📋 Review Request: Test edit and delete functionalities for services sent to technicians")
+    print("=" * 80)
     
-    # Exit with appropriate code
-    sys.exit(0 if success else 1)
+    success = tester.run_edit_delete_tests()
+    
+    if success:
+        print("\n🎉 ALL EDIT AND DELETE TESTS PASSED!")
+        print("✅ Assignment edit functionality working")
+        print("✅ Assignment delete functionality working") 
+        print("✅ Status item edit functionality working")
+        print("✅ Status item delete functionality working")
+        print("✅ Specific items from review request tested")
+        print("✅ Error scenarios handled correctly")
+    else:
+        print("\n❌ SOME TESTS FAILED!")
+        print("⚠️  Check the detailed test results above")
+    
+    print("\n" + "=" * 80)
+    print("🏁 TESTING COMPLETE")
+    print("=" * 80)
 
