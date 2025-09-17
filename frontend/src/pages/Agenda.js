@@ -646,33 +646,6 @@ export function Agenda() {
     }
   };
 
-  // Função para obter emoji do serviço
-  const getServiceEmoji = (serviceName) => {
-    if (!serviceName) return '📦';
-    
-    const name = serviceName.toLowerCase();
-    
-    // Mapeamento específico de emojis
-    if (name.includes('impermeabilização')) return '💦';
-    if (name.includes('carro') || name.includes('veiculo') || name.includes('veículo')) return '🚘';
-    if (name.includes('pagamento') || name.includes('cartão')) return '💳';
-    if (name.includes('colchao') || name.includes('colchão') || name.includes('box') || name.includes('cabeceira')) return '🛏️';
-    if (name.includes('cortina')) return '🪟';
-    if (name.includes('tapete')) return '🗞️';
-    if (name.includes('persiana')) return '📜';
-    if (name.includes('cadeira') || name.includes('cadeirão')) return '🪑';
-    if (name.includes('sofa') || name.includes('sofá') || name.includes('namoradeira') || name.includes('chaise')) return '🛋️';
-    if (name.includes('poltrona')) return '💺';
-    if (name.includes('edredom') || name.includes('colcha') || name.includes('pillowtop')) return '🧺';
-    if (name.includes('carpete')) return '⬜';
-    if (name.includes('carrinho') || name.includes('cadeirinha') || name.includes('bebe') || name.includes('bebê')) return '🛒👶';
-    
-    // Fallbacks por categoria
-    if (name.includes('almofada') || name.includes('puff')) return '📦';
-    
-    return '📦'; // Default
-  };
-
   const loadSentServices = async () => {
     try {
       setLoadingSentServices(true);
