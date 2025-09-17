@@ -3019,6 +3019,129 @@ export function Agenda() {
           </div>
         </div>
       )}
+
+      {/* Modal de Edição de Serviço */}
+      {showEditServiceModal && editingService && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Editar Serviço
+              </h3>
+              <button
+                onClick={() => setShowEditServiceModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Informações do Serviço */}
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-sm font-medium text-gray-700 mb-1">
+                  {editingService.title}
+                </div>
+                <div className="flex items-center space-x-2 text-xs text-gray-500">
+                  <span className={`px-2 py-1 rounded-full ${
+                    editingService.type === 'ASSIGNMENT' 
+                      ? 'bg-purple-100 text-purple-800' 
+                      : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {editingService.type === 'ASSIGNMENT' ? 'Agenda' : 'Status'}
+                  </span>
+                  <span>ID: {editingService.id}</span>
+                </div>
+              </div>
+
+              {/* Campos de Edição */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data
+                  </label>
+                  <input
+                    type="date"
+                    value={editServiceData.assigned_date}
+                    onChange={(e) => setEditServiceData(prev => ({
+                      ...prev,
+                      assigned_date: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Horário
+                  </label>
+                  <input
+                    type="time"
+                    value={editServiceData.assigned_time}
+                    onChange={(e) => setEditServiceData(prev => ({
+                      ...prev,
+                      assigned_time: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Status
+                </label>
+                <select
+                  value={editServiceData.status}
+                  onChange={(e) => setEditServiceData(prev => ({
+                    ...prev,
+                    status: e.target.value
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {editingService.type === 'ASSIGNMENT' ? (
+                    <>
+                      <option value="ASSIGNED">Atribuído</option>
+                      <option value="IN_PROGRESS">Em Progresso</option>
+                      <option value="COMPLETED">Concluído</option>
+                      <option value="CANCELLED">Cancelado</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="EXECUTAR_NO_LOCAL">Executar no Local</option>
+                      <option value="RETIRAR">Retirar</option>
+                      <option value="ENTREGAR">Entregar</option>
+                      <option value="CLIENTE_TROUXE">Cliente Trouxe</option>
+                      <option value="COLETADO">Coletado</option>
+                      <option value="EM_LAVAGEM">Em Lavagem</option>
+                      <option value="AGUARDANDO_ENTREGA">Aguardando Entrega</option>
+                      <option value="ENTREGUE">Entregue</option>
+                      <option value="CANCELADO_PELO_CLIENTE">Cancelado</option>
+                    </>
+                  )}
+                </select>
+              </div>
+            </div>
+
+            {/* Botões de Ação */}
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowEditServiceModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveServiceEdit}
+                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                <Save className="w-4 h-4" />
+                <span>Salvar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
