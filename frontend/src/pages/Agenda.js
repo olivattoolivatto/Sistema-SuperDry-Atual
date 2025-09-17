@@ -655,9 +655,9 @@ export function Agenda() {
       // Se há customEventDate definido, usar essa data, senão usar data atual
       const queryDate = customEventDate || new Date().toISOString().split('T')[0];
       
-      console.log(`📅 Buscando assignments para a data: ${queryDate}`);
+      console.log(`📅 Buscando dados híbridos para a data: ${queryDate}`);
       
-      // Buscar assignments para o técnico atual
+      // Buscar dados híbridos (assignments + status_items) para o técnico atual
       const response = await technicianApi.getDailyTasks(
         'TECH-001', // TODO: Usar técnico logado
         queryDate
@@ -665,13 +665,13 @@ export function Agenda() {
       
       console.log('📋 Resposta API getDailyTasks:', response.data);
       
-      const { assignments } = response.data;
+      const { assignments, status_items } = response.data;
       
       console.log('📋 Assignments encontrados:', assignments?.length || 0);
-      console.log('📋 Assignments detalhados:', assignments);
+      console.log('📋 Status items encontrados:', status_items?.length || 0);
       
       // Processar assignments para exibição (filtrar cancelados)
-      const processedServices = assignments
+      const processedAssignments = assignments
         .filter(assignment => {
           const isNotCancelled = assignment.status !== 'CANCELLED';
           console.log(`📋 Assignment ${assignment.id}: Status ${assignment.status} → Incluir: ${isNotCancelled}`);
@@ -683,16 +683,64 @@ export function Agenda() {
           event_ids: assignment.event_ids,
           technician_id: assignment.technician_id,
           assigned_date: assignment.assigned_date,
-          assigned_time: assignment.assigned_time, // NOVO: Incluir horário
+          assigned_time: assignment.assigned_time,
           status: assignment.status,
           created_at: assignment.created_at,
-          updated_at: assignment.updated_at
+          updated_at: assignment.updated_at,
+          type: 'ASSIGNMENT', // Marcador para identificar o tipo
+          title: `Rota ${assignment.route_id} (${assignment.event_ids?.length || 0} eventos)`
         }));
       
-      console.log('✅ Serviços processados para exibição:', processedServices.length);
-      console.log('✅ Serviços detalhados:', processedServices);
+      // Processar status_items como serviços individuais
+      const processedStatusItems = status_items
+        .filter(item => {
+          // Incluir apenas itens com status relevantes para técnico
+          const relevantStatuses = ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'];
+          return relevantStatuses.includes(item.status);
+        })
+        .map(item => ({
+          id: `status-${item.id}`, // Prefixo para evitar conflito de IDs
+          budget_item_id: item.id,
+          client_name: item.client_name,
+          client_phone: item.client_phone,
+          service_name: item.service_name,
+          service_value: item.service_value,
+          status: item.status,
+          observations: item.observations,
+          client_address: item.client_address,
+          assigned_date: queryDate, // Usar data da consulta
+          assigned_time: '08:00', // Horário padrão para status items
+          type: 'STATUS_ITEM', // Marcador para identificar o tipo
+          title: `${getServiceEmoji(item.service_name)} ${item.client_name} - ${item.service_name}`
+        }));
       
-      setSentServices(processedServices);
+      // Combinar assignments e status items
+      const allServices = [...processedAssignments, ...processedStatusItems];
+      
+      // Ordenar por data e tipo (assignments primeiro, depois status items)
+      allServices.sort((a, b) => {
+        // Priorizar assignments
+        if (a.type === 'ASSIGNMENT' && b.type !== 'ASSIGNMENT') return -1;
+        if (b.type === 'ASSIGNMENT' && a.type !== 'ASSIGNMENT') return 1;
+        
+        // Ordenar por data
+        const dateA = a.assigned_date || queryDate;
+        const dateB = b.assigned_date || queryDate;
+        
+        if (dateA !== dateB) {
+          return dateA.localeCompare(dateB);
+        }
+        
+        // Se mesma data, ordenar por horário
+        return (a.assigned_time || '08:00').localeCompare(b.assigned_time || '08:00');
+      });
+      
+      console.log('✅ Serviços híbridos processados para exibição:', allServices.length);
+      console.log('✅ Assignments:', processedAssignments.length);
+      console.log('✅ Status Items:', processedStatusItems.length);
+      console.log('✅ Serviços detalhados:', allServices);
+      
+      setSentServices(allServices);
       
     } catch (error) {
       console.error('❌ Erro ao carregar serviços enviados:', error);
