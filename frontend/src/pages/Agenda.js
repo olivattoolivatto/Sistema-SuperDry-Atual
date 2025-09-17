@@ -2088,19 +2088,35 @@ export function Agenda() {
               Serviços Enviados ao Técnico
             </h2>
             
-            <div className="flex items-center space-x-3">
-              <span className="text-sm text-gray-600">
-                {sentServices.length} agendamento(s)
-              </span>
+            <div className="flex items-center space-x-4">
+              {/* Filtro de Data */}
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-gray-600">Data:</label>
+                <input
+                  type="date"
+                  value={sentServicesDate}
+                  onChange={(e) => {
+                    setSentServicesDate(e.target.value);
+                    loadSentServices(e.target.value); // Recarregar automaticamente
+                  }}
+                  className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
               
-              <button
-                onClick={updateSentServiceStatus}
-                disabled={loadingSentServices}
-                className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                <RefreshCw className={`w-4 h-4 ${loadingSentServices ? 'animate-spin' : ''}`} />
-                <span>Atualizar Status</span>
-              </button>
+              <div className="flex items-center space-x-3">
+                <span className="text-sm text-gray-600">
+                  {sentServices.length} serviço(s)
+                </span>
+                
+                <button
+                  onClick={() => loadSentServices()}
+                  disabled={loadingSentServices}
+                  className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingSentServices ? 'animate-spin' : ''}`} />
+                  <span>Atualizar Status</span>
+                </button>
+              </div>
             </div>
           </div>
 
