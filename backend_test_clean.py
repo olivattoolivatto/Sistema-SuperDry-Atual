@@ -11287,3 +11287,32 @@ if __name__ == "__main__":
             elif test_type == "technician-deletion":
                 print("🗑️  RUNNING TECHNICIAN ASSIGNMENT DELETION TESTS")
                 success = tester.run_technician_assignment_deletion_tests()
+
+if __name__ == "__main__":
+    tester = ServiceStatusBugTester()
+    
+    # Run the specific edit and delete tests requested in the review
+    print("🚀 STARTING EDIT AND DELETE FUNCTIONALITY TESTS")
+    print("📋 Review Request: Test edit and delete functionalities for services sent to technicians")
+    print("=" * 80)
+    
+    success = tester.run_edit_delete_tests()
+    
+    if success:
+        print("
+🎉 ALL EDIT AND DELETE TESTS PASSED!")
+        print("✅ Assignment edit functionality working")
+        print("✅ Assignment delete functionality working") 
+        print("✅ Status item edit functionality working")
+        print("✅ Status item delete functionality working")
+        print("✅ Specific items from review request tested")
+        print("✅ Error scenarios handled correctly")
+    else:
+        print("
+❌ SOME TESTS FAILED!")
+        print("⚠️  Check the detailed test results above")
+    
+    print("
+" + "=" * 80)
+    print("🏁 TESTING COMPLETE")
+    print("=" * 80)
