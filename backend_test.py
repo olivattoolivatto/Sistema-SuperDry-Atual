@@ -3253,6 +3253,33 @@ class ServiceStatusBugTester:
         
         return not results['bug_confirmed']  # Return True if no bug found
 
+
+if __name__ == "__main__":
+    tester = ServiceStatusBugTester()
+    
+    # Run the specific edit and delete tests requested in the review
+    print("🚀 STARTING EDIT AND DELETE FUNCTIONALITY TESTS")
+    print("📋 Review Request: Test edit and delete functionalities for services sent to technicians")
+    print("=" * 80)
+    
+    success = tester.run_edit_delete_tests()
+    
+    if success:
+        print("\n🎉 ALL EDIT AND DELETE TESTS PASSED!")
+        print("✅ Assignment edit functionality working")
+        print("✅ Assignment delete functionality working") 
+        print("✅ Status item edit functionality working")
+        print("✅ Status item delete functionality working")
+        print("✅ Specific items from review request tested")
+        print("✅ Error scenarios handled correctly")
+    else:
+        print("\n❌ SOME TESTS FAILED!")
+        print("⚠️  Check the detailed test results above")
+    
+    print("\n" + "=" * 80)
+    print("🏁 TESTING COMPLETE")
+    print("=" * 80)
+
     def test_direct_correction_srv_0157_to_0162(self):
         """CORREÇÃO DIRETA: Alterar status dos 4 items problemáticos de RETIRAR para CLIENTE_TROUXE"""
         print("\n" + "=" * 80)
