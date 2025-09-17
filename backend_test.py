@@ -2602,6 +2602,437 @@ class ServiceStatusBugTester:
         
         return len(available_items) > 0
 
+    def test_assignment_edit_functionality(self):
+        """Test editing assignments - PUT /api/technician/assignment/{id}/status"""
+        print("\n=== TESTING ASSIGNMENT EDIT FUNCTIONALITY ===")
+        
+        # First, create a test assignment
+        assignment_data = {
+            "route_id": "RTE-TEST001",
+            "event_ids": ["EVT-001", "EVT-002"],
+            "technician_id": "TECH-001",
+            "assigned_date": "2025-01-15",
+            "assignment_type": "AGENDA",
+            "status": "ASSIGNED"
+        }
+        
+        response = self.make_request('POST', '/technician/assign-events', assignment_data)
+        if not response['success']:
+            self.log_test("Assignment Edit - Create Test Assignment", False, 
+                        "Failed to create test assignment", response['data'])
+            return False
+        
+        assignment_id = response['data'].get('assignment_id')
+        print(f"   🎯 Created test assignment: {assignment_id}")
+        
+        # Test 1: Update status from ASSIGNED to IN_PROGRESS
+        response = self.make_request('PUT', f'/technician/assignment/{assignment_id}/status?status=IN_PROGRESS')
+        if response['success']:
+            result = response['data']
+            if result.get('new_status') == 'IN_PROGRESS':
+                self.log_test("Assignment Edit - Status Update (ASSIGNED→IN_PROGRESS)", True, 
+                            f"✅ Successfully updated assignment status to IN_PROGRESS")
+            else:
+                self.log_test("Assignment Edit - Status Update (ASSIGNED→IN_PROGRESS)", False, 
+                            f"❌ Status not updated correctly: {result}")
+        else:
+            self.log_test("Assignment Edit - Status Update (ASSIGNED→IN_PROGRESS)", False, 
+                        "Failed to update assignment status", response['data'])
+        
+        # Test 2: Update status from IN_PROGRESS to COMPLETED
+        response = self.make_request('PUT', f'/technician/assignment/{assignment_id}/status?status=COMPLETED')
+        if response['success']:
+            result = response['data']
+            if result.get('new_status') == 'COMPLETED':
+                self.log_test("Assignment Edit - Status Update (IN_PROGRESS→COMPLETED)", True, 
+                            f"✅ Successfully updated assignment status to COMPLETED")
+            else:
+                self.log_test("Assignment Edit - Status Update (IN_PROGRESS→COMPLETED)", False, 
+                            f"❌ Status not updated correctly: {result}")
+        else:
+            self.log_test("Assignment Edit - Status Update (IN_PROGRESS→COMPLETED)", False, 
+                        "Failed to update assignment status", response['data'])
+        
+        # Test 3: Test with invalid assignment ID
+        fake_assignment_id = "TASS-FAKE123"
+        response = self.make_request('PUT', f'/technician/assignment/{fake_assignment_id}/status?status=COMPLETED')
+        if not response['success'] and response['status_code'] == 404:
+            self.log_test("Assignment Edit - Invalid ID", True, 
+                        f"✅ Correctly returned 404 for invalid assignment ID")
+        else:
+            self.log_test("Assignment Edit - Invalid ID", False, 
+                        f"❌ Should have returned 404 for invalid assignment ID")
+        
+        return True
+
+    def test_assignment_delete_functionality(self):
+        """Test deleting assignments - PUT /api/technician/assignment/{id}/status?status=CANCELLED"""
+        print("\n=== TESTING ASSIGNMENT DELETE FUNCTIONALITY ===")
+        
+        # Create a test assignment to delete
+        assignment_data = {
+            "route_id": "RTE-TEST002",
+            "event_ids": ["EVT-003", "EVT-004"],
+            "technician_id": "TECH-001",
+            "assigned_date": "2025-01-15",
+            "assignment_type": "AGENDA",
+            "status": "ASSIGNED"
+        }
+        
+        response = self.make_request('POST', '/technician/assign-events', assignment_data)
+        if not response['success']:
+            self.log_test("Assignment Delete - Create Test Assignment", False, 
+                        "Failed to create test assignment", response['data'])
+            return False
+        
+        assignment_id = response['data'].get('assignment_id')
+        print(f"   🎯 Created test assignment for deletion: {assignment_id}")
+        
+        # Test 1: Delete assignment by setting status to CANCELLED
+        response = self.make_request('PUT', f'/technician/assignment/{assignment_id}/status?status=CANCELLED')
+        if response['success']:
+            result = response['data']
+            if result.get('new_status') == 'CANCELLED':
+                self.log_test("Assignment Delete - Cancel Assignment", True, 
+                            f"✅ Successfully cancelled assignment (status → CANCELLED)")
+            else:
+                self.log_test("Assignment Delete - Cancel Assignment", False, 
+                            f"❌ Assignment not cancelled correctly: {result}")
+        else:
+            self.log_test("Assignment Delete - Cancel Assignment", False, 
+                        "Failed to cancel assignment", response['data'])
+        
+        # Test 2: Verify cancelled assignment doesn't appear in daily tasks
+        response = self.make_request('GET', f'/technician/TECH-001/daily-tasks?date=2025-01-15')
+        if response['success']:
+            daily_tasks = response['data']
+            assignments = daily_tasks.get('assignments', [])
+            
+            # Check if cancelled assignment is filtered out
+            cancelled_assignment = next((a for a in assignments if a.get('id') == assignment_id), None)
+            if not cancelled_assignment:
+                self.log_test("Assignment Delete - Verify Filtering", True, 
+                            f"✅ Cancelled assignment correctly filtered from daily tasks")
+            else:
+                self.log_test("Assignment Delete - Verify Filtering", False, 
+                            f"❌ Cancelled assignment still appears in daily tasks")
+        else:
+            self.log_test("Assignment Delete - Verify Filtering", False, 
+                        "Failed to verify assignment filtering", response['data'])
+        
+        return True
+
+    def test_status_item_edit_functionality(self):
+        """Test editing status items - PUT /api/budget-items/{budget_item_id}/status"""
+        print("\n=== TESTING STATUS ITEM EDIT FUNCTIONALITY ===")
+        
+        # Get available status items to test with
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Status Item Edit - Get Available Items", False, 
+                        "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        if not available_items:
+            self.log_test("Status Item Edit - Get Available Items", False, 
+                        "No available items found for testing")
+            return False
+        
+        # Find items with EXECUTAR_NO_LOCAL status (as mentioned in review request)
+        executar_items = [item for item in available_items if item.get('status') == 'EXECUTAR_NO_LOCAL']
+        
+        if not executar_items:
+            # Use any available item
+            test_item = available_items[0]
+            print(f"   ℹ️  No EXECUTAR_NO_LOCAL items found, using: {test_item.get('budget_item_id')}")
+        else:
+            test_item = executar_items[0]
+            print(f"   🎯 Found EXECUTAR_NO_LOCAL item: {test_item.get('budget_item_id')}")
+        
+        item_id = test_item.get('budget_item_id')
+        original_status = test_item.get('status')
+        client_name = test_item.get('client_name', 'Unknown')
+        
+        print(f"   📊 Testing with: {item_id} ({client_name}) - Status: {original_status}")
+        
+        # Test 1: Update status from EXECUTAR_NO_LOCAL to RETIRAR
+        new_status = "RETIRAR"
+        response = self.make_request('PUT', f'/budget-items/{item_id}/status?status={new_status}')
+        if response['success']:
+            result = response['data']
+            if result.get('new_status') == new_status:
+                self.log_test("Status Item Edit - Update Status (EXECUTAR_NO_LOCAL→RETIRAR)", True, 
+                            f"✅ Successfully updated {item_id} status to {new_status}")
+            else:
+                self.log_test("Status Item Edit - Update Status (EXECUTAR_NO_LOCAL→RETIRAR)", False, 
+                            f"❌ Status not updated correctly: {result}")
+        else:
+            self.log_test("Status Item Edit - Update Status (EXECUTAR_NO_LOCAL→RETIRAR)", False, 
+                        "Failed to update status item", response['data'])
+        
+        # Test 2: Update to ENTREGAR status
+        new_status = "ENTREGAR"
+        response = self.make_request('PUT', f'/budget-items/{item_id}/status?status={new_status}')
+        if response['success']:
+            result = response['data']
+            if result.get('new_status') == new_status:
+                self.log_test("Status Item Edit - Update Status (→ENTREGAR)", True, 
+                            f"✅ Successfully updated {item_id} status to {new_status}")
+            else:
+                self.log_test("Status Item Edit - Update Status (→ENTREGAR)", False, 
+                            f"❌ Status not updated correctly: {result}")
+        else:
+            self.log_test("Status Item Edit - Update Status (→ENTREGAR)", False, 
+                        "Failed to update status item", response['data'])
+        
+        # Test 3: Test with invalid status
+        invalid_status = "INVALID_STATUS"
+        response = self.make_request('PUT', f'/budget-items/{item_id}/status?status={invalid_status}')
+        if not response['success'] and response['status_code'] == 400:
+            self.log_test("Status Item Edit - Invalid Status", True, 
+                        f"✅ Correctly rejected invalid status '{invalid_status}'")
+        else:
+            self.log_test("Status Item Edit - Invalid Status", False, 
+                        f"❌ Should have rejected invalid status with 400 error")
+        
+        # Restore original status
+        response = self.make_request('PUT', f'/budget-items/{item_id}/status?status={original_status}')
+        if response['success']:
+            print(f"   🔄 Restored original status: {original_status}")
+        
+        return True
+
+    def test_status_item_delete_functionality(self):
+        """Test deleting status items - PUT /api/budget-items/{budget_item_id}/status?status=CANCELADO_PELO_CLIENTE"""
+        print("\n=== TESTING STATUS ITEM DELETE FUNCTIONALITY ===")
+        
+        # Get available status items to test with
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Status Item Delete - Get Available Items", False, 
+                        "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        if not available_items:
+            self.log_test("Status Item Delete - Get Available Items", False, 
+                        "No available items found for testing")
+            return False
+        
+        # Use the last item to avoid affecting other tests
+        test_item = available_items[-1]
+        item_id = test_item.get('budget_item_id')
+        original_status = test_item.get('status')
+        client_name = test_item.get('client_name', 'Unknown')
+        
+        print(f"   🎯 Testing deletion with: {item_id} ({client_name}) - Status: {original_status}")
+        
+        # Test 1: Delete item by setting status to CANCELADO_PELO_CLIENTE
+        response = self.make_request('PUT', f'/budget-items/{item_id}/status?status=CANCELADO_PELO_CLIENTE')
+        if response['success']:
+            result = response['data']
+            if result.get('new_status') == 'CANCELADO_PELO_CLIENTE':
+                self.log_test("Status Item Delete - Cancel Item", True, 
+                            f"✅ Successfully cancelled status item (status → CANCELADO_PELO_CLIENTE)")
+            else:
+                self.log_test("Status Item Delete - Cancel Item", False, 
+                            f"❌ Item not cancelled correctly: {result}")
+        else:
+            self.log_test("Status Item Delete - Cancel Item", False, 
+                        "Failed to cancel status item", response['data'])
+        
+        # Test 2: Verify cancelled item doesn't appear in available items
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            updated_items = response['data'].get('available_items', [])
+            
+            # Check if cancelled item is filtered out
+            cancelled_item = next((item for item in updated_items if item.get('budget_item_id') == item_id), None)
+            if not cancelled_item:
+                self.log_test("Status Item Delete - Verify Filtering", True, 
+                            f"✅ Cancelled item correctly filtered from available items")
+            else:
+                self.log_test("Status Item Delete - Verify Filtering", False, 
+                            f"❌ Cancelled item still appears in available items")
+        else:
+            self.log_test("Status Item Delete - Verify Filtering", False, 
+                        "Failed to verify item filtering", response['data'])
+        
+        return True
+
+    def test_specific_items_mentioned_in_review(self):
+        """Test specific items mentioned in review request: ITM-1392060 (Daiana), ITM-1416666 (Gabriela)"""
+        print("\n=== TESTING SPECIFIC ITEMS FROM REVIEW REQUEST ===")
+        
+        # Items mentioned in review request
+        specific_items = ["ITM-1392060", "ITM-1416666"]
+        
+        # Get available items to check if these exist
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if not response['success']:
+            self.log_test("Specific Items - Get Available Items", False, 
+                        "Failed to get available items", response['data'])
+            return False
+        
+        available_items = response['data'].get('available_items', [])
+        found_items = []
+        
+        for item_id in specific_items:
+            matching_item = next((item for item in available_items if item.get('budget_item_id') == item_id), None)
+            if matching_item:
+                found_items.append(matching_item)
+                client_name = matching_item.get('client_name', 'Unknown')
+                status = matching_item.get('status', 'Unknown')
+                print(f"   ✅ Found {item_id}: {client_name} - Status: {status}")
+            else:
+                print(f"   ❌ Not found: {item_id}")
+        
+        if not found_items:
+            self.log_test("Specific Items - Find Items", False, 
+                        "None of the specific items from review request were found")
+            return False
+        
+        self.log_test("Specific Items - Find Items", True, 
+                    f"Found {len(found_items)}/{len(specific_items)} specific items from review request")
+        
+        # Test editing these specific items
+        for item in found_items:
+            item_id = item.get('budget_item_id')
+            client_name = item.get('client_name', 'Unknown')
+            original_status = item.get('status')
+            
+            print(f"\n   🎯 Testing specific item: {item_id} ({client_name})")
+            
+            # Test status change
+            new_status = "RETIRAR" if original_status != "RETIRAR" else "ENTREGAR"
+            response = self.make_request('PUT', f'/budget-items/{item_id}/status?status={new_status}')
+            
+            if response['success']:
+                result = response['data']
+                if result.get('new_status') == new_status:
+                    self.log_test(f"Specific Item Edit - {item_id}", True, 
+                                f"✅ Successfully updated {client_name}: {original_status} → {new_status}")
+                    
+                    # Restore original status
+                    restore_response = self.make_request('PUT', f'/budget-items/{item_id}/status?status={original_status}')
+                    if restore_response['success']:
+                        print(f"      🔄 Restored to original status: {original_status}")
+                else:
+                    self.log_test(f"Specific Item Edit - {item_id}", False, 
+                                f"❌ Status not updated correctly for {client_name}")
+            else:
+                self.log_test(f"Specific Item Edit - {item_id}", False, 
+                            f"Failed to update {client_name}", response['data'])
+        
+        return True
+
+    def test_error_scenarios(self):
+        """Test error scenarios for edit and delete operations"""
+        print("\n=== TESTING ERROR SCENARIOS ===")
+        
+        # Test 1: Invalid assignment ID
+        response = self.make_request('PUT', '/technician/assignment/INVALID-ID/status?status=COMPLETED')
+        if not response['success'] and response['status_code'] == 404:
+            self.log_test("Error Scenarios - Invalid Assignment ID", True, 
+                        "✅ Correctly returned 404 for invalid assignment ID")
+        else:
+            self.log_test("Error Scenarios - Invalid Assignment ID", False, 
+                        "❌ Should return 404 for invalid assignment ID")
+        
+        # Test 2: Invalid budget item ID
+        response = self.make_request('PUT', '/budget-items/INVALID-ID/status?status=RETIRAR')
+        if not response['success'] and response['status_code'] == 404:
+            self.log_test("Error Scenarios - Invalid Budget Item ID", True, 
+                        "✅ Correctly returned 404 for invalid budget item ID")
+        else:
+            self.log_test("Error Scenarios - Invalid Budget Item ID", False, 
+                        "❌ Should return 404 for invalid budget item ID")
+        
+        # Test 3: Invalid status for assignment
+        # First create a valid assignment
+        assignment_data = {
+            "route_id": "RTE-TEST003",
+            "event_ids": ["EVT-005"],
+            "technician_id": "TECH-001",
+            "assigned_date": "2025-01-15",
+            "assignment_type": "AGENDA",
+            "status": "ASSIGNED"
+        }
+        
+        response = self.make_request('POST', '/technician/assign-events', assignment_data)
+        if response['success']:
+            assignment_id = response['data'].get('assignment_id')
+            
+            # Try invalid status
+            response = self.make_request('PUT', f'/technician/assignment/{assignment_id}/status?status=INVALID_STATUS')
+            if not response['success']:
+                self.log_test("Error Scenarios - Invalid Assignment Status", True, 
+                            "✅ Correctly rejected invalid assignment status")
+            else:
+                self.log_test("Error Scenarios - Invalid Assignment Status", False, 
+                            "❌ Should reject invalid assignment status")
+        
+        # Test 4: Invalid status for budget item
+        response = self.make_request('GET', '/budget-items/available-for-routes')
+        if response['success']:
+            available_items = response['data'].get('available_items', [])
+            if available_items:
+                test_item_id = available_items[0].get('budget_item_id')
+                
+                response = self.make_request('PUT', f'/budget-items/{test_item_id}/status?status=INVALID_STATUS')
+                if not response['success'] and response['status_code'] == 400:
+                    self.log_test("Error Scenarios - Invalid Budget Item Status", True, 
+                                "✅ Correctly rejected invalid budget item status")
+                else:
+                    self.log_test("Error Scenarios - Invalid Budget Item Status", False, 
+                                "❌ Should reject invalid budget item status with 400 error")
+        
+        return True
+
+    def run_edit_delete_tests(self):
+        """Run comprehensive tests for edit and delete functionalities"""
+        print("🔄 TESTING EDIT AND DELETE FUNCTIONALITIES FOR SERVICES SENT TO TECHNICIANS")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Focus: Test edit and delete operations for assignments and status items")
+        print("=" * 80)
+        
+        # Test assignment edit functionality
+        print("\n1️⃣ TESTING ASSIGNMENT EDIT FUNCTIONALITY:")
+        assignment_edit_success = self.test_assignment_edit_functionality()
+        
+        # Test assignment delete functionality
+        print("\n2️⃣ TESTING ASSIGNMENT DELETE FUNCTIONALITY:")
+        assignment_delete_success = self.test_assignment_delete_functionality()
+        
+        # Test status item edit functionality
+        print("\n3️⃣ TESTING STATUS ITEM EDIT FUNCTIONALITY:")
+        status_edit_success = self.test_status_item_edit_functionality()
+        
+        # Test status item delete functionality
+        print("\n4️⃣ TESTING STATUS ITEM DELETE FUNCTIONALITY:")
+        status_delete_success = self.test_status_item_delete_functionality()
+        
+        # Test specific items mentioned in review
+        print("\n5️⃣ TESTING SPECIFIC ITEMS FROM REVIEW REQUEST:")
+        specific_items_success = self.test_specific_items_mentioned_in_review()
+        
+        # Test error scenarios
+        print("\n6️⃣ TESTING ERROR SCENARIOS:")
+        error_scenarios_success = self.test_error_scenarios()
+        
+        # Summary
+        self.print_summary()
+        
+        return all([
+            assignment_edit_success,
+            assignment_delete_success,
+            status_edit_success,
+            status_delete_success,
+            specific_items_success,
+            error_scenarios_success
+        ])
+
     def investigate_srv_0162_critical_bug(self):
         """INVESTIGAÇÃO CRÍTICA: Analisar SRV-0162 e logs de herança conforme review request"""
         print("\n" + "=" * 80)
