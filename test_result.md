@@ -57,8 +57,8 @@
 ##   test_priority: "high_first"  # or "sequential" or "stuck_first"
 ##
 ## agent_communication:
-##     -agent: "main"  # or "testing" or "user"
-##     -message: "Communication message between agents"
+##     -agent: "main"
+##     -message: "SINCRONIZAÇÃO IMPLEMENTADA - Agenda e TechnicianMode agora usam dados consistentes. Modificado loadSentServices() em Agenda.js para processar tanto assignments quanto status_items do mesmo endpoint /technician/TECH-001/daily-tasks. Adicionado filtro de data em Agenda.js. Ambas as views agora mostram histórico abrangente e consistente. UI diferencia tipos com badges (Agenda/Status). Pronto para testes."
 
 # Protocol Guidelines for Main agent
 #
