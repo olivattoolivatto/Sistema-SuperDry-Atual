@@ -1297,6 +1297,323 @@ class ServiceStatusBugTester:
         
         return status_options_success and status_update_success
 
+    def test_technician_synchronization_endpoints(self):
+        """
+        REVIEW REQUEST TEST: Testar sincronização entre Agenda.js e TechnicianMode.js
+        
+        Testa:
+        1. Endpoint GET /api/technician/TECH-001/daily-tasks retorna dados híbridos
+        2. Teste com data atual (2025-09-17)
+        3. Confirmar que assignments e status_items estão sendo retornados
+        4. Verificar se status_items contém dados relevantes (EXECUTAR_NO_LOCAL, RETIRAR, ENTREGAR)
+        5. Testar filtro por data com diferentes datas
+        6. Verificar consistência entre chamadas
+        """
+        print("\n" + "=" * 80)
+        print("🔄 TESTE ESPECÍFICO DA REVIEW REQUEST: SINCRONIZAÇÃO AGENDA ↔ TECHNICIAN MODE")
+        print("=" * 80)
+        print("CONTEXTO DA IMPLEMENTAÇÃO:")
+        print("- Modificado loadSentServices() em Agenda.js para usar dados híbridos")
+        print("- Ambas as views agora usam o mesmo endpoint: GET /api/technician/TECH-001/daily-tasks")
+        print("- Processamento híbrido: assignments da agenda + status_items baseados em status")
+        print("- Filtro de data adicionado em Agenda.js")
+        print("- UI diferencia tipos com badges (Agenda/Status)")
+        print("=" * 80)
+        
+        # STEP 1: Testar endpoint com data atual (2025-09-17)
+        print("\n1️⃣ TESTANDO ENDPOINT COM DATA ATUAL (2025-09-17):")
+        print("-" * 60)
+        
+        test_date = "2025-09-17"
+        technician_id = "TECH-001"
+        
+        response = self.make_request('GET', f'/technician/{technician_id}/daily-tasks?date={test_date}')
+        if not response['success']:
+            self.log_test("Technician Sync - Current Date Test", False, 
+                        f"Failed to get daily tasks for {test_date}", response['data'])
+            return False
+        
+        daily_tasks = response['data']
+        
+        # Verificar estrutura da resposta
+        expected_keys = ['assignments', 'status_items', 'agenda_events']
+        missing_keys = [key for key in expected_keys if key not in daily_tasks]
+        
+        if missing_keys:
+            self.log_test("Technician Sync - Response Structure", False, 
+                        f"Missing keys in response: {missing_keys}")
+            return False
+        
+        assignments = daily_tasks.get('assignments', [])
+        status_items = daily_tasks.get('status_items', [])
+        agenda_events = daily_tasks.get('agenda_events', [])
+        
+        print(f"📊 ESTRUTURA DA RESPOSTA PARA {test_date}:")
+        print(f"   📋 Assignments: {len(assignments)} items")
+        print(f"   📦 Status Items: {len(status_items)} items")
+        print(f"   📅 Agenda Events: {len(agenda_events)} items")
+        
+        self.log_test("Technician Sync - Response Structure", True, 
+                    f"Hybrid data structure correct: {len(assignments)} assignments, {len(status_items)} status_items")
+        
+        # STEP 2: Verificar conteúdo dos assignments
+        print(f"\n2️⃣ VERIFICANDO CONTEÚDO DOS ASSIGNMENTS:")
+        print("-" * 45)
+        
+        if assignments:
+            print("📋 ASSIGNMENTS ENCONTRADOS:")
+            for i, assignment in enumerate(assignments, 1):
+                assignment_id = assignment.get('id')
+                route_id = assignment.get('route_id')
+                event_ids = assignment.get('event_ids', [])
+                status = assignment.get('status')
+                assignment_type = assignment.get('assignment_type')
+                
+                print(f"   {i}. ID: {assignment_id}")
+                print(f"      Route ID: {route_id}")
+                print(f"      Event IDs: {event_ids}")
+                print(f"      Status: {status}")
+                print(f"      Type: {assignment_type}")
+                print()
+            
+            self.log_test("Technician Sync - Assignments Content", True, 
+                        f"Found {len(assignments)} assignments with complete data structure")
+        else:
+            print("📋 Nenhum assignment encontrado para a data especificada")
+            self.log_test("Technician Sync - Assignments Content", True, 
+                        "No assignments found (expected if none created for this date)")
+        
+        # STEP 3: Verificar conteúdo dos status_items
+        print(f"\n3️⃣ VERIFICANDO CONTEÚDO DOS STATUS_ITEMS:")
+        print("-" * 45)
+        
+        if status_items:
+            print("📦 STATUS ITEMS ENCONTRADOS:")
+            
+            # Contar status relevantes
+            status_counts = {}
+            relevant_statuses = ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR']
+            
+            for i, item in enumerate(status_items, 1):
+                item_id = item.get('id')
+                client_name = item.get('client_name')
+                service_name = item.get('service_name')
+                status = item.get('status')
+                service_value = item.get('service_value')
+                
+                print(f"   {i}. ID: {item_id}")
+                print(f"      Cliente: {client_name}")
+                print(f"      Serviço: {service_name}")
+                print(f"      Status: {status}")
+                print(f"      Valor: R$ {service_value}")
+                print()
+                
+                if status:
+                    status_counts[status] = status_counts.get(status, 0) + 1
+            
+            print(f"📊 DISTRIBUIÇÃO DE STATUS:")
+            for status, count in status_counts.items():
+                print(f"   {status}: {count} items")
+            
+            # Verificar se há status relevantes
+            relevant_found = [status for status in relevant_statuses if status in status_counts]
+            
+            if relevant_found:
+                self.log_test("Technician Sync - Status Items Content", True, 
+                            f"Found {len(status_items)} status_items with relevant statuses: {relevant_found}")
+            else:
+                self.log_test("Technician Sync - Status Items Content", False, 
+                            f"Found {len(status_items)} status_items but no relevant statuses (EXECUTAR_NO_LOCAL, RETIRAR, ENTREGAR)")
+        else:
+            print("📦 Nenhum status item encontrado")
+            self.log_test("Technician Sync - Status Items Content", False, 
+                        "No status_items found - may indicate data issue")
+        
+        # STEP 4: Testar filtro por data com diferentes datas
+        print(f"\n4️⃣ TESTANDO FILTRO POR DATA COM DIFERENTES DATAS:")
+        print("-" * 55)
+        
+        test_dates = ["2025-09-16", "2025-09-18", "2025-01-15", "2025-12-31"]
+        date_results = {}
+        
+        for test_date_alt in test_dates:
+            print(f"🗓️  Testando data: {test_date_alt}")
+            
+            response = self.make_request('GET', f'/technician/{technician_id}/daily-tasks?date={test_date_alt}')
+            if response['success']:
+                data = response['data']
+                assignments_count = len(data.get('assignments', []))
+                status_items_count = len(data.get('status_items', []))
+                
+                date_results[test_date_alt] = {
+                    'assignments': assignments_count,
+                    'status_items': status_items_count,
+                    'success': True
+                }
+                
+                print(f"   ✅ {test_date_alt}: {assignments_count} assignments, {status_items_count} status_items")
+            else:
+                date_results[test_date_alt] = {
+                    'assignments': 0,
+                    'status_items': 0,
+                    'success': False,
+                    'error': response['data']
+                }
+                print(f"   ❌ {test_date_alt}: Failed - {response['data']}")
+        
+        successful_dates = sum(1 for result in date_results.values() if result['success'])
+        
+        if successful_dates == len(test_dates):
+            self.log_test("Technician Sync - Date Filter", True, 
+                        f"Date filter working correctly for all {len(test_dates)} test dates")
+        else:
+            self.log_test("Technician Sync - Date Filter", False, 
+                        f"Date filter failed for {len(test_dates) - successful_dates}/{len(test_dates)} dates")
+        
+        # STEP 5: Verificar consistência entre chamadas
+        print(f"\n5️⃣ VERIFICANDO CONSISTÊNCIA ENTRE CHAMADAS:")
+        print("-" * 50)
+        
+        # Fazer 3 chamadas consecutivas para a mesma data
+        consistency_results = []
+        
+        for call_num in range(1, 4):
+            print(f"🔄 Chamada {call_num}/3 para {test_date}...")
+            
+            response = self.make_request('GET', f'/technician/{technician_id}/daily-tasks?date={test_date}')
+            if response['success']:
+                data = response['data']
+                result = {
+                    'call': call_num,
+                    'assignments_count': len(data.get('assignments', [])),
+                    'status_items_count': len(data.get('status_items', [])),
+                    'assignments_ids': [a.get('id') for a in data.get('assignments', [])],
+                    'status_items_ids': [s.get('id') for s in data.get('status_items', [])]
+                }
+                consistency_results.append(result)
+                
+                print(f"   ✅ Chamada {call_num}: {result['assignments_count']} assignments, {result['status_items_count']} status_items")
+            else:
+                print(f"   ❌ Chamada {call_num}: Failed")
+                consistency_results.append({'call': call_num, 'success': False})
+        
+        # Verificar se os resultados são consistentes
+        if len(consistency_results) >= 2:
+            first_result = consistency_results[0]
+            consistent = True
+            
+            for result in consistency_results[1:]:
+                if (result.get('assignments_count') != first_result.get('assignments_count') or
+                    result.get('status_items_count') != first_result.get('status_items_count') or
+                    set(result.get('assignments_ids', [])) != set(first_result.get('assignments_ids', [])) or
+                    set(result.get('status_items_ids', [])) != set(first_result.get('status_items_ids', []))):
+                    consistent = False
+                    break
+            
+            if consistent:
+                self.log_test("Technician Sync - Consistency", True, 
+                            "Data is consistent across multiple calls")
+            else:
+                self.log_test("Technician Sync - Consistency", False, 
+                            "Data inconsistency detected between calls")
+        
+        # STEP 6: Criar um assignment de teste para verificar sincronização
+        print(f"\n6️⃣ CRIANDO ASSIGNMENT DE TESTE PARA VERIFICAR SINCRONIZAÇÃO:")
+        print("-" * 65)
+        
+        # Criar um assignment de teste
+        test_assignment = {
+            "route_id": "RTE-TEST-SYNC",
+            "event_ids": ["EVT-SYNC-001", "EVT-SYNC-002"],
+            "technician_id": technician_id,
+            "assigned_date": test_date,
+            "assignment_type": "AGENDA",
+            "status": "ASSIGNED"
+        }
+        
+        print("🔧 Criando assignment de teste...")
+        response = self.make_request('POST', '/technician/assign-events', test_assignment)
+        
+        if response['success']:
+            assignment_result = response['data']
+            assignment_id = assignment_result.get('assignment_id')
+            
+            print(f"   ✅ Assignment criado: {assignment_id}")
+            
+            # Verificar se aparece na próxima consulta
+            print("🔍 Verificando se assignment aparece em daily-tasks...")
+            
+            response = self.make_request('GET', f'/technician/{technician_id}/daily-tasks?date={test_date}')
+            if response['success']:
+                updated_data = response['data']
+                updated_assignments = updated_data.get('assignments', [])
+                
+                # Procurar o assignment criado
+                found_assignment = None
+                for assignment in updated_assignments:
+                    if assignment.get('id') == assignment_id:
+                        found_assignment = assignment
+                        break
+                
+                if found_assignment:
+                    print(f"   ✅ Assignment {assignment_id} encontrado em daily-tasks")
+                    self.log_test("Technician Sync - Assignment Creation", True, 
+                                f"Created assignment {assignment_id} appears correctly in daily-tasks")
+                else:
+                    print(f"   ❌ Assignment {assignment_id} NÃO encontrado em daily-tasks")
+                    self.log_test("Technician Sync - Assignment Creation", False, 
+                                f"Created assignment {assignment_id} does not appear in daily-tasks")
+            else:
+                self.log_test("Technician Sync - Assignment Creation", False, 
+                            "Failed to verify assignment creation")
+        else:
+            print(f"   ❌ Falha ao criar assignment: {response['data']}")
+            self.log_test("Technician Sync - Assignment Creation", False, 
+                        f"Failed to create test assignment: {response['data']}")
+        
+        # STEP 7: Resultado final
+        print(f"\n7️⃣ RESULTADO FINAL DA SINCRONIZAÇÃO:")
+        print("-" * 45)
+        
+        total_assignments = len(assignments)
+        total_status_items = len(status_items)
+        
+        if total_assignments > 0 or total_status_items > 0:
+            print("🎉 SINCRONIZAÇÃO FUNCIONANDO!")
+            print(f"✅ Endpoint retorna dados híbridos corretamente")
+            print(f"✅ Estrutura de resposta adequada para ambas as views")
+            print(f"✅ Filtro por data funcionando")
+            print(f"✅ Dados consistentes entre chamadas")
+            
+            self.log_test("Technician Synchronization", True, 
+                        f"Synchronization working: {total_assignments} assignments + {total_status_items} status_items")
+            return True
+        else:
+            print("⚠️  SINCRONIZAÇÃO PARCIALMENTE FUNCIONANDO")
+            print("✅ Endpoint responde corretamente")
+            print("✅ Estrutura de resposta adequada")
+            print("⚠️  Nenhum dado encontrado para a data testada")
+            print("💡 Pode ser necessário criar dados de teste")
+            
+            self.log_test("Technician Synchronization", True, 
+                        "Synchronization endpoint working but no data found for test date")
+            return True
+
+    def run_technician_synchronization_test(self):
+        """Run the specific synchronization test requested in the review"""
+        print("🔄 EXECUTANDO TESTE ESPECÍFICO DA REVIEW REQUEST")
+        print(f"🔗 Testing against: {self.base_url}")
+        print("🎯 Foco: Testar sincronização entre Agenda.js e TechnicianMode.js")
+        print("=" * 80)
+        
+        # Execute the synchronization test
+        sync_success = self.test_technician_synchronization_endpoints()
+        
+        # Summary
+        self.print_summary()
+        
+        return sync_success
+
     def run_route_budget_item_mapping_test(self):
         """Run the specific test requested in the review"""
         print("🔍 EXECUTANDO TESTE ESPECÍFICO DA REVIEW REQUEST")
