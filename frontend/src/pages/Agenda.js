@@ -62,6 +62,13 @@ export function Agenda() {
   const [sentServices, setSentServices] = useState([]); // Serviços enviados para técnico
   const [loadingSentServices, setLoadingSentServices] = useState(false);
   const [sentServicesDate, setSentServicesDate] = useState(new Date().toISOString().split('T')[0]); // Data para filtrar serviços enviados
+  const [showEditServiceModal, setShowEditServiceModal] = useState(false);
+  const [editingService, setEditingService] = useState(null);
+  const [editServiceData, setEditServiceData] = useState({
+    assigned_date: '',
+    assigned_time: '',
+    status: ''
+  });
 
   useEffect(() => {
     // Check if this is a redirect from Google OAuth
