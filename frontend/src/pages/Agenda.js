@@ -2118,23 +2118,48 @@ export function Agenda() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-3">
-                      <span className="font-medium text-gray-900">
-                        Agendamento {service.id}
-                      </span>
+                      {/* Badge do tipo */}
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        service.status === 'ASSIGNED' ? 'bg-yellow-100 text-yellow-800' :
-                        service.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
-                        service.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                        service.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
+                        service.type === 'ASSIGNMENT' 
+                          ? 'bg-purple-100 text-purple-800' 
+                          : 'bg-blue-100 text-blue-800'
                       }`}>
-                        {service.status}
+                        {service.type === 'ASSIGNMENT' ? 'Agenda' : 'Status'}
                       </span>
+                      
+                      <span className="font-medium text-gray-900">
+                        {service.title}
+                      </span>
+                      
+                      {/* Status badge - apenas para assignments */}
+                      {service.type === 'ASSIGNMENT' && (
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          service.status === 'ASSIGNED' ? 'bg-yellow-100 text-yellow-800' :
+                          service.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
+                          service.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                          service.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {service.status}
+                        </span>
+                      )}
+                      
+                      {/* Status badge - para status items */}
+                      {service.type === 'STATUS_ITEM' && (
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          service.status === 'EXECUTAR_NO_LOCAL' ? 'bg-purple-100 text-purple-800' :
+                          service.status === 'RETIRAR' ? 'bg-blue-100 text-blue-800' :
+                          service.status === 'ENTREGAR' ? 'bg-green-100 text-green-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {service.status}
+                        </span>
+                      )}
                     </div>
                     
                     <div className="flex items-center space-x-3">
                       <div className="text-sm text-gray-500">
-                        {/* CORREÇÃO: Mostrar data e horário se disponível */}
+                        {/* Mostrar data e horário */}
                         <div>
                           {new Date(service.assigned_date).toLocaleDateString('pt-BR')}
                         </div>
@@ -2145,34 +2170,64 @@ export function Agenda() {
                         )}
                       </div>
                       
-                      {/* Botão Apagar */}
-                      <button
-                        onClick={() => handleDeleteAssignment(service.id)}
-                        className="flex items-center space-x-1 px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                        title="Apagar serviço enviado ao técnico"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Apagar</span>
-                      </button>
+                      {/* Botão Apagar - apenas para assignments */}
+                      {service.type === 'ASSIGNMENT' && (
+                        <button
+                          onClick={() => handleDeleteAssignment(service.id)}
+                          className="flex items-center space-x-1 px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                          title="Apagar serviço enviado ao técnico"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Apagar</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium text-gray-700">Rota:</span>
-                      <p className="text-gray-600">{service.route_id || 'N/A'}</p>
+                  {/* Conteúdo específico por tipo */}
+                  {service.type === 'ASSIGNMENT' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-700">Rota:</span>
+                        <p className="text-gray-600">{service.route_id || 'N/A'}</p>
+                      </div>
+                      
+                      <div>
+                        <span className="font-medium text-gray-700">Eventos:</span>
+                        <p className="text-gray-600">{service.event_ids?.length || 0} item(s)</p>
+                      </div>
+                      
+                      <div>
+                        <span className="font-medium text-gray-700">Técnico:</span>
+                        <p className="text-gray-600">{service.technician_id}</p>
+                      </div>
                     </div>
-                    
-                    <div>
-                      <span className="font-medium text-gray-700">Eventos:</span>
-                      <p className="text-gray-600">{service.event_ids.length} item(s)</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-700">Cliente:</span>
+                        <p className="text-gray-600">{service.client_name}</p>
+                      </div>
+                      
+                      <div>
+                        <span className="font-medium text-gray-700">Telefone:</span>
+                        <p className="text-gray-600">{service.client_phone || 'N/A'}</p>
+                      </div>
+                      
+                      <div>
+                        <span className="font-medium text-gray-700">Valor:</span>
+                        <p className="text-gray-600">R$ {parseFloat(service.service_value || 0).toFixed(2)}</p>
+                      </div>
                     </div>
-                    
-                    <div>
-                      <span className="font-medium text-gray-700">Técnico:</span>
-                      <p className="text-gray-600">{service.technician_id}</p>
+                  )}
+                  
+                  {/* Observações - para status items */}
+                  {service.type === 'STATUS_ITEM' && service.observations && (
+                    <div className="mt-3 p-2 bg-yellow-50 rounded">
+                      <span className="text-xs font-medium text-yellow-800">Observações:</span>
+                      <p className="text-xs text-yellow-700 mt-1">{service.observations}</p>
                     </div>
-                  </div>
+                  )}
                   
                   {/* Status detalhado (placeholder para implementação futura) */}
                   <div className="mt-3 pt-3 border-t border-gray-100">
