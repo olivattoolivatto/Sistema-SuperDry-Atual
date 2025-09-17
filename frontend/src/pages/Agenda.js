@@ -2304,17 +2304,28 @@ export function Agenda() {
                         )}
                       </div>
                       
-                      {/* Botão Apagar - apenas para assignments */}
-                      {service.type === 'ASSIGNMENT' && (
+                      {/* Botões de Ação */}
+                      <div className="flex items-center space-x-1">
+                        {/* Botão Editar */}
                         <button
-                          onClick={() => handleDeleteAssignment(service.id)}
+                          onClick={() => handleEditService(service)}
+                          className="flex items-center space-x-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          title="Editar serviço"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Editar</span>
+                        </button>
+                        
+                        {/* Botão Excluir */}
+                        <button
+                          onClick={() => handleDeleteService(service)}
                           className="flex items-center space-x-1 px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                          title="Apagar serviço enviado ao técnico"
+                          title="Remover serviço"
                         >
                           <Trash2 className="w-3 h-3" />
-                          <span>Apagar</span>
+                          <span>Excluir</span>
                         </button>
-                      )}
+                      </div>
                     </div>
                   </div>
                   
