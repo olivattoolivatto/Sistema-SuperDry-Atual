@@ -824,6 +824,114 @@ export function Agenda() {
     }
   };
 
+  const handleEditService = (service) => {
+    console.log('✏️ Editando serviço:', service);
+    
+    setEditingService(service);
+    setEditServiceData({
+      assigned_date: service.assigned_date || new Date().toISOString().split('T')[0],
+      assigned_time: service.assigned_time || '08:00',
+      status: service.status || 'ASSIGNED'
+    });
+    setShowEditServiceModal(true);
+  };
+
+  const handleSaveServiceEdit = async () => {
+    if (!editingService) return;
+    
+    try {
+      console.log('💾 Salvando edição do serviço:', editingService.id, editServiceData);
+      
+      // Para assignments, atualizar status e dados
+      if (editingService.type === 'ASSIGNMENT') {
+        // Atualizar status do assignment
+        const response = await technicianApi.updateAssignmentStatus(editingService.id, editServiceData.status);
+        console.log('✅ Status do assignment atualizado:', response.data);
+        
+        // TODO: Implementar endpoint para atualizar data/horário do assignment
+        // Por enquanto, apenas atualizar o status
+      }
+      
+      // Para status items, atualizar via API de budget items
+      if (editingService.type === 'STATUS_ITEM' && editingService.budget_item_id) {
+        const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/${editingService.budget_item_id}/status?status=${editServiceData.status}`, {
+          method: 'PUT'
+        });
+        
+        if (!response.ok) {
+          throw new Error('Erro ao atualizar status do item');
+        }
+        
+        console.log('✅ Status do budget item atualizado');
+      }
+      
+      toast({
+        title: "Sucesso!",
+        description: "Serviço atualizado com sucesso.",
+        variant: "default",
+      });
+      
+      // Recarregar lista
+      await loadSentServices();
+      
+      // Fechar modal
+      setShowEditServiceModal(false);
+      setEditingService(null);
+      
+    } catch (error) {
+      console.error('❌ Erro ao salvar edição:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao atualizar serviço. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteService = async (service) => {
+    try {
+      console.log('🗑️ Removendo serviço:', service.id);
+      
+      // Confirmar ação com o usuário
+      if (!window.confirm(`Tem certeza que deseja remover este serviço? Esta ação não pode ser desfeita.`)) {
+        return;
+      }
+      
+      if (service.type === 'ASSIGNMENT') {
+        // Para assignments, marcar como CANCELLED
+        await handleDeleteAssignment(service.id);
+      } else if (service.type === 'STATUS_ITEM' && service.budget_item_id) {
+        // Para status items, atualizar status para CANCELADO_PELO_CLIENTE
+        const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/${service.budget_item_id}/status?status=CANCELADO_PELO_CLIENTE`, {
+          method: 'PUT'
+        });
+        
+        if (!response.ok) {
+          throw new Error('Erro ao cancelar item');
+        }
+        
+        console.log('✅ Status item marcado como cancelado');
+        
+        toast({
+          title: "Sucesso!",
+          description: "Serviço removido com sucesso.",
+          variant: "default",
+        });
+        
+        // Recarregar lista
+        await loadSentServices();
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro ao remover serviço:', error);
+      toast({
+        title: "Erro!",
+        description: "Erro ao remover serviço. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getCurrentDateRange = () => {
     const start = new Date(currentDate);
     let end = new Date(currentDate);
