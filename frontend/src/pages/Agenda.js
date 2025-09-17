@@ -647,14 +647,13 @@ export function Agenda() {
     }
   };
 
-  const loadSentServices = async () => {
+  const loadSentServices = async (filterDate = null) => {
     try {
       setLoadingSentServices(true);
       console.log('🔄 Iniciando carregamento de serviços enviados...');
       
-      // CORREÇÃO CRÍTICA: Usar a mesma data que foi usada para criar assignments
-      // Se há customEventDate definido, usar essa data, senão usar data atual
-      const queryDate = customEventDate || new Date().toISOString().split('T')[0];
+      // Usar filterDate se fornecida, senão usar sentServicesDate ou data atual
+      const queryDate = filterDate || sentServicesDate || new Date().toISOString().split('T')[0];
       
       console.log(`📅 Buscando dados híbridos para a data: ${queryDate}`);
       
