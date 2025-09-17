@@ -11785,17 +11785,20 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         test_type = sys.argv[1].lower()
         
-        if test_type == "getbudgetandclientdata":
+        if test_type == "synchronization":
+            print("🎯 RUNNING SPECIFIC TEST: Technician Synchronization")
+            success = tester.run_technician_synchronization_test()
+        elif test_type == "getbudgetandclientdata":
             print("🎯 RUNNING SPECIFIC TEST: getBudgetAndClientData Functionality")
             success = tester.run_get_budget_and_client_data_test()
         else:
             print(f"❌ Unknown test type: {test_type}")
-            print("Available tests: getbudgetandclientdata")
+            print("Available tests: synchronization, getbudgetandclientdata")
             sys.exit(1)
     else:
-        # Default: run the specific test requested in the review
-        print("🎯 RUNNING DEFAULT TEST: getBudgetAndClientData Functionality")
-        success = tester.run_get_budget_and_client_data_test()
+        # Default: run the specific synchronization test requested in the review
+        print("🎯 RUNNING DEFAULT TEST: Technician Synchronization")
+        success = tester.run_technician_synchronization_test()
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
