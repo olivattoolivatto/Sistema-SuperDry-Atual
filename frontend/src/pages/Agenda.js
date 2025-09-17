@@ -148,7 +148,7 @@ export function Agenda() {
         },
         body: JSON.stringify({
           code: code,
-          redirect_uri: 'https://tech-laundry-hub.preview.emergentagent.com/agenda'
+          redirect_uri: 'https://laundry-sync.preview.emergentagent.com/agenda'
         })
       });
 
