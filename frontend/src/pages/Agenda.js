@@ -678,6 +678,7 @@ export function Agenda() {
       console.log(`🔄 Carregando todos os serviços enviados - Página: ${page}, Data: ${dateFilter || 'Todas'}`);
       
       let allAssignments = [];
+      let allStatusItems = [];
       
       if (dateFilter && dateFilter.trim()) {
         // Se tem filtro de data, buscar apenas essa data
@@ -701,14 +702,14 @@ export function Agenda() {
         allAssignments = [...processedAssignments, ...processedStatusItems];
         
       } else {
-        // Buscar todos os serviços dos últimos 30 dias (simulando paginação)
-        console.log(`📅 Buscando todos os serviços dos últimos 30 dias...`);
+        // CORREÇÃO: Buscar apenas alguns dias recentes para evitar duplicações
+        console.log(`📅 Buscando serviços dos últimos 7 dias...`);
         
         const today = new Date();
-        const daysToFetch = 30; // Buscar dos últimos 30 dias
-        const startIndex = (page - 1) * 10; // Índice inicial para esta página
+        const daysToFetch = 7; // Reduzido de 30 para 7 dias
+        const seenIds = new Set(); // Para evitar duplicatas
         
-        // Gerar datas dos últimos 30 dias
+        // Gerar datas dos últimos 7 dias
         const dates = [];
         for (let i = 0; i < daysToFetch; i++) {
           const date = new Date(today);
@@ -722,19 +723,33 @@ export function Agenda() {
             const response = await technicianApi.getDailyTasks('TECH-001', date);
             const { assignments, status_items } = response.data;
             
-            // Processar assignments
+            // Processar assignments (evitar duplicados)
             const processedAssignments = await Promise.all(
               assignments
-                .filter(assignment => assignment.status !== 'CANCELLED')
-                .map(assignment => processAssignment(assignment))
+                .filter(assignment => assignment.status !== 'CANCELLED' && !seenIds.has(assignment.id))
+                .map(async assignment => {
+                  seenIds.add(assignment.id); // Marcar como visto
+                  return await processAssignment(assignment);
+                })
             );
             
-            // Processar status items  
+            // Processar status items (evitar duplicados)
             const processedStatusItems = status_items
-              .filter(item => ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'].includes(item.status))
+              .filter(item => {
+                const itemId = `status-${item.id}`;
+                const isRelevant = ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'].includes(item.status);
+                const isNotSeen = !seenIds.has(itemId);
+                
+                if (isRelevant && isNotSeen) {
+                  seenIds.add(itemId); // Marcar como visto
+                  return true;
+                }
+                return false;
+              })
               .map(item => processStatusItem(item, date));
             
-            allAssignments.push(...processedAssignments, ...processedStatusItems);
+            allAssignments.push(...processedAssignments);
+            allStatusItems.push(...processedStatusItems);
             
           } catch (dateError) {
             console.warn(`⚠️ Erro ao buscar data ${date}:`, dateError);
@@ -742,8 +757,11 @@ export function Agenda() {
         }
       }
       
+      // Combinar todos os serviços
+      const allServices = [...allAssignments, ...allStatusItems];
+      
       // Ordenar do mais recente para o mais antigo
-      allAssignments.sort((a, b) => {
+      allServices.sort((a, b) => {
         const dateA = new Date(a.created_at || a.assigned_date);
         const dateB = new Date(b.created_at || b.assigned_date);
         return dateB - dateA; // Mais recente primeiro
@@ -753,25 +771,28 @@ export function Agenda() {
       const itemsPerPage = 10;
       const startIndex = (page - 1) * itemsPerPage;
       const endIndex = startIndex + itemsPerPage;
-      const pageItems = allAssignments.slice(startIndex, endIndex);
+      const pageItems = allServices.slice(startIndex, endIndex);
       
-      console.log(`✅ Total de serviços encontrados: ${allAssignments.length}`);
+      console.log(`✅ Total de serviços encontrados: ${allServices.length}`);
       console.log(`📄 Página ${page}: ${pageItems.length} items (${startIndex} - ${endIndex})`);
       
-      // Atualizar estado
+      // CORREÇÃO: Atualizar estado corretamente
       if (append && page > 1) {
         setSentServices(prev => [...prev, ...pageItems]);
       } else {
-        setSentServices(pageItems);
+        setSentServices(pageItems); // Substituir, não anexar
       }
       
-      setSentServicesTotal(allAssignments.length);
-      setSentServicesHasMore(endIndex < allAssignments.length);
+      setSentServicesTotal(allServices.length);
+      setSentServicesHasMore(endIndex < allServices.length);
       setSentServicesPage(page);
       
     } catch (error) {
       console.error('❌ Erro ao carregar todos os serviços enviados:', error);
       setSentServices([]);
+      setSentServicesTotal(0);
+      setSentServicesHasMore(false);
+      setSentServicesPage(1);
     } finally {
       setLoadingSentServices(false);
     }
