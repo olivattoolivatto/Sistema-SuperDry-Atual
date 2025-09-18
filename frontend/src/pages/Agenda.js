@@ -906,14 +906,28 @@ export function Agenda() {
     try {
       console.log('💾 Salvando edição do serviço:', editingService.id, editServiceData);
       
-      // Para assignments, atualizar status e dados
+      // Para assignments, atualizar status
       if (editingService.type === 'ASSIGNMENT') {
         // Atualizar status do assignment
         const response = await technicianApi.updateAssignmentStatus(editingService.id, editServiceData.status);
         console.log('✅ Status do assignment atualizado:', response.data);
         
-        // TODO: Implementar endpoint para atualizar data/horário do assignment
-        // Por enquanto, apenas atualizar o status
+        // AVISO: A API atual não suporta atualização de data/horário para assignments
+        // Por enquanto, apenas o status será atualizado
+        if (editServiceData.assigned_date !== editingService.assigned_date || editServiceData.assigned_time !== editingService.assigned_time) {
+          console.warn('⚠️ Atualização de data/horário para assignments ainda não implementada na API');
+          toast({
+            title: "Aviso",
+            description: "Status atualizado com sucesso. Atualização de data/horário para assignments será implementada em breve.",
+            variant: "default",
+          });
+        } else {
+          toast({
+            title: "Sucesso!",
+            description: "Status do assignment atualizado com sucesso.",
+            variant: "default",
+          });
+        }
       }
       
       // Para status items, atualizar via API de budget items
@@ -927,13 +941,13 @@ export function Agenda() {
         }
         
         console.log('✅ Status do budget item atualizado');
+        
+        toast({
+          title: "Sucesso!",
+          description: "Status do item atualizado com sucesso.",
+          variant: "default",
+        });
       }
-      
-      toast({
-        title: "Sucesso!",
-        description: "Serviço atualizado com sucesso.",
-        variant: "default",
-      });
       
       // Recarregar lista
       await loadSentServices();
