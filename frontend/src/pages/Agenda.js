@@ -2587,12 +2587,37 @@ export function Agenda() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <Smartphone className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-500">Nenhum serviço foi enviado ao técnico ainda.</p>
-              <p className="text-sm text-gray-400 mt-1">
-                Selecione eventos de uma rota e use o botão "Enviar para Técnico"
-              </p>
+            <div className="text-center py-8 text-gray-500">
+              <p>Nenhum serviço enviado ao técnico encontrado.</p>
+              {sentServicesDate && (
+                <button
+                  onClick={() => {
+                    setSentServicesDate('');
+                    loadAllSentServices(1);
+                  }}
+                  className="mt-2 text-blue-600 hover:text-blue-800 text-sm"
+                >
+                  Ver todos os serviços
+                </button>
+              )}
+            </div>
+          )}
+          
+          {/* Botão "Carregar Mais" para infinite scroll */}
+          {sentServicesHasMore && sentServices.length > 0 && (
+            <div className="text-center mt-6">
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingSentServices}
+                className="flex items-center space-x-2 mx-auto px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors"
+              >
+                {loadingSentServices ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+                <span>{loadingSentServices ? 'Carregando...' : 'Carregar mais 10 serviços'}</span>
+              </button>
             </div>
           )}
         </div>
