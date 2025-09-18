@@ -1069,70 +1069,64 @@ export function Agenda() {
 
   const handleDeleteService = async (service) => {
     try {
-      console.log('🗑️ Removendo serviço:', service.id);
+      console.log('🗑️ Removendo serviço:', service.id, service.type);
       
       // Confirmar ação com o usuário
       if (!window.confirm(`Tem certeza que deseja remover este serviço? Esta ação não pode ser desfeita.`)) {
         return;
       }
       
-      if (service.type === 'ASSIGNMENT') {
-        // Para assignments, marcar como CANCELLED
-        const response = await technicianApi.updateAssignmentStatus(service.id, 'CANCELLED');
-        console.log('✅ Assignment marcado como cancelado:', response.data);
-        
-        toast({
-          title: "Sucesso!",
-          description: "Serviço removido da lista do técnico.",
-          variant: "default",
-        });
-        
-      } else if (service.type === 'STATUS_ITEM' && service.budget_item_id) {
-        // Para status items, atualizar status para CANCELADO_PELO_CLIENTE
-        const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/${service.budget_item_id}/status?status=CANCELADO_PELO_CLIENTE`, {
-          method: 'PUT'
-        });
-        
-        if (!response.ok) {
-          throw new Error('Erro ao cancelar item');
-        }
-        
-        console.log('✅ Status item marcado como cancelado');
-        
-        toast({
-          title: "Sucesso!",
-          description: "Serviço removido com sucesso.",
-          variant: "default",
-        });
-      }
-      
-      // CORREÇÃO: Remover o item do estado local imediatamente (otimistic update)
+      // CORREÇÃO: Remover o item do estado local PRIMEIRO (optimistic update)
       setSentServices(prevServices => {
         const filteredServices = prevServices.filter(s => s.id !== service.id);
-        
-        // Atualizar contador
-        setSentServicesTotal(prev => Math.max(0, prev - 1));
-        
-        console.log(`🔄 Estado atualizado: ${filteredServices.length} serviços restantes`);
+        console.log(`🔄 Estado atualizado otimisticamente: ${filteredServices.length} serviços restantes`);
         return filteredServices;
       });
       
-      // Recarregar lista completa em background para sincronizar
-      setTimeout(() => {
-        if (sentServicesDate) {
-          loadSentServices(sentServicesDate);
-        } else {
-          loadAllSentServices(1); // Recarregar primeira página
+      // Atualizar contador
+      setSentServicesTotal(prev => Math.max(0, prev - 1));
+      
+      // Tentar cancelar no backend em background
+      try {
+        if (service.type === 'ASSIGNMENT') {
+          // Para assignments, marcar como CANCELLED
+          const response = await technicianApi.updateAssignmentStatus(service.id, 'CANCELLED');
+          console.log('✅ Assignment marcado como cancelado no backend:', response.data);
+          
+        } else if (service.type === 'STATUS_ITEM' && service.budget_item_id) {
+          // Para status items, atualizar status para CANCELADO_PELO_CLIENTE
+          const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/${service.budget_item_id}/status?status=CANCELADO_PELO_CLIENTE`, {
+            method: 'PUT'
+          });
+          
+          if (!response.ok) {
+            throw new Error('Erro ao cancelar item no backend');
+          }
+          
+          console.log('✅ Status item marcado como cancelado no backend');
         }
-      }, 1000);
+        
+        // Mostrar mensagem de sucesso
+        console.log('✅ Serviço removido com sucesso');
+        
+      } catch (backendError) {
+        console.error('❌ Erro ao cancelar no backend (mas já removido da UI):', backendError);
+        
+        // Se falhar no backend, reverter a UI
+        setSentServices(prevServices => {
+          const restoredServices = [...prevServices, service];
+          console.log('🔄 Revertendo exclusão devido a erro no backend');
+          return restoredServices;
+        });
+        
+        setSentServicesTotal(prev => prev + 1);
+        
+        alert('Erro ao remover serviço no servidor. Tente novamente.');
+      }
       
     } catch (error) {
-      console.error('❌ Erro ao remover serviço:', error);
-      toast({
-        title: "Erro!",
-        description: "Erro ao remover serviço. Tente novamente.",
-        variant: "destructive",
-      });
+      console.error('❌ Erro geral ao remover serviço:', error);
+      alert('Erro ao remover serviço. Tente novamente.');
     }
   };
 
