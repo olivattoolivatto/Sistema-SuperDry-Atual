@@ -762,7 +762,7 @@ export function Agenda() {
       }));
       
       // Ordenar por data e tipo (assignments primeiro, depois status items)
-      allServices.sort((a, b) => {
+      enrichedServices.sort((a, b) => {
         // Priorizar assignments
         if (a.type === 'ASSIGNMENT' && b.type !== 'ASSIGNMENT') return -1;
         if (b.type === 'ASSIGNMENT' && a.type !== 'ASSIGNMENT') return 1;
@@ -779,12 +779,12 @@ export function Agenda() {
         return (a.assigned_time || '08:00').localeCompare(b.assigned_time || '08:00');
       });
       
-      console.log('✅ Serviços híbridos processados para exibição:', allServices.length);
+      console.log('✅ Serviços híbridos processados para exibição:', enrichedServices.length);
       console.log('✅ Assignments:', processedAssignments.length);
       console.log('✅ Status Items:', processedStatusItems.length);
-      console.log('✅ Serviços detalhados:', allServices);
+      console.log('✅ Serviços detalhados:', enrichedServices);
       
-      setSentServices(allServices);
+      setSentServices(enrichedServices);
       
     } catch (error) {
       console.error('❌ Erro ao carregar serviços enviados:', error);
