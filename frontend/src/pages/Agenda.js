@@ -2371,21 +2371,43 @@ export function Agenda() {
                   
                   {/* Conteúdo específico por tipo */}
                   {service.type === 'ASSIGNMENT' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium text-gray-700">Rota:</span>
-                        <p className="text-gray-600">{service.route_id || 'N/A'}</p>
+                    <div className="space-y-3">
+                      {/* Informações da Rota */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">Rota:</span>
+                          <p className="text-gray-600">{service.route_id || 'N/A'}</p>
+                        </div>
+                        
+                        <div>
+                          <span className="font-medium text-gray-700">Eventos:</span>
+                          <p className="text-gray-600">{service.event_ids?.length || 0} item(s)</p>
+                        </div>
+                        
+                        <div>
+                          <span className="font-medium text-gray-700">Técnico:</span>
+                          <p className="text-gray-600">{service.technician_id}</p>
+                        </div>
                       </div>
                       
-                      <div>
-                        <span className="font-medium text-gray-700">Eventos:</span>
-                        <p className="text-gray-600">{service.event_ids?.length || 0} item(s)</p>
-                      </div>
-                      
-                      <div>
-                        <span className="font-medium text-gray-700">Técnico:</span>
-                        <p className="text-gray-600">{service.technician_id}</p>
-                      </div>
+                      {/* Informações do Cliente e Serviços (se disponível) */}
+                      {(service.clientInfo || service.serviceInfo) && (
+                        <div className="bg-blue-50 rounded-lg p-3">
+                          <div className="text-sm font-medium text-blue-800 mb-2">
+                            Detalhes do Atendimento:
+                          </div>
+                          {service.clientInfo && (
+                            <div className="text-sm text-blue-700">
+                              <span className="font-medium">Cliente:</span> {service.clientInfo}
+                            </div>
+                          )}
+                          {service.serviceInfo && (
+                            <div className="text-sm text-blue-700 mt-1">
+                              <span className="font-medium">Serviços:</span> {service.serviceInfo}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
