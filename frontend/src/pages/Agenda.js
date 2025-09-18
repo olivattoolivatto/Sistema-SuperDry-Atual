@@ -2378,24 +2378,30 @@ export function Agenda() {
                         </div>
                       </div>
                       
-                      {/* Informações do Cliente e Serviços (se disponível) */}
-                      {(service.clientInfo || service.serviceInfo) && (
-                        <div className="bg-blue-50 rounded-lg p-3">
-                          <div className="text-sm font-medium text-blue-800 mb-2">
-                            Detalhes do Atendimento:
-                          </div>
-                          {service.clientInfo && (
-                            <div className="text-sm text-blue-700">
-                              <span className="font-medium">Cliente:</span> {service.clientInfo}
-                            </div>
-                          )}
-                          {service.serviceInfo && (
-                            <div className="text-sm text-blue-700 mt-1">
-                              <span className="font-medium">Serviços:</span> {service.serviceInfo}
-                            </div>
-                          )}
+                      {/* Informações dos Clientes da Data (baseado nos status_items) */}
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <div className="text-sm font-medium text-blue-800 mb-2">
+                          📋 Clientes e Serviços para esta Data:
                         </div>
-                      )}
+                        {status_items && status_items.length > 0 ? (
+                          <div className="space-y-1">
+                            {status_items.slice(0, 3).map((item, index) => (
+                              <div key={index} className="text-sm text-blue-700">
+                                <span className="font-medium">{item.client_name}:</span> {getServiceEmoji(item.service_name)} {item.service_name}
+                              </div>
+                            ))}
+                            {status_items.length > 3 && (
+                              <div className="text-xs text-blue-600 mt-1">
+                                + {status_items.length - 3} outros serviços...
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-blue-700">
+                            Nenhum serviço específico encontrado para esta data.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
