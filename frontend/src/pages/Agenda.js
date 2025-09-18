@@ -755,6 +755,12 @@ export function Agenda() {
       // Combinar assignments e status items
       const allServices = [...processedAssignments, ...processedStatusItems];
       
+      // Adicionar status_items aos assignments para uso na renderização
+      const enrichedServices = allServices.map(service => ({
+        ...service,
+        availableStatusItems: processedStatusItems // Disponibilizar status items para assignments
+      }));
+      
       // Ordenar por data e tipo (assignments primeiro, depois status items)
       allServices.sort((a, b) => {
         // Priorizar assignments
