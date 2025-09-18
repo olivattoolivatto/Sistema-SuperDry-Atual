@@ -99,6 +99,17 @@ export function Agenda() {
       loadSentServices(); // Carregar serviços enviados ao técnico
     }
   }, [currentDate, calendarView, isGoogleAuthenticated]);
+  // useEffect para carregar todos os serviços na inicialização
+  useEffect(() => {
+    loadAllSentServices(1); // Carregar primeira página de todos os serviços
+  }, []);
+
+  // Função para handle infinite scroll
+  const handleLoadMore = () => {
+    if (sentServicesHasMore && !loadingSentServices) {
+      loadAllSentServices(sentServicesPage + 1, sentServicesDate, true); // append = true
+    }
+  };
 
   const loadSavedRoutes = async () => {
     try {
