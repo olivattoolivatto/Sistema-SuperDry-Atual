@@ -681,53 +681,80 @@ export function Agenda() {
       console.log('📋 Status items encontrados:', status_items?.length || 0);
       
       // Processar assignments para exibição (filtrar cancelados)
-      const processedAssignments = assignments
-        .filter(assignment => {
-          const isNotCancelled = assignment.status !== 'CANCELLED';
-          console.log(`📋 Assignment ${assignment.id}: Status ${assignment.status} → Incluir: ${isNotCancelled}`);
-          return isNotCancelled;
-        })
-        .map(assignment => {
-          // Tentar encontrar informações relacionadas nos status_items
-          let detailedTitle = `Rota ${assignment.route_id}`;
-          let clientInfo = '';
-          let serviceInfo = '';
-          
-          // Se temos status_items, usar as informações do primeiro item como referência
-          if (status_items && status_items.length > 0) {
-            // Para assignments da agenda, usamos os dados dos status_items como contexto
-            const firstItem = status_items[0];
-            clientInfo = firstItem.client_name;
-            serviceInfo = `${getServiceEmoji(firstItem.service_name)} ${firstItem.service_name}`;
+      const processedAssignments = await Promise.all(
+        assignments
+          .filter(assignment => {
+            const isNotCancelled = assignment.status !== 'CANCELLED';
+            console.log(`📋 Assignment ${assignment.id}: Status ${assignment.status} → Incluir: ${isNotCancelled}`);
+            return isNotCancelled;
+          })
+          .map(async assignment => {
+            // Implementar desencapsulação por event_id (similar ao TechnicianMode.js)
+            let detailedTitle = `Rota ${assignment.route_id}`;
+            let clientInfo = '';
+            let serviceInfo = '';
             
-            // Se há mais itens, indicar quantidade
-            if (status_items.length > 1) {
-              serviceInfo += ` e mais ${status_items.length - 1} serviço(s)`;
+            try {
+              // Se temos event_ids, tentar desencapsular cada um
+              if (assignment.event_ids && assignment.event_ids.length > 0) {
+                // Para o título, usar o primeiro item válido que conseguirmos buscar
+                const firstEventId = assignment.event_ids[0];
+                
+                if (firstEventId.startsWith('ITM-')) {
+                  console.log(`🔍 Buscando dados para desencapsulação: ${firstEventId}`);
+                  
+                  try {
+                    // Buscar nos itens disponíveis
+                    const availableItemsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/available-for-routes`);
+                    if (availableItemsResponse.ok) {
+                      const availableData = await availableItemsResponse.json();
+                      const availableItem = availableData.available_items.find(item => item.budget_item_id === firstEventId);
+                      
+                      if (availableItem) {
+                        clientInfo = availableItem.client_name;
+                        serviceInfo = `${getServiceEmoji(availableItem.service_name)} ${availableItem.service_name}`;
+                        
+                        // Se há mais eventos, indicar quantidade
+                        if (assignment.event_ids.length > 1) {
+                          serviceInfo += ` e mais ${assignment.event_ids.length - 1} serviço(s)`;
+                        }
+                        
+                        detailedTitle = `${clientInfo} - ${serviceInfo}`;
+                        console.log(`✅ Desencapsulação bem-sucedida: "${detailedTitle}"`);
+                      } else {
+                        console.warn(`⚠️ Item ${firstEventId} não encontrado nos itens disponíveis`);
+                        detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
+                      }
+                    }
+                  } catch (itemError) {
+                    console.error(`❌ Erro ao buscar item ${firstEventId}:`, itemError);
+                    detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('❌ Erro na desencapsulação:', error);
+              detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids?.length || 0} eventos)`;
             }
             
-            detailedTitle = `${clientInfo} - ${serviceInfo}`;
-          } else {
-            // Fallback: mostrar informação da rota + quantidade de eventos
-            detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids?.length || 0} eventos)`;
-          }
-          
-          return {
-            id: assignment.id,
-            route_id: assignment.route_id,
-            event_ids: assignment.event_ids,
-            technician_id: assignment.technician_id,
-            assigned_date: assignment.assigned_date,
-            assigned_time: assignment.assigned_time,
-            status: assignment.status,
-            created_at: assignment.created_at,
-            updated_at: assignment.updated_at,
-            type: 'ASSIGNMENT', // Marcador para identificar o tipo
-            title: detailedTitle,
-            clientInfo: clientInfo,
-            serviceInfo: serviceInfo,
-            routeInfo: assignment.route_id // Manter informação da rota separadamente
-          };
-        });
+            return {
+              id: assignment.id,
+              route_id: assignment.route_id,
+              event_ids: assignment.event_ids,
+              technician_id: assignment.technician_id,
+              assigned_date: assignment.assigned_date,
+              assigned_time: assignment.assigned_time,
+              status: assignment.status,
+              created_at: assignment.created_at,
+              updated_at: assignment.updated_at,
+              type: 'ASSIGNMENT', // Marcador para identificar o tipo
+              title: detailedTitle,
+              clientInfo: clientInfo,
+              serviceInfo: serviceInfo,
+              routeInfo: assignment.route_id // Manter informação da rota separadamente
+            };
+          })
+      );
       
       // Processar status_items como serviços individuais
       const processedStatusItems = status_items
