@@ -715,7 +715,7 @@ export function Agenda() {
             const processedAssignments = await Promise.all(
               assignments
                 .filter(assignment => assignment.status !== 'CANCELLED')
-                .map(async assignment => await processAssignment(assignment))
+                .map(assignment => processAssignment(assignment))
             );
             
             // Processar status items  
