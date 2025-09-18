@@ -666,112 +666,182 @@ export function Agenda() {
       setLoadingSentServices(true);
       console.log(`🔄 Carregando todos os serviços enviados - Página: ${page}, Data: ${dateFilter || 'Todas'}`);
       
-      // Parâmetros da API
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '10',
-        technician_id: 'TECH-001'
-      });
+      let allAssignments = [];
       
-      // Adicionar filtro de data se especificado
       if (dateFilter && dateFilter.trim()) {
-        params.append('date', dateFilter);
-      }
-      
-      // Buscar assignments paginados
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/technician/assignments?${params}`);
-      
-      if (!response.ok) {
-        throw new Error('Erro ao buscar assignments');
-      }
-      
-      const data = await response.json();
-      
-      console.log('📋 Resposta da API assignments:', data);
-      
-      const { assignments, total, has_more } = data;
-      
-      // Processar assignments para exibição (filtrar cancelados)
-      const processedAssignments = await Promise.all(
-        assignments
-          .filter(assignment => {
-            const isNotCancelled = assignment.status !== 'CANCELLED';
-            console.log(`📋 Assignment ${assignment.id}: Status ${assignment.status} → Incluir: ${isNotCancelled}`);
-            return isNotCancelled;
-          })
-          .map(async assignment => {
-            // Implementar desencapsulação por event_id
-            let detailedTitle = `Rota ${assignment.route_id}`;
-            let clientInfo = '';
-            let serviceInfo = '';
+        // Se tem filtro de data, buscar apenas essa data
+        console.log(`📅 Buscando serviços para data específica: ${dateFilter}`);
+        
+        const response = await technicianApi.getDailyTasks('TECH-001', dateFilter);
+        const { assignments, status_items } = response.data;
+        
+        // Processar assignments
+        const processedAssignments = await Promise.all(
+          assignments
+            .filter(assignment => assignment.status !== 'CANCELLED')  
+            .map(async assignment => await processAssignment(assignment))
+        );
+        
+        // Processar status items
+        const processedStatusItems = status_items
+          .filter(item => ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'].includes(item.status))
+          .map(item => processStatusItem(item, dateFilter));
+        
+        allAssignments = [...processedAssignments, ...processedStatusItems];
+        
+      } else {
+        // Buscar todos os serviços dos últimos 30 dias (simulando paginação)
+        console.log(`📅 Buscando todos os serviços dos últimos 30 dias...`);
+        
+        const today = new Date();
+        const daysToFetch = 30; // Buscar dos últimos 30 dias
+        const startIndex = (page - 1) * 10; // Índice inicial para esta página
+        
+        // Gerar datas dos últimos 30 dias
+        const dates = [];
+        for (let i = 0; i < daysToFetch; i++) {
+          const date = new Date(today);
+          date.setDate(today.getDate() - i);
+          dates.push(date.toISOString().split('T')[0]);
+        }
+        
+        // Buscar assignments para cada data
+        for (const date of dates) {
+          try {
+            const response = await technicianApi.getDailyTasks('TECH-001', date);
+            const { assignments, status_items } = response.data;
             
-            try {
-              // Se temos event_ids, tentar desencapsular cada um
-              if (assignment.event_ids && assignment.event_ids.length > 0) {
-                const firstEventId = assignment.event_ids[0];
-                
-                if (firstEventId.startsWith('ITM-')) {
-                  console.log(`🔍 Buscando dados para desencapsulação: ${firstEventId}`);
-                  
-                  try {
-                    // Buscar nos itens disponíveis
-                    const availableItemsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/available-for-routes`);
-                    if (availableItemsResponse.ok) {
-                      const availableData = await availableItemsResponse.json();
-                      const availableItem = availableData.available_items.find(item => item.budget_item_id === firstEventId);
-                      
-                      if (availableItem) {
-                        clientInfo = availableItem.client_name;
-                        serviceInfo = `${getServiceEmoji(availableItem.service_name)} ${availableItem.service_name}`;
-                        
-                        // Se há mais eventos, indicar quantidade
-                        if (assignment.event_ids.length > 1) {
-                          serviceInfo += ` e mais ${assignment.event_ids.length - 1} serviço(s)`;
-                        }
-                        
-                        detailedTitle = `${clientInfo} - ${serviceInfo}`;
-                        console.log(`✅ Desencapsulação bem-sucedida: "${detailedTitle}"`);
-                      } else {
-                        console.warn(`⚠️ Item ${firstEventId} não encontrado nos itens disponíveis`);
-                        detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
-                      }
-                    }
-                  } catch (itemError) {
-                    console.error(`❌ Erro ao buscar item ${firstEventId}:`, itemError);
-                    detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
-                  }
-                }
-              }
-            } catch (error) {
-              console.error('❌ Erro na desencapsulação:', error);
-              detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids?.length || 0} eventos)`;
-            }
+            // Processar assignments
+            const processedAssignments = await Promise.all(
+              assignments
+                .filter(assignment => assignment.status !== 'CANCELLED')
+                .map(async assignment => await processAssignment(assignment))
+            );
             
-            return {
-              id: assignment.id,
-              route_id: assignment.route_id,
-              event_ids: assignment.event_ids,
-              technician_id: assignment.technician_id,
-              assigned_date: assignment.assigned_date,
-              assigned_time: assignment.assigned_time,
-              status: assignment.status,
-              created_at: assignment.created_at,
-              updated_at: assignment.updated_at,
-              type: 'ASSIGNMENT',
-              title: detailedTitle,
-              clientInfo: clientInfo,
-              serviceInfo: serviceInfo,
-              routeInfo: assignment.route_id
-            };
-          })
-      );
+            // Processar status items  
+            const processedStatusItems = status_items
+              .filter(item => ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'].includes(item.status))
+              .map(item => processStatusItem(item, date));
+            
+            allAssignments.push(...processedAssignments, ...processedStatusItems);
+            
+          } catch (dateError) {
+            console.warn(`⚠️ Erro ao buscar data ${date}:`, dateError);
+          }
+        }
+      }
       
       // Ordenar do mais recente para o mais antigo
-      processedAssignments.sort((a, b) => {
-        const dateA = new Date(a.created_at);
-        const dateB = new Date(b.created_at);
+      allAssignments.sort((a, b) => {
+        const dateA = new Date(a.created_at || a.assigned_date);
+        const dateB = new Date(b.created_at || b.assigned_date);
         return dateB - dateA; // Mais recente primeiro
       });
+      
+      // Implementar paginação manual
+      const itemsPerPage = 10;
+      const startIndex = (page - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      const pageItems = allAssignments.slice(startIndex, endIndex);
+      
+      console.log(`✅ Total de serviços encontrados: ${allAssignments.length}`);
+      console.log(`📄 Página ${page}: ${pageItems.length} items (${startIndex} - ${endIndex})`);
+      
+      // Atualizar estado
+      if (append && page > 1) {
+        setSentServices(prev => [...prev, ...pageItems]);
+      } else {
+        setSentServices(pageItems);
+      }
+      
+      setSentServicesTotal(allAssignments.length);
+      setSentServicesHasMore(endIndex < allAssignments.length);
+      setSentServicesPage(page);
+      
+    } catch (error) {
+      console.error('❌ Erro ao carregar todos os serviços enviados:', error);
+      setSentServices([]);
+    } finally {
+      setLoadingSentServices(false);
+    }
+  };
+  
+  // Função auxiliar para processar assignments
+  const processAssignment = async (assignment) => {
+    let detailedTitle = `Rota ${assignment.route_id}`;
+    let clientInfo = '';
+    let serviceInfo = '';
+    
+    try {
+      if (assignment.event_ids && assignment.event_ids.length > 0) {
+        const firstEventId = assignment.event_ids[0];
+        
+        if (firstEventId.startsWith('ITM-')) {
+          try {
+            const availableItemsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/available-for-routes`);
+            if (availableItemsResponse.ok) {
+              const availableData = await availableItemsResponse.json();
+              const availableItem = availableData.available_items.find(item => item.budget_item_id === firstEventId);
+              
+              if (availableItem) {
+                clientInfo = availableItem.client_name;
+                serviceInfo = `${getServiceEmoji(availableItem.service_name)} ${availableItem.service_name}`;
+                
+                if (assignment.event_ids.length > 1) {
+                  serviceInfo += ` e mais ${assignment.event_ids.length - 1} serviço(s)`;
+                }
+                
+                detailedTitle = `${clientInfo} - ${serviceInfo}`;
+              } else {
+                detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
+              }
+            }
+          } catch (itemError) {
+            console.error(`❌ Erro ao buscar item ${firstEventId}:`, itemError);
+            detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro na desencapsulação:', error);
+      detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids?.length || 0} eventos)`;
+    }
+    
+    return {
+      id: assignment.id,
+      route_id: assignment.route_id,
+      event_ids: assignment.event_ids,
+      technician_id: assignment.technician_id,
+      assigned_date: assignment.assigned_date,
+      assigned_time: assignment.assigned_time,
+      status: assignment.status,
+      created_at: assignment.created_at,
+      updated_at: assignment.updated_at,
+      type: 'ASSIGNMENT',
+      title: detailedTitle,
+      clientInfo: clientInfo,
+      serviceInfo: serviceInfo,
+      routeInfo: assignment.route_id
+    };
+  };
+  
+  // Função auxiliar para processar status items
+  const processStatusItem = (item, date) => ({
+    id: `status-${item.id}`,
+    budget_item_id: item.id,
+    client_name: item.client_name,
+    client_phone: item.client_phone,
+    service_name: item.service_name,
+    service_value: item.service_value,
+    status: item.status,
+    observations: item.observations,
+    client_address: item.client_address,
+    assigned_date: date,
+    assigned_time: '08:00',
+    created_at: new Date().toISOString(), // Para ordenação
+    type: 'STATUS_ITEM',
+    title: `${getServiceEmoji(item.service_name)} ${item.client_name} - ${item.service_name}`
+  });
       
   const loadSentServices = async (filterDate = null) => {
     try {
