@@ -661,7 +661,148 @@ export function Agenda() {
     }
   };
 
-  const loadSentServices = async (filterDate = null) => {
+  const loadAllSentServices = async (page = 1, dateFilter = null, append = false) => {
+    try {
+      setLoadingSentServices(true);
+      console.log(`🔄 Carregando todos os serviços enviados - Página: ${page}, Data: ${dateFilter || 'Todas'}`);
+      
+      // Parâmetros da API
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '10',
+        technician_id: 'TECH-001'
+      });
+      
+      // Adicionar filtro de data se especificado
+      if (dateFilter && dateFilter.trim()) {
+        params.append('date', dateFilter);
+      }
+      
+      // Buscar assignments paginados
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/technician/assignments?${params}`);
+      
+      if (!response.ok) {
+        throw new Error('Erro ao buscar assignments');
+      }
+      
+      const data = await response.json();
+      
+      console.log('📋 Resposta da API assignments:', data);
+      
+      const { assignments, total, has_more } = data;
+      
+      // Processar assignments para exibição (filtrar cancelados)
+      const processedAssignments = await Promise.all(
+        assignments
+          .filter(assignment => {
+            const isNotCancelled = assignment.status !== 'CANCELLED';
+            console.log(`📋 Assignment ${assignment.id}: Status ${assignment.status} → Incluir: ${isNotCancelled}`);
+            return isNotCancelled;
+          })
+          .map(async assignment => {
+            // Implementar desencapsulação por event_id
+            let detailedTitle = `Rota ${assignment.route_id}`;
+            let clientInfo = '';
+            let serviceInfo = '';
+            
+            try {
+              // Se temos event_ids, tentar desencapsular cada um
+              if (assignment.event_ids && assignment.event_ids.length > 0) {
+                const firstEventId = assignment.event_ids[0];
+                
+                if (firstEventId.startsWith('ITM-')) {
+                  console.log(`🔍 Buscando dados para desencapsulação: ${firstEventId}`);
+                  
+                  try {
+                    // Buscar nos itens disponíveis
+                    const availableItemsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/available-for-routes`);
+                    if (availableItemsResponse.ok) {
+                      const availableData = await availableItemsResponse.json();
+                      const availableItem = availableData.available_items.find(item => item.budget_item_id === firstEventId);
+                      
+                      if (availableItem) {
+                        clientInfo = availableItem.client_name;
+                        serviceInfo = `${getServiceEmoji(availableItem.service_name)} ${availableItem.service_name}`;
+                        
+                        // Se há mais eventos, indicar quantidade
+                        if (assignment.event_ids.length > 1) {
+                          serviceInfo += ` e mais ${assignment.event_ids.length - 1} serviço(s)`;
+                        }
+                        
+                        detailedTitle = `${clientInfo} - ${serviceInfo}`;
+                        console.log(`✅ Desencapsulação bem-sucedida: "${detailedTitle}"`);
+                      } else {
+                        console.warn(`⚠️ Item ${firstEventId} não encontrado nos itens disponíveis`);
+                        detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
+                      }
+                    }
+                  } catch (itemError) {
+                    console.error(`❌ Erro ao buscar item ${firstEventId}:`, itemError);
+                    detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('❌ Erro na desencapsulação:', error);
+              detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids?.length || 0} eventos)`;
+            }
+            
+            return {
+              id: assignment.id,
+              route_id: assignment.route_id,
+              event_ids: assignment.event_ids,
+              technician_id: assignment.technician_id,
+              assigned_date: assignment.assigned_date,
+              assigned_time: assignment.assigned_time,
+              status: assignment.status,
+              created_at: assignment.created_at,
+              updated_at: assignment.updated_at,
+              type: 'ASSIGNMENT',
+              title: detailedTitle,
+              clientInfo: clientInfo,
+              serviceInfo: serviceInfo,
+              routeInfo: assignment.route_id
+            };
+          })
+      );
+      
+      // Ordenar do mais recente para o mais antigo
+      processedAssignments.sort((a, b) => {
+        const dateA = new Date(a.created_at);
+        const dateB = new Date(b.created_at);
+        return dateB - dateA; // Mais recente primeiro
+      });
+      
+      console.log(`✅ Serviços processados - Página ${page}:`, processedAssignments.length);
+      console.log(`📊 Total: ${total}, Has More: ${has_more}`);
+      
+      // Atualizar estado
+      if (append && page > 1) {
+        // Adicionar aos serviços existentes (paginação)
+        setSentServices(prev => [...prev, ...processedAssignments]);
+      } else {
+        // Substituir serviços (nova busca)
+        setSentServices(processedAssignments);
+      }
+      
+      setSentServicesTotal(total);
+      setSentServicesHasMore(has_more);
+      setSentServicesPage(page);
+      
+    } catch (error) {
+      console.error('❌ Erro ao carregar todos os serviços enviados:', error);
+      
+      // Fallback: usar a função original para uma data específica se disponível
+      if (dateFilter) {
+        console.log('🔄 Tentando fallback com função original...');
+        await loadSentServices(dateFilter);
+      } else {
+        setSentServices([]);
+      }
+    } finally {
+      setLoadingSentServices(false);
+    }
+  };
     try {
       setLoadingSentServices(true);
       console.log('🔄 Iniciando carregamento de serviços enviados...');
