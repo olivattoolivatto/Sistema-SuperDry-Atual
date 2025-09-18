@@ -2389,16 +2389,16 @@ export function Agenda() {
                         <div className="text-sm font-medium text-blue-800 mb-2">
                           📋 Clientes e Serviços para esta Data:
                         </div>
-                        {status_items && status_items.length > 0 ? (
+                        {service.availableStatusItems && service.availableStatusItems.length > 0 ? (
                           <div className="space-y-1">
-                            {status_items.slice(0, 3).map((item, index) => (
+                            {service.availableStatusItems.slice(0, 3).map((item, index) => (
                               <div key={index} className="text-sm text-blue-700">
                                 <span className="font-medium">{item.client_name}:</span> {getServiceEmoji(item.service_name)} {item.service_name}
                               </div>
                             ))}
-                            {status_items.length > 3 && (
+                            {service.availableStatusItems.length > 3 && (
                               <div className="text-xs text-blue-600 mt-1">
-                                + {status_items.length - 3} outros serviços...
+                                + {service.availableStatusItems.length - 3} outros serviços...
                               </div>
                             )}
                           </div>
