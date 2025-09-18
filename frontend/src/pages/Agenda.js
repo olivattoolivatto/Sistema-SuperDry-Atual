@@ -1077,7 +1077,15 @@ export function Agenda() {
       
       if (service.type === 'ASSIGNMENT') {
         // Para assignments, marcar como CANCELLED
-        await handleDeleteAssignment(service.id);
+        const response = await technicianApi.updateAssignmentStatus(service.id, 'CANCELLED');
+        console.log('✅ Assignment marcado como cancelado:', response.data);
+        
+        toast({
+          title: "Sucesso!",
+          description: "Serviço removido da lista do técnico.",
+          variant: "default",
+        });
+        
       } else if (service.type === 'STATUS_ITEM' && service.budget_item_id) {
         // Para status items, atualizar status para CANCELADO_PELO_CLIENTE
         const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/${service.budget_item_id}/status?status=CANCELADO_PELO_CLIENTE`, {
@@ -1095,10 +1103,27 @@ export function Agenda() {
           description: "Serviço removido com sucesso.",
           variant: "default",
         });
-        
-        // Recarregar lista
-        await loadSentServices();
       }
+      
+      // CORREÇÃO: Remover o item do estado local imediatamente (otimistic update)
+      setSentServices(prevServices => {
+        const filteredServices = prevServices.filter(s => s.id !== service.id);
+        
+        // Atualizar contador
+        setSentServicesTotal(prev => Math.max(0, prev - 1));
+        
+        console.log(`🔄 Estado atualizado: ${filteredServices.length} serviços restantes`);
+        return filteredServices;
+      });
+      
+      // Recarregar lista completa em background para sincronizar
+      setTimeout(() => {
+        if (sentServicesDate) {
+          loadSentServices(sentServicesDate);
+        } else {
+          loadAllSentServices(1); // Recarregar primeira página
+        }
+      }, 1000);
       
     } catch (error) {
       console.error('❌ Erro ao remover serviço:', error);
