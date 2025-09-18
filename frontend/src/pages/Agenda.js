@@ -64,7 +64,7 @@ export function Agenda() {
   const [sendingToTechnician, setSendingToTechnician] = useState(false);
   const [sentServices, setSentServices] = useState([]); // Serviços enviados para técnico
   const [loadingSentServices, setLoadingSentServices] = useState(false);
-  const [sentServicesDate, setSentServicesDate] = useState(new Date().toISOString().split('T')[0]); // Data para filtrar serviços enviados
+  const [sentServicesDate, setSentServicesDate] = useState(''); // Data opcional para filtro
   const [showEditServiceModal, setShowEditServiceModal] = useState(false);
   const [editingService, setEditingService] = useState(null);
   const [editServiceData, setEditServiceData] = useState({
@@ -72,6 +72,10 @@ export function Agenda() {
     assigned_time: '',
     status: ''
   });
+  // Estados para paginação
+  const [sentServicesPage, setSentServicesPage] = useState(1);
+  const [sentServicesHasMore, setSentServicesHasMore] = useState(true);
+  const [sentServicesTotal, setSentServicesTotal] = useState(0);
 
   useEffect(() => {
     // Check if this is a redirect from Google OAuth
