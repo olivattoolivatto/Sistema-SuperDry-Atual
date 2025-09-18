@@ -681,25 +681,65 @@ export function Agenda() {
       console.log('📋 Status items encontrados:', status_items?.length || 0);
       
       // Processar assignments para exibição (filtrar cancelados)
-      const processedAssignments = assignments
-        .filter(assignment => {
-          const isNotCancelled = assignment.status !== 'CANCELLED';
-          console.log(`📋 Assignment ${assignment.id}: Status ${assignment.status} → Incluir: ${isNotCancelled}`);
-          return isNotCancelled;
-        })
-        .map(assignment => ({
-          id: assignment.id,
-          route_id: assignment.route_id,
-          event_ids: assignment.event_ids,
-          technician_id: assignment.technician_id,
-          assigned_date: assignment.assigned_date,
-          assigned_time: assignment.assigned_time,
-          status: assignment.status,
-          created_at: assignment.created_at,
-          updated_at: assignment.updated_at,
-          type: 'ASSIGNMENT', // Marcador para identificar o tipo
-          title: `Rota ${assignment.route_id} (${assignment.event_ids?.length || 0} eventos)`
-        }));
+      const processedAssignments = await Promise.all(
+        assignments
+          .filter(assignment => {
+            const isNotCancelled = assignment.status !== 'CANCELLED';
+            console.log(`📋 Assignment ${assignment.id}: Status ${assignment.status} → Incluir: ${isNotCancelled}`);
+            return isNotCancelled;
+          })
+          .map(async assignment => {
+            // Tentar buscar informações detalhadas dos eventos/itens do assignment
+            let detailedTitle = `Rota ${assignment.route_id}`;
+            let clientInfo = '';
+            let serviceInfo = '';
+            
+            // Se temos event_ids, tentar buscar mais informações
+            if (assignment.event_ids && assignment.event_ids.length > 0) {
+              try {
+                // Buscar informações dos itens relacionados aos eventos
+                // Como os event_ids podem não corresponder diretamente aos budget_item_ids,
+                // vamos usar uma abordagem de busca nos status_items para encontrar informações relevantes
+                const relatedItems = status_items.filter(item => 
+                  assignment.event_ids.some(eventId => eventId.includes(item.id) || item.id.includes(eventId.replace('EVT-', 'ITM-')))
+                );
+                
+                if (relatedItems.length > 0) {
+                  const firstItem = relatedItems[0];
+                  clientInfo = firstItem.client_name;
+                  serviceInfo = relatedItems.map(item => 
+                    `${getServiceEmoji(item.service_name)} ${item.service_name}`
+                  ).join(', ');
+                  
+                  detailedTitle = `${clientInfo} - ${serviceInfo}`;
+                } else {
+                  // Fallback: mostrar informação da rota + quantidade de eventos
+                  detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
+                }
+              } catch (error) {
+                console.warn('Erro ao buscar detalhes do assignment:', error);
+                detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
+              }
+            }
+            
+            return {
+              id: assignment.id,
+              route_id: assignment.route_id,
+              event_ids: assignment.event_ids,
+              technician_id: assignment.technician_id,
+              assigned_date: assignment.assigned_date,
+              assigned_time: assignment.assigned_time,
+              status: assignment.status,
+              created_at: assignment.created_at,
+              updated_at: assignment.updated_at,
+              type: 'ASSIGNMENT', // Marcador para identificar o tipo
+              title: detailedTitle,
+              clientInfo: clientInfo,
+              serviceInfo: serviceInfo,
+              routeInfo: assignment.route_id // Manter informação da rota separadamente
+            };
+          })
+      );
       
       // Processar status_items como serviços individuais
       const processedStatusItems = status_items
