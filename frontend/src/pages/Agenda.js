@@ -99,10 +99,11 @@ export function Agenda() {
       loadSentServices(); // Carregar serviços enviados ao técnico
     }
   }, [currentDate, calendarView, isGoogleAuthenticated]);
-  // useEffect para carregar todos os serviços na inicialização
+  // useEffect para carregar serviços na inicialização
   useEffect(() => {
+    console.log('🚀 Inicializando carregamento de serviços...');
     loadAllSentServices(1); // Carregar primeira página de todos os serviços
-  }, []);
+  }, []); // Executa apenas uma vez na inicialização
 
   // Função para handle infinite scroll
   const handleLoadMore = () => {
