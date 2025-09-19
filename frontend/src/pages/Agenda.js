@@ -2483,7 +2483,7 @@ export function Agenda() {
                         {service.title}
                       </span>
                       
-                      {/* Status badge - apenas para assignments */}
+                      {/* Status badge - para assignments */}
                       {service.type === 'ASSIGNMENT' && (
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           service.status === 'ASSIGNED' ? 'bg-yellow-100 text-yellow-800' :
@@ -2492,7 +2492,11 @@ export function Agenda() {
                           service.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
-                          {service.status}
+                          {service.status === 'ASSIGNED' ? 'Atribuído' :
+                           service.status === 'IN_PROGRESS' ? 'Em Progresso' :
+                           service.status === 'COMPLETED' ? 'Concluído' :
+                           service.status === 'CANCELLED' ? 'Cancelado' :
+                           service.status}
                         </span>
                       )}
                       
@@ -2502,9 +2506,32 @@ export function Agenda() {
                           service.status === 'EXECUTAR_NO_LOCAL' ? 'bg-purple-100 text-purple-800' :
                           service.status === 'RETIRAR' ? 'bg-blue-100 text-blue-800' :
                           service.status === 'ENTREGAR' ? 'bg-green-100 text-green-800' :
+                          service.status === 'CLIENTE_TROUXE' ? 'bg-cyan-100 text-cyan-800' :
+                          service.status === 'COLETADO' ? 'bg-indigo-100 text-indigo-800' :
+                          service.status === 'EM_LAVAGEM' ? 'bg-orange-100 text-orange-800' :
+                          service.status === 'AGUARDANDO_ENTREGA' ? 'bg-yellow-100 text-yellow-800' :
+                          service.status === 'ENTREGUE' ? 'bg-green-100 text-green-800' :
+                          service.status === 'CANCELADO_PELO_CLIENTE' ? 'bg-red-100 text-red-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
-                          {service.status}
+                          {service.status === 'EXECUTAR_NO_LOCAL' ? 'Executar no Local' :
+                           service.status === 'RETIRAR' ? 'Retirar' :
+                           service.status === 'ENTREGAR' ? 'Entregar' :
+                           service.status === 'CLIENTE_TROUXE' ? 'Cliente Trouxe' :
+                           service.status === 'COLETADO' ? 'Coletado' :
+                           service.status === 'EM_LAVAGEM' ? 'Em Lavagem' :
+                           service.status === 'AGUARDANDO_ENTREGA' ? 'Aguardando Entrega' :
+                           service.status === 'ENTREGUE' ? 'Entregue' :
+                           service.status === 'CANCELADO_PELO_CLIENTE' ? 'Cancelado' :
+                           service.status}
+                        </span>
+                      )}
+                      
+                      {/* Badge indicador se está PENDENTE para o técnico */}
+                      {((service.type === 'ASSIGNMENT' && ['ASSIGNED', 'IN_PROGRESS'].includes(service.status)) ||
+                        (service.type === 'STATUS_ITEM' && ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'].includes(service.status))) && (
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 border border-yellow-300">
+                          🔄 PENDENTE
                         </span>
                       )}
                     </div>
