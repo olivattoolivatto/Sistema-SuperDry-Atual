@@ -676,7 +676,7 @@ export function Agenda() {
   const loadAllSentServices = async (page = 1, dateFilter = null, append = false) => {
     try {
       setLoadingSentServices(true);
-      console.log(`🔄 Carregando todos os serviços enviados - Página: ${page}, Data: ${dateFilter || 'Todas'}`);
+      console.log(`🔄 Carregando TODOS os serviços enviados - Página: ${page}, Data: ${dateFilter || 'Todas'}`);
       
       let allAssignments = [];
       let allStatusItems = [];
@@ -688,27 +688,25 @@ export function Agenda() {
         const response = await technicianApi.getDailyTasks('TECH-001', dateFilter);
         const { assignments, status_items } = response.data;
         
-        // Processar assignments
+        // Processar ALL assignments (incluindo cancelados para histórico completo)
         const processedAssignments = await Promise.all(
           assignments
-            .filter(assignment => assignment.status !== 'CANCELLED')
             .map(assignment => processAssignment(assignment))
         );
         
-        // Processar status items
+        // Processar ALL status items (incluindo cancelados para histórico completo)
         const processedStatusItems = status_items
-          .filter(item => ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'].includes(item.status))
           .map(item => processStatusItem(item, dateFilter));
         
         allAssignments = [...processedAssignments, ...processedStatusItems];
         
       } else {
-        // CORREÇÃO: Buscar apenas alguns dias recentes para evitar duplicações
-        console.log(`📅 Buscando serviços dos últimos 7 dias...`);
+        // AGENDA: Buscar TODOS os serviços (incluindo finalizados/cancelados)
+        console.log(`📅 Buscando TODOS os serviços dos últimos 7 dias (histórico completo)...`);
         
         const today = new Date();
-        const daysToFetch = 7; // Reduzido de 30 para 7 dias
-        const seenIds = new Set(); // Para evitar duplicatas
+        const daysToFetch = 7;
+        const seenIds = new Set();
         
         // Gerar datas dos últimos 7 dias
         const dates = [];
@@ -724,25 +722,24 @@ export function Agenda() {
             const response = await technicianApi.getDailyTasks('TECH-001', date);
             const { assignments, status_items } = response.data;
             
-            // Processar assignments (evitar duplicados)
+            // Processar ALL assignments (sem filtrar por status para histórico completo)
             const processedAssignments = await Promise.all(
               assignments
-                .filter(assignment => assignment.status !== 'CANCELLED' && !seenIds.has(assignment.id))
+                .filter(assignment => !seenIds.has(assignment.id))
                 .map(async assignment => {
-                  seenIds.add(assignment.id); // Marcar como visto
+                  seenIds.add(assignment.id);
                   return await processAssignment(assignment);
                 })
             );
             
-            // Processar status items (evitar duplicados)
+            // Processar ALL status items (sem filtrar por status para histórico completo)
             const processedStatusItems = status_items
               .filter(item => {
                 const itemId = `status-${item.id}`;
-                const isRelevant = ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'].includes(item.status);
                 const isNotSeen = !seenIds.has(itemId);
                 
-                if (isRelevant && isNotSeen) {
-                  seenIds.add(itemId); // Marcar como visto
+                if (isNotSeen) {
+                  seenIds.add(itemId);
                   return true;
                 }
                 return false;
@@ -765,7 +762,7 @@ export function Agenda() {
       allServices.sort((a, b) => {
         const dateA = new Date(a.created_at || a.assigned_date);
         const dateB = new Date(b.created_at || b.assigned_date);
-        return dateB - dateA; // Mais recente primeiro
+        return dateB - dateA;
       });
       
       // Implementar paginação manual
@@ -774,14 +771,14 @@ export function Agenda() {
       const endIndex = startIndex + itemsPerPage;
       const pageItems = allServices.slice(startIndex, endIndex);
       
-      console.log(`✅ Total de serviços encontrados: ${allServices.length}`);
+      console.log(`✅ Total de serviços encontrados (TODOS): ${allServices.length}`);
       console.log(`📄 Página ${page}: ${pageItems.length} items (${startIndex} - ${endIndex})`);
       
       // CORREÇÃO: Atualizar estado corretamente
       if (append && page > 1) {
         setSentServices(prev => [...prev, ...pageItems]);
       } else {
-        setSentServices(pageItems); // Substituir, não anexar
+        setSentServices(pageItems);
       }
       
       setSentServicesTotal(allServices.length);
