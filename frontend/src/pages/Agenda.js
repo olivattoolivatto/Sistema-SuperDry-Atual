@@ -1076,22 +1076,14 @@ export function Agenda() {
         return;
       }
       
-      // CORREÇÃO: Remover o item do estado local PRIMEIRO (optimistic update)
-      setSentServices(prevServices => {
-        const filteredServices = prevServices.filter(s => s.id !== service.id);
-        console.log(`🔄 Estado atualizado otimisticamente: ${filteredServices.length} serviços restantes`);
-        return filteredServices;
-      });
+      let backendSuccess = false;
       
-      // Atualizar contador
-      setSentServicesTotal(prev => Math.max(0, prev - 1));
-      
-      // Tentar cancelar no backend em background
       try {
         if (service.type === 'ASSIGNMENT') {
           // Para assignments, marcar como CANCELLED
           const response = await technicianApi.updateAssignmentStatus(service.id, 'CANCELLED');
           console.log('✅ Assignment marcado como cancelado no backend:', response.data);
+          backendSuccess = true;
           
         } else if (service.type === 'STATUS_ITEM' && service.budget_item_id) {
           // Para status items, atualizar status para CANCELADO_PELO_CLIENTE
@@ -1099,29 +1091,46 @@ export function Agenda() {
             method: 'PUT'
           });
           
-          if (!response.ok) {
-            throw new Error('Erro ao cancelar item no backend');
+          if (response.ok) {
+            console.log('✅ Status item API call success');
+            backendSuccess = true;
+          } else {
+            throw new Error(`Erro HTTP: ${response.status}`);
           }
-          
-          console.log('✅ Status item marcado como cancelado no backend');
         }
         
-        // Mostrar mensagem de sucesso
-        console.log('✅ Serviço removido com sucesso');
-        
       } catch (backendError) {
-        console.error('❌ Erro ao cancelar no backend (mas já removido da UI):', backendError);
+        console.error('❌ Erro ao cancelar no backend:', backendError);
+        alert(`Erro ao cancelar no servidor: ${backendError.message}. O item não foi removido.`);
+        return; // Não prosseguir se o backend falhou
+      }
+      
+      if (backendSuccess) {
+        // Só atualizar a UI se o backend foi bem-sucedido
+        console.log('✅ Backend operation successful, updating UI');
         
-        // Se falhar no backend, reverter a UI
+        // Remover o item do estado local
         setSentServices(prevServices => {
-          const restoredServices = [...prevServices, service];
-          console.log('🔄 Revertendo exclusão devido a erro no backend');
-          return restoredServices;
+          const filteredServices = prevServices.filter(s => s.id !== service.id);
+          console.log(`🔄 Estado atualizado: ${filteredServices.length} serviços restantes`);
+          return filteredServices;
         });
         
-        setSentServicesTotal(prev => prev + 1);
+        // Atualizar contador
+        setSentServicesTotal(prev => Math.max(0, prev - 1));
         
-        alert('Erro ao remover serviço no servidor. Tente novamente.');
+        console.log('✅ Serviço removido com sucesso da UI e backend');
+        alert('Serviço removido com sucesso!');
+        
+        // Recarregar lista em background para garantir sincronização
+        setTimeout(() => {
+          console.log('🔄 Recarregando lista para sincronização...');
+          if (sentServicesDate) {
+            loadSentServices(sentServicesDate);
+          } else {
+            loadAllSentServices(1);
+          }
+        }, 2000);
       }
       
     } catch (error) {
