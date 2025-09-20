@@ -917,6 +917,12 @@ export function Agenda() {
       }
     }
     
+    // CORREÇÃO: Garantir que a data seja válida
+    let validDate = queryDate;
+    if (!validDate || validDate === 'Invalid Date') {
+      validDate = new Date().toISOString().split('T')[0]; // Usar data atual como fallback
+    }
+    
     return {
       id: `status-${item.id}`, // Usar prefixo para evitar conflito de IDs
       budget_item_id: item.id,
@@ -927,7 +933,7 @@ export function Agenda() {
       status: item.status,
       observations: item.observations,
       client_address: item.client_address,
-      assigned_date: queryDate, // CORREÇÃO: Usar data fixa da consulta
+      assigned_date: validDate, // CORREÇÃO: Usar data válida
       assigned_time: '08:00',
       created_at: new Date().toISOString(), // Para ordenação
       type: 'STATUS_ITEM',
