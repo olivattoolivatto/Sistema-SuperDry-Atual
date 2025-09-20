@@ -1594,12 +1594,47 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
                 Registre fotos para todos os itens antes de prosseguir.
               </p>
             )}
+            
+            {/* Validação de danos */}
+            {(() => {
+              const itemsWithDamage = client.items.filter(item => damageInfo[item.id]?.hasDamage);
+              const invalidDamageItems = itemsWithDamage.filter(item => {
+                const info = damageInfo[item.id];
+                return !info.damageDetails || !info.damageDetails.trim() || 
+                       !info.damagePhotos || info.damagePhotos.length === 0;
+              });
+              
+              if (invalidDamageItems.length > 0) {
+                return (
+                  <p className="text-sm text-orange-600 mt-1">
+                    ⚠️ Itens com danos precisam de detalhes e fotos específicas.
+                  </p>
+                );
+              }
+            })()}
           </div>
           <button
             onClick={onProceed}
-            disabled={!allItemsHavePhotos()}
+            disabled={!allItemsHavePhotos() || (() => {
+              // Validação adicional para danos
+              const itemsWithDamage = client.items.filter(item => damageInfo[item.id]?.hasDamage);
+              const invalidDamageItems = itemsWithDamage.filter(item => {
+                const info = damageInfo[item.id];
+                return !info.damageDetails || !info.damageDetails.trim() || 
+                       !info.damagePhotos || info.damagePhotos.length === 0;
+              });
+              return invalidDamageItems.length > 0;
+            })()}
             className={`py-2 px-6 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
-              allItemsHavePhotos()
+              allItemsHavePhotos() && (() => {
+                const itemsWithDamage = client.items.filter(item => damageInfo[item.id]?.hasDamage);
+                const invalidDamageItems = itemsWithDamage.filter(item => {
+                  const info = damageInfo[item.id];
+                  return !info.damageDetails || !info.damageDetails.trim() || 
+                         !info.damagePhotos || info.damagePhotos.length === 0;
+                });
+                return invalidDamageItems.length === 0;
+              })()
                 ? 'bg-green-600 text-white hover:bg-green-700'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
