@@ -706,11 +706,19 @@ export function Agenda() {
             .map(assignment => processAssignment(assignment, budgets))
         );
         
-        // Processar ALL status items (incluindo cancelados para histórico completo)
+        // Processar ALL status items com filtro para "SERVTECS"
+        // CORREÇÃO FLUXO AUTOMÁTICO: Por enquanto, mostrar apenas assignments explícitos
+        // Os status_items só devem aparecer se foram explicitamente enviados para o técnico
+        const processedStatusItems = [];
+        
+        // NOTA: Comentando status_items até termos lógica para identificar 
+        // quais foram explicitamente enviados vs automáticos
+        /*
         const processedStatusItems = await Promise.all(
           status_items
             .map(item => processStatusItem(item, dateFilter, budgets))
         );
+        */
         
         allAssignments = [...processedAssignments, ...processedStatusItems];
         
