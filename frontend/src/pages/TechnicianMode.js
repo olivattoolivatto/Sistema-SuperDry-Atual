@@ -713,6 +713,26 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
         </div>
         <p className="text-sm text-gray-600 mt-1">{getClientAddress(client)}</p>
         
+        {/* Observações do Orçamento e Internas - APÓS O ENDEREÇO */}
+        <div className="mt-2 space-y-1">
+          <div className="p-2 bg-green-50 rounded-md">
+            <p className="text-xs font-medium text-green-800">💰 Observações do Orçamento:</p>
+            <p className="text-xs text-green-700">
+              {client.budgetObservations && client.budgetObservations.trim() 
+                ? client.budgetObservations 
+                : 'Sem informações'}
+            </p>
+          </div>
+          <div className="p-2 bg-blue-50 rounded-md">
+            <p className="text-xs font-medium text-blue-800">📝 Observações Internas:</p>
+            <p className="text-xs text-blue-700">
+              {client.internalObservations && client.internalObservations.trim() 
+                ? client.internalObservations 
+                : 'Sem informações'}
+            </p>
+          </div>
+        </div>
+        
         {/* Status do assignment se for da agenda */}
         {client.source === 'AGENDA_ASSIGNMENT' && (
           <div className="mt-2 flex items-center space-x-2">
