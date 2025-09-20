@@ -847,7 +847,15 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
       
     } catch (error) {
       console.error(`❌ Erro ao remover assignment ${assignmentId}:`, error);
-      alert('Erro ao remover da agenda. Tente novamente.');
+      
+      // CORREÇÃO: Tratar especificamente erro 404 (assignment não existe)
+      if (error.response && error.response.status === 404) {
+        alert('Este serviço não existe mais na agenda. A lista será atualizada.');
+        console.log('🔄 Assignment não encontrado, recarregando lista...');
+        window.location.reload();
+      } else {
+        alert('Erro ao remover da agenda. Tente novamente.');
+      }
     }
   };
   
