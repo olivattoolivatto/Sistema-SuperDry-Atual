@@ -876,11 +876,19 @@ export function Agenda() {
   };
   
   // Função auxiliar para processar status items
-  const processStatusItem = (item, queryDate) => {
+  const processStatusItem = async (item, queryDate, budgets = null) => {
     console.log(`🔍 Processando status item: ${item.id} - ${item.service_name} (Status: ${item.status})`);
     
     // Buscar informações do orçamento para obter vendedor
     let salesperson = null;
+    
+    if (budgets) {
+      const budget = budgets.find(b => b.id === item.budget_id);
+      if (budget) {
+        salesperson = budget.salesperson;
+        console.log(`✅ Vendedor encontrado para ${item.id}: ${salesperson}`);
+      }
+    }
     
     return {
       id: `status-${item.id}`, // Usar prefixo para evitar conflito de IDs
