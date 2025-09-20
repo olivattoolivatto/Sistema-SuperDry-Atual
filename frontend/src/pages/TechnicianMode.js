@@ -581,8 +581,23 @@ function StreetMode({ onBack }) {
             scheduledTime: '08:00', // TODO: Definir lógica de horário
             items: [],
             internalObservations: item.internal_observations,
+            budgetObservations: null, // Será preenchido abaixo
             source: 'STATUS_BASED'
           };
+          
+          // Buscar observações do orçamento
+          if (item.budget_id) {
+            try {
+              const budgetResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budgets/${item.budget_id}`);
+              if (budgetResponse.ok) {
+                const budgetData = await budgetResponse.json();
+                unifiedClients[clientId].budgetObservations = budgetData.budget_observations;
+                console.log(`✅ Observações do orçamento ${item.budget_id}: ${budgetData.budget_observations}`);
+              }
+            } catch (budgetError) {
+              console.warn(`⚠️ Erro ao buscar orçamento ${item.budget_id}:`, budgetError);
+            }
+          }
         }
         
         unifiedClients[clientId].items.push({
