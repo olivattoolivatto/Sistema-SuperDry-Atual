@@ -1199,17 +1199,21 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
       const result = await response.json();
       console.log('✅ Upload realizado com sucesso:', result);
       
-      // Criar previews locais das fotos
+      // Criar previews locais das fotos com observações
       const uploadedPhotos = [];
-      for (let file of files) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const photoId = Date.now() + Math.random() + i;
         const photoPreview = {
-          id: Date.now() + Math.random(),
+          id: photoId,
           file: file,
           url: URL.createObjectURL(file),
           name: file.name,
           size: file.size,
           type: file.type,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          observations: '', // Será preenchido pelo usuário
+          photoType: 'NORMAL' // NORMAL ou DAMAGE
         };
         uploadedPhotos.push(photoPreview);
       }
