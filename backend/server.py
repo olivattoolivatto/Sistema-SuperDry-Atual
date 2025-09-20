@@ -1378,35 +1378,38 @@ async def create_test_assignments_for_tech001():
                             'service_name': item.get('service_name', 'Serviço')
                         })
         
-        if len(valid_items) < 2:
+        if len(valid_items) < 1:
             raise HTTPException(status_code=400, detail="Não há itens suficientes para criar assignments de teste")
         
-        # Criar 2 assignments de teste para hoje
+        # Criar assignments de teste para hoje
         today = datetime.now().strftime('%Y-%m-%d')
         created_assignments = []
         
-        # Assignment 1: Com múltiplos event_ids
+        # Assignment 1: Com item disponível
         assignment1 = TechnicianAssignment(
             route_id="RTE-TEST001",
-            event_ids=[valid_items[0]['budget_item_id'], valid_items[1]['budget_item_id'] if len(valid_items) > 1 else valid_items[0]['budget_item_id']],
+            event_ids=[valid_items[0]['budget_item_id']],
             technician_id="TECH-001",
             assigned_date=today,
             assignment_type="AGENDA",
             status="ASSIGNED"
         )
         
-        # Assignment 2: Com evento único
-        assignment2 = TechnicianAssignment(
-            route_id="RTE-TEST002", 
-            event_ids=[valid_items[0]['budget_item_id']],
-            technician_id="TECH-001",
-            assigned_date=today,
-            assignment_type="MANUAL",
-            status="ASSIGNED"
-        )
+        # Se há mais de 1 item, criar segundo assignment
+        assignments_to_create = [assignment1]
+        if len(valid_items) > 1:
+            assignment2 = TechnicianAssignment(
+                route_id="RTE-TEST002", 
+                event_ids=[valid_items[1]['budget_item_id']],
+                technician_id="TECH-001",
+                assigned_date=today,
+                assignment_type="MANUAL",
+                status="ASSIGNED"
+            )
+            assignments_to_create.append(assignment2)
         
         # Salvar assignments no banco
-        for assignment in [assignment1, assignment2]:
+        for assignment in assignments_to_create:
             assignment_dict = assignment.dict()
             assignment_dict['created_at'] = assignment.created_at.isoformat()
             assignment_dict['updated_at'] = assignment.updated_at.isoformat()
