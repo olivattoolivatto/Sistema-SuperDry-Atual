@@ -700,6 +700,7 @@ export function Agenda() {
           status: item.assignment_status || 'ASSIGNED',
           observations: item.observations,
           internal_observations: item.internal_observations,
+          budget_observations: item.budget_observations,
           client_address: item.client_address,
           assigned_date: item.assigned_date,
           assigned_time: '08:00',
