@@ -1026,10 +1026,24 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
             <Phone className="w-4 h-4 text-green-600" />
             <span className="text-sm text-gray-700">{client.phone}</span>
           </div>
-          <div className="mt-3 p-3 bg-yellow-50 rounded-md">
-            <p className="text-sm font-medium text-yellow-800">Observações Internas:</p>
-            <p className="text-sm text-yellow-700">{client.internalObservations}</p>
-          </div>
+          
+          {/* Observações logo após o endereço */}
+          {(client.internalObservations || client.budgetObservations) && (
+            <div className="mt-3 space-y-2">
+              {client.internalObservations && (
+                <div className="p-2 bg-blue-50 rounded-md">
+                  <p className="text-xs font-medium text-blue-800">📝 Observações Internas:</p>
+                  <p className="text-xs text-blue-700">{client.internalObservations}</p>
+                </div>
+              )}
+              {client.budgetObservations && (
+                <div className="p-2 bg-green-50 rounded-md">
+                  <p className="text-xs font-medium text-green-800">💰 Observações do Orçamento:</p>
+                  <p className="text-xs text-green-700">{client.budgetObservations}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
