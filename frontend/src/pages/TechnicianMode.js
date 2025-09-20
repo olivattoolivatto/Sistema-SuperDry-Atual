@@ -395,7 +395,7 @@ function StreetMode({ onBack }) {
             scheduledTime: '08:00', // TODO: Definir lógica de horário
             items: [],
             internalObservations: item.internal_observations,
-            budgetObservations: '',  // Não disponível em status_items individuais
+            budgetObservations: item.budget_observations,  // CORREÇÃO: Agora disponível nos status_items
             assigned_date: item.assigned_date || new Date().toISOString().split('T')[0],
             source: 'AGENDA_ASSIGNMENT', // CORRIGIDO: Agora são assignments desencapsulados
             status: item.assignment_status || 'ASSIGNED',
