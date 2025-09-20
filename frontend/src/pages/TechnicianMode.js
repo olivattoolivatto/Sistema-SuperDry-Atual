@@ -1414,7 +1414,7 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
 
               {/* Upload de Fotos */}
               <div className="p-4">
-                <div className="mb-3">
+                <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Selecionar fotos para este item:
                   </label>
@@ -1426,6 +1426,65 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
                     onChange={(e) => handleFileSelect(item.id, Array.from(e.target.files))}
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
+                </div>
+                
+                {/* Checkbox de Danos */}
+                <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="flex items-start space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`damage-${item.id}`}
+                      checked={damageInfo[item.id]?.hasDamage || false}
+                      onChange={(e) => handleDamageToggle(item.id, e.target.checked)}
+                      className="mt-1 h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor={`damage-${item.id}`} className="text-sm text-orange-800">
+                      <span className="font-medium">O item apresenta danos visíveis?</span>
+                      <br />
+                      <span className="text-orange-700">
+                        Rasgos, manchas claramente irreversíveis (tinta, cola, desbotamento), 
+                        Descosturas ou desfiamento (gatos), afundamento de espuma ou coisa parecida?
+                      </span>
+                    </label>
+                  </div>
+                  
+                  {/* Campo de detalhes do dano */}
+                  {damageInfo[item.id]?.hasDamage && (
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-orange-800 mb-1">
+                          Detalhes sobre o Dano: *
+                        </label>
+                        <textarea
+                          value={damageInfo[item.id]?.damageDetails || ''}
+                          onChange={(e) => handleDamageDetailsChange(item.id, e.target.value)}
+                          placeholder="Descreva detalhadamente os danos encontrados..."
+                          className="w-full px-3 py-2 border border-orange-300 rounded-lg text-sm focus:ring-orange-500 focus:border-orange-500"
+                          rows="3"
+                          required
+                        />
+                      </div>
+                      
+                      {/* Upload de foto do dano */}
+                      <div>
+                        <label className="block text-sm font-medium text-orange-800 mb-2">
+                          Foto de identificação do dano: *
+                        </label>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => handleDamagePhotoUpload(item.id, Array.from(e.target.files))}
+                          className="block w-full text-sm text-orange-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-100 file:text-orange-800 hover:file:bg-orange-200"
+                          required
+                        />
+                        <p className="text-xs text-orange-600 mt-1">
+                          Obrigatório: Capture fotos específicas dos danos identificados
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {selectedFiles[item.id] && selectedFiles[item.id].length > 0 && (
