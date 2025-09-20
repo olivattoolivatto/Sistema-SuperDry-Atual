@@ -2724,13 +2724,33 @@ export function Agenda() {
                     </div>
                   )}
                   
-                  {/* Observações - para status items */}
-                  {service.type === 'STATUS_ITEM' && service.observations && (
+                  {/* Observações do serviço individual */}
+                  {service.observations && (
                     <div className="mt-3 p-2 bg-yellow-50 rounded">
-                      <span className="text-xs font-medium text-yellow-800">Observações:</span>
+                      <span className="text-xs font-medium text-yellow-800">📝 Observações do Serviço:</span>
                       <p className="text-xs text-yellow-700 mt-1">{service.observations}</p>
                     </div>
                   )}
+                  
+                  {/* Observações Internas e do Orçamento - SEMPRE EXIBIR */}
+                  <div className="mt-3 space-y-2">
+                    <div className="p-2 bg-blue-50 rounded">
+                      <span className="text-xs font-medium text-blue-800">📝 Observações Internas:</span>
+                      <p className="text-xs text-blue-700 mt-1">
+                        {service.internal_observations && service.internal_observations.trim() 
+                          ? service.internal_observations 
+                          : 'Sem informações'}
+                      </p>
+                    </div>
+                    <div className="p-2 bg-green-50 rounded">
+                      <span className="text-xs font-medium text-green-800">💰 Observações do Orçamento:</span>
+                      <p className="text-xs text-green-700 mt-1">
+                        {service.budget_observations && service.budget_observations.trim() 
+                          ? service.budget_observations 
+                          : 'Sem informações'}
+                      </p>
+                    </div>
+                  </div>
                   
                   {/* Status detalhado (placeholder para implementação futura) */}
                   <div className="mt-3 pt-3 border-t border-gray-100">
