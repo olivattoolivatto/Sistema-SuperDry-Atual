@@ -564,8 +564,12 @@ function StreetMode({ onBack }) {
       }
       
       // 2. Processar itens por status
+      console.log(`🔍 Processando ${status_items.length} status items para unificação`);
+      
       for (const item of status_items) {
-        const clientId = item.client_id;
+        const clientId = item.client_id; // PROBLEMA POTENCIAL: usar client_id pode causar duplicação
+        
+        console.log(`📋 Processando item: ${item.id} - ${item.service_name} para cliente: ${clientId}`);
         
         if (!unifiedClients[clientId]) {
           // CORREÇÃO: Usar função helper para extrair endereço correto de status_items
@@ -585,6 +589,8 @@ function StreetMode({ onBack }) {
             source: 'STATUS_BASED'
           };
           
+          console.log(`✅ Novo cliente criado: ${clientId}`);
+          
           // Buscar observações do orçamento
           if (item.budget_id) {
             try {
@@ -600,13 +606,20 @@ function StreetMode({ onBack }) {
           }
         }
         
-        unifiedClients[clientId].items.push({
-          id: item.id,
-          name: item.service_name,
-          status: item.status,
-          value: parseFloat(item.service_value),
-          observations: item.observations
-        });
+        // CORREÇÃO: Verificar se o item já foi adicionado para evitar duplicação
+        const existingItem = unifiedClients[clientId].items.find(existingItem => existingItem.id === item.id);
+        if (!existingItem) {
+          unifiedClients[clientId].items.push({
+            id: item.id,
+            name: item.service_name,
+            status: item.status,
+            value: parseFloat(item.service_value),
+            observations: item.observations
+          });
+          console.log(`✅ Item adicionado: ${item.id} - ${item.service_name}`);
+        } else {
+          console.warn(`⚠️ Item duplicado ignorado: ${item.id} - ${item.service_name}`);
+        }
       }
       
       // Converter para array e ordenar por data
