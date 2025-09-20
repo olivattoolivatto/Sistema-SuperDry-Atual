@@ -983,18 +983,24 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
             <span>Iniciar Atendimento</span>
           </button>
           
-          {/* Botão Remover para assignments da agenda */}
-          {client.source === 'AGENDA_ASSIGNMENT' && (
+          {/* Botão de exclusão - com tratamento melhorado para ambos os tipos */}
+          {client.source === 'AGENDA_ASSIGNMENT' && client.original_assignment_id && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                handleRemoveAssignment(client.id);
+                handleRemoveAssignment(client.original_assignment_id);
               }}
-              className="bg-red-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-red-700 transition-colors flex items-center justify-center"
-              title="Remover da minha agenda"
+              className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+              title="Remover da agenda (assignment)"
             >
               <Trash2 className="w-4 h-4" />
             </button>
+          )}
+          {/* Informação para itens automáticos */}
+          {client.source === 'STATUS_BASED' && (
+            <div className="p-1 text-gray-400" title="Item automático por status - use a Agenda para gerenciar">
+              <Package className="w-4 h-4" />
+            </div>
           )}
         </div>
       </div>
