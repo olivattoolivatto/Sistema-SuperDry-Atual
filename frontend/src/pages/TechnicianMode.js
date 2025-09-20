@@ -564,7 +564,7 @@ function StreetMode({ onBack }) {
       }
       
       // 2. Processar itens por status
-      status_items.forEach(item => {
+      for (const item of status_items) {
         const clientId = item.client_id;
         
         if (!unifiedClients[clientId]) {
@@ -607,7 +607,7 @@ function StreetMode({ onBack }) {
           value: parseFloat(item.service_value),
           observations: item.observations
         });
-      });
+      }
       
       // Converter para array e ordenar por data
       const clientsArray = Object.values(unifiedClients);
