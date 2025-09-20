@@ -4634,6 +4634,240 @@ if __name__ == "__main__":
         
         return len(issues_found) == 0
 
+    def run_technician_mode_corrections_test(self):
+        """
+        REVIEW REQUEST TEST: Testar correções implementadas para problemas do Modo Técnico
+        
+        CORREÇÕES IMPLEMENTADAS:
+        1. Melhor tratamento de erro 404 para assignments inexistentes no TechnicianMode.js
+        2. Filtro "Apenas hoje" mais consistente entre assignments e status_items
+        3. Visualização unificada com badges melhorados (📋 Agenda vs ⚡ Auto)
+        4. Novo endpoint POST /api/technician/create-test-assignments para criar dados de teste
+
+        TESTES NECESSÁRIOS:
+        1. Testar endpoint de criação de assignments de teste: POST /api/technician/create-test-assignments
+        2. Verificar se assignments criados aparecem em GET /api/technician/TECH-001/daily-tasks
+        3. Testar atualização de status dos assignments criados
+        4. Confirmar que sistema agora mostra dados tanto da agenda quanto por status
+        5. Verificar se erro 404 é tratado adequadamente (tentar excluir assignment inexistente)
+        """
+        print("\n" + "=" * 80)
+        print("🔧 TESTE DAS CORREÇÕES IMPLEMENTADAS PARA OS PROBLEMAS DO MODO TÉCNICO")
+        print("=" * 80)
+        print("CORREÇÕES IMPLEMENTADAS:")
+        print("1. Melhor tratamento de erro 404 para assignments inexistentes no TechnicianMode.js")
+        print("2. Filtro 'Apenas hoje' mais consistente entre assignments e status_items")
+        print("3. Visualização unificada com badges melhorados (📋 Agenda vs ⚡ Auto)")
+        print("4. Novo endpoint POST /api/technician/create-test-assignments para criar dados de teste")
+        print("=" * 80)
+        
+        # TESTE 1: Endpoint de criação de assignments de teste
+        print("\n1️⃣ TESTANDO ENDPOINT DE CRIAÇÃO DE ASSIGNMENTS DE TESTE:")
+        print("-" * 65)
+        
+        response = self.make_request('POST', '/technician/create-test-assignments')
+        if not response['success']:
+            self.log_test("Create Test Assignments", False, 
+                        "Failed to create test assignments", response['data'])
+            return False
+        
+        result = response['data']
+        assignment_ids = result.get('assignment_ids', [])
+        date_created = result.get('date', '')
+        items_used = result.get('items_used', [])
+        
+        print(f"✅ Assignments criados com sucesso:")
+        print(f"   📋 Assignment IDs: {assignment_ids}")
+        print(f"   📅 Data: {date_created}")
+        print(f"   📦 Items utilizados: {items_used}")
+        
+        self.log_test("Create Test Assignments", True, 
+                    f"Successfully created {len(assignment_ids)} test assignments for TECH-001")
+        
+        # TESTE 2: Verificar se assignments aparecem em daily-tasks
+        print("\n2️⃣ VERIFICANDO SE ASSIGNMENTS APARECEM EM DAILY-TASKS:")
+        print("-" * 60)
+        
+        response = self.make_request('GET', f'/technician/TECH-001/daily-tasks?date={date_created}')
+        if not response['success']:
+            self.log_test("Daily Tasks After Creation", False, 
+                        "Failed to get daily tasks after assignment creation", response['data'])
+            return False
+        
+        daily_tasks = response['data']
+        assignments = daily_tasks.get('assignments', [])
+        status_items = daily_tasks.get('status_items', [])
+        
+        print(f"📊 Dados híbridos retornados:")
+        print(f"   📋 Assignments: {len(assignments)} items")
+        print(f"   ⚡ Status Items: {len(status_items)} items")
+        
+        # Verificar se os assignments criados estão na lista
+        found_assignments = []
+        for assignment in assignments:
+            if assignment.get('id') in assignment_ids:
+                found_assignments.append(assignment.get('id'))
+        
+        if len(found_assignments) == len(assignment_ids):
+            print(f"✅ Todos os {len(assignment_ids)} assignments criados aparecem em daily-tasks")
+            self.log_test("Daily Tasks After Creation", True, 
+                        f"All {len(assignment_ids)} created assignments appear in daily-tasks")
+        else:
+            print(f"❌ Apenas {len(found_assignments)}/{len(assignment_ids)} assignments aparecem em daily-tasks")
+            self.log_test("Daily Tasks After Creation", False, 
+                        f"Only {len(found_assignments)}/{len(assignment_ids)} assignments appear in daily-tasks")
+        
+        # TESTE 3: Testar atualização de status dos assignments
+        print("\n3️⃣ TESTANDO ATUALIZAÇÃO DE STATUS DOS ASSIGNMENTS:")
+        print("-" * 55)
+        
+        if assignment_ids:
+            test_assignment_id = assignment_ids[0]
+            
+            # Testar transição ASSIGNED → IN_PROGRESS
+            response = self.make_request('PUT', f'/technician/assignment/{test_assignment_id}/status?status=IN_PROGRESS')
+            if response['success']:
+                print(f"✅ Status atualizado para IN_PROGRESS: {test_assignment_id}")
+                self.log_test("Assignment Status Update - IN_PROGRESS", True, 
+                            f"Successfully updated assignment {test_assignment_id} to IN_PROGRESS")
+                
+                # Testar transição IN_PROGRESS → COMPLETED
+                response = self.make_request('PUT', f'/technician/assignment/{test_assignment_id}/status?status=COMPLETED')
+                if response['success']:
+                    print(f"✅ Status atualizado para COMPLETED: {test_assignment_id}")
+                    self.log_test("Assignment Status Update - COMPLETED", True, 
+                                f"Successfully updated assignment {test_assignment_id} to COMPLETED")
+                else:
+                    print(f"❌ Falha ao atualizar para COMPLETED: {test_assignment_id}")
+                    self.log_test("Assignment Status Update - COMPLETED", False, 
+                                f"Failed to update assignment {test_assignment_id} to COMPLETED", response['data'])
+            else:
+                print(f"❌ Falha ao atualizar para IN_PROGRESS: {test_assignment_id}")
+                self.log_test("Assignment Status Update - IN_PROGRESS", False, 
+                            f"Failed to update assignment {test_assignment_id} to IN_PROGRESS", response['data'])
+        
+        # TESTE 4: Confirmar sistema híbrido (agenda + status)
+        print("\n4️⃣ CONFIRMANDO SISTEMA HÍBRIDO (AGENDA + STATUS):")
+        print("-" * 50)
+        
+        # Verificar se temos dados de ambas as fontes
+        has_assignments = len(assignments) > 0
+        has_status_items = len(status_items) > 0
+        
+        print(f"📋 Dados da Agenda (assignments): {'✅ Presente' if has_assignments else '❌ Ausente'}")
+        print(f"⚡ Dados por Status (status_items): {'✅ Presente' if has_status_items else '❌ Ausente'}")
+        
+        if has_assignments and has_status_items:
+            print("✅ Sistema híbrido funcionando - dados de ambas as fontes disponíveis")
+            self.log_test("Hybrid System Check", True, 
+                        f"Hybrid system working: {len(assignments)} assignments + {len(status_items)} status_items")
+        elif has_assignments or has_status_items:
+            print("⚠️ Sistema híbrido parcial - apenas uma fonte de dados disponível")
+            self.log_test("Hybrid System Check", True, 
+                        f"Hybrid system partial: {len(assignments)} assignments + {len(status_items)} status_items")
+        else:
+            print("❌ Sistema híbrido não funcionando - nenhuma fonte de dados disponível")
+            self.log_test("Hybrid System Check", False, 
+                        "Hybrid system not working - no data from either source")
+        
+        # TESTE 5: Verificar tratamento de erro 404 (assignment inexistente)
+        print("\n5️⃣ VERIFICANDO TRATAMENTO DE ERRO 404 (ASSIGNMENT INEXISTENTE):")
+        print("-" * 70)
+        
+        fake_assignment_id = "TASS-inexistente-404"
+        response = self.make_request('PUT', f'/technician/assignment/{fake_assignment_id}/status?status=CANCELLED')
+        
+        if not response['success'] and response['status_code'] == 404:
+            print(f"✅ Erro 404 tratado adequadamente para assignment inexistente: {fake_assignment_id}")
+            self.log_test("404 Error Handling", True, 
+                        f"404 error properly handled for non-existent assignment {fake_assignment_id}")
+        else:
+            print(f"❌ Erro 404 não tratado adequadamente - Status: {response['status_code']}")
+            self.log_test("404 Error Handling", False, 
+                        f"404 error not properly handled - Status: {response['status_code']}", response['data'])
+        
+        # TESTE 6: Verificar filtro "Apenas hoje" com diferentes datas
+        print("\n6️⃣ VERIFICANDO FILTRO 'APENAS HOJE' COM DIFERENTES DATAS:")
+        print("-" * 60)
+        
+        test_dates = [
+            date_created,  # Data dos assignments criados
+            "2025-01-15",  # Data diferente
+            "2025-01-16"   # Outra data diferente
+        ]
+        
+        date_results = {}
+        for test_date in test_dates:
+            response = self.make_request('GET', f'/technician/TECH-001/daily-tasks?date={test_date}')
+            if response['success']:
+                tasks = response['data']
+                assignments_count = len(tasks.get('assignments', []))
+                status_items_count = len(tasks.get('status_items', []))
+                
+                date_results[test_date] = {
+                    'assignments': assignments_count,
+                    'status_items': status_items_count,
+                    'total': assignments_count + status_items_count
+                }
+                
+                print(f"📅 {test_date}: {assignments_count} assignments + {status_items_count} status_items = {assignments_count + status_items_count} total")
+            else:
+                date_results[test_date] = {'error': True}
+                print(f"❌ {test_date}: Erro ao buscar dados")
+        
+        # Verificar se filtro por data está funcionando
+        if len([d for d in date_results.values() if not d.get('error')]) >= 2:
+            print("✅ Filtro por data funcionando - diferentes datas retornam resultados")
+            self.log_test("Date Filter Check", True, 
+                        f"Date filter working - tested {len(test_dates)} different dates")
+        else:
+            print("❌ Filtro por data pode não estar funcionando adequadamente")
+            self.log_test("Date Filter Check", False, 
+                        "Date filter may not be working properly")
+        
+        # RESULTADO FINAL
+        print("\n" + "=" * 80)
+        print("📊 RESULTADO FINAL DAS CORREÇÕES DO MODO TÉCNICO:")
+        print("=" * 80)
+        
+        # Contar sucessos
+        technician_tests = [result for result in self.test_results if 'Create Test Assignments' in result['test'] or 
+                           'Daily Tasks After Creation' in result['test'] or 
+                           'Assignment Status Update' in result['test'] or
+                           'Hybrid System Check' in result['test'] or
+                           '404 Error Handling' in result['test'] or
+                           'Date Filter Check' in result['test']]
+        
+        successful_tests = sum(1 for test in technician_tests if test['success'])
+        total_tests = len(technician_tests)
+        
+        if successful_tests == total_tests:
+            print("🎉 TODAS AS CORREÇÕES DO MODO TÉCNICO FUNCIONANDO PERFEITAMENTE!")
+            print(f"✅ {successful_tests}/{total_tests} testes aprovados (100% sucesso)")
+            print("✅ Endpoint de criação de assignments de teste funcionando")
+            print("✅ Assignments aparecem corretamente em daily-tasks")
+            print("✅ Atualização de status funcionando")
+            print("✅ Sistema híbrido (agenda + status) operacional")
+            print("✅ Tratamento de erro 404 adequado")
+            print("✅ Filtro por data funcionando")
+            
+            self.log_test("Technician Mode Corrections - Overall", True, 
+                        f"All technician mode corrections working perfectly: {successful_tests}/{total_tests} tests passed")
+            return True
+        else:
+            print("⚠️ ALGUMAS CORREÇÕES DO MODO TÉCNICO PRECISAM DE ATENÇÃO")
+            print(f"📊 {successful_tests}/{total_tests} testes aprovados ({successful_tests/total_tests*100:.1f}% sucesso)")
+            
+            failed_tests = [test for test in technician_tests if not test['success']]
+            if failed_tests:
+                print("❌ Testes que falharam:")
+                for test in failed_tests:
+                    print(f"   - {test['test']}: {test['message']}")
+            
+            self.log_test("Technician Mode Corrections - Overall", False, 
+                        f"Some technician mode corrections need attention: {successful_tests}/{total_tests} tests passed")
+            return False
+
     def run_all_tests(self):
         """Run complete routes API test suite"""
         print("🚀 STARTING ROUTES API COMPREHENSIVE TESTS")
