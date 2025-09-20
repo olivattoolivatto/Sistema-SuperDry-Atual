@@ -856,22 +856,26 @@ export function Agenda() {
   };
   
   // Função auxiliar para processar status items
-  const processStatusItem = (item, date) => ({
-    id: `status-${item.id}`,
-    budget_item_id: item.id,
-    client_name: item.client_name,
-    client_phone: item.client_phone,
-    service_name: item.service_name,
-    service_value: item.service_value,
-    status: item.status,
-    observations: item.observations,
-    client_address: item.client_address,
-    assigned_date: date,
-    assigned_time: '08:00',
-    created_at: new Date().toISOString(), // Para ordenação
-    type: 'STATUS_ITEM',
-    title: `${getServiceEmoji(item.service_name)} ${item.client_name} - ${item.service_name}`
-  });
+  const processStatusItem = (item, date) => {
+    console.log(`🔍 Processando status item: ${item.id} - ${item.service_name} (Status: ${item.status})`);
+    
+    return {
+      id: `status-${item.id}`, // Usar prefixo para evitar conflito de IDs
+      budget_item_id: item.id,
+      client_name: item.client_name,
+      client_phone: item.client_phone,
+      service_name: item.service_name,
+      service_value: item.service_value,
+      status: item.status,
+      observations: item.observations,
+      client_address: item.client_address,
+      assigned_date: date,
+      assigned_time: '08:00',
+      created_at: new Date().toISOString(), // Para ordenação
+      type: 'STATUS_ITEM',
+      title: `${getServiceEmoji(item.service_name)} ${item.client_name} - ${item.service_name}`
+    };
+  };
       
   const loadSentServices = async (filterDate = null) => {
     // Esta função será mantida como fallback para filtros de data específica
