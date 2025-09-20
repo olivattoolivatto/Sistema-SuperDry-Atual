@@ -1294,10 +1294,54 @@ async def get_technician_daily_tasks(
         
         tasks["assignments"] = assignments
         
-        # 2. Modo automático DESATIVADO por solicitação do usuário
-        # (Anteriormente buscava budget items com status RETIRAR, EXECUTAR_NO_LOCAL, ENTREGAR automaticamente)
-        # Agora apenas assignments manuais da agenda são exibidos
-        pass
+        # 2. DESENCAPSULAR ASSIGNMENTS EM ITENS INDIVIDUAIS
+        # A lógica do sistema por status funcionava melhor porque trabalhava com budget_items individuais
+        # Agora aplicaremos a mesma lógica aos assignments, desencapsulando-os
+        for assignment in assignments:
+            # Para cada event_id no assignment, criar um item individual como status_items
+            for event_id in assignment.get("event_ids", []):
+                if event_id.startswith('ITM-'):  # Apenas budget_item_ids válidos
+                    # Buscar dados do budget item específico
+                    budget_found = None
+                    item_found = None
+                    
+                    budgets = await db.budgets.find({}).to_list(None)
+                    for budget in budgets:
+                        if budget.get('items'):
+                            for item in budget['items']:
+                                if item.get('id') == event_id:
+                                    budget_found = budget
+                                    item_found = item
+                                    break
+                        if item_found:
+                            break
+                    
+                    if budget_found and item_found:
+                        # Buscar dados do cliente
+                        client = await db.clients.find_one({"id": budget_found.get('client_id')})
+                        
+                        # Criar item desencapsulado no formato que funcionava
+                        desencapsulated_item = {
+                            "id": item_found.get('id'),
+                            "budget_id": budget_found.get('id'),
+                            "client_id": budget_found.get('client_id'),
+                            "client_name": client.get('name') if client else 'Cliente não encontrado',
+                            "client_address": client.get('address') if client else {},
+                            "client_phone": client.get('phone_primary') if client else '',
+                            "service_name": item_found.get('service_name'),
+                            "service_value": item_found.get('total_value', 0),
+                            "status": item_found.get('status'),
+                            "observations": item_found.get('observations', ''),
+                            "internal_observations": budget_found.get('internal_observations', ''),
+                            # Campos extras do assignment para controle
+                            "assignment_id": assignment.get("id"),
+                            "assignment_type": assignment.get("assignment_type"),
+                            "assignment_status": assignment.get("status"),
+                            "assigned_date": assignment.get("assigned_date"),
+                            "route_id": assignment.get("route_id")
+                        }
+                        
+                        tasks["status_items"].append(desencapsulated_item)
         
         return tasks
         
