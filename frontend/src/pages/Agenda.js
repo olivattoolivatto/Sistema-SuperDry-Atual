@@ -813,12 +813,13 @@ export function Agenda() {
   };
   
   // Função auxiliar para processar assignments
-  const processAssignment = async (assignment) => {
+  const processAssignment = async (assignment, budgets = null) => {
     console.log(`🔍 Processando assignment: ${assignment.id} com ${assignment.event_ids?.length || 0} eventos`);
     
     let detailedTitle = `Rota ${assignment.route_id}`;
     let clientInfo = '';
     let serviceInfo = '';
+    let salesperson = null;
     
     try {
       if (assignment.event_ids && assignment.event_ids.length > 0) {
@@ -827,11 +828,15 @@ export function Agenda() {
         // CORREÇÃO: Buscar detalhes de cada ITM diretamente nos orçamentos
         const itemDetails = [];
         
-        // Buscar todos os orçamentos para encontrar os ITMs
-        const budgetsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budgets`);
-        if (budgetsResponse.ok) {
-          const budgets = await budgetsResponse.json();
-          
+        if (!budgets) {
+          // Se não foram passados orçamentos, buscar
+          const budgetsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budgets`);
+          if (budgetsResponse.ok) {
+            budgets = await budgetsResponse.json();
+          }
+        }
+        
+        if (budgets) {
           // Procurar cada event_id nos orçamentos
           for (const eventId of assignment.event_ids) {
             for (const budget of budgets) {
@@ -843,9 +848,14 @@ export function Agenda() {
                   service_name: foundItem.service_name,
                   service_value: foundItem.total_value,
                   status: foundItem.status,
-                  budget_id: budget.id
+                  budget_id: budget.id,
+                  salesperson: budget.salesperson
                 });
-                console.log(`✅ Encontrado: ${eventId} - ${budget.client_name} - ${foundItem.service_name}`);
+                console.log(`✅ Encontrado: ${eventId} - ${budget.client_name} - ${foundItem.service_name} (Vendedor: ${budget.salesperson})`);
+                
+                if (!salesperson) {
+                  salesperson = budget.salesperson; // Usar primeiro vendedor encontrado
+                }
               }
             }
           }
@@ -855,7 +865,7 @@ export function Agenda() {
           // Se encontrou itens válidos, usar o primeiro para o título
           const firstItem = itemDetails[0];
           clientInfo = firstItem.client_name;
-          serviceInfo = `${getServiceEmoji(firstItem.service_name)} ${firstItem.service_name}`;
+          serviceInfo = `${getServiceEmoji(firstItem.service_name, salesperson)} ${firstItem.service_name}`;
           
           if (itemDetails.length > 1) {
             serviceInfo += ` e mais ${itemDetails.length - 1} serviço(s)`;
@@ -887,7 +897,8 @@ export function Agenda() {
       title: detailedTitle,
       clientInfo: clientInfo,
       serviceInfo: serviceInfo,
-      routeInfo: assignment.route_id
+      routeInfo: assignment.route_id,
+      salesperson: salesperson
     };
   };
   
