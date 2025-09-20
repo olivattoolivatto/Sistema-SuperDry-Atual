@@ -1126,6 +1126,9 @@ function TabButton({ active, onClick, icon, label }) {
 // Componente de Captura de Fotos
 function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadingPhotos, setUploadingPhotos, onProceed, allItemsHavePhotos }) {
   const [selectedFiles, setSelectedFiles] = useState({});
+  const [photoObservations, setPhotoObservations] = useState({}); // Observações de cada foto
+  const [damageInfo, setDamageInfo] = useState({}); // Informações sobre danos por item
+  const [currentPhotoForObservation, setCurrentPhotoForObservation] = useState(null);
   
   // Backend URL
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
