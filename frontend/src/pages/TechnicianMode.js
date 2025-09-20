@@ -1519,24 +1519,57 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
 
                 {/* Preview das Fotos */}
                 {hasPhotos && (
-                  <div className="mt-3">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Fotos capturadas:</p>
-                    <div className="grid grid-cols-2 gap-2">
+                  <div className="mt-4">
+                    <p className="text-sm font-medium text-gray-700 mb-3">Fotos capturadas:</p>
+                    <div className="space-y-4">
                       {itemPhotosArray.map(photo => (
-                        <div key={photo.id} className="relative">
-                          <img
-                            src={photo.url}
-                            alt={`Foto ${photo.name}`}
-                            className="w-full h-24 object-cover rounded-md border border-gray-200"
-                          />
-                          <button
-                            onClick={() => removePhoto(item.id, photo.id)}
-                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
-                          >
-                            ×
-                          </button>
-                          <div className="text-xs text-gray-500 mt-1 truncate">
-                            {photo.name}
+                        <div key={photo.id} className={`border rounded-lg p-3 ${
+                          photo.photoType === 'DAMAGE' ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'
+                        }`}>
+                          <div className="flex space-x-3">
+                            {/* Thumbnail da foto */}
+                            <div className="relative flex-shrink-0">
+                              <img
+                                src={photo.url}
+                                alt={`Foto ${photo.name}`}
+                                className="w-20 h-20 object-cover rounded-md border border-gray-200"
+                              />
+                              <button
+                                onClick={() => removePhoto(item.id, photo.id)}
+                                className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-700"
+                              >
+                                ×
+                              </button>
+                              {photo.photoType === 'DAMAGE' && (
+                                <span className="absolute -bottom-1 -left-1 bg-orange-600 text-white text-xs px-1 rounded">
+                                  DANO
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Detalhes e observações */}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-gray-500 mb-2 truncate">
+                                {photo.name} • {new Date(photo.timestamp).toLocaleTimeString()}
+                              </div>
+                              
+                              {/* Campo de observações sobre a foto */}
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  Observações sobre esta foto:
+                                </label>
+                                <textarea
+                                  value={photo.observations || photoObservations[photo.id] || ''}
+                                  onChange={(e) => updatePhotoObservation(photo.id, e.target.value)}
+                                  placeholder={photo.photoType === 'DAMAGE' 
+                                    ? "Descreva especificamente o dano mostrado nesta foto..." 
+                                    : "Descreva o que esta foto mostra (estado geral, detalhes importantes, etc.)"
+                                  }
+                                  className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-blue-500 focus:border-blue-500"
+                                  rows="2"
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ))}
