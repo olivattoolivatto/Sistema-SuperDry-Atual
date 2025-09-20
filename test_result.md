@@ -335,6 +335,18 @@ backend:
         -agent: "testing"
         -comment: "🎯 MAPEAMENTO ROUTE → BUDGET_ITEM_IDS EXECUTADO COM 100% DE SUCESSO: Comprehensive investigation completed as requested in the review to find real budget_item_ids from route stops to fix the mapping. ✅ ROTA ENCONTRADA: Found route RTE-0000005 with 4 stops containing valid budget_item_ids. ✅ BUDGET_ITEM_IDS EXTRAÍDOS: Successfully extracted 4 valid budget_item_ids from route stops: ITM-1311375 (Gabriela - Lavagem de Cabeceira), ITM-9105027 (Alex Klasener - Lavagem de Bancos de Carro), ITM-1354271 (Diego Olivatto - Lavagem de Sofá), ITM-1370083 (Neusa - Lavagem de Cadeira). ✅ VALIDAÇÃO NA API: All 4 budget_item_ids found and validated via /api/budget-items/available-for-routes endpoint (individual endpoint not available but data accessible). ✅ GERAÇÃO DE TÍTULOS BONITOS TESTADA: Successfully generated beautiful titles for all 4 items with correct emojis: '📦 Gabriela', '🚘 Alex Klasener', '🛋️ Diego Olivatto', '🪑 Neusa Gonçalves Desidério'. ✅ SOLUÇÃO PARA CORREÇÃO IDENTIFICADA: The problem is assignments contain event_ids ['EVT-003', 'EVT-004'] but need budget_item_ids ['ITM-1311375', 'ITM-9105027', etc.] for generateEventTitle() to work. ✅ PRÓXIMOS PASSOS DEFINIDOS: 1) Modify assignments to use budget_item_ids instead of event_ids, 2) Update generateEventTitle() to process budget_item_ids, 3) Test that beautiful titles appear correctly in frontend. The correct budget_item_ids to replace fictitious event_ids (EVT-003) are now identified and ready for implementation."
 
+  - task: "Critical Technician Mode Issues Investigation"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+        -working: false
+        -agent: "testing"
+        -comment: "🚨 INVESTIGAÇÃO CRÍTICA COMPLETA - PROBLEMAS IDENTIFICADOS E ANALISADOS: Executada investigação detalhada conforme review request sobre problemas no modo técnico. ❌ PROBLEMA 1 CONFIRMADO: Assignment TASS-befa2095-1 NÃO EXISTE (404 Error) - usuário tentando excluir assignment inexistente. ❌ PROBLEMA 2 IDENTIFICADO: NENHUM assignment encontrado para TECH-001 em 6 datas testadas (2025-09-15 a 2025-09-20) - explica por que 'Serviços enviados ao técnico' na Agenda está vazio. ✅ PROBLEMA 3 NÃO REPRODUZIDO: Apenas 1 tipo de dados retornado (status_items) - não há dois formatos diferentes atualmente. ✅ PROBLEMA 4 RESOLVIDO: Nenhuma duplicação encontrada nos 3 itens disponíveis. ✅ SISTEMA FUNCIONANDO: GET /api/technician/TECH-001/daily-tasks retorna 3 status_items válidos (EXECUTAR_NO_LOCAL) sem inconsistências. 🎯 CAUSA RAIZ: Sistema híbrido funcionando corretamente, mas não há assignments manuais criados via agenda - apenas status_items automáticos baseados em status. RECOMENDAÇÃO: Criar assignments de teste via POST /api/technician/assign-events para popular 'Serviços enviados ao técnico'."
+
 frontend:
 frontend:
   - task: "Edit and Delete Buttons for Sent Services in Agenda"
