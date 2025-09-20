@@ -1422,7 +1422,7 @@ async def create_test_assignments_for_tech001():
             "message": f"Criados {len(created_assignments)} assignments de teste para TECH-001",
             "assignment_ids": created_assignments,
             "date": today,
-            "items_used": [item['budget_item_id'] for item in valid_items[:2]]
+            "items_used": [item['budget_item_id'] for item in valid_items[:len(assignments_to_create)]]
         }
         
     except Exception as e:
