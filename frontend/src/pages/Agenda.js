@@ -676,55 +676,48 @@ export function Agenda() {
   const loadAllSentServices = async (page = 1, dateFilter = null, append = false) => {
     try {
       setLoadingSentServices(true);
-      console.log(`🔄 Carregando TODOS os serviços enviados - Página: ${page}, Data: ${dateFilter || 'Todas'}`);
+      console.log(`🔄 AGENDA: Carregando status_items desencapsulados (mesmo do Modo Técnico) - Página: ${page}, Data: ${dateFilter || 'Todas'}`);
       
-      // Buscar orçamentos uma vez para ter informações de vendedores
-      let budgets = [];
-      try {
-        const budgetsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budgets`);
-        if (budgetsResponse.ok) {
-          budgets = await budgetsResponse.json();
-          console.log(`📋 Carregados ${budgets.length} orçamentos para referência`);
-        }
-      } catch (budgetError) {
-        console.warn('⚠️ Erro ao carregar orçamentos:', budgetError);
-      }
-      
-      let allAssignments = [];
-      let allStatusItems = [];
+      let allServices = [];
       
       if (dateFilter && dateFilter.trim()) {
         // Se tem filtro de data, buscar apenas essa data
         console.log(`📅 Buscando serviços para data específica: ${dateFilter}`);
         
         const response = await technicianApi.getDailyTasks('TECH-001', dateFilter);
-        const { assignments, status_items } = response.data;
+        const { status_items } = response.data; // CORREÇÃO: Usar status_items que contêm assignments desencapsulados
         
-        // Processar ALL assignments (incluindo cancelados para histórico completo)
-        const processedAssignments = await Promise.all(
-          assignments
-            .map(assignment => processAssignment(assignment, budgets))
-        );
+        // Processar status_items (que são assignments desencapsulados) 
+        // da mesma forma que o Modo Técnico
+        const processedServices = status_items.map(item => ({
+          id: item.assignment_id, // Usar assignment_id para poder editar/excluir
+          assignment_id: item.assignment_id,
+          budget_item_id: item.id,
+          client_name: item.client_name,
+          client_phone: item.client_phone,
+          service_name: item.service_name,
+          service_value: item.service_value,
+          status: item.assignment_status || 'ASSIGNED',
+          observations: item.observations,
+          internal_observations: item.internal_observations,
+          client_address: item.client_address,
+          assigned_date: item.assigned_date,
+          assigned_time: '08:00',
+          created_at: new Date().toISOString(),
+          route_id: item.route_id,
+          type: 'DESENCAPSULATED_ASSIGNMENT',
+          title: `${item.client_name} - ${getServiceEmoji(item.service_name)} ${item.service_name}`,
+          clientInfo: item.client_name,
+          serviceInfo: `${getServiceEmoji(item.service_name)} ${item.service_name}`,
+          routeInfo: item.route_id,
+          salesperson: null // Será buscado se necessário
+        }));
         
-        // Processar ALL status items com filtro para "SERVTECS"
-        // CORREÇÃO FLUXO AUTOMÁTICO: Por enquanto, mostrar apenas assignments explícitos
-        // Os status_items só devem aparecer se foram explicitamente enviados para o técnico
-        const processedStatusItems = [];
-        
-        // NOTA: Comentando status_items até termos lógica para identificar 
-        // quais foram explicitamente enviados vs automáticos
-        /*
-        const processedStatusItems = await Promise.all(
-          status_items
-            .map(item => processStatusItem(item, dateFilter, budgets))
-        );
-        */
-        
-        allAssignments = [...processedAssignments, ...processedStatusItems];
+        allServices = processedServices;
         
       } else {
-        // AGENDA: Buscar TODOS os serviços (incluindo finalizados/cancelados)
-        console.log(`📅 Buscando TODOS os serviços dos últimos 7 dias (histórico completo)...`);
+        // AGENDA: Buscar TODOS os serviços dos últimos 7 dias usando status_items desencapsulados
+        console.log(`📅 Buscando TODOS os status_items desencapsulados dos últimos 7 dias...`);
         
         const today = new Date();
         const daysToFetch = 7;
@@ -738,37 +731,50 @@ export function Agenda() {
           dates.push(date.toISOString().split('T')[0]);
         }
         
-        // Buscar assignments para cada data
+        // Buscar status_items desencapsulados para cada data
         for (const date of dates) {
           try {
             const response = await technicianApi.getDailyTasks('TECH-001', date);
-            const { assignments, status_items } = response.data;
+            const { status_items } = response.data;
             
-            // Processar assignments válidos apenas
-            const processedAssignments = await Promise.all(
-              assignments
-                .filter(assignment => !seenIds.has(assignment.id))
-                .map(async assignment => {
-                  seenIds.add(assignment.id);
-                  return await processAssignment(assignment, budgets);
-                })
-            );
+            // Processar status_items (assignments desencapsulados)
+            const processedServices = status_items
+              .filter(item => !seenIds.has(item.assignment_id)) // Evitar duplicações por assignment_id
+              .map(item => {
+                seenIds.add(item.assignment_id);
+                
+                return {
+                  id: item.assignment_id,
+                  assignment_id: item.assignment_id,
+                  budget_item_id: item.id,
+                  client_name: item.client_name,
+                  client_phone: item.client_phone,
+                  service_name: item.service_name,
+                  service_value: item.service_value,
+                  status: item.assignment_status || 'ASSIGNED',
+                  observations: item.observations,
+                  internal_observations: item.internal_observations,
+                  client_address: item.client_address,
+                  assigned_date: item.assigned_date,
+                  assigned_time: '08:00',
+                  created_at: new Date().toISOString(),
+                  route_id: item.route_id,
+                  type: 'DESENCAPSULATED_ASSIGNMENT',
+                  title: `${item.client_name} - ${getServiceEmoji(item.service_name)} ${item.service_name}`,
+                  clientInfo: item.client_name,
+                  serviceInfo: `${getServiceEmoji(item.service_name)} ${item.service_name}`,
+                  routeInfo: item.route_id,
+                  salesperson: null
+                };
+              });
             
-            // CORREÇÃO FLUXO AUTOMÁTICO: Não processar status_items automaticamente
-            // Apenas assignments explícitos devem aparecer na tela "servtecs"
-            const processedStatusItems = [];
-            
-            allAssignments.push(...processedAssignments);
-            allStatusItems.push(...processedStatusItems);
+            allServices.push(...processedServices);
             
           } catch (dateError) {
             console.warn(`⚠️ Erro ao buscar data ${date}:`, dateError);
           }
         }
       }
-      
-      // Combinar todos os serviços
-      const allServices = [...allAssignments, ...allStatusItems];
       
       // Ordenar do mais recente para o mais antigo
       allServices.sort((a, b) => {
@@ -783,10 +789,10 @@ export function Agenda() {
       const endIndex = startIndex + itemsPerPage;
       const pageItems = allServices.slice(startIndex, endIndex);
       
-      console.log(`✅ Total de serviços encontrados (TODOS): ${allServices.length}`);
+      console.log(`✅ AGENDA: Total status_items desencapsulados: ${allServices.length}`);
       console.log(`📄 Página ${page}: ${pageItems.length} items (${startIndex} - ${endIndex})`);
       
-      // CORREÇÃO: Atualizar estado corretamente
+      // Atualizar estado
       if (append && page > 1) {
         setSentServices(prev => [...prev, ...pageItems]);
       } else {
@@ -798,7 +804,7 @@ export function Agenda() {
       setSentServicesPage(page);
       
     } catch (error) {
-      console.error('❌ Erro ao carregar todos os serviços enviados:', error);
+      console.error('❌ Erro ao carregar serviços desencapsulados na Agenda:', error);
       setSentServices([]);
       setSentServicesTotal(0);
       setSentServicesHasMore(false);
