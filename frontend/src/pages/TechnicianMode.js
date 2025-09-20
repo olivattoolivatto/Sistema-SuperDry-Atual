@@ -563,30 +563,35 @@ function StreetMode({ onBack }) {
         }
       }
       
-      // 2. Processar itens por status
+      // 2. Processar status_items (ITENS DESENCAPSULADOS DOS ASSIGNMENTS)
       console.log(`🔍 Processando ${status_items.length} status items para unificação`);
       
       for (const item of status_items) {
-        const clientId = item.client_id; // PROBLEMA POTENCIAL: usar client_id pode causar duplicação
+        const clientId = item.client_id;
         
         console.log(`📋 Processando item: ${item.id} - ${item.service_name} para cliente: ${clientId}`);
         
         if (!unifiedClients[clientId]) {
-          // CORREÇÃO: Usar função helper para extrair endereço correto de status_items
-          const formattedAddress = item.client_address && typeof item.client_address === 'object' 
-            ? (item.client_address.full_address || 'Endereço não informado')
-            : item.client_address || 'Endereço não informado';
-            
+          // Processar endereço completo da mesma forma que os assignments
+          const fullAddress = getClientAddress(item.client_address);
+          const complement = getClientComplement(item.client_address);
+          
           unifiedClients[clientId] = {
             id: clientId,
             name: item.client_name,
-            address: formattedAddress,
+            address: item.client_address,
             phone: item.client_phone,
             scheduledTime: '08:00', // TODO: Definir lógica de horário
             items: [],
             internalObservations: item.internal_observations,
-            budgetObservations: null, // Será preenchido abaixo
-            source: 'STATUS_BASED'
+            budgetObservations: '',  // Não disponível em status_items individuais
+            assigned_date: item.assigned_date || new Date().toISOString().split('T')[0],
+            source: 'AGENDA_ASSIGNMENT', // CORRIGIDO: Agora são assignments desencapsulados
+            status: item.assignment_status || 'ASSIGNED',
+            original_assignment_id: item.assignment_id, // Para poder excluir
+            route_id: item.route_id,
+            full_address: fullAddress,
+            complement: complement
           };
           
           console.log(`✅ Novo cliente criado: ${clientId}`);
