@@ -749,21 +749,14 @@ function AgendaTab({ clients, loading, generateNavigationLink }) {
   const [selectedClient, setSelectedClient] = useState(null);
   const [showOnlyToday, setShowOnlyToday] = useState(true);
   
-  // Filtrar clientes por data
+  // Filtrar clientes por data - APENAS ASSIGNMENTS DA AGENDA
   const filteredClients = clients.filter(client => {
     if (!showOnlyToday) return true; // Mostrar todos
     
     const today = new Date().toISOString().split('T')[0];
+    const clientDate = client.assigned_date || today;
     
-    // CORREÇÃO: Filtrar consistentemente para ambos os tipos
-    if (client.source === 'AGENDA_ASSIGNMENT') {
-      // Para assignments, usar assigned_date
-      const clientDate = client.assigned_date || today;
-      return clientDate === today;
-    } else {
-      // Para status_items, considerar sempre como "hoje" (são itens pendentes atuais)
-      return true;
-    }
+    return clientDate === today;
   });
 
   if (loading) {
