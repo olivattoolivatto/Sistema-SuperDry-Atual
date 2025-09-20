@@ -1359,6 +1359,72 @@ async def update_assignment_status(assignment_id: str, status: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating assignment: {str(e)}")
 
+@api_router.post("/technician/create-test-assignments")
+async def create_test_assignments_for_tech001():
+    """Criar assignments de teste para TECH-001 para demonstrar funcionalidade"""
+    try:
+        # Buscar budget items válidos para criar assignments
+        budgets = await db.budgets.find({}).to_list(None)
+        
+        valid_items = []
+        for budget in budgets:
+            if budget.get('items'):
+                for item in budget['items']:
+                    if item.get('status') in ['RETIRAR', 'EXECUTAR_NO_LOCAL', 'ENTREGAR']:
+                        valid_items.append({
+                            'budget_item_id': item.get('id'),
+                            'budget_id': budget.get('id'),
+                            'client_name': budget.get('client_name', 'Cliente'),
+                            'service_name': item.get('service_name', 'Serviço')
+                        })
+        
+        if len(valid_items) < 2:
+            raise HTTPException(status_code=400, detail="Não há itens suficientes para criar assignments de teste")
+        
+        # Criar 2 assignments de teste para hoje
+        today = datetime.now().strftime('%Y-%m-%d')
+        created_assignments = []
+        
+        # Assignment 1: Com múltiplos event_ids
+        assignment1 = TechnicianAssignment(
+            route_id="RTE-TEST001",
+            event_ids=[valid_items[0]['budget_item_id'], valid_items[1]['budget_item_id'] if len(valid_items) > 1 else valid_items[0]['budget_item_id']],
+            technician_id="TECH-001",
+            assigned_date=today,
+            assignment_type="AGENDA",
+            status="ASSIGNED"
+        )
+        
+        # Assignment 2: Com evento único
+        assignment2 = TechnicianAssignment(
+            route_id="RTE-TEST002", 
+            event_ids=[valid_items[0]['budget_item_id']],
+            technician_id="TECH-001",
+            assigned_date=today,
+            assignment_type="MANUAL",
+            status="ASSIGNED"
+        )
+        
+        # Salvar assignments no banco
+        for assignment in [assignment1, assignment2]:
+            assignment_dict = assignment.dict()
+            assignment_dict['created_at'] = assignment.created_at.isoformat()
+            assignment_dict['updated_at'] = assignment.updated_at.isoformat()
+            
+            await db.technician_assignments.insert_one(assignment_dict)
+            created_assignments.append(assignment.id)
+        
+        return {
+            "success": True,
+            "message": f"Criados {len(created_assignments)} assignments de teste para TECH-001",
+            "assignment_ids": created_assignments,
+            "date": today,
+            "items_used": [item['budget_item_id'] for item in valid_items[:2]]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao criar assignments de teste: {str(e)}")
+
 @api_router.post("/calendar/events/direct")
 async def create_direct_calendar_event(event_request: DirectEventCreate):
     """Create a direct calendar event (not from route)"""
