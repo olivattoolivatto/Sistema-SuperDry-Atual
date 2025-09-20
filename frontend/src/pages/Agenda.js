@@ -1546,29 +1546,43 @@ export function Agenda() {
     }
   };
 
-  // Função para gerar emoji do serviço baseado nas palavras-chave
-  const getServiceEmoji = (serviceName) => {
-    if (!serviceName) return '✨'; // Emoji padrão
+  // Função para obter emoji do serviço + emoji do vendedor
+  const getServiceEmoji = (serviceName, salesperson = null) => {
+    if (!serviceName) return '📦';
     
     const name = serviceName.toLowerCase();
     
-    // Verificar palavras-chave específicas
-    if (name.includes('impermeabilização')) return '💦';
-    if (name.includes('carro') || name.includes('veiculo') || name.includes('veículo')) return '🚘';
-    if (name.includes('pagamento') || name.includes('cartão') || name.includes('credito') || name.includes('débito') || name.includes('debito')) return '💳';
-    if (name.includes('colchao') || name.includes('colchão') || name.includes('box') || name.includes('cabeceira')) return '🛏️';
-    if (name.includes('cortina')) return '🪟';
-    if (name.includes('tapete')) return '🗞️';
-    if (name.includes('persiana')) return '📜';
-    if (name.includes('cadeira') || name.includes('cadeirão') || name.includes('cadeirao')) return '🪑';
-    if (name.includes('sofa') || name.includes('sofá') || name.includes('namoradeira') || name.includes('chaise') || name.includes('cheise')) return '🛋️';
-    if (name.includes('poltrona')) return '💺';
-    if (name.includes('edredom') || name.includes('colcha') || name.includes('pillowtop')) return '🧺';
-    if (name.includes('almofada') || name.includes('puff') || name.includes('outros')) return '📦';
-    if (name.includes('carpete')) return '⬜';
-    if (name.includes('carrinho') || name.includes('cadeirinha') || name.includes('bebe') || name.includes('bebê')) return '🛒👶';
+    // Emoji do serviço
+    let serviceEmoji = '📦'; // Default
     
-    return '✨'; // Emoji padrão para serviços não mapeados
+    if (name.includes('impermeabilização')) serviceEmoji = '💦';
+    else if (name.includes('carro') || name.includes('veiculo') || name.includes('veículo')) serviceEmoji = '🚘';
+    else if (name.includes('pagamento') || name.includes('cartão')) serviceEmoji = '💳';
+    else if (name.includes('colchao') || name.includes('colchão') || name.includes('box') || name.includes('cabeceira')) serviceEmoji = '🛏️';
+    else if (name.includes('cortina')) serviceEmoji = '🪟';
+    else if (name.includes('tapete')) serviceEmoji = '🗞️';
+    else if (name.includes('persiana')) serviceEmoji = '📜';
+    else if (name.includes('cadeira') || name.includes('cadeirão')) serviceEmoji = '🪑';
+    else if (name.includes('sofa') || name.includes('sofá') || name.includes('namoradeira') || name.includes('chaise') || name.includes('cheise')) serviceEmoji = '🛋️';
+    else if (name.includes('poltrona')) serviceEmoji = '💺';
+    else if (name.includes('edredom') || name.includes('colcha') || name.includes('pillowtop')) serviceEmoji = '🧺';
+    else if (name.includes('carpete')) serviceEmoji = '⬜';
+    else if (name.includes('carrinho') || name.includes('cadeirinha') || name.includes('bebe') || name.includes('bebê')) serviceEmoji = '🛒👶';
+    else if (name.includes('almofada') || name.includes('puff')) serviceEmoji = '🛏️';
+    
+    // Emoji do vendedor
+    let vendorEmoji = '';
+    if (salesperson) {
+      const vendor = salesperson.toLowerCase();
+      if (vendor.includes('daiana olivatto') || vendor.includes('diego olivatto')) {
+        vendorEmoji = '🏷️';
+      } else if (vendor.includes('marcos antonio') || vendor.includes('marcos antônio')) {
+        vendorEmoji = '🌟';
+      }
+    }
+    
+    // Combinar emojis
+    return vendorEmoji ? `${vendorEmoji}${serviceEmoji}` : serviceEmoji;
   };
 
   // Função para gerar título do evento com múltiplos serviços
