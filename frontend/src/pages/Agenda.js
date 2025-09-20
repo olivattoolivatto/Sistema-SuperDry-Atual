@@ -678,6 +678,18 @@ export function Agenda() {
       setLoadingSentServices(true);
       console.log(`🔄 Carregando TODOS os serviços enviados - Página: ${page}, Data: ${dateFilter || 'Todas'}`);
       
+      // Buscar orçamentos uma vez para ter informações de vendedores
+      let budgets = [];
+      try {
+        const budgetsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budgets`);
+        if (budgetsResponse.ok) {
+          budgets = await budgetsResponse.json();
+          console.log(`📋 Carregados ${budgets.length} orçamentos para referência`);
+        }
+      } catch (budgetError) {
+        console.warn('⚠️ Erro ao carregar orçamentos:', budgetError);
+      }
+      
       let allAssignments = [];
       let allStatusItems = [];
       
@@ -691,12 +703,14 @@ export function Agenda() {
         // Processar ALL assignments (incluindo cancelados para histórico completo)
         const processedAssignments = await Promise.all(
           assignments
-            .map(assignment => processAssignment(assignment))
+            .map(assignment => processAssignment(assignment, budgets))
         );
         
         // Processar ALL status items (incluindo cancelados para histórico completo)
-        const processedStatusItems = status_items
-          .map(item => processStatusItem(item, dateFilter));
+        const processedStatusItems = await Promise.all(
+          status_items
+            .map(item => processStatusItem(item, dateFilter, budgets))
+        );
         
         allAssignments = [...processedAssignments, ...processedStatusItems];
         
@@ -728,23 +742,25 @@ export function Agenda() {
                 .filter(assignment => !seenIds.has(assignment.id))
                 .map(async assignment => {
                   seenIds.add(assignment.id);
-                  return await processAssignment(assignment);
+                  return await processAssignment(assignment, budgets);
                 })
             );
             
             // Processar ALL status items (sem filtrar por status para histórico completo)
-            const processedStatusItems = status_items
-              .filter(item => {
-                const itemId = `status-${item.id}`;
-                const isNotSeen = !seenIds.has(itemId);
-                
-                if (isNotSeen) {
-                  seenIds.add(itemId);
-                  return true;
-                }
-                return false;
-              })
-              .map(item => processStatusItem(item, date));
+            const processedStatusItems = await Promise.all(
+              status_items
+                .filter(item => {
+                  const itemId = `status-${item.id}`;
+                  const isNotSeen = !seenIds.has(itemId);
+                  
+                  if (isNotSeen) {
+                    seenIds.add(itemId);
+                    return true;
+                  }
+                  return false;
+                })
+                .map(item => processStatusItem(item, date, budgets))
+            );
             
             allAssignments.push(...processedAssignments);
             allStatusItems.push(...processedStatusItems);
