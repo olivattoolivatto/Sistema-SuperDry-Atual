@@ -744,7 +744,7 @@ export function Agenda() {
             const response = await technicianApi.getDailyTasks('TECH-001', date);
             const { assignments, status_items } = response.data;
             
-            // Processar ALL assignments (sem filtrar por status para histórico completo)
+            // Processar assignments válidos apenas
             const processedAssignments = await Promise.all(
               assignments
                 .filter(assignment => !seenIds.has(assignment.id))
@@ -754,21 +754,9 @@ export function Agenda() {
                 })
             );
             
-            // Processar ALL status items (sem filtrar por status para histórico completo)
-            const processedStatusItems = await Promise.all(
-              status_items
-                .filter(item => {
-                  const itemId = `status-${item.id}`;
-                  const isNotSeen = !seenIds.has(itemId);
-                  
-                  if (isNotSeen) {
-                    seenIds.add(itemId);
-                    return true;
-                  }
-                  return false;
-                })
-                .map(item => processStatusItem(item, date, budgets))
-            );
+            // CORREÇÃO FLUXO AUTOMÁTICO: Não processar status_items automaticamente
+            // Apenas assignments explícitos devem aparecer na tela "servtecs"
+            const processedStatusItems = [];
             
             allAssignments.push(...processedAssignments);
             allStatusItems.push(...processedStatusItems);
