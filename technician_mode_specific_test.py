@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://laundry-sync.preview.emergentagent.com/api"
+BASE_URL = "https://cleansync.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 class TechnicianModeSpecificTester:

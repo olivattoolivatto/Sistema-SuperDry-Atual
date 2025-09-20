@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 # Configuration
-BASE_URL = "https://laundry-sync.preview.emergentagent.com/api"
+BASE_URL = "https://cleansync.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 class SRVCorrectionTester:
