@@ -1139,6 +1139,29 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
     setSelectedFiles(newSelectedFiles);
   };
 
+  const handleDamageToggle = (itemId, hasDamage) => {
+    const newDamageInfo = { ...damageInfo };
+    if (!newDamageInfo[itemId]) {
+      newDamageInfo[itemId] = {};
+    }
+    newDamageInfo[itemId].hasDamage = hasDamage;
+    if (!hasDamage) {
+      // Se não tem dano, limpar detalhes
+      newDamageInfo[itemId].damageDetails = '';
+      newDamageInfo[itemId].damagePhotos = [];
+    }
+    setDamageInfo(newDamageInfo);
+  };
+
+  const handleDamageDetailsChange = (itemId, details) => {
+    const newDamageInfo = { ...damageInfo };
+    if (!newDamageInfo[itemId]) {
+      newDamageInfo[itemId] = {};
+    }
+    newDamageInfo[itemId].damageDetails = details;
+    setDamageInfo(newDamageInfo);
+  };
+
   const handlePhotoUpload = async (itemId) => {
     const files = selectedFiles[itemId];
     if (!files || files.length === 0) {
