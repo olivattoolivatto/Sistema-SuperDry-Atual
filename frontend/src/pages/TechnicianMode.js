@@ -883,16 +883,7 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
               )}
             </div>
             
-            {/* Badge do tipo de source - MELHORADO para reduzir confusão */}
-            {client.source === 'AGENDA_ASSIGNMENT' ? (
-              <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
-                📋 Agenda
-              </span>
-            ) : (
-              <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                ⚡ Auto
-              </span>
-            )}
+            {/* Badge removido - agora apenas assignments da agenda */}
           </div>
           <div className="text-right">
             <p className="text-sm font-medium text-green-600">R$ {totalValue.toFixed(2)}</p>
