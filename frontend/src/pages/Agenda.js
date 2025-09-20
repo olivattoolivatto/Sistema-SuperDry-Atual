@@ -798,43 +798,63 @@ export function Agenda() {
   
   // Função auxiliar para processar assignments
   const processAssignment = async (assignment) => {
+    console.log(`🔍 Processando assignment: ${assignment.id} com ${assignment.event_ids?.length || 0} eventos`);
+    
     let detailedTitle = `Rota ${assignment.route_id}`;
     let clientInfo = '';
     let serviceInfo = '';
     
     try {
       if (assignment.event_ids && assignment.event_ids.length > 0) {
-        const firstEventId = assignment.event_ids[0];
+        console.log(`📋 Event IDs: ${assignment.event_ids.join(', ')}`);
         
-        if (firstEventId.startsWith('ITM-')) {
-          try {
-            const availableItemsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/available-for-routes`);
-            if (availableItemsResponse.ok) {
-              const availableData = await availableItemsResponse.json();
-              const availableItem = availableData.available_items.find(item => item.budget_item_id === firstEventId);
-              
-              if (availableItem) {
-                clientInfo = availableItem.client_name;
-                serviceInfo = `${getServiceEmoji(availableItem.service_name)} ${availableItem.service_name}`;
-                
-                if (assignment.event_ids.length > 1) {
-                  serviceInfo += ` e mais ${assignment.event_ids.length - 1} serviço(s)`;
-                }
-                
-                detailedTitle = `${clientInfo} - ${serviceInfo}`;
-              } else {
-                detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
+        // CORREÇÃO: Buscar detalhes de cada ITM diretamente nos orçamentos
+        const itemDetails = [];
+        
+        // Buscar todos os orçamentos para encontrar os ITMs
+        const budgetsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budgets`);
+        if (budgetsResponse.ok) {
+          const budgets = await budgetsResponse.json();
+          
+          // Procurar cada event_id nos orçamentos
+          for (const eventId of assignment.event_ids) {
+            for (const budget of budgets) {
+              const foundItem = budget.items.find(item => item.id === eventId);
+              if (foundItem && foundItem.status !== 'CANCELADO_PELO_CLIENTE') {
+                itemDetails.push({
+                  id: foundItem.id,
+                  client_name: budget.client_name,
+                  service_name: foundItem.service_name,
+                  service_value: foundItem.total_value,
+                  status: foundItem.status,
+                  budget_id: budget.id
+                });
+                console.log(`✅ Encontrado: ${eventId} - ${budget.client_name} - ${foundItem.service_name}`);
               }
             }
-          } catch (itemError) {
-            console.error(`❌ Erro ao buscar item ${firstEventId}:`, itemError);
-            detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos)`;
           }
+        }
+        
+        if (itemDetails.length > 0) {
+          // Se encontrou itens válidos, usar o primeiro para o título
+          const firstItem = itemDetails[0];
+          clientInfo = firstItem.client_name;
+          serviceInfo = `${getServiceEmoji(firstItem.service_name)} ${firstItem.service_name}`;
+          
+          if (itemDetails.length > 1) {
+            serviceInfo += ` e mais ${itemDetails.length - 1} serviço(s)`;
+          }
+          
+          detailedTitle = `${clientInfo} - ${serviceInfo}`;
+          console.log(`✅ Desencapsulação bem-sucedida: "${detailedTitle}"`);
+        } else {
+          console.warn(`⚠️ Nenhum item válido encontrado para assignment ${assignment.id}`);
+          detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids.length} eventos) - ÓRFÃO`;
         }
       }
     } catch (error) {
       console.error('❌ Erro na desencapsulação:', error);
-      detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids?.length || 0} eventos)`;
+      detailedTitle = `Rota ${assignment.route_id} (${assignment.event_ids?.length || 0} eventos) - ERRO`;
     }
     
     return {
