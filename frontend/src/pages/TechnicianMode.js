@@ -870,23 +870,25 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
             <span className="text-sm text-gray-700">{client.phone}</span>
           </div>
           
-          {/* Observações logo após o endereço */}
-          {(client.internalObservations || client.budgetObservations) && (
-            <div className="mt-3 space-y-2">
-              {client.internalObservations && (
-                <div className="p-2 bg-blue-50 rounded-md">
-                  <p className="text-xs font-medium text-blue-800">📝 Observações Internas:</p>
-                  <p className="text-xs text-blue-700">{client.internalObservations}</p>
-                </div>
-              )}
-              {client.budgetObservations && (
-                <div className="p-2 bg-green-50 rounded-md">
-                  <p className="text-xs font-medium text-green-800">💰 Observações do Orçamento:</p>
-                  <p className="text-xs text-green-700">{client.budgetObservations}</p>
-                </div>
-              )}
+          {/* Observações logo após o endereço - SEMPRE EXIBIR */}
+          <div className="mt-3 space-y-2">
+            <div className="p-2 bg-blue-50 rounded-md">
+              <p className="text-xs font-medium text-blue-800">📝 Observações Internas:</p>
+              <p className="text-xs text-blue-700">
+                {client.internalObservations && client.internalObservations.trim() 
+                  ? client.internalObservations 
+                  : 'Sem informações'}
+              </p>
             </div>
-          )}
+            <div className="p-2 bg-green-50 rounded-md">
+              <p className="text-xs font-medium text-green-800">💰 Observações do Orçamento:</p>
+              <p className="text-xs text-green-700">
+                {client.budgetObservations && client.budgetObservations.trim() 
+                  ? client.budgetObservations 
+                  : 'Sem informações'}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
