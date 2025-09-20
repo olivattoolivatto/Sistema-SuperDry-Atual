@@ -876,8 +876,11 @@ export function Agenda() {
   };
   
   // Função auxiliar para processar status items
-  const processStatusItem = (item, date) => {
+  const processStatusItem = (item, queryDate) => {
     console.log(`🔍 Processando status item: ${item.id} - ${item.service_name} (Status: ${item.status})`);
+    
+    // Buscar informações do orçamento para obter vendedor
+    let salesperson = null;
     
     return {
       id: `status-${item.id}`, // Usar prefixo para evitar conflito de IDs
@@ -889,11 +892,12 @@ export function Agenda() {
       status: item.status,
       observations: item.observations,
       client_address: item.client_address,
-      assigned_date: date,
+      assigned_date: queryDate, // CORREÇÃO: Usar data fixa da consulta
       assigned_time: '08:00',
       created_at: new Date().toISOString(), // Para ordenação
       type: 'STATUS_ITEM',
-      title: `${getServiceEmoji(item.service_name)} ${item.client_name} - ${item.service_name}`
+      title: `${getServiceEmoji(item.service_name, salesperson)} ${item.client_name} - ${item.service_name}`,
+      salesperson: salesperson
     };
   };
       
