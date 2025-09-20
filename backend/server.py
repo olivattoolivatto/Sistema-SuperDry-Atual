@@ -1333,6 +1333,7 @@ async def get_technician_daily_tasks(
                             "status": item_found.get('status'),
                             "observations": item_found.get('observations', ''),
                             "internal_observations": budget_found.get('internal_observations', ''),
+                            "budget_observations": budget_found.get('budget_observations', ''),
                             # Campos extras do assignment para controle
                             "assignment_id": assignment.get("id"),
                             "assignment_type": assignment.get("assignment_type"),
