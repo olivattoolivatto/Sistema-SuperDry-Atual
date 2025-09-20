@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Implementar sincronização entre 'Serviços enviados ao técnico' (Agenda.js) e 'Agendamentos do dia' (TechnicianMode.js). O usuário reportou inconsistência onde a view 'Agenda' mostra apenas serviços recentes enquanto 'Modo Técnico' mostra histórico. Objetivo: garantir que ambas as views mostrem histórico consistente e abrangente de assignments, permitindo edição, exclusão ou alteração independente da data. Implementar filtros de data mantendo data atual como filtro principal."
+user_problem_statement: "PROBLEMAS CRÍTICOS NO MODO TÉCNICO: 1) Dois tipos diferentes de agendamentos aparecendo com formatos inconsistentes (assignments vs status_items), 2) Filtro 'Apenas hoje' mostra tipos diferentes, 3) Erro 404 ao tentar excluir assignments inexistentes (TASS-befa2095-1), 4) 'Serviços enviados ao técnico' vazio na Agenda, 5) Possível duplicação visual de itens. CAUSA RAIZ: Sistema híbrido não está sincronizado adequadamente entre as duas fontes de dados (manual assignments vs automático status_items)."
 
 backend:
   - task: "Assignment Edit and Delete Functionality Testing"
