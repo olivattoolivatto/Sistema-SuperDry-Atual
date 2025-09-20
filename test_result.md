@@ -58,7 +58,7 @@
 ##
 ## agent_communication:
 ##     -agent: "main"
-##     -message: "SINCRONIZAÇÃO IMPLEMENTADA - Agenda e TechnicianMode agora usam dados consistentes. Modificado loadSentServices() em Agenda.js para processar tanto assignments quanto status_items do mesmo endpoint /technician/TECH-001/daily-tasks. Adicionado filtro de data em Agenda.js. Ambas as views agora mostram histórico abrangente e consistente. UI diferencia tipos com badges (Agenda/Status). Pronto para testes."
+##     -message: "INVESTIGAÇÃO COMPLETA - Identificados problemas críticos no TechnicianMode: 1) Assignment TASS-befa2095-1 não existe (confirmado 404), 2) Nenhum assignment para TECH-001 (por isso agenda vazia), 3) Sistema híbrido funcionando mas causando confusão visual com dois formatos diferentes, 4) 3 status_items válidos encontrados. CORREÇÕES NECESSÁRIAS: Melhorar filtragem e unificação visual entre assignments e status_items, tratar casos de assignments inexistentes, criar dados de teste se necessário."
 
 # Protocol Guidelines for Main agent
 #
