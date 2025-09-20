@@ -790,9 +790,14 @@ function AgendaTab({ clients, loading, generateNavigationLink }) {
       {/* Filtros */}
       <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-800">
-            Agenda do Dia - {filteredClients.length} cliente(s)
-          </h3>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800">
+              Agenda do Dia - {filteredClients.length} cliente(s)
+            </h3>
+            <p className="text-xs text-gray-500 mt-1">
+              📋 Agenda: Serviços enviados manualmente | ⚡ Auto: Serviços por status
+            </p>
+          </div>
           
           <div className="flex items-center space-x-4">
             <label className="flex items-center space-x-2">
