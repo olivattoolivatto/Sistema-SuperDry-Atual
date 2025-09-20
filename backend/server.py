@@ -1294,42 +1294,10 @@ async def get_technician_daily_tasks(
         
         tasks["assignments"] = assignments
         
-        # 2. Buscar itens por status (modo híbrido)
-        # Itens com status de rua que não foram atribuídos via agenda
-        assigned_event_ids = []
-        for assignment in assignments:
-            assigned_event_ids.extend(assignment.get("event_ids", []))
-        
-        # Buscar budget items com status RETIRAR, EXECUTAR_NO_LOCAL, ENTREGAR
-        # que não estão em assignments
-        budgets = await db.budgets.find({}).to_list(None)
-        
-        for budget in budgets:
-            if not budget.get('items'):
-                continue
-                
-            for item in budget['items']:
-                if (item.get('status') in ['RETIRAR', 'EXECUTAR_NO_LOCAL', 'ENTREGAR'] and
-                    item.get('id') not in assigned_event_ids):
-                    
-                    # Buscar dados do cliente
-                    client = await db.clients.find_one({"id": budget.get('client_id')})
-                    
-                    status_item = {
-                        "id": item.get('id'),
-                        "budget_id": budget.get('id'),
-                        "client_id": budget.get('client_id'),
-                        "client_name": client.get('name') if client else 'Cliente não encontrado',
-                        "client_address": client.get('address', {}).get('full_address') if client else '',
-                        "client_phone": client.get('phone_primary') if client else '',
-                        "service_name": item.get('service_name'),
-                        "service_value": item.get('total_value', 0),
-                        "status": item.get('status'),
-                        "observations": item.get('observations', ''),
-                        "internal_observations": budget.get('internal_observations', '')
-                    }
-                    
-                    tasks["status_items"].append(status_item)
+        # 2. Modo automático DESATIVADO por solicitação do usuário
+        # (Anteriormente buscava budget items com status RETIRAR, EXECUTAR_NO_LOCAL, ENTREGAR automaticamente)
+        # Agora apenas assignments manuais da agenda são exibidos
+        pass
         
         return tasks
         
