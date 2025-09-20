@@ -754,9 +754,16 @@ function AgendaTab({ clients, loading, generateNavigationLink }) {
     if (!showOnlyToday) return true; // Mostrar todos
     
     const today = new Date().toISOString().split('T')[0];
-    const clientDate = client.assigned_date || today;
     
-    return clientDate === today;
+    // CORREÇÃO: Filtrar consistentemente para ambos os tipos
+    if (client.source === 'AGENDA_ASSIGNMENT') {
+      // Para assignments, usar assigned_date
+      const clientDate = client.assigned_date || today;
+      return clientDate === today;
+    } else {
+      // Para status_items, considerar sempre como "hoje" (são itens pendentes atuais)
+      return true;
+    }
   });
 
   if (loading) {
