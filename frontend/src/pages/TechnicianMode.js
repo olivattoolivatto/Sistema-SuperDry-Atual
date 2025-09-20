@@ -1241,9 +1241,113 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
     }
   };
 
+  const handleDamagePhotoUpload = async (itemId, files) => {
+    if (!files || files.length === 0) {
+      alert('Selecione pelo menos uma foto do dano.');
+      return;
+    }
+
+    setUploadingPhotos(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('item_id', itemId);
+      formData.append('technician_id', 'TECH-001');
+      formData.append('photo_type', 'DAMAGE');
+      
+      if (client.original_assignment_id) {
+        formData.append('assignment_id', client.original_assignment_id);
+      }
+      
+      for (let file of files) {
+        formData.append('files', file);
+      }
+      
+      const response = await fetch(`${BACKEND_URL}/api/technician/upload-photos`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erro no upload: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Upload de fotos de dano realizado:', result);
+      
+      // Criar previews das fotos de dano
+      const damagePhotos = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const photoId = Date.now() + Math.random() + i;
+        const photoPreview = {
+          id: photoId,
+          file: file,
+          url: URL.createObjectURL(file),
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          timestamp: new Date().toISOString(),
+          observations: '',
+          photoType: 'DAMAGE'
+        };
+        damagePhotos.push(photoPreview);
+      }
+      
+      // Adicionar as fotos de dano ao estado
+      const newItemPhotos = { ...itemPhotos };
+      if (!newItemPhotos[itemId]) {
+        newItemPhotos[itemId] = [];
+      }
+      newItemPhotos[itemId] = [...newItemPhotos[itemId], ...damagePhotos];
+      setItemPhotos(newItemPhotos);
+      
+      // Armazenar as fotos de dano no damageInfo também
+      const newDamageInfo = { ...damageInfo };
+      if (!newDamageInfo[itemId]) {
+        newDamageInfo[itemId] = {};
+      }
+      if (!newDamageInfo[itemId].damagePhotos) {
+        newDamageInfo[itemId].damagePhotos = [];
+      }
+      newDamageInfo[itemId].damagePhotos = [...newDamageInfo[itemId].damagePhotos, ...damagePhotos];
+      setDamageInfo(newDamageInfo);
+      
+      alert(`${damagePhotos.length} foto(s) de dano enviada(s) com sucesso!`);
+      
+    } catch (error) {
+      console.error('❌ Erro ao fazer upload das fotos de dano:', error);
+      alert('Erro ao fazer upload das fotos de dano. Tente novamente.');
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
   const removePhoto = (itemId, photoId) => {
     const newItemPhotos = { ...itemPhotos };
     newItemPhotos[itemId] = newItemPhotos[itemId].filter(photo => photo.id !== photoId);
+    setItemPhotos(newItemPhotos);
+    
+    // Se for uma foto de dano, remover também do damageInfo
+    const newDamageInfo = { ...damageInfo };
+    if (newDamageInfo[itemId] && newDamageInfo[itemId].damagePhotos) {
+      newDamageInfo[itemId].damagePhotos = newDamageInfo[itemId].damagePhotos.filter(photo => photo.id !== photoId);
+      setDamageInfo(newDamageInfo);
+    }
+  };
+
+  const updatePhotoObservation = (photoId, observation) => {
+    const newObservations = { ...photoObservations };
+    newObservations[photoId] = observation;
+    setPhotoObservations(newObservations);
+    
+    // Atualizar também no itemPhotos
+    const newItemPhotos = { ...itemPhotos };
+    Object.keys(newItemPhotos).forEach(itemId => {
+      newItemPhotos[itemId] = newItemPhotos[itemId].map(photo => 
+        photo.id === photoId ? { ...photo, observations: observation } : photo
+      );
+    });
     setItemPhotos(newItemPhotos);
   };
 
