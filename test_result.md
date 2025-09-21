@@ -956,9 +956,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Critical Technician Mode Issues Investigation"
-    - "Assignment Edit and Delete Functionality Testing"
-    - "Status Item Edit and Delete Functionality Testing"
+    - "Duplication and Inconsistency Investigation - URGENT"
   stuck_tasks: []
   test_all: false
   test_priority: "critical"
