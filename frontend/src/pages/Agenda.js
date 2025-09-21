@@ -690,7 +690,7 @@ export function Agenda() {
         // Processar status_items (que são assignments desencapsulados) 
         // da mesma forma que o Modo Técnico
         const processedServices = status_items.map(item => ({
-          id: item.assignment_id, // Usar assignment_id para poder editar/excluir
+          id: `${item.assignment_id}-${item.id}`, // Key única: assignment_id + budget_item_id
           assignment_id: item.assignment_id,
           budget_item_id: item.id,
           client_name: item.client_name,
