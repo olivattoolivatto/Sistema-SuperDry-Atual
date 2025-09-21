@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "PROBLEMAS CRÍTICOS NO MODO TÉCNICO: 1) Dois tipos diferentes de agendamentos aparecendo com formatos inconsistentes (assignments vs status_items), 2) Filtro 'Apenas hoje' mostra tipos diferentes, 3) Erro 404 ao tentar excluir assignments inexistentes (TASS-befa2095-1), 4) 'Serviços enviados ao técnico' vazio na Agenda, 5) Possível duplicação visual de itens. CAUSA RAIZ: Sistema híbrido não está sincronizado adequadamente entre as duas fontes de dados (manual assignments vs automático status_items)."
+user_problem_statement: "INVESTIGAÇÃO URGENTE - PROBLEMAS DE DUPLICAÇÃO E INCONSISTÊNCIA DE DADOS: 1) SERVTEC (Agenda): Mostra 7 eventos, 2) Modo Rua: Mostra apenas 1 evento (deveria ser pelo menos 3), 3) Console.log mostra: 'Total status_items desencapsulados: 7', 4) ERRO React: Keys duplicadas `TASS-ab148306` e `TASS-99f7fc9e`. INVESTIGAÇÃO NECESSÁRIA: Verificar quantos assignments existem realmente para TECH-001, listar todos os assignment_ids únicos e verificar duplicações, testar GET /api/technician/TECH-001/daily-tasks para hoje e verificar se há assignment_ids duplicados nos status_items, analisar se um assignment com múltiplos event_ids está gerando múltiplos status_items com mesmo assignment_id."
 
 backend:
   - task: "Assignment Edit and Delete Functionality Testing"
