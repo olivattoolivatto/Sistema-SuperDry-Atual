@@ -745,7 +745,7 @@ export function Agenda() {
                 seenIds.add(item.assignment_id);
                 
                 return {
-                  id: item.assignment_id,
+                  id: `${item.assignment_id}-${item.id}`, // Key única: assignment_id + budget_item_id
                   assignment_id: item.assignment_id,
                   budget_item_id: item.id,
                   client_name: item.client_name,
