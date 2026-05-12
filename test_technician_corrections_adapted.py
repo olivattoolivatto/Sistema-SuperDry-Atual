@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://cleansync.preview.emergentagent.com/api"
+BASE_URL = "https://superdry-laundry.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 def make_request(method: str, endpoint: str, data: dict = None) -> dict:
