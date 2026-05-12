@@ -102,7 +102,150 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "INVESTIGAÇÃO URGENTE - PROBLEMAS DE DUPLICAÇÃO E INCONSISTÊNCIA DE DADOS: 1) SERVTEC (Agenda): Mostra 7 eventos, 2) Modo Rua: Mostra apenas 1 evento (deveria ser pelo menos 3), 3) Console.log mostra: 'Total status_items desencapsulados: 7', 4) ERRO React: Keys duplicadas `TASS-ab148306` e `TASS-99f7fc9e`. INVESTIGAÇÃO NECESSÁRIA: Verificar quantos assignments existem realmente para TECH-001, listar todos os assignment_ids únicos e verificar duplicações, testar GET /api/technician/TECH-001/daily-tasks para hoje e verificar se há assignment_ids duplicados nos status_items, analisar se um assignment com múltiplos event_ids está gerando múltiplos status_items com mesmo assignment_id."
+user_problem_statement: "FASE 1 - Sistema SuperDry Lavanderia: Reformulação para suporte multi-perfil (admin, técnico, atendente, financeiro, manutenção). Implementação de autenticação JWT, auditoria, novos endpoints Clientes (CPF/CNPJ/Instagram/GPS/audit), Dashboard com 7 cards, gestão de usuários, layout mobile-first vertical. Frontend redesenhado com Login, AuthContext, novo Layout responsivo (sidebar desktop + bottom nav mobile), nova tela Clientes com Places autocomplete e Modal de Histórico."
+
+backend:
+  - task: "Auth System (JWT + Login + Roles)"
+    implemented: true
+    working: true
+    file: "auth.py, server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Implementado módulo auth.py: hash bcrypt, JWT HS256, dependências get_current_user/require_roles, bootstrap admin (admin@superdry.com/admin123), modelos UserRole/User/UserPublic/LoginRequest/LoginResponse. Endpoints: POST /api/auth/login, GET /api/auth/me, POST /api/auth/change-password, GET/POST/PUT/DELETE /api/users, GET /api/audit-logs. Login funcionando via curl. Precisa testar fluxos completos."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ AUTH SYSTEM TESTED 100% SUCCESSFULLY (7/7 tests passed): 1) POST /api/auth/login with admin credentials returns access_token + UserPublic (no password_hash) ✅, 2) Login with wrong password returns 401 ✅, 3) Login with inactive user returns 403 ✅, 4) GET /api/auth/me without Bearer returns 401 ✅, 5) GET /api/auth/me with valid Bearer returns current user info ✅, 6) POST /api/auth/change-password with wrong old_password returns 401 ✅, 7) Password change with valid old_password works and new password becomes usable ✅. USERS CRUD TESTED 100% (9/9 tests passed): 1) GET /api/users with admin token returns list including admin ✅, 2) GET /api/users with non-admin token returns 403 ✅, 3) POST /api/users creates new user with role TECNICO ✅, 4) Duplicate email returns 400 ✅, 5) PUT /api/users/{id} updates name/role/is_active ✅, 6) Password update via PUT works and allows login with new password ✅, 7) DELETE /api/users/{id} cannot delete self (400) ✅, 8) Cannot delete the only remaining admin (400) ✅, 9) Regular user deletion works (200) ✅. All authentication flows, role-based access control, and user management working perfectly."
+
+  - task: "Clients Endpoints with Audit and Broad Search"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Modelo Client expandido com name_normalized/phone_digits/cpf_cnpj_digits/created_by/updated_by para auditoria e busca abrangente. Endpoints adicionados: GET /api/clients/count, GET /api/clients/{id}/history. Todos clientes endpoints agora requerem autenticação (Depends(get_current_user)) e gravam audit log. Busca insensitive a acento e case. ID sequencial CLI-0000 mantido. Delete bloqueado se houver orçamentos vinculados."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ CLIENTS ENDPOINTS TESTED 100% SUCCESSFULLY (13/13 tests passed): 1) POST /api/clients with full payload creates client with sequential ID CLI-0001 and audit fields (created_by/created_by_name/updated_by/updated_by_name) ✅, 2) GET /api/clients/count returns {total:N} ✅, 3) GET /api/clients?search performs broad search: case-insensitive ('joao' finds 'João') ✅, accent-insensitive ('monica' finds 'Mônica') ✅, numeric-only search matches phone digits ✅, search by city works (added address.city/neighborhood/full_address to search) ✅, 4) GET /api/clients/{id} returns client ✅, 5) 404 for invalid id ✅, 6) GET /api/clients/{id}/history returns {client_id, items:[], total_items:0} ✅, 7) PUT /api/clients/{id} updates and writes UPDATE audit log with updated_by ✅, 8) DELETE /api/clients/{id} returns 200 and removes client when no budgets ✅. MINOR FIX APPLIED: Added address fields (city, neighborhood, full_address) to search query for complete broad search functionality. All client CRUD operations, audit logging, and search working perfectly."
+
+  - task: "Dashboard Summary - 7 Cards"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Novo endpoint GET /api/dashboard/summary retorna 7 métricas: items_pending_routes, active_budgets, execution_today, items_in_washing, financial_pending, finance_summary (placeholder), tickets_open. Mantém /api/dashboard legado. Requer auth."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ DASHBOARD SUMMARY TESTED 100% SUCCESSFULLY (2/2 tests passed): 1) GET /api/dashboard/summary without auth returns 401 ✅, 2) GET /api/dashboard/summary with auth returns all required fields: items_pending_routes, active_budgets, execution_today, items_in_washing, financial_pending, finance_summary (with cash_balance/bank_balance/month_revenue/available), tickets_open, total_clients, generated_at ✅. All dashboard metrics working correctly."
+
+  - task: "Audit Log Collection"
+    implemented: true
+    working: true
+    file: "auth.py, server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Collection audit_logs criada. Helper log_audit() registra ação, entidade, usuário e diff/snapshot em CRUD de clients/users e login. Endpoint GET /api/audit-logs?entity_type=&entity_id= (apenas admin)."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ AUDIT LOGS TESTED 100% SUCCESSFULLY (4/4 tests passed): 1) GET /api/audit-logs with admin token returns {logs:[], count:N} ✅, 2) Filter by entity_type=client works correctly ✅, 3) Filter by entity_type=user works correctly ✅, 4) Non-admin access returns 403 ✅. CRITICAL FIX APPLIED: Fixed ObjectId serialization error in audit logs endpoint by adding recursive clean_doc() function to remove MongoDB _id fields and convert ObjectIds to strings. Previous CRUD operations on clients/users correctly produced audit entries. All audit logging and retrieval working perfectly."
+
+frontend:
+  - task: "Login Page + AuthContext + ProtectedRoute"
+    implemented: true
+    working: "NA"
+    file: "pages/Login.js, contexts/AuthContext.js, App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Implementado: Login.js (email + senha), AuthContext (login/logout/refresh/hasRole), ProtectedRoute. axios interceptor automático adicionando Bearer token. Auto logout em 401. Roteamento: /login público; demais rotas protegidas."
+
+  - task: "Mobile-First Vertical Layout"
+    implemented: true
+    working: "NA"
+    file: "components/Layout.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Layout completamente redesenhado. Desktop: sidebar fixa esquerda 64. Mobile: header top + bottom nav 5 colunas (4 itens + 'Mais') + drawer lateral. Filtragem de menus por role. Logout e info do usuário no rodapé."
+
+  - task: "Dashboard 7 Cards Personalizados por Role"
+    implemented: true
+    working: "NA"
+    file: "pages/Dashboard.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Dashboard reformulado com 7 cards (Itens Pendentes de Rota, Orçamentos Ativos, Execução de Hoje, Em Lavagem/Execução, Pendências Financeiras, Resumo Financeiro, Chamados em Aberto). Visibilidade filtrada por role. Cards são botões que navegam para tela relacionada. Header gradient com saudação. Botão refresh."
+
+  - task: "Clients Page Reformulada"
+    implemented: true
+    working: "NA"
+    file: "pages/Clients.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Tela Clientes 100% reescrita conforme spec: campo único de busca/cadastro com busca abrangente client-side (case+acento insensitive em nome, email, instagram, endereço, telefone, CPF). Botão 'Adicionar Novo Cliente' expande formulário. AddressAutocomplete usando /api/places/search (debounce 350ms) com até 10 sugestões; ao escolher, preenche bairro/cidade/estado e captura latitude/longitude via /api/places/details. Máscaras BR para telefone e CPF/CNPJ. Instagram com prefix instagram.com/. Botão WhatsApp ao lado do telefone. Cards compactos com CLI-XXXX, dados, MiniMap, 3 botões (Histórico/Editar/Excluir com confirmação). Modal de Histórico com tabela sortable (Orçamento, Cód.Serviço, Descrição, Unidade, M², M.Linear, Qtd, Valor, Status)."
+
+  - task: "Users Management in SystemConfig"
+    implemented: true
+    working: "NA"
+    file: "pages/SystemConfig.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Adicionado componente UsersManager no SystemConfig (visível apenas para admin). CRUD completo de usuários com modal: nome, email, senha, role (Admin/Técnico/Atendente/Financeiro/Manutenção), is_active. Substituiu a seção 'Funcionalidades Futuras'."
+
+metadata:
+  created_by: "main_agent"
+  version: "2.1"
+  test_sequence: 2
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "All Phase 1 backend tasks completed and tested"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "FASE 1 IMPLEMENTADA: Backend ganhou autenticação JWT completa com 5 roles, auditoria genérica, modelo Client expandido (CPF/CNPJ, Instagram, GPS, audit fields, busca normalizada), dashboard com 7 cards e CRUD de usuários. Frontend redesenhado mobile-first com Login, AuthContext, ProtectedRoute, layout responsivo (sidebar desktop + bottom nav mobile + drawer), Dashboard com cards personalizados por role, Clientes 100% reformulada com Places autocomplete/MiniMap/Histórico modal, e gestão de usuários em SystemConfig (admin only). Admin padrão: admin@superdry.com / admin123. POR FAVOR TESTAR APENAS BACKEND nesta rodada - foco em: 1) auth flow completo (login, /me, change-password), 2) endpoints de clients novos (CRUD com auth, busca abrangente, history, count, delete bloqueado se há orçamentos), 3) dashboard/summary com novas métricas, 4) gestão de usuários (CRUD, role-based access, proteção último admin), 5) audit logs."
+    -agent: "testing"
+    -message: "✅ BACKEND PHASE 1 TESTING COMPLETE - 33/33 TESTS PASSED (100%): Comprehensive testing completed for all Phase 1 backend features. AUTH SYSTEM: All 7 auth endpoints working perfectly - login with correct/wrong/inactive credentials, /auth/me with/without token, password change flows. USERS CRUD: All 9 user management tests passed - admin-only access, create/update/delete with proper validations (cannot delete self, cannot delete last admin, duplicate email blocked). CLIENTS ENDPOINTS: All 13 client tests passed - sequential ID generation (CLI-0001), audit fields (created_by/updated_by), broad search (case+accent insensitive, phone digits, city/neighborhood), history, count, delete protection. DASHBOARD: Both dashboard tests passed - auth required, all 7 metrics returned correctly. AUDIT LOGS: All 4 audit tests passed - admin-only access, entity_type filtering, proper audit trail for all CRUD operations. FIXES APPLIED: 1) Fixed ObjectId serialization error in audit logs endpoint (added recursive clean_doc function), 2) Added address fields (city/neighborhood/full_address) to client search for complete broad search functionality. NO CRITICAL ISSUES FOUND. All endpoints working as specified in review request."
+
+# ============== LEGADO (arquivado abaixo) ==============
 
 backend:
   - task: "Assignment Edit and Delete Functionality Testing"

@@ -9,23 +9,41 @@ const api = axios.create({
   timeout: 60000, // Increased to 60 seconds for OSRM optimization
 });
 
-// Add request interceptor for debugging
+// Token storage helpers
+export const TOKEN_KEY = 'superdry_token';
+export const USER_KEY = 'superdry_user';
+
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const setToken = (t) => t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
+export const getStoredUser = () => {
+  try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null'); } catch { return null; }
+};
+export const setStoredUser = (u) => u ? localStorage.setItem(USER_KEY, JSON.stringify(u)) : localStorage.removeItem(USER_KEY);
+
+// Add request interceptor for auth + debugging
 api.interceptors.request.use(
   (config) => {
-    console.log('API Request:', config.method?.toUpperCase(), config.url);
+    const token = getToken();
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
-  (error) => {
-    console.error('API Request Error:', error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Add response interceptor for error handling
+// Add response interceptor for error handling + auto logout on 401
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Response Error:', error.response?.data || error.message);
+    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
+      setToken(null);
+      setStoredUser(null);
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
     return Promise.reject(error);
   }
 );
@@ -34,9 +52,27 @@ api.interceptors.response.use(
 export const clientsApi = {
   getAll: (params = {}) => api.get('/clients', { params }),
   getById: (id) => api.get(`/clients/${id}`),
+  getHistory: (id) => api.get(`/clients/${id}/history`),
+  count: () => api.get('/clients/count'),
   create: (data) => api.post('/clients', data),
   update: (id, data) => api.put(`/clients/${id}`, data),
   delete: (id) => api.delete(`/clients/${id}`),
+};
+
+// Auth API
+export const authApi = {
+  login: (email, password) => api.post('/auth/login', { email, password }),
+  me: () => api.get('/auth/me'),
+  changePassword: (oldPassword, newPassword) =>
+    api.post('/auth/change-password', { old_password: oldPassword, new_password: newPassword }),
+};
+
+// Users API (admin)
+export const usersApi = {
+  list: () => api.get('/users'),
+  create: (data) => api.post('/users', data),
+  update: (id, data) => api.put(`/users/${id}`, data),
+  delete: (id) => api.delete(`/users/${id}`),
 };
 
 // Services API
@@ -68,7 +104,8 @@ export const placesApi = {
 
 // Dashboard API
 export const dashboardApi = {
-  getSummary: () => api.get('/dashboard'),
+  getSummary: () => api.get('/dashboard/summary'),
+  getLegacy: () => api.get('/dashboard'),
 };
 
 // Budget Config API

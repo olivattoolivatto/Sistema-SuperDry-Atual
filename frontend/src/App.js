@@ -1,6 +1,8 @@
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { AuthProvider, ProtectedRoute, useAuth } from "./contexts/AuthContext";
+import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Clients } from "./pages/Clients";
 import { Catalog } from "./pages/Catalog";
@@ -13,23 +15,61 @@ import TechnicianMode from "./pages/TechnicianMode";
 import { Toaster } from "./components/ui/sonner";
 import "./App.css";
 
+const Placeholder = ({ title }) => (
+  <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+    <h2 className="text-xl font-semibold text-gray-900 mb-2">{title}</h2>
+    <p className="text-gray-500">Em breve nesta tela.</p>
+  </div>
+);
+
+function LoginGate() {
+  const { user, loading } = useAuth();
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+    </div>
+  );
+  if (user) return <Navigate to="/" replace />;
+  return <Login />;
+}
+
+function ProtectedShell() {
+  return (
+    <ProtectedRoute>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/clients" element={<Clients />} />
+          <Route path="/catalog" element={<Catalog />} />
+          <Route path="/budgets" element={<Budgets />} />
+          <Route path="/routes" element={<RoutesPage />} />
+          <Route path="/budget-config" element={<BudgetConfig />} />
+          <Route path="/system-config" element={<SystemConfig />} />
+          <Route path="/agenda" element={<Agenda />} />
+          <Route path="/technician" element={<TechnicianMode />} />
+          <Route path="/whatsapp" element={<Placeholder title="WhatsApp" />} />
+          <Route path="/washing" element={<Placeholder title="Lavagem / Execução" />} />
+          <Route path="/financial" element={<Placeholder title="Financeiro" />} />
+          <Route path="/finance-manager" element={<Placeholder title="Gerenciador Financeiro" />} />
+          <Route path="/reports" element={<Placeholder title="Relatórios" />} />
+          <Route path="/tickets" element={<Placeholder title="Chamados e Manutenção" />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </ProtectedRoute>
+  );
+}
+
 function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <Layout>
+        <AuthProvider>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/clients" element={<Clients />} />
-            <Route path="/catalog" element={<Catalog />} />
-            <Route path="/budgets" element={<Budgets />} />
-            <Route path="/routes" element={<RoutesPage />} />
-            <Route path="/budget-config" element={<BudgetConfig />} />
-            <Route path="/system-config" element={<SystemConfig />} />
-            <Route path="/agenda" element={<Agenda />} />
-          <Route path="/technician" element={<TechnicianMode />} />
+            <Route path="/login" element={<LoginGate />} />
+            <Route path="/*" element={<ProtectedShell />} />
           </Routes>
-        </Layout>
+        </AuthProvider>
       </BrowserRouter>
       <Toaster />
     </div>

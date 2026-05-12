@@ -33,9 +33,18 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from fastapi import Depends
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Import auth module (Phase 1)
+from auth import (
+    User, UserPublic, UserCreate, UserUpdate, UserRole,
+    LoginRequest, LoginResponse, AuditLog,
+    hash_password, verify_password, create_access_token,
+    make_auth_dependencies, ensure_default_admin,
+)
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -54,6 +63,23 @@ def format_whatsapp_text(text: str) -> str:
     # _text_ -> Italic in WhatsApp  
     text = re.sub(r'_(.*?)_', r'_\1_', text)
     return text
+
+
+def normalize_text(s: str) -> str:
+    """Normaliza texto para busca: minúsculo, sem acento."""
+    if not s:
+        return ""
+    import unicodedata
+    nfkd = unicodedata.normalize("NFD", s)
+    only_ascii = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return only_ascii.lower().strip()
+
+
+def only_digits(s: str) -> str:
+    """Mantém apenas dígitos (útil para CPF/CNPJ/telefone)."""
+    if not s:
+        return ""
+    return re.sub(r"\D+", "", s)
 
 def format_html_text(text: str) -> str:
     """Convert markdown-like formatting to HTML"""
@@ -98,6 +124,16 @@ app = FastAPI(title="SuperDry Lavanderia Management System")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+
+# ============================================================
+# AUTH dependencies setup (Phase 1)
+# ============================================================
+_auth = make_auth_dependencies(db)
+get_current_user = _auth["get_current_user"]
+get_optional_user = _auth["get_optional_user"]
+require_roles = _auth["require_roles"]
+log_audit = _auth["log_audit"]
+require_admin = require_roles(UserRole.ADMIN)
 
 # Enums
 class ServiceCategory(str, Enum):
@@ -186,6 +222,15 @@ class Client(BaseModel):
     cpf_cnpj: Optional[str] = None
     instagram: Optional[str] = None
     address: Address
+    # Campos de busca normalizada (não usados pelo front, mas pelo back)
+    name_normalized: Optional[str] = None
+    phone_digits: Optional[str] = None
+    cpf_cnpj_digits: Optional[str] = None
+    # Auditoria
+    created_by: Optional[str] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[str] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -766,78 +811,189 @@ async def get_place_details(place_id: str):
 
 # Client endpoints
 @api_router.post("/clients", response_model=Client)
-async def create_client(client_data: ClientCreate):
+async def create_client(
+    client_data: ClientCreate,
+    current_user: UserPublic = Depends(get_current_user),
+):
     """Criar um novo cliente"""
     try:
-        # Generate sequential ID
+        # Generate sequential ID (CLI-0001, CLI-0002...)
         last_client = await db.clients.find_one(sort=[("created_at", -1)])
-        if last_client:
-            last_id_num = int(last_client["id"].split("-")[1])
+        if last_client and last_client.get("id", "").startswith("CLI-"):
+            try:
+                last_id_num = int(last_client["id"].split("-")[1])
+            except Exception:
+                last_id_num = await db.clients.count_documents({})
             new_id_num = last_id_num + 1
         else:
             new_id_num = 1
-        
+
+        # Garante unicidade
+        while await db.clients.find_one({"id": f"CLI-{str(new_id_num).zfill(4)}"}):
+            new_id_num += 1
+
         client_dict = client_data.dict()
         client_dict["id"] = f"CLI-{str(new_id_num).zfill(4)}"
+        client_dict["name_normalized"] = normalize_text(client_data.name)
+        client_dict["phone_digits"] = only_digits(client_data.phone_primary or "") + \
+            ("|" + only_digits(client_data.phone_alternative) if client_data.phone_alternative else "")
+        client_dict["cpf_cnpj_digits"] = only_digits(client_data.cpf_cnpj or "")
         client_dict["created_at"] = datetime.utcnow()
         client_dict["updated_at"] = datetime.utcnow()
-        
+        client_dict["created_by"] = current_user.id
+        client_dict["created_by_name"] = current_user.name
+        client_dict["updated_by"] = current_user.id
+        client_dict["updated_by_name"] = current_user.name
+
         client = Client(**client_dict)
-        
         await db.clients.insert_one(client.dict())
+        await log_audit("client", client.id, "CREATE", current_user, {"after": client.dict()})
         return client
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error creating client: {str(e)}")
 
+
 @api_router.get("/clients", response_model=List[Client])
-async def get_clients(skip: int = 0, limit: int = 100, search: str = None):
-    """Listar clientes"""
+async def get_clients(
+    skip: int = 0,
+    limit: int = 1000,
+    search: str = None,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Listar clientes com busca abrangente (case + acento insensitive)."""
     try:
-        query = {}
+        query: Dict[str, Any] = {}
         if search:
-            query = {
-                "$or": [
-                    {"name": {"$regex": search, "$options": "i"}},
-                    {"id": {"$regex": search, "$options": "i"}},
-                    {"phone_primary": {"$regex": search, "$options": "i"}}
-                ]
-            }
-        
-        cursor = db.clients.find(query).skip(skip).limit(limit)
+            norm = normalize_text(search)
+            digits = only_digits(search)
+            ors: List[Dict[str, Any]] = [
+                {"name_normalized": {"$regex": re.escape(norm), "$options": "i"}},
+                {"name": {"$regex": re.escape(search), "$options": "i"}},
+                {"id": {"$regex": re.escape(search), "$options": "i"}},
+                {"email": {"$regex": re.escape(search), "$options": "i"}},
+                {"instagram": {"$regex": re.escape(search), "$options": "i"}},
+                # Address fields search
+                {"address.city": {"$regex": re.escape(search), "$options": "i"}},
+                {"address.neighborhood": {"$regex": re.escape(search), "$options": "i"}},
+                {"address.full_address": {"$regex": re.escape(search), "$options": "i"}},
+            ]
+            if digits:
+                ors.append({"phone_digits": {"$regex": re.escape(digits)}})
+                ors.append({"cpf_cnpj_digits": {"$regex": re.escape(digits)}})
+            query = {"$or": ors}
+
+        cursor = db.clients.find(query).sort("name", 1).skip(skip).limit(limit)
         clients = await cursor.to_list(length=limit)
-        return [Client(**client) for client in clients]
+        return [Client(**c) for c in clients]
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error getting clients: {str(e)}")
 
+
+@api_router.get("/clients/count")
+async def get_clients_count(current_user: UserPublic = Depends(get_current_user)):
+    total = await db.clients.count_documents({})
+    return {"total": total}
+
+
 @api_router.get("/clients/{client_id}", response_model=Client)
-async def get_client(client_id: str):
+async def get_client(client_id: str, current_user: UserPublic = Depends(get_current_user)):
     """Obter cliente específico"""
     client = await db.clients.find_one({"id": client_id})
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     return Client(**client)
 
-@api_router.put("/clients/{client_id}", response_model=Client)
-async def update_client(client_id: str, client_data: ClientCreate):
-    """Atualizar cliente"""
+
+@api_router.get("/clients/{client_id}/history")
+async def get_client_history(
+    client_id: str,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Retorna histórico de itens (todos os orçamentos) do cliente."""
     client = await db.clients.find_one({"id": client_id})
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    
+    cursor = db.budgets.find({"client_id": client_id}).sort("created_at", -1)
+    budgets = await cursor.to_list(length=10000)
+    rows = []
+    for b in budgets:
+        budget_id = b.get("id")
+        for it in (b.get("items") or []):
+            rows.append({
+                "budget_id": budget_id,
+                "item_id": it.get("id"),
+                "service_code": it.get("service_code"),
+                "service_name": it.get("service_name"),
+                "description": it.get("description") or it.get("observations") or "",
+                "measure_type": it.get("measure_type"),
+                "quantity": it.get("quantity"),
+                "area_m2": it.get("area_m2") or it.get("total_area") or 0,
+                "linear_meters": it.get("linear_meters") or 0,
+                "unit_value": it.get("unit_value"),
+                "total_value": it.get("total_value"),
+                "status": it.get("status"),
+                "created_at": it.get("created_at") or b.get("created_at"),
+            })
+    return {"client_id": client_id, "items": rows, "total_items": len(rows)}
+
+
+@api_router.put("/clients/{client_id}", response_model=Client)
+async def update_client(
+    client_id: str,
+    client_data: ClientCreate,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Atualizar cliente"""
+    existing = await db.clients.find_one({"id": client_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Client not found")
+
     update_data = client_data.dict()
+    update_data["name_normalized"] = normalize_text(client_data.name)
+    update_data["phone_digits"] = only_digits(client_data.phone_primary or "") + \
+        ("|" + only_digits(client_data.phone_alternative) if client_data.phone_alternative else "")
+    update_data["cpf_cnpj_digits"] = only_digits(client_data.cpf_cnpj or "")
     update_data["updated_at"] = datetime.utcnow()
-    
+    update_data["updated_by"] = current_user.id
+    update_data["updated_by_name"] = current_user.name
+
     await db.clients.update_one({"id": client_id}, {"$set": update_data})
-    
+
+    # Capture diff (apenas dos campos relevantes)
+    diff = {}
+    for k, v in update_data.items():
+        if existing.get(k) != v:
+            diff[k] = {"before": existing.get(k), "after": v}
+    await log_audit("client", client_id, "UPDATE", current_user, {"diff": diff})
+
     updated_client = await db.clients.find_one({"id": client_id})
     return Client(**updated_client)
 
+
 @api_router.delete("/clients/{client_id}")
-async def delete_client(client_id: str):
-    """Excluir cliente"""
+async def delete_client(
+    client_id: str,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Excluir cliente (apenas admin/atendente)."""
+    if current_user.role not in (UserRole.ADMIN, UserRole.ATENDENTE):
+        raise HTTPException(status_code=403, detail="Sem permissão para excluir clientes")
+    existing = await db.clients.find_one({"id": client_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # Bloqueio se houver orçamentos vinculados
+    bcount = await db.budgets.count_documents({"client_id": client_id})
+    if bcount > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cliente possui {bcount} orçamento(s) vinculado(s) e não pode ser excluído.",
+        )
+
     result = await db.clients.delete_one({"id": client_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Client not found")
+    await log_audit("client", client_id, "DELETE", current_user, {"before": existing})
     return {"message": "Client deleted successfully"}
 
 # Service catalog endpoints
@@ -3012,6 +3168,244 @@ async def delete_technician_photo(photo_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting photo: {str(e)}")
 
+# ============================================================
+# AUTH endpoints (Phase 1)
+# ============================================================
+@api_router.post("/auth/login", response_model=LoginResponse)
+async def auth_login(payload: LoginRequest):
+    """Login com email + senha. Retorna JWT."""
+    email = (payload.email or "").strip().lower()
+    user_doc = await db.users.find_one({"email": email})
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Email ou senha incorretos")
+    if not user_doc.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Usuário inativo")
+    if not verify_password(payload.password, user_doc.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Email ou senha incorretos")
+
+    token = create_access_token(user_doc["id"], user_doc.get("role", "ATENDENTE"))
+    pub = UserPublic(**{k: v for k, v in user_doc.items() if k != "password_hash"})
+    try:
+        await db.audit_logs.insert_one(AuditLog(
+            entity_type="user", entity_id=user_doc["id"], action="LOGIN",
+            user_id=user_doc["id"], user_name=user_doc.get("name"),
+        ).dict())
+    except Exception:
+        pass
+    return LoginResponse(access_token=token, user=pub)
+
+
+@api_router.get("/auth/me", response_model=UserPublic)
+async def auth_me(current_user: UserPublic = Depends(get_current_user)):
+    return current_user
+
+
+@api_router.post("/auth/change-password")
+async def auth_change_password(
+    body: Dict[str, str],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    old = body.get("old_password", "")
+    new = body.get("new_password", "")
+    if not new or len(new) < 4:
+        raise HTTPException(status_code=400, detail="Nova senha muito curta (mínimo 4 caracteres)")
+    user_doc = await db.users.find_one({"id": current_user.id})
+    if not user_doc or not verify_password(old, user_doc.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Senha atual incorreta")
+    await db.users.update_one(
+        {"id": current_user.id},
+        {"$set": {"password_hash": hash_password(new), "updated_at": datetime.utcnow()}},
+    )
+    await log_audit("user", current_user.id, "PASSWORD_CHANGE", current_user)
+    return {"success": True}
+
+
+# ============================================================
+# USERS endpoints (admin)
+# ============================================================
+@api_router.get("/users", response_model=List[UserPublic])
+async def list_users(current_user: UserPublic = Depends(require_admin)):
+    cursor = db.users.find({}).sort("name", 1)
+    docs = await cursor.to_list(length=10000)
+    return [UserPublic(**{k: v for k, v in d.items() if k != "password_hash"}) for d in docs]
+
+
+@api_router.post("/users", response_model=UserPublic)
+async def create_user(
+    payload: UserCreate,
+    current_user: UserPublic = Depends(require_admin),
+):
+    email = payload.email.strip().lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Email já cadastrado")
+    user = User(
+        name=payload.name.strip(),
+        email=email,
+        role=payload.role,
+        is_active=payload.is_active,
+        password_hash=hash_password(payload.password),
+    )
+    await db.users.insert_one(user.dict())
+    await log_audit("user", user.id, "CREATE", current_user, {"after": {**user.dict(), "password_hash": "***"}})
+    return UserPublic(**{k: v for k, v in user.dict().items() if k != "password_hash"})
+
+
+@api_router.put("/users/{user_id}", response_model=UserPublic)
+async def update_user(
+    user_id: str,
+    payload: UserUpdate,
+    current_user: UserPublic = Depends(require_admin),
+):
+    existing = await db.users.find_one({"id": user_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    update_data: Dict[str, Any] = {}
+    if payload.name is not None: update_data["name"] = payload.name.strip()
+    if payload.email is not None: update_data["email"] = payload.email.strip().lower()
+    if payload.role is not None: update_data["role"] = payload.role.value if hasattr(payload.role, "value") else payload.role
+    if payload.is_active is not None: update_data["is_active"] = payload.is_active
+    if payload.password:
+        update_data["password_hash"] = hash_password(payload.password)
+    update_data["updated_at"] = datetime.utcnow()
+
+    await db.users.update_one({"id": user_id}, {"$set": update_data})
+    await log_audit("user", user_id, "UPDATE", current_user, {"diff": {k: update_data.get(k) for k in update_data if k != "password_hash"}})
+    new_doc = await db.users.find_one({"id": user_id})
+    return UserPublic(**{k: v for k, v in new_doc.items() if k != "password_hash"})
+
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_user: UserPublic = Depends(require_admin),
+):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Você não pode excluir sua própria conta")
+    existing = await db.users.find_one({"id": user_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    # Garante que ainda restará 1 admin
+    if existing.get("role") == UserRole.ADMIN.value:
+        admins = await db.users.count_documents({"role": UserRole.ADMIN.value})
+        if admins <= 1:
+            raise HTTPException(status_code=400, detail="É necessário pelo menos 1 administrador no sistema")
+    await db.users.delete_one({"id": user_id})
+    await log_audit("user", user_id, "DELETE", current_user, {"before": {**existing, "password_hash": "***"}})
+    return {"success": True}
+
+
+@api_router.get("/audit-logs")
+async def list_audit_logs(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    limit: int = 200,
+    current_user: UserPublic = Depends(require_admin),
+):
+    from bson import ObjectId
+    
+    def clean_doc(doc):
+        """Remove MongoDB ObjectId fields recursively"""
+        if isinstance(doc, dict):
+            return {k: clean_doc(v) for k, v in doc.items() if k != "_id" and not isinstance(v, ObjectId)}
+        elif isinstance(doc, list):
+            return [clean_doc(item) for item in doc]
+        elif isinstance(doc, ObjectId):
+            return str(doc)
+        else:
+            return doc
+    
+    q: Dict[str, Any] = {}
+    if entity_type: q["entity_type"] = entity_type
+    if entity_id: q["entity_id"] = entity_id
+    cursor = db.audit_logs.find(q).sort("created_at", -1).limit(limit)
+    docs = await cursor.to_list(length=limit)
+    cleaned_docs = [clean_doc(d) for d in docs]
+    return {"logs": cleaned_docs, "count": len(cleaned_docs)}
+
+
+# ============================================================
+# DASHBOARD detalhado (Phase 1)
+# ============================================================
+@api_router.get("/dashboard/summary")
+async def get_dashboard_summary(current_user: UserPublic = Depends(get_current_user)):
+    """Resumo expandido para Painel Inicial."""
+    try:
+        from datetime import date as _date
+        today = _date.today().isoformat()
+
+        # 1) Itens pendentes de rota: status RETIRAR/EXECUTAR_NO_LOCAL/ENTREGAR não atribuídos a nenhuma rota
+        route_statuses = [
+            ServiceStatus.RETIRAR.value,
+            ServiceStatus.EXECUTAR_NO_LOCAL.value,
+            ServiceStatus.ENTREGAR.value,
+        ]
+        items_pending_routes = 0
+        async for b in db.budgets.find({"items.status": {"$in": route_statuses}}):
+            for it in (b.get("items") or []):
+                if it.get("status") in route_statuses:
+                    items_pending_routes += 1
+
+        # 2) Orçamentos ativos (sem rota associada)
+        active_budgets = 0
+        async for b in db.budgets.find({}):
+            items = b.get("items") or []
+            has_pending = any((it.get("status") in route_statuses) for it in items)
+            if has_pending:
+                active_budgets += 1
+
+        # 3) Execução de hoje (assignments do técnico)
+        execution_today = 0
+        async for a in db.technician_assignments.find({"assigned_date": today, "status": {"$ne": "CANCELLED"}}):
+            execution_today += len(a.get("event_ids") or [])
+
+        # 4) Em lavagem/execução
+        wash_statuses = [
+            ServiceStatus.EM_LAVAGEM.value,
+            ServiceStatus.EM_LAVAGEM_PARCEIRO.value,
+            ServiceStatus.COLETADO.value,
+            ServiceStatus.AGUARDANDO_ENTREGA.value,
+            ServiceStatus.AGUARDANDO_BUSCAR.value,
+        ]
+        items_in_washing = 0
+        async for b in db.budgets.find({"items.status": {"$in": wash_statuses}}):
+            for it in (b.get("items") or []):
+                if it.get("status") in wash_statuses:
+                    items_in_washing += 1
+
+        # 5) Pendências financeiras (orçamentos sem payment_received)
+        financial_pending = await db.budgets.count_documents(
+            {"$or": [{"payment_received": {"$ne": True}}, {"payment_received": {"$exists": False}}]}
+        )
+
+        # 6) Resumo do gerenciador financeiro (placeholder - implementado em fase futura)
+        finance_summary = {
+            "cash_balance": 0.0,
+            "bank_balance": 0.0,
+            "month_revenue": 0.0,
+            "available": False,
+        }
+
+        # 7) Chamados e manutenção
+        tickets_open = await db.tickets.count_documents({"status": {"$nin": ["FECHADO", "RESOLVIDO"]}}) if "tickets" in await db.list_collection_names() else 0
+
+        # Compat: campos antigos
+        total_clients = await db.clients.count_documents({})
+
+        return {
+            "items_pending_routes": items_pending_routes,
+            "active_budgets": active_budgets,
+            "execution_today": execution_today,
+            "items_in_washing": items_in_washing,
+            "financial_pending": financial_pending,
+            "finance_summary": finance_summary,
+            "tickets_open": tickets_open,
+            "total_clients": total_clients,
+            "generated_at": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro no dashboard: {str(e)}")
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -3022,6 +3416,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_bootstrap():
+    """Cria índices e usuário admin padrão se necessário."""
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.clients.create_index("name_normalized")
+        await db.clients.create_index("id", unique=True)
+        await db.audit_logs.create_index([("entity_type", 1), ("entity_id", 1)])
+    except Exception as e:
+        print(f"[startup] erro criando índices: {e}")
+    await ensure_default_admin(db)
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

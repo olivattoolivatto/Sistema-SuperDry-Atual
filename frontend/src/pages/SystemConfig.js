@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Save, MapPin, Building2, Shield, Users, ChevronDown, ChevronRight } from 'lucide-react';
-import { systemConfigApi, placesApi } from '../services/api';
+import { Save, MapPin, Building2, Shield, Users, ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, X, KeyRound } from 'lucide-react';
+import { systemConfigApi, placesApi, usersApi } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import { toast } from '../hooks/use-toast';
 import MiniMap from '../components/MiniMap';
 
@@ -661,23 +662,8 @@ export const SystemConfig = () => {
           </div>
         </div>
 
-        {/* Future Features */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center mb-6">
-            <Users className="w-5 h-5 text-orange-600 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Funcionalidades Futuras</h2>
-          </div>
-
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Em Desenvolvimento</h3>
-            <ul className="text-sm text-gray-600 space-y-1">
-              <li>• Cadastro de usuários e permissões</li>
-              <li>• Controle de acesso por módulos</li>
-              <li>• Auditoria de ações dos usuários</li>
-              <li>• Configurações avançadas de segurança</li>
-            </ul>
-          </div>
-        </div>
+        {/* Gestão de Usuários */}
+        <UsersManager />
 
         {/* Save Button */}
         <div className="flex justify-end">
@@ -694,3 +680,228 @@ export const SystemConfig = () => {
     </div>
   );
 };
+
+// ============================================================
+// Users Manager (admin only)
+// ============================================================
+const ROLE_LABELS = {
+  ADMIN: 'Administrador',
+  TECNICO: 'Técnico',
+  ATENDENTE: 'Atendente',
+  FINANCEIRO: 'Financeiro',
+  MANUTENCAO: 'Manutenção',
+};
+
+function UsersManager() {
+  const { user: currentUser } = useAuth();
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'ATENDENTE', is_active: true });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const isAdmin = currentUser?.role === 'ADMIN';
+
+  const load = async () => {
+    if (!isAdmin) { setLoading(false); return; }
+    try {
+      setLoading(true);
+      const r = await usersApi.list();
+      setUsers(r.data || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [isAdmin]);
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ name: '', email: '', password: '', role: 'ATENDENTE', is_active: true });
+    setError('');
+    setModalOpen(true);
+  };
+
+  const openEdit = (u) => {
+    setEditing(u);
+    setForm({ name: u.name, email: u.email, password: '', role: u.role, is_active: u.is_active });
+    setError('');
+    setModalOpen(true);
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!form.name.trim() || !form.email.trim()) { setError('Nome e email são obrigatórios.'); return; }
+    if (!editing && !form.password) { setError('Senha obrigatória ao criar usuário.'); return; }
+    try {
+      setSaving(true);
+      if (editing) {
+        const payload = { ...form };
+        if (!payload.password) delete payload.password;
+        await usersApi.update(editing.id, payload);
+      } else {
+        await usersApi.create(form);
+      }
+      setModalOpen(false);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Erro ao salvar usuário.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onDelete = async (u) => {
+    if (!window.confirm(`Excluir usuário ${u.name}?`)) return;
+    try {
+      await usersApi.delete(u.id);
+      await load();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Erro ao excluir.');
+    }
+  };
+
+  if (!isAdmin) return null;
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200">
+      <div
+        onClick={() => setOpen(v => !v)}
+        className="p-4 sm:p-6 flex items-center justify-between cursor-pointer"
+      >
+        <div className="flex items-center">
+          <Users className="w-5 h-5 text-blue-600 mr-2" />
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Usuários e Permissões</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">{users.length} usuário(s)</span>
+          {open ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+        </div>
+      </div>
+
+      {open && (
+        <div className="border-t border-gray-200 p-4 sm:p-6 space-y-3">
+          <div className="flex justify-end">
+            <button
+              onClick={openCreate}
+              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium inline-flex items-center gap-1"
+            >
+              <Plus className="w-4 h-4" /> Novo Usuário
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-blue-600" /></div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-[11px] uppercase text-gray-600">Nome</th>
+                    <th className="text-left px-3 py-2 text-[11px] uppercase text-gray-600">Email</th>
+                    <th className="text-left px-3 py-2 text-[11px] uppercase text-gray-600">Perfil</th>
+                    <th className="text-left px-3 py-2 text-[11px] uppercase text-gray-600">Status</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id} className="border-t border-gray-100">
+                      <td className="px-3 py-2 font-medium text-gray-900">{u.name}</td>
+                      <td className="px-3 py-2 text-gray-700">{u.email}</td>
+                      <td className="px-3 py-2">
+                        <span className="px-2 py-0.5 rounded text-[11px] bg-blue-50 text-blue-700">
+                          {ROLE_LABELS[u.role] || u.role}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`px-2 py-0.5 rounded text-[11px] ${u.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {u.is_active ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        <button onClick={() => openEdit(u)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => onDelete(u)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded ml-1">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {users.length === 0 && (
+                    <tr><td colSpan={5} className="text-center text-gray-500 py-6">Nenhum usuário cadastrado.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <form onSubmit={onSubmit} className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">{editing ? 'Editar Usuário' : 'Novo Usuário'}</h3>
+              <button type="button" onClick={() => setModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
+              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Email *</label>
+              <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Senha {editing && <span className="text-gray-400">(deixe em branco para manter)</span>}
+              </label>
+              <div className="relative">
+                <KeyRound className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Perfil *</label>
+              <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} />
+              Usuário ativo
+            </label>
+
+            {error && <div className="text-sm bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setModalOpen(false)}
+                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium">
+                Cancelar
+              </button>
+              <button type="submit" disabled={saving}
+                className="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />} Salvar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}

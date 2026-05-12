@@ -1,801 +1,831 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Edit2, 
-  Trash2, 
-  History, 
-  MessageCircle,
-  Phone,
-  Mail,
-  MapPin,
-  MessageSquare,
-  Users,
-  FileText
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Plus, Search, Edit2, Trash2, History as HistoryIcon, MessageCircle,
+  Mail, MapPin, X, Save, Phone, AtSign, Instagram, FileText,
+  ChevronDown, ChevronUp, Loader2, AlertTriangle, ExternalLink, Check
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { clientsApi, placesApi } from '../services/api';
 import MiniMap from '../components/MiniMap';
 
-const ClientCard = ({ client, onEdit, onDelete, onHistory, onNewBudget }) => (
-  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-    <div className="flex items-start justify-between mb-4">
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900">{client.name}</h3>
-        <p className="text-sm text-gray-500 font-mono">{client.id}</p>
+// ===== Helpers =====
+const onlyDigits = (s = '') => String(s || '').replace(/\D+/g, '');
+
+const maskPhoneBR = (v) => {
+  const d = onlyDigits(v).slice(0, 11);
+  if (d.length <= 10) {
+    return d
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+  return d
+    .replace(/^(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2');
+};
+
+const maskCpfCnpj = (v) => {
+  const d = onlyDigits(v).slice(0, 14);
+  if (d.length <= 11) {
+    return d
+      .replace(/^(\d{3})(\d)/, '$1.$2')
+      .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1-$2');
+  }
+  return d
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2');
+};
+
+const normalize = (s = '') =>
+  String(s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const sanitizeInstagram = (v = '') =>
+  v.replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').trim();
+
+const onlyWhatsappDigits = (v = '') => {
+  const d = onlyDigits(v);
+  if (!d) return '';
+  return d.startsWith('55') ? d : `55${d}`;
+};
+
+// ===== AddressAutocomplete =====
+function AddressAutocomplete({ value, onSelect, placeholder }) {
+  const [query, setQuery] = useState(value || '');
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debRef = useRef(null);
+  const boxRef = useRef(null);
+
+  useEffect(() => { setQuery(value || ''); }, [value]);
+
+  useEffect(() => {
+    if (debRef.current) clearTimeout(debRef.current);
+    if (!query || query.length < 3) {
+      setResults([]);
+      setOpen(false);
+      return;
+    }
+    debRef.current = setTimeout(async () => {
+      try {
+        setLoading(true);
+        const r = await placesApi.search(query);
+        setResults(r.data?.results || []);
+        setOpen(true);
+      } catch (e) {
+        console.error(e);
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 350);
+  }, [query]);
+
+  useEffect(() => {
+    const onClick = (e) => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  const handleChoose = async (p) => {
+    setOpen(false);
+    setQuery(p.description || '');
+    // Try to enrich with place details if no geometry yet
+    let lat = p?.geometry?.location?.lat;
+    let lng = p?.geometry?.location?.lng;
+    let neighborhood = p?.neighborhood;
+    let city = p?.city;
+    let state = p?.state;
+    let fullAddress = p.description || '';
+
+    if ((!lat || !lng) && p.place_id) {
+      try {
+        const det = await placesApi.getDetails(p.place_id);
+        const d = det.data?.details?.result || det.data?.details || {};
+        fullAddress = d.formatted_address || fullAddress;
+        const geo = d.geometry?.location;
+        if (geo) {
+          lat = geo.lat;
+          lng = geo.lng;
+        }
+        // parse address_components
+        (d.address_components || []).forEach((c) => {
+          const t = c.types || [];
+          if (t.includes('sublocality') || t.includes('neighborhood') || t.includes('sublocality_level_1')) {
+            neighborhood = c.long_name;
+          }
+          if (t.includes('administrative_area_level_2') || t.includes('locality')) {
+            city = c.long_name;
+          }
+          if (t.includes('administrative_area_level_1')) {
+            state = c.short_name || c.long_name;
+          }
+        });
+      } catch (e) {
+        console.warn('place details fail', e);
+      }
+    }
+
+    onSelect({
+      full_address: fullAddress,
+      neighborhood: neighborhood || '',
+      city: city || '',
+      state: state || '',
+      latitude: lat || null,
+      longitude: lng || null,
+    });
+  };
+
+  return (
+    <div className="relative" ref={boxRef}>
+      <div className="relative">
+        <MapPin className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => results.length && setOpen(true)}
+          placeholder={placeholder || 'Buscar endereço, bairro, local…'}
+          className="w-full pl-9 pr-9 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+        />
+        {loading && <Loader2 className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />}
       </div>
-      <div className="flex space-x-2">
+      {open && results.length > 0 && (
+        <ul className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+          {results.slice(0, 10).map((p) => (
+            <li
+              key={p.place_id || p.description}
+              onClick={() => handleChoose(p)}
+              className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-100 last:border-0"
+            >
+              <div className="font-medium text-gray-900 truncate">
+                {p.structured_formatting?.main_text || p.description}
+              </div>
+              <div className="text-xs text-gray-500 truncate">
+                {p.structured_formatting?.secondary_text || ''}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ===== Empty initial form =====
+const emptyForm = () => ({
+  name: '',
+  phone_primary: '',
+  phone_alternative: '',
+  email: '',
+  cpf_cnpj: '',
+  instagram: '',
+  address: {
+    full_address: '',
+    complement: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    latitude: null,
+    longitude: null,
+  },
+});
+
+// ===== Client History Modal =====
+function HistoryModal({ client, onClose }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sortKey, setSortKey] = useState('created_at');
+  const [sortAsc, setSortAsc] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await clientsApi.getHistory(client.id);
+        setRows(r.data?.items || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [client.id]);
+
+  const sorted = useMemo(() => {
+    const arr = [...rows];
+    arr.sort((a, b) => {
+      const av = a[sortKey] ?? '';
+      const bv = b[sortKey] ?? '';
+      if (typeof av === 'number' && typeof bv === 'number') return sortAsc ? av - bv : bv - av;
+      return sortAsc
+        ? String(av).localeCompare(String(bv), 'pt-BR')
+        : String(bv).localeCompare(String(av), 'pt-BR');
+    });
+    return arr;
+  }, [rows, sortKey, sortAsc]);
+
+  const Header = ({ k, label, className = '' }) => (
+    <th
+      onClick={() => {
+        if (sortKey === k) setSortAsc(!sortAsc);
+        else { setSortKey(k); setSortAsc(true); }
+      }}
+      className={`text-left text-[11px] font-semibold text-gray-600 uppercase px-2 py-2 cursor-pointer select-none whitespace-nowrap ${className}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {sortKey === k ? (sortAsc ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : null}
+      </span>
+    </th>
+  );
+
+  const fmtMoney = (n) => (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full sm:max-w-5xl sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[92vh]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <div>
+            <h3 className="font-semibold text-gray-900">Histórico de {client.name}</h3>
+            <p className="text-xs text-gray-500">{client.id} • {rows.length} itens</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto">
+          {loading ? (
+            <div className="flex items-center justify-center h-40">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <FileText className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+              Nenhum item encontrado para este cliente.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <Header k="budget_id" label="Orçamento" />
+                  <Header k="service_code" label="Cód. Serviço" />
+                  <Header k="service_name" label="Descrição" />
+                  <Header k="measure_type" label="Unidade" />
+                  <Header k="area_m2" label="M²" />
+                  <Header k="linear_meters" label="M. Linear" />
+                  <Header k="quantity" label="Qtd" />
+                  <Header k="total_value" label="Valor" />
+                  <Header k="status" label="Status" />
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((r, idx) => (
+                  <tr key={r.item_id || idx} className="border-t border-gray-100 hover:bg-blue-50/40">
+                    <td className="px-2 py-2 font-mono text-xs">{r.budget_id}</td>
+                    <td className="px-2 py-2 font-mono text-xs">{r.service_code}</td>
+                    <td className="px-2 py-2">{r.service_name}</td>
+                    <td className="px-2 py-2 text-xs">{r.measure_type}</td>
+                    <td className="px-2 py-2 tabular-nums">{r.area_m2 ? Number(r.area_m2).toFixed(2) : '-'}</td>
+                    <td className="px-2 py-2 tabular-nums">{r.linear_meters ? Number(r.linear_meters).toFixed(2) : '-'}</td>
+                    <td className="px-2 py-2 tabular-nums">{r.quantity ?? '-'}</td>
+                    <td className="px-2 py-2 tabular-nums font-medium">{fmtMoney(r.total_value)}</td>
+                    <td className="px-2 py-2">
+                      <span className="px-2 py-0.5 rounded-full text-[11px] bg-gray-100 text-gray-700">
+                        {r.status || '-'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== Client Card =====
+function ClientCard({ client, onEdit, onDelete, onHistory }) {
+  const phoneDigits = onlyWhatsappDigits(client.phone_primary);
+  const igUser = sanitizeInstagram(client.instagram || '');
+  const addr = client.address || {};
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+      <div className="p-3 sm:p-4 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[11px] font-mono text-blue-700 bg-blue-50 inline-block px-1.5 py-0.5 rounded">
+              {client.id}
+            </div>
+            <h3 className="font-semibold text-gray-900 mt-1 text-sm sm:text-base truncate">{client.name}</h3>
+          </div>
+        </div>
+
+        <div className="mt-2 space-y-1 text-xs sm:text-sm text-gray-600">
+          {client.phone_primary && (
+            <div className="flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <span className="truncate">{maskPhoneBR(client.phone_primary)}</span>
+              {phoneDigits && (
+                <a
+                  href={`https://wa.me/${phoneDigits}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-auto p-1 rounded-md bg-green-50 text-green-700 hover:bg-green-100"
+                  title="Abrir WhatsApp"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
+          )}
+          {client.email && (
+            <div className="flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <span className="truncate">{client.email}</span>
+            </div>
+          )}
+          {igUser && (
+            <div className="flex items-center gap-1.5">
+              <Instagram className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <a
+                href={`https://instagram.com/${igUser}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-pink-600 hover:underline truncate"
+              >
+                @{igUser}
+              </a>
+            </div>
+          )}
+          {addr.full_address && (
+            <div className="flex items-start gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+              <span className="text-[11px] sm:text-xs leading-snug line-clamp-2">{addr.full_address}</span>
+            </div>
+          )}
+        </div>
+
+        {(addr.latitude && addr.longitude) && (
+          <div className="mt-3 rounded-lg overflow-hidden border border-gray-200">
+            <MiniMap latitude={addr.latitude} longitude={addr.longitude} height="100px" zoom={14} title={client.name} />
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 border-t border-gray-100">
         <button
           onClick={() => onHistory(client)}
-          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-          title="Histórico"
+          className="py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 flex items-center justify-center gap-1"
         >
-          <History className="w-4 h-4" />
+          <HistoryIcon className="w-3.5 h-3.5" /> Histórico
         </button>
         <button
           onClick={() => onEdit(client)}
-          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
-          title="Editar"
+          className="py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 flex items-center justify-center gap-1 border-l border-gray-100"
         >
-          <Edit2 className="w-4 h-4" />
+          <Edit2 className="w-3.5 h-3.5" /> Editar
         </button>
         <button
           onClick={() => onDelete(client)}
-          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          title="Excluir"
+          className="py-2 text-xs font-medium text-rose-700 hover:bg-rose-50 flex items-center justify-center gap-1 border-l border-gray-100"
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="w-3.5 h-3.5" /> Excluir
         </button>
       </div>
     </div>
+  );
+}
 
-    <div className="space-y-3">
-      <div className="flex items-center text-gray-600 text-sm">
-        <Phone className="w-4 h-4 mr-2" />
-        <span>{client.phone_primary}</span>
-        {client.phone_primary && (
-          <a
-            href={`https://wa.me/55${client.phone_primary.replace(/\D/g, '')}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-2 p-1 text-green-600 hover:bg-green-50 rounded"
-            title="WhatsApp"
-          >
-            <MessageSquare className="w-4 h-4" />
-          </a>
-        )}
-      </div>
-      
-      {client.email && (
-        <div className="flex items-center text-gray-600 text-sm">
-          <Mail className="w-4 h-4 mr-2" />
-          <span>{client.email}</span>
-        </div>
-      )}
-      
-      <div className="flex items-start text-gray-600 text-sm">
-        <MapPin className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-        <div className="flex-1">
-          <p>{client.address.full_address}</p>
-          {client.address.complement && (
-            <p className="text-xs text-gray-500">{client.address.complement}</p>
-          )}
-          <p className="text-xs text-gray-500">
-            {client.address.neighborhood}, {client.address.city} - {client.address.state}
-          </p>
-        </div>
-      </div>
+// ===== Main page =====
+export function Clients() {
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(emptyForm());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [historyClient, setHistoryClient] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
-      {/* Mini Map for Client Location */}
-      {client.address.latitude && client.address.longitude && (
-        <div className="border border-gray-200 rounded-lg p-2">
-          <MiniMap
-            latitude={client.address.latitude}
-            longitude={client.address.longitude}
-            title={client.name}
-            height="120px"
-            className="w-full"
-            zoom={16}
-          />
-          <p className="text-xs text-gray-400 mt-1 text-center">
-            📍 {client.address.neighborhood} • Clique para abrir no Google Maps
-          </p>
-        </div>
-      )}
-    </div>
-
-    <div className="flex space-x-2 mt-4 pt-4 border-t border-gray-100">
-      <button
-        onClick={() => onHistory(client)}
-        className="flex-1 flex items-center justify-center px-3 py-2 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors"
-      >
-        <History className="w-4 h-4 mr-1" />
-        Histórico
-      </button>
-      <button
-        onClick={() => onNewBudget(client)}
-        className="flex-1 flex items-center justify-center px-3 py-2 text-sm bg-green-50 text-green-700 hover:bg-green-100 rounded-lg transition-colors"
-      >
-        <FileText className="w-4 h-4 mr-1" />
-        Novo Orçamento
-      </button>
-    </div>
-  </div>
-);
-
-const ClientForm = ({ client, onSave, onCancel }) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    phone_primary: '',
-    phone_alternative: '',
-    email: '',
-    cpf_cnpj: '',
-    instagram: '',
-    address: {
-      full_address: '',
-      complement: '',
-      neighborhood: '',
-      city: '',
-      state: '',
-      latitude: null,
-      longitude: null
-    }
-  });
-  const [addressSuggestions, setAddressSuggestions] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (client) {
-      setFormData(client);
-    }
-  }, [client]);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleAddressChange = async (e) => {
-    const value = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      address: { ...prev.address, full_address: value }
-    }));
-
-    if (value.length > 2) {
-      try {
-        console.log('Buscando endereço:', value);
-        const response = await placesApi.search(value);
-        console.log('Resultados encontrados:', response.data.results);
-        setAddressSuggestions(response.data.results || []);
-      } catch (error) {
-        console.error('Erro ao buscar endereços:', error);
-        setAddressSuggestions([]);
-      }
-    } else {
-      setAddressSuggestions([]);
-    }
-  };
-
-  const handleAddressSelect = async (suggestion) => {
+  const loadClients = async () => {
     try {
-      console.log('Selecionando endereço:', suggestion);
-      
-      // First try to get details from API if available
-      let neighborhood = suggestion.neighborhood || '';
-      let city = suggestion.city || '';
-      let state = suggestion.state || '';
-      let latitude = null;
-      let longitude = null;
-      let fullAddress = suggestion.description || suggestion.structured_formatting?.main_text || '';
-      
-      // First priority: Extract location data from search result
-      if (suggestion.geometry && suggestion.geometry.location) {
-        latitude = suggestion.geometry.location.lat;
-        longitude = suggestion.geometry.location.lng;
-        console.log('📍 Coordenadas obtidas do resultado da busca:', { latitude, longitude });
-      }
-      
-      // If we don't have coordinates or address components, try to get details
-      if ((!latitude || !longitude || !neighborhood || !city || !state) && suggestion.place_id) {
-        try {
-          console.log('🔍 Buscando detalhes adicionais via place_id...');
-          const response = await placesApi.getDetails(suggestion.place_id);
-          const details = response.data.details.result;
-          console.log('Detalhes obtidos da API:', details);
-          
-          // Update coordinates if not already available
-          if (!latitude || !longitude) {
-            latitude = details.geometry?.location?.lat || latitude;
-            longitude = details.geometry?.location?.lng || longitude;
-            console.log('📍 Coordenadas obtidas dos detalhes:', { latitude, longitude });
-          }
-          
-          if (details && details.address_components && (!neighborhood || !city || !state)) {
-            const addressComponents = details.address_components;
-            console.log('Componentes do endereço:', addressComponents);
-            
-            // Extract address components with multiple fallbacks
-            const getComponent = (types, preferLongName = true) => {
-              const component = addressComponents.find(c => 
-                types.some(type => c.types.includes(type))
-              );
-              if (!component) return '';
-              return preferLongName ? component.long_name : component.short_name;
-            };
-
-            neighborhood = neighborhood || getComponent(['sublocality_level_1', 'sublocality']) ||
-                          getComponent(['neighborhood']) ||
-                          getComponent(['administrative_area_level_4']) ||
-                          getComponent(['administrative_area_level_3']);
-            
-            city = city || getComponent(['locality']) ||
-                  getComponent(['administrative_area_level_2']) ||
-                  getComponent(['sublocality']);
-            
-            state = state || getComponent(['administrative_area_level_1'], false);
-            
-            fullAddress = details.formatted_address || fullAddress;
-          }
-        } catch (detailsError) {
-          console.log('⚠️ Erro ao obter detalhes da API, usando extração local:', detailsError);
-          
-          // Fallback: Extract from description text
-          const description = suggestion.description || '';
-          const parts = description.split(',').map(part => part.trim());
-          
-          if (parts.length >= 3) {
-            // Format: "Rua Nome da Rua, número - Bairro, Cidade - Estado, CEP, País"
-            const lastPart = parts[parts.length - 1]; // "Brasil"
-            const secondLastPart = parts[parts.length - 2]; // "CEP" or "Estado"
-            const thirdLastPart = parts[parts.length - 3]; // "Cidade - Estado"
-            
-            // Extract state (usually 2 letters after dash)
-            if (thirdLastPart && thirdLastPart.includes(' - ')) {
-              const stateParts = thirdLastPart.split(' - ');
-              if (stateParts.length >= 2) {
-                city = city || stateParts[0];
-                state = state || stateParts[1];
-              }
-            } else if (secondLastPart && secondLastPart.length <= 3) {
-              state = state || secondLastPart;
-              city = city || thirdLastPart;
-            }
-            
-            // NEW ADVANCED NEIGHBORHOOD EXTRACTION LOGIC
-            // Example: "R. Mal. Mascarenhas de Morães, 278-A - Duque de Caxias II, Cuiabá - MT, 78043-352, Brasil"
-            // Target: Extract "Duque de Caxias II" (between last comma before city and before dash, reading right to left)
-            if (parts.length >= 3 && !neighborhood) {
-              console.log('🔍 Analyzing address parts for neighborhood extraction:', parts);
-              
-              // Strategy 1: Find city-state part (e.g., "Cuiabá - MT")
-              let cityStateIndex = -1;
-              for (let i = parts.length - 1; i >= 0; i--) {
-                const part = parts[i].trim();
-                // Look for pattern: "City - State" where state is 2-3 chars
-                if (part.includes(' - ') && part.split(' - ')[1].length <= 3) {
-                  cityStateIndex = i;
-                  break;
-                }
-              }
-              
-              if (cityStateIndex > 0) {
-                // Get the part immediately before city-state
-                const potentialNeighborhoodPart = parts[cityStateIndex - 1].trim();
-                console.log('📍 Potential neighborhood part:', potentialNeighborhoodPart);
-                
-                // Strategy 2: Extract from potential neighborhood part
-                if (potentialNeighborhoodPart.includes(' - ')) {
-                  // Split by dash and take the part after the last dash
-                  const dashParts = potentialNeighborhoodPart.split(' - ');
-                  neighborhood = dashParts[dashParts.length - 1].trim();
-                  console.log('✅ Neighborhood extracted after dash:', neighborhood);
-                } else {
-                  // No dash, use the whole part as neighborhood
-                  neighborhood = potentialNeighborhoodPart;
-                  console.log('✅ Neighborhood extracted (no dash):', neighborhood);
-                }
-              } else {
-                // Fallback: Try to extract from any part that contains a dash
-                console.log('🔄 Fallback: looking for dash in any part...');
-                for (let i = 1; i < parts.length - 2; i++) { // Skip first and last two parts
-                  const part = parts[i].trim();
-                  if (part.includes(' - ')) {
-                    const dashParts = part.split(' - ');
-                    if (dashParts.length >= 2) {
-                      neighborhood = dashParts[dashParts.length - 1].trim();
-                      console.log('✅ Fallback neighborhood extracted:', neighborhood);
-                      break;
-                    }
-                  }
-                }
-              }
-              
-              // Final fallback: if still no neighborhood, set a placeholder
-              if (!neighborhood || neighborhood.length < 2) {
-                neighborhood = 'BAIRRO A COMPLETAR';
-                console.log('⚠️ Using placeholder neighborhood');
-              } else {
-                console.log('✅ Final neighborhood result:', neighborhood);
-              }
-            }
-          }
-        }
-      }
-
-      console.log('Componentes extraídos:', { 
-        neighborhood, 
-        city, 
-        state,
-        latitude,
-        longitude,
-        fullAddress
-      });
-
-      // Update form data
-      const newFormData = {
-        ...formData,
-        address: {
-          ...formData.address,
-          full_address: fullAddress,
-          neighborhood: neighborhood || '',
-          city: city || '',
-          state: state || '',
-          latitude: latitude,
-          longitude: longitude
-        }
-      };
-
-      console.log('Atualizando formData:', newFormData);
-      setFormData(newFormData);
-      
-      // Limpar sugestões
-      setAddressSuggestions([]);
-      console.log('✅ Endereço selecionado e campos preenchidos automaticamente');
-      
-    } catch (error) {
-      console.error('Erro geral ao selecionar endereço:', error);
-      
-      // Final fallback - usar apenas os dados da sugestão
-      setFormData(prev => ({
-        ...prev,
-        address: {
-          ...prev.address,
-          full_address: suggestion.description || suggestion.structured_formatting?.main_text || '',
-          neighborhood: '',
-          city: '',
-          state: '',
-          latitude: null,
-          longitude: null
-        }
-      }));
-      setAddressSuggestions([]);
-      console.log('⚠️ Usando fallback final - apenas endereço principal preenchido');
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await onSave(formData);
+      setLoading(true);
+      const r = await clientsApi.getAll({ limit: 1000 });
+      setClients(r.data || []);
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => { loadClients(); }, []);
+
+  // Client-side broad search (case + accent insensitive + multi-fields)
+  const filtered = useMemo(() => {
+    const q = normalize(searchTerm);
+    if (!q) return clients;
+    const qDigits = onlyDigits(searchTerm);
+    return clients.filter((c) => {
+      const name = normalize(c.name);
+      if (name.includes(q)) return true;
+      if (normalize(c.email || '').includes(q)) return true;
+      if (normalize(c.id || '').includes(q)) return true;
+      if (normalize(c.instagram || '').includes(q)) return true;
+      const addr = c.address || {};
+      if (normalize(addr.full_address || '').includes(q)) return true;
+      if (normalize(addr.neighborhood || '').includes(q)) return true;
+      if (normalize(addr.city || '').includes(q)) return true;
+      if (qDigits) {
+        if (onlyDigits(c.phone_primary || '').includes(qDigits)) return true;
+        if (onlyDigits(c.phone_alternative || '').includes(qDigits)) return true;
+        if (onlyDigits(c.cpf_cnpj || '').includes(qDigits)) return true;
+      }
+      return false;
+    });
+  }, [clients, searchTerm]);
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ ...emptyForm(), name: searchTerm });
+    setError('');
+    setFormOpen(true);
+    setTimeout(() => {
+      const el = document.getElementById('client-form-anchor');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
+  const openEdit = (c) => {
+    setEditing(c);
+    setForm({
+      name: c.name || '',
+      phone_primary: c.phone_primary || '',
+      phone_alternative: c.phone_alternative || '',
+      email: c.email || '',
+      cpf_cnpj: c.cpf_cnpj || '',
+      instagram: c.instagram || '',
+      address: {
+        full_address: c.address?.full_address || '',
+        complement: c.address?.complement || '',
+        neighborhood: c.address?.neighborhood || '',
+        city: c.address?.city || '',
+        state: c.address?.state || '',
+        latitude: c.address?.latitude ?? null,
+        longitude: c.address?.longitude ?? null,
+      },
+    });
+    setError('');
+    setFormOpen(true);
+    setTimeout(() => {
+      const el = document.getElementById('client-form-anchor');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
+  const cancelForm = () => {
+    setFormOpen(false);
+    setEditing(null);
+    setForm(emptyForm());
+    setError('');
+  };
+
+  const submitForm = async (e) => {
+    e?.preventDefault();
+    setError('');
+    if (!form.name.trim()) { setError('Nome do cliente é obrigatório.'); return; }
+    if (!form.phone_primary || onlyDigits(form.phone_primary).length < 10) {
+      setError('Telefone principal inválido.');
+      return;
+    }
+    if (!form.address.full_address) {
+      setError('Endereço é obrigatório. Use a busca acima.');
+      return;
+    }
+    const payload = {
+      ...form,
+      phone_primary: onlyDigits(form.phone_primary),
+      phone_alternative: form.phone_alternative ? onlyDigits(form.phone_alternative) : null,
+      cpf_cnpj: form.cpf_cnpj ? onlyDigits(form.cpf_cnpj) : null,
+      instagram: form.instagram ? sanitizeInstagram(form.instagram) : null,
+      email: form.email || null,
+    };
+    try {
+      setSaving(true);
+      if (editing) await clientsApi.update(editing.id, payload);
+      else await clientsApi.create(payload);
+      await loadClients();
+      cancelForm();
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Erro ao salvar cliente.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await clientsApi.delete(deleteTarget.id);
+      setDeleteTarget(null);
+      await loadClients();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Erro ao excluir.');
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">
-            {client ? 'Editar Cliente' : 'Novo Cliente'}
-          </h2>
+    <div className="space-y-4">
+      {/* Search + Add */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Digite o nome do cliente (ou telefone, email, endereço, CPF/CNPJ…)"
+              className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            />
+          </div>
+          <button
+            onClick={openCreate}
+            className="px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-[0.98] transition"
+          >
+            <Plus className="w-4 h-4" /> Adicionar Novo Cliente
+          </button>
         </div>
+        <div className="mt-2 text-xs text-gray-500">
+          {searchTerm ? `${filtered.length} de ${clients.length} clientes` : `${clients.length} cliente(s) cadastrado(s)`}
+        </div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Form */}
+      <div id="client-form-anchor" />
+      {formOpen && (
+        <form onSubmit={submitForm} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900">
+              {editing ? `Editar Cliente — ${editing.id}` : 'Novo Cliente'}
+            </h2>
+            <button type="button" onClick={cancelForm} className="p-2 rounded-lg hover:bg-gray-100">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Nome */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nome do Cliente *</label>
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+              required
+            />
+          </div>
+
+          {/* Telefones */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nome do Cliente *
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              <label className="block text-xs font-medium text-gray-600 mb-1">Telefone Principal / WhatsApp *</label>
+              <div className="flex gap-2">
+                <input
+                  value={maskPhoneBR(form.phone_primary)}
+                  onChange={(e) => setForm({ ...form, phone_primary: onlyDigits(e.target.value) })}
+                  placeholder="(00) 00000-0000"
+                  className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                  required
+                />
+                <a
+                  href={form.phone_primary ? `https://wa.me/${onlyWhatsappDigits(form.phone_primary)}` : '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`px-3 rounded-lg flex items-center justify-center ${
+                    form.phone_primary ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-200 text-gray-400 pointer-events-none'
+                  }`}
+                  title="Abrir WhatsApp"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                </a>
+              </div>
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Telefone Principal/WhatsApp *
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Telefone Alternativo</label>
               <input
-                type="tel"
-                name="phone_primary"
-                value={formData.phone_primary}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="(65) 99999-9999"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Telefone Alternativo
-              </label>
-              <input
-                type="tel"
-                name="phone_alternative"
-                value={formData.phone_alternative}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="(65) 99999-9999"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                CPF/CNPJ
-              </label>
-              <input
-                type="text"
-                name="cpf_cnpj"
-                value={formData.cpf_cnpj}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Instagram
-              </label>
-              <input
-                type="text"
-                name="instagram"
-                value={formData.instagram}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="usuario_instagram"
+                value={maskPhoneBR(form.phone_alternative)}
+                onChange={(e) => setForm({ ...form, phone_alternative: onlyDigits(e.target.value) })}
+                placeholder="(00) 00000-0000"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
           </div>
 
-          <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Endereço Completo *
-            </label>
-            <input
-              type="text"
-              value={formData.address.full_address}
-              onChange={handleAddressChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Digite o endereço para buscar..."
+          {/* Email + CPF/CNPJ */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+              <div className="relative">
+                <AtSign className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">CPF / CNPJ</label>
+              <input
+                value={maskCpfCnpj(form.cpf_cnpj)}
+                onChange={(e) => setForm({ ...form, cpf_cnpj: onlyDigits(e.target.value) })}
+                placeholder="000.000.000-00"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Instagram */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Instagram</label>
+            <div className="flex">
+              <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
+                instagram.com/
+              </span>
+              <input
+                value={sanitizeInstagram(form.instagram)}
+                onChange={(e) => setForm({ ...form, instagram: sanitizeInstagram(e.target.value) })}
+                placeholder="usuario"
+                className="flex-1 px-3 py-2.5 border border-gray-300 rounded-r-lg focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+              {sanitizeInstagram(form.instagram) && (
+                <a
+                  href={`https://instagram.com/${sanitizeInstagram(form.instagram)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-2 px-3 py-2.5 rounded-lg bg-pink-50 text-pink-600 hover:bg-pink-100"
+                  title="Abrir Instagram"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Endereço */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Endereço Completo *</label>
+            <AddressAutocomplete
+              value={form.address.full_address}
+              onSelect={(addr) => setForm((f) => ({ ...f, address: { ...f.address, ...addr } }))}
             />
-            
-            {addressSuggestions.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-y-auto">
-                {addressSuggestions.map((suggestion, index) => (
-                  <button
-                    key={`${suggestion.place_id}-${index}`}
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      console.log('Clicou em:', suggestion);
-                      handleAddressSelect(suggestion);
-                    }}
-                    className="w-full px-3 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900 text-sm">
-                          {suggestion.structured_formatting?.main_text || suggestion.description}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {suggestion.structured_formatting?.secondary_text || ''}
-                        </div>
-                      </div>
-                      <div className="ml-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded flex-shrink-0">
-                        {suggestion.source === 'places' ? 'Local' : 'Endereço'}
-                      </div>
-                    </div>
-                  </button>
-                ))}
+            {form.address.latitude && form.address.longitude && (
+              <div className="text-[11px] text-emerald-700 mt-1 inline-flex items-center gap-1">
+                <Check className="w-3 h-3" /> Localização GPS capturada
               </div>
             )}
           </div>
 
+          {/* Complemento */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Complemento
-            </label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Complemento</label>
             <input
-              type="text"
-              value={formData.address.complement}
-              onChange={(e) => setFormData(prev => ({
-                ...prev,
-                address: { ...prev.address, complement: e.target.value }
-              }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Apto, Bloco, etc."
+              value={form.address.complement}
+              onChange={(e) => setForm({ ...form, address: { ...form.address, complement: e.target.value } })}
+              placeholder="Apto, bloco, ponto de referência…"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Bairro / Cidade / Estado */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Bairro
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Bairro</label>
               <input
-                type="text"
-                value={formData.address.neighborhood}
+                value={form.address.neighborhood}
+                onChange={(e) => setForm({ ...form, address: { ...form.address, neighborhood: e.target.value } })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-sm"
                 readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cidade
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Cidade</label>
               <input
-                type="text"
-                value={formData.address.city}
+                value={form.address.city}
+                onChange={(e) => setForm({ ...form, address: { ...form.address, city: e.target.value } })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-sm"
                 readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Estado
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Estado</label>
               <input
-                type="text"
-                value={formData.address.state}
+                value={form.address.state}
+                onChange={(e) => setForm({ ...form, address: { ...form.address, state: e.target.value } })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-sm"
                 readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
               />
             </div>
           </div>
 
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+          {error && (
+            <div className="text-sm bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
             <button
               type="button"
-              onClick={onCancel}
-              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              onClick={cancelForm}
+              className="flex-1 sm:flex-none px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+              disabled={saving}
+              className="flex-1 sm:flex-none px-4 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              {loading ? 'Salvando...' : 'Salvar'}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {editing ? 'Salvar Alterações' : 'Cadastrar Cliente'}
             </button>
           </div>
         </form>
-      </div>
-    </div>
-  );
-};
-
-export function Clients() {
-  const navigate = useNavigate();
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [editingClient, setEditingClient] = useState(null);
-  const [showHistory, setShowHistory] = useState(false);
-  const [selectedClient, setSelectedClient] = useState(null);
-
-  useEffect(() => {
-    loadClients();
-  }, []);
-
-  const loadClients = async () => {
-    try {
-      setLoading(true);
-      const response = await clientsApi.getAll({ search: searchTerm });
-      setClients(response.data);
-    } catch (error) {
-      console.error('Erro ao carregar clientes:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSearch = (e) => {
-    setSearchTerm(e.target.value);
-  };
-
-  useEffect(() => {
-    const debounced = setTimeout(() => {
-      if (searchTerm !== undefined) {
-        loadClients();
-      }
-    }, 500);
-
-    return () => clearTimeout(debounced);
-  }, [searchTerm]);
-
-  const handleSaveClient = async (clientData) => {
-    try {
-      if (editingClient) {
-        await clientsApi.update(editingClient.id, clientData);
-      } else {
-        await clientsApi.create(clientData);
-      }
-      
-      setShowForm(false);
-      setEditingClient(null);
-      loadClients();
-    } catch (error) {
-      console.error('Erro ao salvar cliente:', error);
-      alert('Erro ao salvar cliente. Tente novamente.');
-    }
-  };
-
-  const handleDeleteClient = async (client) => {
-    if (window.confirm(`Tem certeza que deseja excluir o cliente ${client.name}?`)) {
-      try {
-        await clientsApi.delete(client.id);
-        loadClients();
-      } catch (error) {
-        console.error('Erro ao excluir cliente:', error);
-        alert('Erro ao excluir cliente. Tente novamente.');
-      }
-    }
-  };
-
-  const handleHistory = (client) => {
-    setSelectedClient(client);
-    setShowHistory(true);
-  };
-
-  const handleNewBudget = (client) => {
-    navigate('/budgets', { state: { selectedClient: client } });
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-          <p className="text-gray-600">Gerencie os clientes da lavanderia</p>
-        </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Novo Cliente
-        </button>
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-        <input
-          type="text"
-          placeholder="Buscar clientes por nome, código ou telefone..."
-          value={searchTerm}
-          onChange={handleSearch}
-          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        />
-      </div>
-
-      {/* Clients Count */}
-      <div className="text-sm text-gray-600">
-        {clients.length} cliente{clients.length !== 1 ? 's' : ''} encontrado{clients.length !== 1 ? 's' : ''}
-      </div>
-
-      {/* Clients Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {clients.map((client) => (
-          <ClientCard
-            key={client.id}
-            client={client}
-            onEdit={(client) => {
-              setEditingClient(client);
-              setShowForm(true);
-            }}
-            onDelete={handleDeleteClient}
-            onHistory={handleHistory}
-            onNewBudget={handleNewBudget}
-          />
-        ))}
-      </div>
-
-      {clients.length === 0 && (
-        <div className="text-center py-12">
-          <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum cliente encontrado</h3>
-          <p className="text-gray-500 mb-4">
-            {searchTerm ? 'Tente ajustar sua busca' : 'Comece cadastrando seu primeiro cliente'}
-          </p>
-          {!searchTerm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Cadastrar Cliente
-            </button>
-          )}
-        </div>
       )}
 
-      {/* Form Modal */}
-      {showForm && (
-        <ClientForm
-          client={editingClient}
-          onSave={handleSaveClient}
-          onCancel={() => {
-            setShowForm(false);
-            setEditingClient(null);
-          }}
-        />
+      {/* Cards */}
+      {loading ? (
+        <div className="flex items-center justify-center h-32">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center text-gray-500">
+          {clients.length === 0 ? 'Nenhum cliente cadastrado ainda.' : 'Nenhum cliente encontrado para a busca.'}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {filtered.map((c) => (
+              <ClientCard
+                key={c.id}
+                client={c}
+                onEdit={openEdit}
+                onDelete={(cli) => setDeleteTarget(cli)}
+                onHistory={(cli) => setHistoryClient(cli)}
+              />
+            ))}
+          </div>
+          <div className="text-center text-xs text-gray-400 pt-1">
+            Total: <span className="font-semibold text-gray-600">{filtered.length}</span> cliente(s)
+            {searchTerm && ` (filtrado de ${clients.length})`}
+          </div>
+        </>
       )}
 
-      {/* History Modal */}
-      {showHistory && selectedClient && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Histórico - {selectedClient.name}
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="text-center py-12 text-gray-500">
-                <History className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>Histórico de orçamentos será implementado em breve</p>
+      {/* History modal */}
+      {historyClient && (
+        <HistoryModal client={historyClient} onClose={() => setHistoryClient(null)} />
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5" />
               </div>
+              <h3 className="font-semibold text-gray-900">Confirmar exclusão</h3>
             </div>
-            <div className="p-6 border-t border-gray-200">
+            <p className="text-sm text-gray-600 mb-4">
+              Tem certeza que deseja excluir <strong>{deleteTarget.name}</strong> ({deleteTarget.id})?
+              Esta ação não poderá ser desfeita.
+            </p>
+            <div className="flex gap-2">
               <button
-                onClick={() => {
-                  setShowHistory(false);
-                  setSelectedClient(null);
-                }}
-                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium"
               >
-                Fechar
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 text-sm font-medium"
+              >
+                Excluir
               </button>
             </div>
           </div>
@@ -804,3 +834,5 @@ export function Clients() {
     </div>
   );
 }
+
+export default Clients;
