@@ -1,0 +1,1651 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Car, 
+  Building, 
+  Calendar, 
+  MapPin, 
+  Camera, 
+  FileText, 
+  CreditCard,
+  Phone,
+  Settings,
+  Navigation,
+  CheckCircle,
+  Package,
+  Truck,
+  User,
+  Trash2
+} from 'lucide-react';
+import { routesApi, budgetItemsApi, technicianApi } from '../services/api';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
+// Função para extrair endereço legível do objeto cliente (COPIADA DA AGENDA)
+const getClientAddress = (client) => {
+  if (!client) return 'Endereço não informado';
+  
+  // Se address é um objeto
+  if (client.address && typeof client.address === 'object') {
+    return client.address.full_address || 'Endereço não informado';
+  }
+  
+  // Se full_address existe diretamente no cliente
+  if (client.full_address) {
+    return client.full_address;
+  }
+  
+  // Fallback para endereço simples
+  if (client.address && typeof client.address === 'string') {
+    return client.address;
+  }
+  
+  return 'Endereço não informado';
+};
+
+// Função para extrair complemento do endereço (COPIADA DA AGENDA)
+const getClientComplement = (client) => {
+  if (!client) return 'NENHUM';
+  
+  // Se address é um objeto
+  if (client.address && typeof client.address === 'object' && client.address.complement) {
+    return client.address.complement;
+  }
+  
+  // Se complement existe diretamente no cliente
+  if (client.address_complement || client.complement) {
+    return client.address_complement || client.complement;
+  }
+  
+  return 'NENHUM';
+};
+
+// Função para gerar emoji do serviço baseado nas palavras-chave
+const getServiceEmoji = (serviceName) => {
+  if (!serviceName) return '✨'; // Emoji padrão
+  
+  const name = serviceName.toLowerCase();
+  
+  // Verificar palavras-chave específicas
+  if (name.includes('impermeabilização')) return '💦';
+  if (name.includes('carro') || name.includes('veiculo') || name.includes('veículo')) return '🚘';
+  if (name.includes('pagamento') || name.includes('cartão') || name.includes('credito') || name.includes('débito') || name.includes('debito')) return '💳';
+  if (name.includes('colchao') || name.includes('colchão') || name.includes('box') || name.includes('cabeceira')) return '🛏️';
+  if (name.includes('cortina')) return '🪟';
+  if (name.includes('sofa') || name.includes('sofá')) return '🛋️';
+  if (name.includes('poltrona')) return '💺';
+  if (name.includes('edredom') || name.includes('colcha') || name.includes('pillowtop')) return '🧺';
+  if (name.includes('almofada') || name.includes('puff') || name.includes('outros')) return '📦';
+  if (name.includes('carpete')) return '⬜';
+  if (name.includes('carrinho') || name.includes('cadeirinha') || name.includes('bebe') || name.includes('bebê')) return '🛒👶';
+  
+  return '✨'; // Emoji padrão para serviços não mapeados
+};
+
+// Função para gerar título do evento com múltiplos serviços
+const generateEventTitle = (budget, clientName) => {
+  if (!budget.items || budget.items.length === 0) {
+    return `✨ ${clientName}`;
+  }
+
+  // Agrupar itens por emoji (serviço similar) e coletar status
+  const serviceGroups = {};
+  
+  budget.items.forEach(item => {
+    const emoji = getServiceEmoji(item.service_name);
+    const status = item.status || 'EXECUTAR_NO_LOCAL';
+    
+    if (!serviceGroups[emoji]) {
+      serviceGroups[emoji] = {
+        emoji,
+        statuses: new Set(),
+        services: new Set()
+      };
+    }
+    
+    serviceGroups[emoji].statuses.add(status);
+    serviceGroups[emoji].services.add(item.service_name);
+  });
+
+  console.log('🎨 Grupos de serviços para título:', serviceGroups);
+
+  // Construir partes do título
+  const titleParts = [];
+  
+  Object.values(serviceGroups).forEach(group => {
+    let part = group.emoji;
+    
+    // Verificar se tem RETIRAR ou ENTREGAR
+    const hasRetirar = group.statuses.has('RETIRAR');
+    const hasEntregar = group.statuses.has('ENTREGAR');
+    
+    if (hasRetirar && hasEntregar) {
+      part += 'RETIRAR/ENTREGAR';
+    } else if (hasRetirar) {
+      part += 'RETIRAR';
+    } else if (hasEntregar) {
+      part += 'ENTREGAR';
+    }
+    // Se for apenas EXECUTAR_NO_LOCAL, não adiciona texto
+    
+    titleParts.push(part);
+  });
+
+  // Juntar partes com "e" e adicionar nome do cliente
+  let title;
+  if (titleParts.length === 1) {
+    title = `${titleParts[0]} ${clientName}`;
+  } else if (titleParts.length === 2) {
+    title = `${titleParts[0]} e ${titleParts[1]} ${clientName}`;
+  } else {
+    // Mais de 2 serviços: usar vírgulas e "e" no final
+    const lastPart = titleParts.pop();
+    title = `${titleParts.join(', ')} e ${lastPart} ${clientName}`;
+  }
+
+  console.log('🎯 Título gerado:', title);
+  return title;
+};
+
+// Função para buscar dados do orçamento e cliente - VERSÃO MELHORADA
+const getBudgetAndClientData = async (budgetItemId) => {
+  try {
+    console.log(`🔍 Buscando dados para budget item: ${budgetItemId}`);
+    
+    // NOVA ABORDAGEM: Usar endpoint available-for-routes para encontrar dados completos
+    const availableItemsResponse = await fetch(`${BACKEND_URL}/api/budget-items/available-for-routes`);
+    if (!availableItemsResponse.ok) {
+      throw new Error('Erro ao buscar itens disponíveis');
+    }
+    const availableData = await availableItemsResponse.json();
+    
+    // Procurar o item específico na lista de itens disponíveis
+    const specificItem = availableData.available_items.find(item => item.budget_item_id === budgetItemId);
+    
+    if (!specificItem) {
+      throw new Error(`Item ${budgetItemId} não encontrado nos itens disponíveis`);
+    }
+    
+    console.log(`✅ Item encontrado nos disponíveis: ${specificItem.client_name} - ${specificItem.service_name}`);
+    
+    // Buscar orçamento completo para ter todos os dados
+    const budgetResponse = await fetch(`${BACKEND_URL}/api/budgets/${specificItem.budget_id}`);
+    if (!budgetResponse.ok) {
+      throw new Error('Erro ao buscar orçamento completo');
+    }
+    const budget = await budgetResponse.json();
+    
+    // Buscar dados do cliente
+    const clientResponse = await fetch(`${BACKEND_URL}/api/clients/${specificItem.client_id}`);
+    if (!clientResponse.ok) {
+      throw new Error('Erro ao buscar cliente');
+    }
+    const client = await clientResponse.json();
+    
+    console.log(`✅ Dados completos encontrados - Cliente: ${client.name}, Orçamento: ${budget.code}, Serviço: ${specificItem.service_name}`);
+    
+    // Retornar dados no formato esperado, incluindo o item específico
+    return { 
+      budget: {
+        ...budget,
+        // Filtrar apenas o item específico para generateEventTitle funcionar corretamente
+        items: budget.items.filter(item => item.id === budgetItemId)
+      }, 
+      client,
+      specificItem // Dados diretos do item para facilitar acesso
+    };
+  } catch (error) {
+    console.error('❌ Erro ao buscar dados do orçamento/cliente:', error);
+    throw error;
+  }
+};
+
+// Componente principal do Modo Técnico
+export function TechnicianMode() {
+  const [currentMode, setCurrentMode] = useState('selection'); // selection | street | company
+  const [technicianData, setTechnicianData] = useState(null);
+
+  // Carregar dados do técnico logado
+  useEffect(() => {
+    // TODO: Implementar autenticação do técnico
+    setTechnicianData({
+      id: 'TECH-001',
+      name: 'João Silva',
+      role: 'Técnico de Campo'
+    });
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-16">
+      {/* Header */}
+      <div className="bg-blue-600 text-white p-4 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold">Modo Técnico</h1>
+            <p className="text-blue-100 text-sm">
+              {technicianData?.name || 'Carregando...'}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm">{new Date().toLocaleDateString('pt-BR')}</p>
+            <p className="text-blue-100 text-xs">
+              {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Conteúdo Principal */}
+      {currentMode === 'selection' && (
+        <ModeSelection onModeSelect={setCurrentMode} />
+      )}
+      
+      {currentMode === 'street' && (
+        <StreetMode onBack={() => setCurrentMode('selection')} />
+      )}
+      
+      {currentMode === 'company' && (
+        <CompanyMode onBack={() => setCurrentMode('selection')} />
+      )}
+    </div>
+  );
+}
+
+// Componente de Seleção de Modo
+function ModeSelection({ onModeSelect }) {
+  return (
+    <div className="p-6 space-y-6">
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Selecione o Modo</h2>
+        <p className="text-gray-600">Escolha o ambiente de trabalho</p>
+      </div>
+
+      {/* Modo Rua */}
+      <div 
+        onClick={() => onModeSelect('street')}
+        className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500 cursor-pointer hover:shadow-lg transition-shadow"
+      >
+        <div className="flex items-center space-x-4">
+          <div className="bg-blue-100 p-3 rounded-full">
+            <Car className="w-8 h-8 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-800">Modo Rua</h3>
+            <p className="text-gray-600 text-sm">Atendimento externo aos clientes</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">RETIRAR</span>
+              <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">EXECUTAR_NO_LOCAL</span>
+              <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">ENTREGAR</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Modo Empresa */}
+      <div 
+        onClick={() => onModeSelect('company')}
+        className="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500 cursor-pointer hover:shadow-lg transition-shadow"
+      >
+        <div className="flex items-center space-x-4">
+          <div className="bg-orange-100 p-3 rounded-full">
+            <Building className="w-8 h-8 text-orange-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-800">Modo Empresa</h3>
+            <p className="text-gray-600 text-sm">Operação interna e controle produtivo</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">CLIENTE_TROUXE</span>
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">EM_LAVAGEM</span>
+              <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">AGUARDANDO_ENTREGA</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Componente Modo Rua
+function StreetMode({ onBack }) {
+  const [activeTab, setActiveTab] = useState('agenda');
+  const [dailyClients, setDailyClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showOnlyToday, setShowOnlyToday] = useState(true); // Novo filtro por data
+
+  useEffect(() => {
+    loadDailyAgenda();
+  }, []);
+
+  const loadDailyAgenda = async () => {
+    try {
+      setLoading(true);
+      
+      // Buscar tarefas híbridas do técnico para múltiplas datas se necessário
+      const today = new Date().toISOString().split('T')[0];
+      console.log(`📅 TechnicianMode: Buscando tarefas para a data: ${today}`);
+      
+      let response = await technicianApi.getDailyTasks(
+        'TECH-001', // TODO: Usar technicianData.id quando disponível
+        today
+      );
+      
+      // Se não encontrou assignments para hoje, tentar datas próximas
+      let allAssignments = response.data.assignments || [];
+      let allStatusItems = response.data.status_items || [];
+      let allAgendaEvents = response.data.agenda_events || [];
+      
+      if (allAssignments.length === 0) {
+        console.log('🔍 Nenhum assignment encontrado para hoje, buscando em datas próximas...');
+        
+        // Tentar ontem e amanhã
+        const dates = [
+          new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Ontem
+          new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Amanhã
+        ];
+        
+        for (const date of dates) {
+          console.log(`🔍 Tentando data: ${date}`);
+          const dateResponse = await technicianApi.getDailyTasks('TECH-001', date);
+          
+          if (dateResponse.data.assignments && dateResponse.data.assignments.length > 0) {
+            console.log(`✅ Encontrou ${dateResponse.data.assignments.length} assignments para ${date}`);
+            allAssignments = [...allAssignments, ...dateResponse.data.assignments];
+            allStatusItems = [...allStatusItems, ...dateResponse.data.status_items];
+            allAgendaEvents = [...allAgendaEvents, ...dateResponse.data.agenda_events];
+          }
+        }
+      }
+      
+      // Usar dados combinados
+      const combinedResponse = {
+        assignments: allAssignments,
+        status_items: allStatusItems,
+        agenda_events: allAgendaEvents
+      };
+      
+      console.log('📋 Tarefas híbridas recebidas:', combinedResponse);
+      
+      const { agenda_events, status_items, assignments } = combinedResponse;
+      
+      // Combinar dados de agenda e status em um formato unificado
+      const unifiedClients = {};
+      
+      // 1. Processar assignments removido - agora os status_items contêm os assignments desencapsulados
+      console.log(`🔍 Processando assignments via status_items desencapsulados (${assignments.length} assignments originais)`);
+      
+      // Os assignments agora são processados via status_items que foram desencapsulados no backend
+      
+      // 2. Processar status_items (ITENS DESENCAPSULADOS DOS ASSIGNMENTS)
+      console.log(`🔍 Processando ${status_items.length} status items para unificação`);
+      
+      for (const item of status_items) {
+        const clientId = item.client_id;
+        
+        console.log(`📋 Processando item: ${item.id} - ${item.service_name} para cliente: ${clientId}`);
+        
+        if (!unifiedClients[clientId]) {
+          // Processar endereço completo da mesma forma que os assignments
+          const fullAddress = getClientAddress(item.client_address);
+          const complement = getClientComplement(item.client_address);
+          
+          unifiedClients[clientId] = {
+            id: clientId,
+            name: item.client_name,
+            address: item.client_address,
+            phone: item.client_phone,
+            scheduledTime: '08:00', // TODO: Definir lógica de horário
+            items: [],
+            internalObservations: item.internal_observations,
+            budgetObservations: item.budget_observations,  // CORREÇÃO: Agora disponível nos status_items
+            assigned_date: item.assigned_date || new Date().toISOString().split('T')[0],
+            source: 'AGENDA_ASSIGNMENT', // CORRIGIDO: Agora são assignments desencapsulados
+            status: item.assignment_status || 'ASSIGNED',
+            original_assignment_id: item.assignment_id, // Para poder excluir
+            route_id: item.route_id,
+            full_address: fullAddress,
+            complement: complement
+          };
+          
+          console.log(`✅ Novo cliente criado: ${clientId}`);
+          
+          // Buscar observações do orçamento
+          if (item.budget_id) {
+            try {
+              const budgetResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budgets/${item.budget_id}`);
+              if (budgetResponse.ok) {
+                const budgetData = await budgetResponse.json();
+                unifiedClients[clientId].budgetObservations = budgetData.budget_observations;
+                console.log(`✅ Observações do orçamento ${item.budget_id}: ${budgetData.budget_observations}`);
+              }
+            } catch (budgetError) {
+              console.warn(`⚠️ Erro ao buscar orçamento ${item.budget_id}:`, budgetError);
+            }
+          }
+        }
+        
+        // CORREÇÃO: Verificar se o item já foi adicionado para evitar duplicação
+        const existingItem = unifiedClients[clientId].items.find(existingItem => existingItem.id === item.id);
+        if (!existingItem) {
+          unifiedClients[clientId].items.push({
+            id: item.id,
+            name: item.service_name,
+            status: item.status,
+            value: parseFloat(item.service_value),
+            observations: item.observations
+          });
+          console.log(`✅ Item adicionado: ${item.id} - ${item.service_name}`);
+        } else {
+          console.warn(`⚠️ Item duplicado ignorado: ${item.id} - ${item.service_name}`);
+        }
+      }
+      
+      // Converter para array e ordenar por data
+      const clientsArray = Object.values(unifiedClients);
+      
+      // Ordenar por data e tipo de fonte (assignments da agenda primeiro, depois status items)
+      clientsArray.sort((a, b) => {
+        // Priorizar assignments da agenda
+        if (a.source === 'AGENDA_ASSIGNMENT' && b.source !== 'AGENDA_ASSIGNMENT') return -1;
+        if (b.source === 'AGENDA_ASSIGNMENT' && a.source !== 'AGENDA_ASSIGNMENT') return 1;
+        
+        // Ordenar por data (assignments têm assigned_date, status items usam data atual)
+        const dateA = a.assigned_date || new Date().toISOString().split('T')[0];
+        const dateB = b.assigned_date || new Date().toISOString().split('T')[0];
+        
+        if (dateA !== dateB) {
+          return dateA.localeCompare(dateB);
+        }
+        
+        // Se mesma data, ordenar por horário agendado
+        return a.scheduledTime.localeCompare(b.scheduledTime);
+      });
+      
+      console.log('👥 Clientes unificados (ordenados por data e tipo):', clientsArray);
+      
+      setDailyClients(clientsArray);
+      setLoading(false);
+      
+    } catch (error) {
+      console.error('Erro ao carregar agenda híbrida:', error);
+      
+      // Fallback para dados mock em caso de erro
+      const mockClients = [
+        {
+          id: 'CLI-001',
+          name: 'João Silva',
+          address: 'Rua das Flores, 123 - Centro',
+          phone: '(11) 99999-9999',
+          scheduledTime: '08:30',
+          items: [
+            { id: 'ITM-001', name: 'Sofá 3 Lugares', status: 'EXECUTAR_NO_LOCAL', value: 320.00, observations: 'Mancha no braço direito' },
+            { id: 'ITM-002', name: 'Cadeira Presidencial', status: 'EXECUTAR_NO_LOCAL', value: 80.00, observations: '' }
+          ],
+          internalObservations: 'Cliente preferencial. Cuidado com pets.',
+          source: 'MOCK'
+        },
+        {
+          id: 'CLI-002', 
+          name: 'Maria Santos',
+          address: 'Av. Principal, 456 - Jardins',
+          phone: '(11) 88888-8888',
+          scheduledTime: '10:00',
+          items: [
+            { id: 'ITM-003', name: 'Tapete Persa 2x3m', status: 'RETIRAR', value: 150.00, observations: 'Cuidado com as franjas' }
+          ],
+          internalObservations: 'Portão azul, tocar interfone.',
+          source: 'MOCK'
+        }
+      ];
+      
+      setDailyClients(mockClients);
+      setLoading(false);
+    }
+  };
+
+  const generateNavigationLink = (address) => {
+    const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(address)}`;
+    const mapsUrl = `https://maps.google.com/maps?q=${encodeURIComponent(address)}`;
+    return { wazeUrl, mapsUrl };
+  };
+
+  return (
+    <div>
+      {/* Header com botão voltar */}
+      <div className="bg-blue-600 text-white p-4 flex items-center">
+        <button onClick={onBack} className="mr-3">
+          <span className="text-xl">←</span>
+        </button>
+        <h2 className="text-lg font-semibold">Modo Rua</h2>
+      </div>
+
+      {/* Tabs de navegação */}
+      <div className="bg-white shadow-sm">
+        <div className="flex">
+          <TabButton 
+            active={activeTab === 'agenda'} 
+            onClick={() => setActiveTab('agenda')}
+            icon={<Calendar className="w-4 h-4" />}
+            label="Agenda"
+          />
+          <TabButton 
+            active={activeTab === 'payments'} 
+            onClick={() => setActiveTab('payments')}
+            icon={<CreditCard className="w-4 h-4" />}
+            label="Pagamentos"
+          />
+          <TabButton 
+            active={activeTab === 'tickets'} 
+            onClick={() => setActiveTab('tickets')}
+            icon={<Phone className="w-4 h-4" />}
+            label="Chamados"
+          />
+          <TabButton 
+            active={activeTab === 'photos'} 
+            onClick={() => setActiveTab('photos')}
+            icon={<Camera className="w-4 h-4" />}
+            label="Fotos"
+          />
+        </div>
+      </div>
+
+      {/* Conteúdo das tabs */}
+      <div className="p-4">
+        {activeTab === 'agenda' && (
+          <AgendaTab clients={dailyClients} loading={loading} generateNavigationLink={generateNavigationLink} />
+        )}
+        {activeTab === 'payments' && <PaymentsTab />}
+        {activeTab === 'tickets' && <TicketsTab />}
+        {activeTab === 'photos' && <PhotosTab />}
+      </div>
+    </div>
+  );
+}
+
+// Componente da Tab Agenda
+function AgendaTab({ clients, loading, generateNavigationLink }) {
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [showOnlyToday, setShowOnlyToday] = useState(true);
+  
+  // Filtrar clientes por data - APENAS ASSIGNMENTS DA AGENDA
+  const filteredClients = clients.filter(client => {
+    if (!showOnlyToday) return true; // Mostrar todos
+    
+    const today = new Date().toISOString().split('T')[0];
+    const clientDate = client.assigned_date || today;
+    
+    return clientDate === today;
+  });
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-2 text-gray-600">Carregando agenda...</p>
+      </div>
+    );
+  }
+
+  if (selectedClient) {
+    return (
+      <ClientDetails 
+        client={selectedClient} 
+        onBack={() => setSelectedClient(null)}
+        generateNavigationLink={generateNavigationLink}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Filtros */}
+      <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Agenda do Dia - {filteredClients.length} cliente(s)
+          </h3>
+          
+          <div className="flex items-center space-x-4">
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={showOnlyToday}
+                onChange={(e) => setShowOnlyToday(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm text-gray-700">Apenas hoje</span>
+            </label>
+            
+            <div className="text-sm text-gray-500">
+              {showOnlyToday 
+                ? `Hoje (${new Date().toLocaleDateString('pt-BR')})` 
+                : 'Todos os pendentes'
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {filteredClients.map(client => (
+        <ClientCard 
+          key={client.id} 
+          client={client} 
+          onClick={() => setSelectedClient(client)}
+          generateNavigationLink={generateNavigationLink}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Card do Cliente
+function ClientCard({ client, onClick, generateNavigationLink }) {
+  const { wazeUrl, mapsUrl } = generateNavigationLink(getClientAddress(client));
+  
+  const totalValue = client.items.reduce((sum, item) => sum + item.value, 0);
+  
+  const handleRemoveAssignment = async (assignmentId) => {
+    try {
+      console.log(`🗑️ Removendo assignment ${assignmentId} da agenda`);
+      
+      // Confirmar ação com o usuário
+      if (!window.confirm('Tem certeza que deseja remover este serviço da sua agenda? Esta ação não pode ser desfeita.')) {
+        return;
+      }
+      
+      // Marcar assignment como CANCELLED (não existe endpoint DELETE)
+      const response = await technicianApi.updateAssignmentStatus(assignmentId, 'CANCELLED');
+      
+      console.log(`✅ Assignment ${assignmentId} marcado como cancelado:`, response.data);
+      
+      alert('Serviço removido da sua agenda com sucesso!');
+      
+      // Recarregar dados da agenda
+      window.location.reload(); // Solução temporária - TODO: implementar reload otimizado
+      
+    } catch (error) {
+      console.error(`❌ Erro ao remover assignment ${assignmentId}:`, error);
+      
+      // CORREÇÃO: Tratar especificamente erro 404 (assignment não existe)
+      if (error.response && error.response.status === 404) {
+        alert('Este serviço não existe mais na agenda. A lista será atualizada.');
+        console.log('🔄 Assignment não encontrado, recarregando lista...');
+        window.location.reload();
+      } else {
+        alert('Erro ao remover da agenda. Tente novamente.');
+      }
+    }
+  };
+  
+  return (
+    <div className="bg-white rounded-lg shadow-md border border-gray-200">
+      {/* Header do card */}
+      <div className="p-4 border-b border-gray-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            {/* Ícone específico por tipo de source */}
+            {client.source === 'AGENDA_ASSIGNMENT' ? (
+              <Calendar className="w-4 h-4 text-purple-600" />
+            ) : (
+              <MapPin className="w-4 h-4 text-blue-600" />
+            )}
+            <span className="font-semibold text-gray-800">{client.name}</span>
+            
+            {/* CORREÇÃO: Mostrar data + horário ao invés de apenas horário */}
+            <div className="flex flex-col">
+              <span className="text-blue-600 font-medium text-sm">{client.scheduledTime}</span>
+              {client.scheduledDate && (
+                <span className="text-gray-500 text-xs">
+                  {new Date(client.scheduledDate).toLocaleDateString('pt-BR')}
+                </span>
+              )}
+            </div>
+            
+            {/* Badge removido - agora apenas assignments da agenda */}
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-medium text-green-600">R$ {totalValue.toFixed(2)}</p>
+            {/* Mostrar data se for assignment da agenda */}
+            {client.assigned_date && (
+              <p className="text-xs text-gray-500">
+                {new Date(client.assigned_date).toLocaleDateString('pt-BR')}
+              </p>
+            )}
+          </div>
+        </div>
+        <p className="text-sm text-gray-600 mt-1">{getClientAddress(client)}</p>
+        
+        {/* Observações do Orçamento e Internas - APÓS O ENDEREÇO */}
+        <div className="mt-2 space-y-1">
+          <div className="p-2 bg-green-50 rounded-md">
+            <p className="text-xs font-medium text-green-800">💰 Observações do Orçamento:</p>
+            <p className="text-xs text-green-700">
+              {client.budgetObservations && client.budgetObservations.trim() 
+                ? client.budgetObservations 
+                : 'Sem informações'}
+            </p>
+          </div>
+          <div className="p-2 bg-blue-50 rounded-md">
+            <p className="text-xs font-medium text-blue-800">📝 Observações Internas:</p>
+            <p className="text-xs text-blue-700">
+              {client.internalObservations && client.internalObservations.trim() 
+                ? client.internalObservations 
+                : 'Sem informações'}
+            </p>
+          </div>
+        </div>
+        
+        {/* Status do assignment se for da agenda */}
+        {client.source === 'AGENDA_ASSIGNMENT' && (
+          <div className="mt-2 flex items-center space-x-2">
+            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+              client.status === 'ASSIGNED' ? 'bg-yellow-100 text-yellow-800' :
+              client.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
+              client.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>
+              {client.status}
+            </span>
+            {client.event_ids && (
+              <span className="text-xs text-gray-500">
+                {client.event_ids.length} evento(s) da agenda
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Items summary */}
+      <div className="p-4">
+        <div className="flex flex-wrap gap-2 mb-3">
+          {client.items.map(item => (
+            <div key={item.id} className="flex items-center space-x-1">
+              <span className="text-sm">
+                {item.status === 'EXECUTAR_NO_LOCAL' ? '🛋️' : 
+                 item.status === 'RETIRAR' ? '📦' : 
+                 item.status === 'ENTREGAR' ? '🚚' : '✨'}
+              </span>
+              <span className="text-sm text-gray-700">{item.name}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex space-x-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(wazeUrl, '_blank');
+            }}
+            className="flex-1 bg-green-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-green-700 transition-colors flex items-center justify-center space-x-1"
+          >
+            <Navigation className="w-4 h-4" />
+            <span>Waze</span>
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(mapsUrl, '_blank');
+            }}
+            className="flex-1 bg-blue-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center space-x-1"
+          >
+            <MapPin className="w-4 h-4" />
+            <span>Maps</span>
+          </button>
+          <button
+            onClick={onClick}
+            className="flex-1 bg-gray-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors flex items-center justify-center space-x-1"
+          >
+            <User className="w-4 h-4" />
+            <span>Iniciar Atendimento</span>
+          </button>
+          
+          {/* Botão de exclusão - apenas para assignments da agenda */}
+          {client.original_assignment_id && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRemoveAssignment(client.original_assignment_id);
+              }}
+              className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+              title="Remover da agenda"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Detalhes do Cliente
+function ClientDetails({ client, onBack, generateNavigationLink }) {
+  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [technicianNotes, setTechnicianNotes] = useState('');
+  const [showPhotoCapture, setShowPhotoCapture] = useState(true); // Iniciar com captura de fotos
+  const [itemPhotos, setItemPhotos] = useState({}); // {itemId: [photos]}
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+
+  const handleItemSelect = (itemId, checked) => {
+    const newSelected = new Set(selectedItems);
+    if (checked) {
+      newSelected.add(itemId);
+    } else {
+      newSelected.delete(itemId);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  // Verificar se todos os itens têm pelo menos uma foto
+  const allItemsHavePhotos = () => {
+    return client.items.every(item => {
+      const photos = itemPhotos[item.id] || [];
+      return photos.length > 0;
+    });
+  };
+
+  // Prosseguir para o atendimento após captura de fotos
+  const proceedToService = () => {
+    if (!allItemsHavePhotos()) {
+      alert('Por favor, registre pelo menos uma foto para cada item antes de prosseguir.');
+      return;
+    }
+    setShowPhotoCapture(false);
+  };
+
+  // Se ainda está na fase de captura de fotos
+  if (showPhotoCapture) {
+    return (
+      <PhotoCaptureScreen 
+        client={client}
+        onBack={onBack}
+        itemPhotos={itemPhotos}
+        setItemPhotos={setItemPhotos}
+        uploadingPhotos={uploadingPhotos}
+        setUploadingPhotos={setUploadingPhotos}
+        onProceed={proceedToService}
+        allItemsHavePhotos={allItemsHavePhotos}
+      />
+    );
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center mb-4">
+        <button onClick={onBack} className="mr-3 text-blue-600">
+          <span className="text-xl">←</span>
+        </button>
+        <h3 className="text-lg font-semibold text-gray-800">{client.name}</h3>
+      </div>
+
+      {/* Client Info */}
+      <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+        <div className="space-y-2">
+          <div className="flex items-center space-x-2">
+            <MapPin className="w-4 h-4 text-blue-600" />
+            <span className="text-sm text-gray-700">{getClientAddress(client)}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Phone className="w-4 h-4 text-green-600" />
+            <span className="text-sm text-gray-700">{client.phone}</span>
+          </div>
+          
+          {/* Observações logo após o endereço - SEMPRE EXIBIR */}
+          <div className="mt-3 space-y-2">
+            <div className="p-2 bg-blue-50 rounded-md">
+              <p className="text-xs font-medium text-blue-800">📝 Observações Internas:</p>
+              <p className="text-xs text-blue-700">
+                {client.internalObservations && client.internalObservations.trim() 
+                  ? client.internalObservations 
+                  : 'Sem informações'}
+              </p>
+            </div>
+            <div className="p-2 bg-green-50 rounded-md">
+              <p className="text-xs font-medium text-green-800">💰 Observações do Orçamento:</p>
+              <p className="text-xs text-green-700">
+                {client.budgetObservations && client.budgetObservations.trim() 
+                  ? client.budgetObservations 
+                  : 'Sem informações'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Items List */}
+      <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+        <h4 className="font-medium text-gray-800 mb-3">Itens/Serviços</h4>
+        <div className="space-y-3">
+          {client.items.map(item => (
+            <div key={item.id} className="border border-gray-200 rounded-md p-3">
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  checked={selectedItems.has(item.id)}
+                  onChange={(e) => handleItemSelect(item.id, e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-800">{item.name}</span>
+                    <span className="font-medium text-green-600">R$ {item.value.toFixed(2)}</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Status: {item.status}</p>
+                  {item.observations && (
+                    <p className="text-sm text-gray-500 italic">Obs: {item.observations}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Technician Notes */}
+      <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+        <h4 className="font-medium text-gray-800 mb-3">Observações do Técnico</h4>
+        <textarea
+          value={technicianNotes}
+          onChange={(e) => setTechnicianNotes(e.target.value)}
+          placeholder="Adicione observações sobre o atendimento..."
+          className="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+          rows={3}
+        />
+      </div>
+
+      {/* Action Buttons */}
+      {selectedItems.size > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <h4 className="font-medium text-gray-800 mb-3">Ações para {selectedItems.size} item(s)</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <button className="bg-green-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-green-700 transition-colors flex items-center justify-center space-x-1">
+              <CheckCircle className="w-4 h-4" />
+              <span>Serviço Concluído</span>
+            </button>
+            <button className="bg-blue-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center space-x-1">
+              <Package className="w-4 h-4" />
+              <span>Retirada Efetuada</span>
+            </button>
+            <button className="bg-purple-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-purple-700 transition-colors flex items-center justify-center space-x-1">
+              <Truck className="w-4 h-4" />
+              <span>Entrega Efetuada</span>
+            </button>
+            <button className="bg-orange-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-orange-700 transition-colors flex items-center justify-center space-x-1">
+              <User className="w-4 h-4" />
+              <span>Cliente Buscou</span>
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <button className="bg-red-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-red-700 transition-colors">
+              Cancelado pelo Cliente
+            </button>
+            <button className="bg-yellow-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-yellow-700 transition-colors">
+              Reagendar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Componente Modo Empresa (Básico)
+function CompanyMode({ onBack }) {
+  const [statusCounts, setStatusCounts] = useState({
+    CLIENTE_TROUXE: 2,
+    COLETADO: 3, 
+    EM_LAVAGEM: 5,
+    EM_LAVAGEM_PARCEIRO: 3,
+    AGUARDANDO_ENTREGA: 7,
+    AGUARDANDO_BUSCAR: 5
+  });
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="bg-orange-600 text-white p-4 flex items-center">
+        <button onClick={onBack} className="mr-3">
+          <span className="text-xl">←</span>
+        </button>
+        <h2 className="text-lg font-semibold">Modo Empresa</h2>
+      </div>
+
+      <div className="p-4 space-y-4">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Controle Produtivo</h3>
+        
+        {/* Recepção */}
+        <StatusSection 
+          title="📥 RECEPÇÃO" 
+          items={[
+            { status: 'CLIENTE_TROUXE', count: statusCounts.CLIENTE_TROUXE, color: 'yellow' },
+            { status: 'COLETADO', count: statusCounts.COLETADO, color: 'blue' }
+          ]}
+        />
+
+        {/* Lavagem */}
+        <StatusSection 
+          title="🧽 LAVAGEM" 
+          items={[
+            { status: 'EM_LAVAGEM', count: statusCounts.EM_LAVAGEM, color: 'blue' },
+            { status: 'EM_LAVAGEM_PARCEIRO', count: statusCounts.EM_LAVAGEM_PARCEIRO, color: 'indigo' }
+          ]}
+        />
+
+        {/* Depósito Saída */}
+        <StatusSection 
+          title="📦 DEPÓSITO SAÍDA" 
+          items={[
+            { status: 'AGUARDANDO_ENTREGA', count: statusCounts.AGUARDANDO_ENTREGA, color: 'green' },
+            { status: 'AGUARDANDO_BUSCAR', count: statusCounts.AGUARDANDO_BUSCAR, color: 'purple' }
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Componente de Seção de Status
+function StatusSection({ title, items }) {
+  const totalCount = items.reduce((sum, item) => sum + item.count, 0);
+  
+  return (
+    <div className="bg-white rounded-lg shadow-md p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-medium text-gray-800">{title}</h4>
+        <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm font-medium">
+          {totalCount} itens
+        </span>
+      </div>
+      <div className="space-y-2">
+        {items.map(item => (
+          <div key={item.status} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+            <span className="text-sm text-gray-700">{item.status}</span>
+            <span className={`px-2 py-1 rounded text-xs font-medium
+              ${item.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
+                item.color === 'blue' ? 'bg-blue-100 text-blue-800' :
+                item.color === 'indigo' ? 'bg-indigo-100 text-indigo-800' :
+                item.color === 'green' ? 'bg-green-100 text-green-800' :
+                item.color === 'purple' ? 'bg-purple-100 text-purple-800' :
+                'bg-gray-100 text-gray-800'}`}>
+              {item.count}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Componentes de Tab (Placeholders)
+function PaymentsTab() {
+  return (
+    <div className="text-center py-8 text-gray-500">
+      <CreditCard className="w-12 h-12 mx-auto mb-2 opacity-50" />
+      <p>Sistema de Pagamentos</p>
+      <p className="text-sm">Em desenvolvimento</p>
+    </div>
+  );
+}
+
+function TicketsTab() {
+  return (
+    <div className="text-center py-8 text-gray-500">
+      <Phone className="w-12 h-12 mx-auto mb-2 opacity-50" />
+      <p>Sistema de Chamados</p>
+      <p className="text-sm">Em desenvolvimento</p>
+    </div>
+  );
+}
+
+function PhotosTab() {
+  return (
+    <div className="text-center py-8 text-gray-500">
+      <Camera className="w-12 h-12 mx-auto mb-2 opacity-50" />
+      <p>Sistema de Fotos</p>
+      <p className="text-sm">Em desenvolvimento</p>
+    </div>
+  );
+}
+
+// Componente de Tab Button
+function TabButton({ active, onClick, icon, label }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 flex flex-col items-center py-3 px-2 text-xs font-medium transition-colors
+        ${active 
+          ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' 
+          : 'text-gray-500 hover:text-gray-700'}`}
+    >
+      {icon}
+      <span className="mt-1">{label}</span>
+    </button>
+  );
+}
+
+// Componente de Captura de Fotos
+function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadingPhotos, setUploadingPhotos, onProceed, allItemsHavePhotos }) {
+  const [selectedFiles, setSelectedFiles] = useState({});
+  const [photoObservations, setPhotoObservations] = useState({}); // Observações de cada foto
+  const [damageInfo, setDamageInfo] = useState({}); // Informações sobre danos por item
+  const [currentPhotoForObservation, setCurrentPhotoForObservation] = useState(null);
+  
+  // Backend URL
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
+  const handleFileSelect = (itemId, files) => {
+    const newSelectedFiles = { ...selectedFiles };
+    newSelectedFiles[itemId] = files;
+    setSelectedFiles(newSelectedFiles);
+  };
+
+  const handleDamageToggle = (itemId, hasDamage) => {
+    const newDamageInfo = { ...damageInfo };
+    if (!newDamageInfo[itemId]) {
+      newDamageInfo[itemId] = {};
+    }
+    newDamageInfo[itemId].hasDamage = hasDamage;
+    if (!hasDamage) {
+      // Se não tem dano, limpar detalhes
+      newDamageInfo[itemId].damageDetails = '';
+      newDamageInfo[itemId].damagePhotos = [];
+    }
+    setDamageInfo(newDamageInfo);
+  };
+
+  const handleDamageDetailsChange = (itemId, details) => {
+    const newDamageInfo = { ...damageInfo };
+    if (!newDamageInfo[itemId]) {
+      newDamageInfo[itemId] = {};
+    }
+    newDamageInfo[itemId].damageDetails = details;
+    setDamageInfo(newDamageInfo);
+  };
+
+  const handlePhotoUpload = async (itemId) => {
+    const files = selectedFiles[itemId];
+    if (!files || files.length === 0) {
+      alert('Selecione pelo menos uma foto para este item.');
+      return;
+    }
+
+    setUploadingPhotos(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('item_id', itemId);
+      formData.append('technician_id', 'TECH-001'); // TODO: Usar técnico logado
+      formData.append('photo_type', 'BEFORE');
+      
+      if (client.original_assignment_id) {
+        formData.append('assignment_id', client.original_assignment_id);
+      }
+      
+      // Adicionar todas as fotos ao FormData
+      for (let file of files) {
+        formData.append('files', file);
+      }
+      
+      // Upload real para o backend
+      const response = await fetch(`${BACKEND_URL}/api/technician/upload-photos`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erro no upload: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Upload realizado com sucesso:', result);
+      
+      // Criar previews locais das fotos com observações
+      const uploadedPhotos = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const photoId = Date.now() + Math.random() + i;
+        const photoPreview = {
+          id: photoId,
+          file: file,
+          url: URL.createObjectURL(file),
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          timestamp: new Date().toISOString(),
+          observations: '', // Será preenchido pelo usuário
+          photoType: 'NORMAL' // NORMAL ou DAMAGE
+        };
+        uploadedPhotos.push(photoPreview);
+      }
+      
+      // Atualizar estado das fotos
+      const newItemPhotos = { ...itemPhotos };
+      if (!newItemPhotos[itemId]) {
+        newItemPhotos[itemId] = [];
+      }
+      newItemPhotos[itemId] = [...newItemPhotos[itemId], ...uploadedPhotos];
+      setItemPhotos(newItemPhotos);
+      
+      // Limpar seleção de arquivos
+      const newSelectedFiles = { ...selectedFiles };
+      delete newSelectedFiles[itemId];
+      setSelectedFiles(newSelectedFiles);
+      
+      alert(`${uploadedPhotos.length} foto(s) enviada(s) com sucesso!`);
+      
+    } catch (error) {
+      console.error('❌ Erro ao fazer upload das fotos:', error);
+      alert('Erro ao fazer upload das fotos. Verifique sua conexão e tente novamente.');
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
+  const handleDamagePhotoUpload = async (itemId, files) => {
+    if (!files || files.length === 0) {
+      alert('Selecione pelo menos uma foto do dano.');
+      return;
+    }
+
+    setUploadingPhotos(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('item_id', itemId);
+      formData.append('technician_id', 'TECH-001');
+      formData.append('photo_type', 'DAMAGE');
+      
+      if (client.original_assignment_id) {
+        formData.append('assignment_id', client.original_assignment_id);
+      }
+      
+      for (let file of files) {
+        formData.append('files', file);
+      }
+      
+      const response = await fetch(`${BACKEND_URL}/api/technician/upload-photos`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erro no upload: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Upload de fotos de dano realizado:', result);
+      
+      // Criar previews das fotos de dano
+      const damagePhotos = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const photoId = Date.now() + Math.random() + i;
+        const photoPreview = {
+          id: photoId,
+          file: file,
+          url: URL.createObjectURL(file),
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          timestamp: new Date().toISOString(),
+          observations: '',
+          photoType: 'DAMAGE'
+        };
+        damagePhotos.push(photoPreview);
+      }
+      
+      // Adicionar as fotos de dano ao estado
+      const newItemPhotos = { ...itemPhotos };
+      if (!newItemPhotos[itemId]) {
+        newItemPhotos[itemId] = [];
+      }
+      newItemPhotos[itemId] = [...newItemPhotos[itemId], ...damagePhotos];
+      setItemPhotos(newItemPhotos);
+      
+      // Armazenar as fotos de dano no damageInfo também
+      const newDamageInfo = { ...damageInfo };
+      if (!newDamageInfo[itemId]) {
+        newDamageInfo[itemId] = {};
+      }
+      if (!newDamageInfo[itemId].damagePhotos) {
+        newDamageInfo[itemId].damagePhotos = [];
+      }
+      newDamageInfo[itemId].damagePhotos = [...newDamageInfo[itemId].damagePhotos, ...damagePhotos];
+      setDamageInfo(newDamageInfo);
+      
+      alert(`${damagePhotos.length} foto(s) de dano enviada(s) com sucesso!`);
+      
+    } catch (error) {
+      console.error('❌ Erro ao fazer upload das fotos de dano:', error);
+      alert('Erro ao fazer upload das fotos de dano. Tente novamente.');
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
+  const removePhoto = (itemId, photoId) => {
+    const newItemPhotos = { ...itemPhotos };
+    newItemPhotos[itemId] = newItemPhotos[itemId].filter(photo => photo.id !== photoId);
+    setItemPhotos(newItemPhotos);
+    
+    // Se for uma foto de dano, remover também do damageInfo
+    const newDamageInfo = { ...damageInfo };
+    if (newDamageInfo[itemId] && newDamageInfo[itemId].damagePhotos) {
+      newDamageInfo[itemId].damagePhotos = newDamageInfo[itemId].damagePhotos.filter(photo => photo.id !== photoId);
+      setDamageInfo(newDamageInfo);
+    }
+  };
+
+  const updatePhotoObservation = (photoId, observation) => {
+    const newObservations = { ...photoObservations };
+    newObservations[photoId] = observation;
+    setPhotoObservations(newObservations);
+    
+    // Atualizar também no itemPhotos
+    const newItemPhotos = { ...itemPhotos };
+    Object.keys(newItemPhotos).forEach(itemId => {
+      newItemPhotos[itemId] = newItemPhotos[itemId].map(photo => 
+        photo.id === photoId ? { ...photo, observations: observation } : photo
+      );
+    });
+    setItemPhotos(newItemPhotos);
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center mb-4">
+        <button onClick={onBack} className="mr-3 text-blue-600">
+          <span className="text-xl">←</span>
+        </button>
+        <h3 className="text-lg font-semibold text-gray-800">Registro Fotográfico - {client.name}</h3>
+      </div>
+
+      {/* Instruções */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <div className="flex items-start space-x-2">
+          <Camera className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h4 className="font-medium text-yellow-800 mb-2">Antes de iniciar o serviço registre a situação inicial do Item:</h4>
+            <p className="text-sm text-yellow-700">
+              Capture fotos do estado atual de cada item antes de iniciar o trabalho. 
+              É obrigatório registrar pelo menos uma foto para cada item listado abaixo.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Lista de Items para Fotografar */}
+      <div className="space-y-4 mb-6">
+        {client.items.map(item => {
+          const itemPhotosArray = itemPhotos[item.id] || [];
+          const hasPhotos = itemPhotosArray.length > 0;
+          
+          return (
+            <div key={item.id} className="bg-white rounded-lg shadow-md border border-gray-200">
+              {/* Header do Item */}
+              <div className={`p-4 border-b border-gray-100 ${hasPhotos ? 'bg-green-50' : 'bg-red-50'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    {hasPhotos ? (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <Camera className="w-5 h-5 text-red-600" />
+                    )}
+                    <div>
+                      <h5 className="font-medium text-gray-800">{item.name}</h5>
+                      <p className="text-sm text-gray-600">Status: {item.status} • R$ {item.value.toFixed(2)}</p>
+                      {item.observations && (
+                        <p className="text-sm text-gray-500 italic">Obs: {item.observations}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      hasPhotos 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {hasPhotos ? `${itemPhotosArray.length} foto(s)` : 'Sem fotos'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload de Fotos */}
+              <div className="p-4">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Selecionar fotos para este item:
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => handleFileSelect(item.id, Array.from(e.target.files))}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                </div>
+                
+                {/* Checkbox de Danos */}
+                <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="flex items-start space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`damage-${item.id}`}
+                      checked={damageInfo[item.id]?.hasDamage || false}
+                      onChange={(e) => handleDamageToggle(item.id, e.target.checked)}
+                      className="mt-1 h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor={`damage-${item.id}`} className="text-sm text-orange-800">
+                      <span className="font-medium">O item apresenta danos visíveis?</span>
+                      <br />
+                      <span className="text-orange-700">
+                        Rasgos, manchas claramente irreversíveis (tinta, cola, desbotamento), 
+                        Descosturas ou desfiamento (gatos), afundamento de espuma ou coisa parecida?
+                      </span>
+                    </label>
+                  </div>
+                  
+                  {/* Campo de detalhes do dano */}
+                  {damageInfo[item.id]?.hasDamage && (
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-orange-800 mb-1">
+                          Detalhes sobre o Dano: *
+                        </label>
+                        <textarea
+                          value={damageInfo[item.id]?.damageDetails || ''}
+                          onChange={(e) => handleDamageDetailsChange(item.id, e.target.value)}
+                          placeholder="Descreva detalhadamente os danos encontrados..."
+                          className="w-full px-3 py-2 border border-orange-300 rounded-lg text-sm focus:ring-orange-500 focus:border-orange-500"
+                          rows="3"
+                          required
+                        />
+                      </div>
+                      
+                      {/* Upload de foto do dano */}
+                      <div>
+                        <label className="block text-sm font-medium text-orange-800 mb-2">
+                          Foto de identificação do dano: *
+                        </label>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => handleDamagePhotoUpload(item.id, Array.from(e.target.files))}
+                          className="block w-full text-sm text-orange-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-100 file:text-orange-800 hover:file:bg-orange-200"
+                          required
+                        />
+                        <p className="text-xs text-orange-600 mt-1">
+                          Obrigatório: Capture fotos específicas dos danos identificados
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {selectedFiles[item.id] && selectedFiles[item.id].length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-sm text-gray-600 mb-2">
+                      {selectedFiles[item.id].length} arquivo(s) selecionado(s):
+                    </p>
+                    <div className="text-xs text-gray-500 space-y-1">
+                      {Array.from(selectedFiles[item.id]).map((file, index) => (
+                        <div key={index}>• {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => handlePhotoUpload(item.id)}
+                      disabled={uploadingPhotos}
+                      className="mt-2 bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    >
+                      {uploadingPhotos ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Enviando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-4 h-4" />
+                          <span>Adicionar Fotos</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Preview das Fotos */}
+                {hasPhotos && (
+                  <div className="mt-4">
+                    <p className="text-sm font-medium text-gray-700 mb-3">Fotos capturadas:</p>
+                    <div className="space-y-4">
+                      {itemPhotosArray.map(photo => (
+                        <div key={photo.id} className={`border rounded-lg p-3 ${
+                          photo.photoType === 'DAMAGE' ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'
+                        }`}>
+                          <div className="flex space-x-3">
+                            {/* Thumbnail da foto */}
+                            <div className="relative flex-shrink-0">
+                              <img
+                                src={photo.url}
+                                alt={`Foto ${photo.name}`}
+                                className="w-20 h-20 object-cover rounded-md border border-gray-200"
+                              />
+                              <button
+                                onClick={() => removePhoto(item.id, photo.id)}
+                                className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-700"
+                              >
+                                ×
+                              </button>
+                              {photo.photoType === 'DAMAGE' && (
+                                <span className="absolute -bottom-1 -left-1 bg-orange-600 text-white text-xs px-1 rounded">
+                                  DANO
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Detalhes e observações */}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-gray-500 mb-2 truncate">
+                                {photo.name} • {new Date(photo.timestamp).toLocaleTimeString()}
+                              </div>
+                              
+                              {/* Campo de observações sobre a foto */}
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  Observações sobre esta foto:
+                                </label>
+                                <textarea
+                                  value={photo.observations || photoObservations[photo.id] || ''}
+                                  onChange={(e) => updatePhotoObservation(photo.id, e.target.value)}
+                                  placeholder={photo.photoType === 'DAMAGE' 
+                                    ? "Descreva especificamente o dano mostrado nesta foto..." 
+                                    : "Descreva o que esta foto mostra (estado geral, detalhes importantes, etc.)"
+                                  }
+                                  className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-blue-500 focus:border-blue-500"
+                                  rows="2"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Botão para Prosseguir */}
+      <div className="bg-white rounded-lg shadow-md p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">
+              Progresso: {Object.values(itemPhotos).filter(photos => photos.length > 0).length} de {client.items.length} itens fotografados
+            </p>
+            {!allItemsHavePhotos() && (
+              <p className="text-sm text-red-600 mt-1">
+                Registre fotos para todos os itens antes de prosseguir.
+              </p>
+            )}
+            
+            {/* Validação de danos */}
+            {(() => {
+              const itemsWithDamage = client.items.filter(item => damageInfo[item.id]?.hasDamage);
+              const invalidDamageItems = itemsWithDamage.filter(item => {
+                const info = damageInfo[item.id];
+                return !info.damageDetails || !info.damageDetails.trim() || 
+                       !info.damagePhotos || info.damagePhotos.length === 0;
+              });
+              
+              if (invalidDamageItems.length > 0) {
+                return (
+                  <p className="text-sm text-orange-600 mt-1">
+                    ⚠️ Itens com danos precisam de detalhes e fotos específicas.
+                  </p>
+                );
+              }
+            })()}
+          </div>
+          <button
+            onClick={onProceed}
+            disabled={!allItemsHavePhotos() || (() => {
+              // Validação adicional para danos
+              const itemsWithDamage = client.items.filter(item => damageInfo[item.id]?.hasDamage);
+              const invalidDamageItems = itemsWithDamage.filter(item => {
+                const info = damageInfo[item.id];
+                return !info.damageDetails || !info.damageDetails.trim() || 
+                       !info.damagePhotos || info.damagePhotos.length === 0;
+              });
+              return invalidDamageItems.length > 0;
+            })()}
+            className={`py-2 px-6 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
+              allItemsHavePhotos() && (() => {
+                const itemsWithDamage = client.items.filter(item => damageInfo[item.id]?.hasDamage);
+                const invalidDamageItems = itemsWithDamage.filter(item => {
+                  const info = damageInfo[item.id];
+                  return !info.damageDetails || !info.damageDetails.trim() || 
+                         !info.damagePhotos || info.damagePhotos.length === 0;
+                });
+                return invalidDamageItems.length === 0;
+              })()
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            <CheckCircle className="w-4 h-4" />
+            <span>Prosseguir para Atendimento</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default TechnicianMode;
