@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   MapPin,
   Truck,
@@ -16,6 +16,16 @@ import {
 } from 'lucide-react';
 import { toast } from '../hooks/use-toast';
 import { routesApi, budgetItemsApi } from '../services/api';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix default marker icons
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
 
 export function RoutesGeoapify() {
   const [availableItems, setAvailableItems]         = useState([]);
@@ -37,6 +47,103 @@ export function RoutesGeoapify() {
   const { suggestedDate, suggestedTime } = getSuggestedDateTime();
   const [routeDate, setRouteDate] = useState(suggestedDate);
   const [routeTime, setRouteTime] = useState(suggestedTime);
+
+  // ── map ────────────────────────────────────────────────────────────────────
+  const mapRef         = useRef(null);
+  const mapInstanceRef = useRef(null);
+
+  // Init empty map on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (mapRef.current && !mapInstanceRef.current) initEmptyMap();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Update map when route changes
+  useEffect(() => {
+    if (optimizedRoute && mapInstanceRef.current) {
+      updateMap();
+    } else if (!optimizedRoute && mapInstanceRef.current) {
+      // Clear markers/lines when route is cleared
+      mapInstanceRef.current.eachLayer(layer => {
+        if (layer instanceof L.Marker || layer instanceof L.Polyline) mapInstanceRef.current.removeLayer(layer);
+      });
+      mapInstanceRef.current.setView([-15.601481, -56.097389], 11);
+    }
+  }, [optimizedRoute]);
+
+  const initEmptyMap = () => {
+    if (!mapRef.current || mapInstanceRef.current) return;
+    try {
+      mapInstanceRef.current = L.map(mapRef.current).setView([-15.601481, -56.097389], 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(mapInstanceRef.current);
+      setTimeout(() => mapInstanceRef.current?.invalidateSize(), 200);
+    } catch (e) { console.error('Map init error:', e); }
+  };
+
+  const updateMap = () => {
+    const map = mapInstanceRef.current;
+    if (!map || !optimizedRoute?.stops?.length) return;
+
+    // Clear markers and polylines
+    map.eachLayer(layer => {
+      if (layer instanceof L.Marker || layer instanceof L.Polyline) map.removeLayer(layer);
+    });
+
+    const companyLat = optimizedRoute.company_address?.latitude  || -15.6014;
+    const companyLng = optimizedRoute.company_address?.longitude || -56.0974;
+
+    // Company marker
+    const companyIcon = L.divIcon({
+      className: '',
+      html: `<div style="background:linear-gradient(135deg,#10B981,#059669);color:white;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 3px 8px rgba(0,0,0,.4)">🏢</div>`,
+      iconSize: [44, 44], iconAnchor: [22, 22]
+    });
+    L.marker([companyLat, companyLng], { icon: companyIcon })
+      .addTo(map)
+      .bindPopup('<b>Empresa — Início / Fim</b>');
+
+    const markers = [];
+    const sortedStops = [...optimizedRoute.stops].sort((a, b) => (a.order_sequence || 0) - (b.order_sequence || 0));
+
+    sortedStops.forEach((stop, i) => {
+      const lat = stop.address?.latitude;
+      const lng = stop.address?.longitude;
+      if (!lat || !lng) return;
+
+      const seq = stop.order_sequence || (i + 1);
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="background:linear-gradient(135deg,#2563EB,#1D4ED8);color:white;border-radius:20px;padding:5px 10px;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:bold;border:2px solid white;box-shadow:0 3px 6px rgba(0,0,0,.3);white-space:nowrap"><span style="background:white;color:#2563EB;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold">${seq}</span>${stop.client_name.split(' ')[0]}</div>`,
+        iconSize: [90, 30], iconAnchor: [45, 15]
+      });
+
+      const marker = L.marker([lat, lng], { icon }).addTo(map);
+      marker.bindPopup(`<b>${seq}ª parada — ${stop.client_name}</b><br>${stop.service_name}<br>R$ ${stop.service_value.toFixed(2)}<br>${stop.address?.neighborhood || ''}`);
+      markers.push(marker);
+    });
+
+    // Draw route line: company → stops (in order) → company
+    const lineCoords = [
+      [companyLat, companyLng],
+      ...sortedStops
+        .filter(s => s.address?.latitude && s.address?.longitude)
+        .map(s => [s.address.latitude, s.address.longitude]),
+      [companyLat, companyLng]
+    ];
+    L.polyline(lineCoords, { color: '#2563EB', weight: 4, opacity: 0.75, dashArray: '8,5' }).addTo(map);
+
+    // Fit bounds
+    if (markers.length > 0) {
+      const all = [L.marker([companyLat, companyLng]), ...markers];
+      map.fitBounds(L.featureGroup(all).getBounds().pad(0.15));
+    }
+
+    setTimeout(() => map.invalidateSize(), 100);
+  };
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -618,6 +725,22 @@ export function RoutesGeoapify() {
           </div>
         </div>
 
+        {/* Map — always visible */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">
+            {optimizedRoute ? 'Mapa da Rota Otimizada' : 'Mapa — Aguardando Rota'}
+          </h3>
+          <div className="border border-gray-300 rounded-lg overflow-hidden">
+            <div ref={mapRef} style={{ height: '360px', width: '100%' }} className="bg-gray-100" />
+          </div>
+          <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+            <MapPin className="w-3 h-3" />
+            {optimizedRoute
+              ? '🏢 = Empresa (início/fim) · Números = ordem otimizada pelo Geoapify'
+              : 'Mapa aguardando dados da otimização de rota'}
+          </p>
+        </div>
+
         {optimizedRoute && optimizedRoute.stops && optimizedRoute.stops.length > 0 ? (
           <div>
             {/* Stats */}
@@ -664,7 +787,7 @@ export function RoutesGeoapify() {
               </div>
             </div>
 
-            {/* Optimized stops order */}
+            {/* Optimized stops order list */}
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                 <Navigation className="w-5 h-5 text-blue-600 mr-2" />
@@ -687,8 +810,7 @@ export function RoutesGeoapify() {
                       <div className="text-right ml-3">
                         <div className="text-sm font-medium text-gray-900">R$ {stop.service_value.toFixed(2)}</div>
                         <div className="text-xs text-gray-500">{stop.estimated_duration}min</div>
-                        <div className="text-xs px-2 py-0.5 rounded-full font-medium mt-1
-                          bg-blue-100 text-blue-800">
+                        <div className="text-xs px-2 py-0.5 rounded-full font-medium mt-1 bg-blue-100 text-blue-800">
                           {stop.priority}
                         </div>
                       </div>
@@ -732,7 +854,7 @@ export function RoutesGeoapify() {
             </div>
           </div>
         ) : (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-8 text-gray-500">
             <Navigation className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma Rota Calculada</h3>
             <p>Use o botão "Calcular Rota com Geoapify" na seção de priorização.</p>
