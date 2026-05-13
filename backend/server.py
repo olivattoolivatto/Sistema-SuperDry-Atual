@@ -164,6 +164,22 @@ class ExecutionLocation(str, Enum):
     NO_LOCAL = "NO_LOCAL"
     CLIENTE_TROUXE = "CLIENTE_TROUXE"
 
+
+class ExecutionMode(str, Enum):
+    """Modo de execução logístico de um ITEM (não confundir com ExecutionLocation do Service)."""
+    RETIRAR_E_LEVAR = "RETIRAR_E_LEVAR"   # SuperDry busca, leva à empresa, devolve
+    EXECUTAR_NO_LOCAL = "EXECUTAR_NO_LOCAL"  # Técnico executa no endereço do cliente
+    CLIENTE_TROUXE = "CLIENTE_TROUXE"     # Cliente entrega na empresa, SuperDry devolve
+    CLIENTE_LEVARA = "CLIENTE_LEVARA"     # Cliente entrega e busca na empresa
+
+
+class PaymentStatusItem(str, Enum):
+    PENDENTE = "PENDENTE"
+    PARCIAL = "PARCIAL"
+    PAGO = "PAGO"
+    CORTESIA = "CORTESIA"
+    INADIMPLENTE = "INADIMPLENTE"
+
 class PaymentMethod(str, Enum):
     PIX_CNPJ_1 = "PIX_CNPJ_25995295000104"
     PIX_CNPJ_2 = "PIX_CNPJ_30369419000186"
@@ -196,6 +212,11 @@ class ServiceStatus(str, Enum):
     BUSCOU = "BUSCOU"
     EXECUTADO = "EXECUTADO"
     CANCELADO_PELO_CLIENTE = "CANCELADO_PELO_CLIENTE"
+    # Novos (standby para fluxos futuros)
+    AGENDADO = "AGENDADO"
+    RETOQUE_NECESSARIO = "RETOQUE_NECESSARIO"
+    EM_TRANSITO_DEVOLUCAO = "EM_TRANSITO_DEVOLUCAO"
+    EXECUCAO_PARCIAL = "EXECUCAO_PARCIAL"
 
 class Salesperson(str, Enum):
     GABRIELA_ALCANTARA = "Gabriela Alcântara"
@@ -269,25 +290,86 @@ class ServiceCreate(BaseModel):
 
 class BudgetItem(BaseModel):
     id: str = Field(default_factory=lambda: f"ITM-{str(uuid.uuid4().int)[:7].zfill(7)}")
+    # FK redundantes (item é o pilar — precisa carregar referência direta)
+    budget_id: Optional[str] = None
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    client_phone: Optional[str] = None
+
+    # Serviço
     service_id: str
     service_name: str
     service_code: str
+    service_category: Optional[str] = None
+    measure_type: Optional[str] = None
     quantity: float = 1.0
     unit_price: float
     area_m2: Optional[float] = None
     linear_meters: Optional[float] = None
     total_value: float
     observations: Optional[str] = None
+
+    # Status atual + histórico
     status: ServiceStatus = ServiceStatus.RETIRAR
+    status_history: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # Modo de execução logístico
+    execution_mode: ExecutionMode = ExecutionMode.RETIRAR_E_LEVAR
     is_retoque: bool = False
     execution_location: ExecutionLocation
+
+    # Endereços por etapa (override do endereço do cliente)
+    pickup_address: Optional[Dict[str, Any]] = None
+    execution_address: Optional[Dict[str, Any]] = None
+    delivery_address: Optional[Dict[str, Any]] = None
+
+    # Datas planejadas
+    scheduled_pickup_date: Optional[str] = None       # "YYYY-MM-DD"
+    scheduled_pickup_time: Optional[str] = None       # "HH:MM"
+    scheduled_execution_date: Optional[str] = None
+    scheduled_execution_time: Optional[str] = None
+    scheduled_delivery_date: Optional[str] = None
+    scheduled_delivery_time: Optional[str] = None
+
+    # Datas reais
+    actual_pickup_at: Optional[datetime] = None
+    actual_started_at: Optional[datetime] = None
+    actual_finished_at: Optional[datetime] = None
+    actual_delivered_at: Optional[datetime] = None
+
+    # Sessões de execução (suporta execução em partes)
+    execution_sessions: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # Referências de tráfego
+    current_route_id: Optional[str] = None
+    current_route_stop_id: Optional[str] = None
+    route_history: List[str] = Field(default_factory=list)
+    technician_id: Optional[str] = None
+    agenda_event_ids: List[str] = Field(default_factory=list)
+    assignment_ids: List[str] = Field(default_factory=list)
+
+    # Fotos
+    photos_before: List[str] = Field(default_factory=list)
+    photos_after: List[str] = Field(default_factory=list)
+
+    # Financeiro do item
+    payment_method: Optional[PaymentMethod] = None    # null = herda do orçamento
+    payment_status: PaymentStatusItem = PaymentStatusItem.PENDENTE
+    paid_value: float = 0.0
+    payment_records: List[Dict[str, Any]] = Field(default_factory=list)
+
     # Medidas específicas para diferentes tipos
     width: Optional[float] = None
     height: Optional[float] = None
     diameter: Optional[float] = None
     fabric_folds: Optional[int] = None
     fabric_per_fold: Optional[float] = None
+
+    # Auditoria
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class BudgetItemCreate(BaseModel):
     service_id: str
@@ -1865,155 +1947,285 @@ async def delete_calendar_event(event_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Budget endpoints
+
+EXEC_LOCATION_TO_MODE = {
+    "RETIRADA": "RETIRAR_E_LEVAR",
+    "NO_LOCAL": "EXECUTAR_NO_LOCAL",
+    "CLIENTE_TROUXE": "CLIENTE_TROUXE",
+}
+
+
+async def enrich_budget_item(
+    item_data: dict,
+    budget_id: str,
+    client_doc: dict,
+    user: Optional[UserPublic] = None,
+    is_new: bool = True,
+) -> dict:
+    """
+    Garante que todo BudgetItem tenha os campos necessários para ser
+    pilar do sistema (FK redundantes, snapshot de cliente, defaults).
+    """
+    now = datetime.utcnow()
+    item = dict(item_data)
+
+    # ID
+    if not item.get("id"):
+        item["id"] = f"ITM-{str(uuid.uuid4().int)[:7].zfill(7)}"
+
+    # FK + snapshot de cliente
+    item["budget_id"] = budget_id
+    item["client_id"] = client_doc.get("id")
+    item["client_name"] = client_doc.get("name")
+    item["client_phone"] = client_doc.get("phone_primary")
+
+    # Enriquecer com dados do serviço se faltar
+    if item.get("service_id"):
+        srv = await db.services.find_one({"id": item["service_id"]})
+        if srv:
+            item.setdefault("service_name", srv.get("name"))
+            item.setdefault("service_code", srv.get("id"))
+            item.setdefault("service_category", srv.get("category"))
+            item.setdefault("measure_type", srv.get("measure_type"))
+            item.setdefault("execution_location", srv.get("execution_location", "RETIRADA"))
+            # Status padrão derivado do serviço
+            if not item.get("status"):
+                item["status"] = srv.get("default_service_status") or "RETIRAR"
+
+    # Execution mode default (derivado da execution_location)
+    if not item.get("execution_mode"):
+        exec_loc = item.get("execution_location", "RETIRADA")
+        item["execution_mode"] = EXEC_LOCATION_TO_MODE.get(exec_loc, "RETIRAR_E_LEVAR")
+
+    # Defaults para coleções/refs
+    item.setdefault("status_history", [])
+    item.setdefault("execution_sessions", [])
+    item.setdefault("route_history", [])
+    item.setdefault("agenda_event_ids", [])
+    item.setdefault("assignment_ids", [])
+    item.setdefault("photos_before", [])
+    item.setdefault("photos_after", [])
+    item.setdefault("payment_records", [])
+    item.setdefault("payment_status", "PENDENTE")
+    item.setdefault("paid_value", 0.0)
+    item.setdefault("status", "RETIRAR")
+
+    # Status history inicial
+    if is_new and not item.get("status_history"):
+        item["status_history"] = [{
+            "status": item["status"],
+            "at": now.isoformat(),
+            "by_user_id": user.id if user else None,
+            "by_user_name": user.name if user else None,
+            "notes": "Item criado",
+        }]
+
+    # Auditoria + timestamps
+    if is_new:
+        item["created_at"] = item.get("created_at") or now
+        item["created_by"] = user.id if user else None
+    item["updated_at"] = now
+    item["updated_by"] = user.id if user else None
+
+    return item
+
+
+def calc_budget_totals(items: List[dict]) -> dict:
+    return {
+        "total_value": sum(float(i.get("total_value", 0) or 0) for i in items),
+        "total_area_m2": sum(float(i.get("area_m2", 0) or 0) for i in items),
+        "total_linear_meters": sum(float(i.get("linear_meters", 0) or 0) for i in items),
+        "total_units": len(items),
+    }
+
+
 @api_router.post("/budgets", response_model=Budget)
-async def create_budget(budget_data: BudgetCreate):
+async def create_budget(
+    budget_data: BudgetCreate,
+    current_user: UserPublic = Depends(get_current_user),
+):
     """Criar um novo orçamento"""
     try:
-        # Verify client exists
         client = await db.clients.find_one({"id": budget_data.client_id})
         if not client:
             raise HTTPException(status_code=404, detail="Client not found")
-        
-        # Generate sequential ID
+
+        # ID sequencial
         last_budget = await db.budgets.find_one(sort=[("created_at", -1)])
-        if last_budget:
-            last_id_num = int(last_budget["id"].split("-")[1])
+        if last_budget and last_budget.get("id", "").startswith("ORC-"):
+            try:
+                last_id_num = int(last_budget["id"].split("-")[1])
+            except Exception:
+                last_id_num = await db.budgets.count_documents({})
             new_id_num = last_id_num + 1
         else:
             new_id_num = 1
-        
+        while await db.budgets.find_one({"id": f"ORC-{str(new_id_num).zfill(7)}"}):
+            new_id_num += 1
+        new_budget_id = f"ORC-{str(new_id_num).zfill(7)}"
+
         budget_dict = budget_data.dict()
-        budget_dict["id"] = f"ORC-{str(new_id_num).zfill(7)}"
+        budget_dict["id"] = new_budget_id
         budget_dict["client_name"] = client["name"]
         budget_dict["created_at"] = datetime.utcnow()
         budget_dict["updated_at"] = datetime.utcnow()
-        
-        # Process items if provided
+        budget_dict["created_by"] = current_user.id
+        budget_dict["created_by_name"] = current_user.name
+        budget_dict["payment_received"] = False
+
+        # Items enriquecidos
         processed_items = []
-        if budget_data.items:
-            for item_data in budget_data.items:
-                # Generate item ID if not provided
-                if 'id' not in item_data or not item_data['id']:
-                    item_data['id'] = f"ITM-{str(datetime.utcnow().timestamp()).replace('.', '')[:7]}"
-                
-                # Ensure required fields
-                if 'created_at' not in item_data:
-                    item_data['created_at'] = datetime.utcnow().isoformat()
-                if 'status' not in item_data:
-                    item_data['status'] = 'RETIRAR'
-                    
-                processed_items.append(item_data)
-        
-        budget_dict['items'] = processed_items
-        
-        # Calculate totals
-        total_value = sum(float(item.get('total_value', 0)) for item in processed_items)
-        total_area_m2 = sum(float(item.get('area_m2', 0)) for item in processed_items)
-        total_linear_meters = sum(float(item.get('linear_meters', 0)) for item in processed_items)
-        total_units = len(processed_items)
-        
-        budget_dict.update({
-            'total_value': total_value,
-            'total_area_m2': total_area_m2,
-            'total_linear_meters': total_linear_meters,
-            'total_units': total_units
+        for item_data in (budget_data.items or []):
+            enriched = await enrich_budget_item(item_data, new_budget_id, client, current_user, is_new=True)
+            processed_items.append(enriched)
+        budget_dict["items"] = processed_items
+        budget_dict.update(calc_budget_totals(processed_items))
+
+        await db.budgets.insert_one(budget_dict)
+        await log_audit("budget", new_budget_id, "CREATE", current_user, {
+            "items": len(processed_items),
+            "total_value": budget_dict["total_value"],
         })
-        
-        budget = Budget(**budget_dict)
-        
-        await db.budgets.insert_one(budget.dict())
-        return budget
+
+        # Re-fetch para garantir conversão correta
+        saved = await db.budgets.find_one({"id": new_budget_id})
+        saved.pop("_id", None)
+        return Budget(**saved)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error creating budget: {str(e)}")
 
+
 @api_router.get("/budgets", response_model=List[Budget])
-async def get_budgets(skip: int = 0, limit: int = 100, search: str = None):
-    """Listar orçamentos"""
+async def get_budgets(
+    skip: int = 0,
+    limit: int = 200,
+    search: str = None,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Listar orçamentos com busca abrangente."""
     try:
-        query = {}
+        query: Dict[str, Any] = {}
         if search:
-            query = {
-                "$or": [
-                    {"id": {"$regex": search, "$options": "i"}},
-                    {"client_name": {"$regex": search, "$options": "i"}}
-                ]
-            }
-        
-        cursor = db.budgets.find(query).skip(skip).limit(limit)
+            ors = [
+                {"id": {"$regex": re.escape(search), "$options": "i"}},
+                {"client_name": {"$regex": re.escape(search), "$options": "i"}},
+                {"items.id": {"$regex": re.escape(search), "$options": "i"}},
+            ]
+            query = {"$or": ors}
+        cursor = db.budgets.find(query).sort("created_at", -1).skip(skip).limit(limit)
         budgets = await cursor.to_list(length=limit)
-        return [Budget(**budget) for budget in budgets]
+        result = []
+        for b in budgets:
+            b.pop("_id", None)
+            try:
+                result.append(Budget(**b))
+            except Exception as parse_err:
+                print(f"[budgets] parse error {b.get('id')}: {parse_err}")
+        return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error getting budgets: {str(e)}")
 
+
 @api_router.get("/budgets/{budget_id}", response_model=Budget)
-async def get_budget(budget_id: str):
+async def get_budget(budget_id: str, current_user: UserPublic = Depends(get_current_user)):
     """Obter orçamento específico"""
     budget = await db.budgets.find_one({"id": budget_id})
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
+    budget.pop("_id", None)
     return Budget(**budget)
 
+
 @api_router.put("/budgets/{budget_id}", response_model=Budget)
-async def update_budget(budget_id: str, budget_data: BudgetCreate):
-    """Atualizar orçamento"""
+async def update_budget(
+    budget_id: str,
+    budget_data: BudgetCreate,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Atualizar orçamento (mantém referências e auditoria por item)."""
     try:
         budget = await db.budgets.find_one({"id": budget_id})
         if not budget:
             raise HTTPException(status_code=404, detail="Budget not found")
-        
-        # Verify client exists
         client = await db.clients.find_one({"id": budget_data.client_id})
         if not client:
             raise HTTPException(status_code=404, detail="Client not found")
-        
+
+        # Map dos itens existentes por id (para preservar histórico/refs)
+        existing_items = {it.get("id"): it for it in (budget.get("items") or [])}
+
         update_data = budget_data.dict()
         update_data["client_name"] = client["name"]
         update_data["updated_at"] = datetime.utcnow()
-        
-        # Process items if provided
+        update_data["updated_by"] = current_user.id
+        update_data["updated_by_name"] = current_user.name
+
         processed_items = []
-        if budget_data.items:
-            for item_data in budget_data.items:
-                # Generate item ID if not provided
-                if 'id' not in item_data or not item_data['id']:
-                    item_data['id'] = f"ITM-{str(datetime.utcnow().timestamp()).replace('.', '')[:7]}"
-                
-                # Ensure required fields
-                if 'created_at' not in item_data:
-                    item_data['created_at'] = datetime.utcnow().isoformat()
-                if 'status' not in item_data:
-                    item_data['status'] = 'RETIRAR'
-                
-                processed_items.append(item_data)
-        
-        update_data['items'] = processed_items
-        
-        # Calculate totals
-        total_value = sum(float(item.get('total_value', 0)) for item in processed_items)
-        total_area_m2 = sum(float(item.get('area_m2', 0)) for item in processed_items)
-        total_linear_meters = sum(float(item.get('linear_meters', 0)) for item in processed_items)
-        total_units = len(processed_items)
-        
-        update_data.update({
-            'total_value': total_value,
-            'total_area_m2': total_area_m2,
-            'total_linear_meters': total_linear_meters,
-            'total_units': total_units
-        })
-        
+        for item_data in (budget_data.items or []):
+            iid = item_data.get("id")
+            is_new = not iid or iid not in existing_items
+            base = {} if is_new else existing_items[iid]
+            # merge: campos enviados sobrepõem, mas preservamos histórico/refs/audit
+            merged = {**base, **item_data}
+            # Garantir preservação de campos críticos
+            for key in ("status_history", "execution_sessions", "route_history",
+                        "agenda_event_ids", "assignment_ids", "photos_before",
+                        "photos_after", "payment_records", "paid_value",
+                        "payment_status", "current_route_id", "current_route_stop_id",
+                        "technician_id", "created_at", "created_by"):
+                if key in base and key not in item_data:
+                    merged[key] = base[key]
+            enriched = await enrich_budget_item(merged, budget_id, client, current_user, is_new=is_new)
+            # Se status mudou em relação ao base, append em status_history
+            if not is_new and base.get("status") != enriched.get("status"):
+                enriched["status_history"] = list(enriched.get("status_history") or [])
+                enriched["status_history"].append({
+                    "status": enriched["status"],
+                    "at": datetime.utcnow().isoformat(),
+                    "by_user_id": current_user.id,
+                    "by_user_name": current_user.name,
+                    "notes": "Status atualizado via edição do orçamento",
+                })
+            processed_items.append(enriched)
+
+        update_data["items"] = processed_items
+        update_data.update(calc_budget_totals(processed_items))
+
         await db.budgets.update_one({"id": budget_id}, {"$set": update_data})
-        
-        updated_budget = await db.budgets.find_one({"id": budget_id})
-        return Budget(**updated_budget)
+        await log_audit("budget", budget_id, "UPDATE", current_user, {
+            "items": len(processed_items), "total_value": update_data["total_value"]
+        })
+        saved = await db.budgets.find_one({"id": budget_id})
+        saved.pop("_id", None)
+        return Budget(**saved)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error updating budget: {str(e)}")
 
+
 @api_router.delete("/budgets/{budget_id}")
-async def delete_budget(budget_id: str):
-    """Excluir orçamento"""
-    result = await db.budgets.delete_one({"id": budget_id})
-    if result.deleted_count == 0:
+async def delete_budget(budget_id: str, current_user: UserPublic = Depends(get_current_user)):
+    """Excluir orçamento (bloqueia se algum item já está em rota ou executado)."""
+    budget = await db.budgets.find_one({"id": budget_id})
+    if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
+    locked = [
+        it for it in (budget.get("items") or [])
+        if it.get("current_route_id") or it.get("status") in (
+            ServiceStatus.EXECUTADO.value, ServiceStatus.ENTREGUE.value,
+            ServiceStatus.EM_LAVAGEM.value, ServiceStatus.COLETADO.value,
+        )
+    ]
+    if locked:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Não é possível excluir: {len(locked)} item(ns) já em rota ou execução.",
+        )
+    await db.budgets.delete_one({"id": budget_id})
+    await log_audit("budget", budget_id, "DELETE", current_user, {"before": budget})
     return {"message": "Budget deleted successfully"}
 
 @api_router.get("/budgets/{budget_id}/whatsapp")
@@ -2611,49 +2823,70 @@ async def get_dashboard():
 
 # Routes endpoints
 @api_router.get("/budget-items/available-for-routes")
-async def get_available_budget_items_for_routes():
-    """Get budget items available for routes (status: RETIRAR, EXECUTAR_NO_LOCAL, ENTREGAR)"""
+async def get_available_budget_items_for_routes(current_user: UserPublic = Depends(get_current_user)):
+    """Itens disponíveis para rota: status route-eligible + sem rota corrente."""
     try:
-        # Find budgets with items in route-eligible status
-        route_statuses = [ServiceStatus.RETIRAR, ServiceStatus.EXECUTAR_NO_LOCAL, ServiceStatus.ENTREGAR]
-        
+        route_statuses = [
+            ServiceStatus.RETIRAR.value,
+            ServiceStatus.EXECUTAR_NO_LOCAL.value,
+            ServiceStatus.ENTREGAR.value,
+        ]
         pipeline = [
             {"$unwind": "$items"},
-            {"$match": {"items.status": {"$in": route_statuses}}},
+            {"$match": {
+                "items.status": {"$in": route_statuses},
+                "$or": [
+                    {"items.current_route_id": None},
+                    {"items.current_route_id": {"$exists": False}},
+                ],
+            }},
             {"$lookup": {
                 "from": "clients",
-                "localField": "client_id", 
+                "localField": "client_id",
                 "foreignField": "id",
-                "as": "client_info"
+                "as": "client_info",
             }},
-            {"$unwind": "$client_info"},
+            {"$unwind": {"path": "$client_info", "preserveNullAndEmptyArrays": True}},
             {"$project": {
+                "_id": 0,
                 "budget_id": "$id",
                 "client_id": "$client_id",
                 "client_name": "$client_name",
                 "item": "$items",
-                "client_address": "$client_info.address"
-            }}
+                "client_address": "$client_info.address",
+            }},
         ]
-        
         cursor = db.budgets.aggregate(pipeline)
         results = []
-        
         async for doc in cursor:
-            item_data = {
-                "budget_item_id": doc["item"]["id"],
+            item = doc["item"]
+            status = item.get("status")
+            # Endereço específico por etapa, com fallback no cliente
+            if status == ServiceStatus.RETIRAR.value:
+                addr = item.get("pickup_address") or doc.get("client_address") or {}
+            elif status == ServiceStatus.ENTREGAR.value:
+                addr = item.get("delivery_address") or doc.get("client_address") or {}
+            else:
+                addr = item.get("execution_address") or doc.get("client_address") or {}
+            results.append({
+                "budget_item_id": item["id"],
                 "budget_id": doc["budget_id"],
                 "client_id": doc["client_id"],
-                "client_name": doc["client_name"],
-                "service_name": doc["item"]["service_name"],
-                "service_code": doc["item"]["service_code"],
-                "service_value": doc["item"]["total_value"],
-                "status": doc["item"]["status"],
-                "neighborhood": doc["client_address"].get("neighborhood", ""),
-                "address": doc["client_address"]
-            }
-            results.append(item_data)
-        
+                "client_name": item.get("client_name") or doc["client_name"],
+                "service_name": item.get("service_name"),
+                "service_code": item.get("service_code"),
+                "service_value": item.get("total_value"),
+                "status": status,
+                "execution_mode": item.get("execution_mode"),
+                "payment_status": item.get("payment_status"),
+                "neighborhood": (addr or {}).get("neighborhood", ""),
+                "address": addr,
+                "scheduled_date": (
+                    item.get("scheduled_pickup_date") if status == ServiceStatus.RETIRAR.value
+                    else item.get("scheduled_delivery_date") if status == ServiceStatus.ENTREGAR.value
+                    else item.get("scheduled_execution_date")
+                ),
+            })
         return {"available_items": results}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error fetching available items: {str(e)}")
@@ -2842,7 +3075,22 @@ async def update_route_stops(route_id: str, stops_data: List[dict]):
                 }
             }
         )
-        
+
+        # Atualiza cada item para refletir current_route_id (ITEM como pilar)
+        for s in stops:
+            try:
+                await db.budgets.update_one(
+                    {"items.id": s.budget_item_id},
+                    {"$set": {
+                        "items.$.current_route_id": route_id,
+                        "items.$.current_route_stop_id": s.id,
+                        "items.$.updated_at": datetime.utcnow(),
+                    },
+                    "$addToSet": {"items.$.route_history": route_id}},
+                )
+            except Exception as ex:
+                print(f"[routes/stops] erro atualizando item {s.budget_item_id}: {ex}")
+
         return {"message": "Route stops updated successfully", "stops_count": len(stops)}
         
     except Exception as e:
@@ -2942,13 +3190,24 @@ async def optimize_route(route_id: str, route_type: str = "CURTA"):
         raise HTTPException(status_code=400, detail=f"Error optimizing route: {str(e)}")
 
 @api_router.delete("/routes/{route_id}")
-async def delete_route(route_id: str):
-    """Delete a route"""
+async def delete_route(route_id: str, current_user: UserPublic = Depends(get_current_user)):
+    """Delete a route and clear current_route_id on its items."""
     try:
+        # Limpa current_route_id dos itens vinculados a esta rota
+        await db.budgets.update_many(
+            {"items.current_route_id": route_id},
+            {"$set": {
+                "items.$[elem].current_route_id": None,
+                "items.$[elem].current_route_stop_id": None,
+            }},
+            array_filters=[{"elem.current_route_id": route_id}],
+        )
         result = await db.routes.delete_one({"id": route_id})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Route not found")
         return {"message": "Route deleted successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error deleting route: {str(e)}")
 
@@ -3019,29 +3278,48 @@ async def migrate_budget_item_status():
 
 # Additional endpoint for updating budget item status
 @api_router.put("/budget-items/{item_id}/status")
-async def update_budget_item_status(item_id: str, status: str = Query(...)):
-    """Update the status of a specific budget item"""
+async def update_budget_item_status(
+    item_id: str,
+    status: str = Query(...),
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Update the status of a specific budget item (compat — também grava em status_history)."""
     try:
-        # Validate status
         if status not in [s.value for s in ServiceStatus]:
             raise HTTPException(status_code=400, detail=f"Invalid status. Valid options: {[s.value for s in ServiceStatus]}")
-        
-        # Find the budget containing this item
+
         budget = await db.budgets.find_one({"items.id": item_id})
         if not budget:
             raise HTTPException(status_code=404, detail="Budget item not found")
-        
-        # Update the specific item's status
-        result = await db.budgets.update_one(
+
+        current_item = next((it for it in (budget.get("items") or []) if it.get("id") == item_id), None)
+        old_status = current_item.get("status") if current_item else None
+
+        await db.budgets.update_one(
             {"items.id": item_id},
-            {"$set": {"items.$.status": status, "items.$.updated_at": datetime.utcnow().isoformat()}}
+            {"$set": {
+                "items.$.status": status,
+                "items.$.updated_at": datetime.utcnow(),
+                "items.$.updated_by": current_user.id,
+            }},
         )
-        
-        if result.modified_count == 0:
-            raise HTTPException(status_code=404, detail="Failed to update budget item status")
-        
+
+        if old_status != status:
+            entry = {
+                "status": status,
+                "at": datetime.utcnow().isoformat(),
+                "by_user_id": current_user.id,
+                "by_user_name": current_user.name,
+                "notes": "Atualizado via endpoint legacy",
+            }
+            await db.budgets.update_one(
+                {"items.id": item_id},
+                {"$push": {"items.$.status_history": entry}},
+            )
+            await log_audit("item", item_id, "STATUS_CHANGE", current_user,
+                            {"from": old_status, "to": status, "via": "legacy"})
+
         return {"success": True, "item_id": item_id, "new_status": status}
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -3333,7 +3611,7 @@ async def get_dashboard_summary(current_user: UserPublic = Depends(get_current_u
         from datetime import date as _date
         today = _date.today().isoformat()
 
-        # 1) Itens pendentes de rota: status RETIRAR/EXECUTAR_NO_LOCAL/ENTREGAR não atribuídos a nenhuma rota
+        # 1) Itens pendentes de rota: status route-eligible + sem rota corrente
         route_statuses = [
             ServiceStatus.RETIRAR.value,
             ServiceStatus.EXECUTAR_NO_LOCAL.value,
@@ -3342,14 +3620,17 @@ async def get_dashboard_summary(current_user: UserPublic = Depends(get_current_u
         items_pending_routes = 0
         async for b in db.budgets.find({"items.status": {"$in": route_statuses}}):
             for it in (b.get("items") or []):
-                if it.get("status") in route_statuses:
+                if it.get("status") in route_statuses and not it.get("current_route_id"):
                     items_pending_routes += 1
 
-        # 2) Orçamentos ativos (sem rota associada)
+        # 2) Orçamentos ativos (com algum item pendente de rota)
         active_budgets = 0
         async for b in db.budgets.find({}):
             items = b.get("items") or []
-            has_pending = any((it.get("status") in route_statuses) for it in items)
+            has_pending = any(
+                (it.get("status") in route_statuses and not it.get("current_route_id"))
+                for it in items
+            )
             if has_pending:
                 active_budgets += 1
 
@@ -3365,6 +3646,7 @@ async def get_dashboard_summary(current_user: UserPublic = Depends(get_current_u
             ServiceStatus.COLETADO.value,
             ServiceStatus.AGUARDANDO_ENTREGA.value,
             ServiceStatus.AGUARDANDO_BUSCAR.value,
+            ServiceStatus.EXECUCAO_PARCIAL.value,
         ]
         items_in_washing = 0
         async for b in db.budgets.find({"items.status": {"$in": wash_statuses}}):
@@ -3372,10 +3654,13 @@ async def get_dashboard_summary(current_user: UserPublic = Depends(get_current_u
                 if it.get("status") in wash_statuses:
                     items_in_washing += 1
 
-        # 5) Pendências financeiras (orçamentos sem payment_received)
-        financial_pending = await db.budgets.count_documents(
-            {"$or": [{"payment_received": {"$ne": True}}, {"payment_received": {"$exists": False}}]}
-        )
+        # 5) Pendências financeiras (itens com payment_status != PAGO e != CORTESIA)
+        pending_payment_statuses = ["PENDENTE", "PARCIAL", "INADIMPLENTE"]
+        financial_pending = 0
+        async for b in db.budgets.find({"items.payment_status": {"$in": pending_payment_statuses}}):
+            for it in (b.get("items") or []):
+                if it.get("payment_status", "PENDENTE") in pending_payment_statuses:
+                    financial_pending += 1
 
         # 6) Resumo do gerenciador financeiro (placeholder - implementado em fase futura)
         finance_summary = {
@@ -3404,6 +3689,418 @@ async def get_dashboard_summary(current_user: UserPublic = Depends(get_current_u
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro no dashboard: {str(e)}")
+
+
+@api_router.get("/service-status/options-legacy")
+async def _legacy_service_status_options_marker():
+    """Mantido como referência. Use /service-status/options."""
+    return [{"value": s.value, "label": s.value} for s in ServiceStatus]
+
+
+# ============================================================
+# ITEM endpoints (pilar do sistema)
+# ============================================================
+async def _find_budget_and_item(item_id: str):
+    """Encontra o orçamento que contém o item_id; retorna (budget, item)."""
+    budget = await db.budgets.find_one({"items.id": item_id})
+    if not budget:
+        return None, None
+    item = next((it for it in (budget.get("items") or []) if it.get("id") == item_id), None)
+    return budget, item
+
+
+async def _update_item_fields(item_id: str, fields: Dict[str, Any], user: UserPublic):
+    """Atualiza campos de um item no array embedded, preserva auditoria."""
+    fields["updated_at"] = datetime.utcnow()
+    fields["updated_by"] = user.id
+    set_ops = {f"items.$.{k}": v for k, v in fields.items()}
+    res = await db.budgets.update_one(
+        {"items.id": item_id},
+        {"$set": set_ops},
+    )
+    return res.modified_count > 0
+
+
+async def _append_to_item_array(item_id: str, array_field: str, value: Any):
+    res = await db.budgets.update_one(
+        {"items.id": item_id},
+        {"$push": {f"items.$.{array_field}": value}},
+    )
+    return res.modified_count > 0
+
+
+@api_router.get("/items/{item_id}")
+async def get_item(item_id: str, current_user: UserPublic = Depends(get_current_user)):
+    """Buscar um item específico (rico)."""
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    return {
+        "item": {k: v for k, v in item.items() if not k.startswith("_")},
+        "budget_id": budget.get("id"),
+        "budget_payment_method": budget.get("payment_method"),
+    }
+
+
+@api_router.patch("/items/{item_id}")
+async def patch_item(
+    item_id: str,
+    payload: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Atualizar campos arbitrários de um item (com auditoria)."""
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+
+    # Campos proibidos (administrados via endpoints próprios)
+    PROTECTED = {
+        "id", "budget_id", "created_at", "created_by",
+        "status_history", "execution_sessions", "payment_records",
+        "route_history", "agenda_event_ids", "assignment_ids",
+    }
+    fields = {k: v for k, v in payload.items() if k not in PROTECTED}
+    if not fields:
+        raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar.")
+
+    diff = {k: {"before": item.get(k), "after": v} for k, v in fields.items() if item.get(k) != v}
+
+    await _update_item_fields(item_id, fields, current_user)
+
+    # Se status mudou, append em history
+    if "status" in fields and fields["status"] != item.get("status"):
+        entry = {
+            "status": fields["status"],
+            "at": datetime.utcnow().isoformat(),
+            "by_user_id": current_user.id,
+            "by_user_name": current_user.name,
+            "notes": payload.get("status_notes") or "Status atualizado",
+        }
+        await _append_to_item_array(item_id, "status_history", entry)
+
+    await log_audit("item", item_id, "UPDATE", current_user, {"diff": diff})
+    _, new_item = await _find_budget_and_item(item_id)
+    return {"success": True, "item": new_item}
+
+
+@api_router.post("/items/{item_id}/status")
+async def change_item_status(
+    item_id: str,
+    payload: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Mudar status do item (sempre grava em status_history)."""
+    new_status = payload.get("status")
+    if not new_status:
+        raise HTTPException(status_code=400, detail="Campo 'status' obrigatório.")
+    valid = {s.value for s in ServiceStatus}
+    if new_status not in valid:
+        raise HTTPException(status_code=400, detail=f"Status inválido: {new_status}")
+
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    if item.get("status") == new_status:
+        return {"success": True, "unchanged": True}
+
+    entry = {
+        "status": new_status,
+        "at": datetime.utcnow().isoformat(),
+        "by_user_id": current_user.id,
+        "by_user_name": current_user.name,
+        "notes": payload.get("notes") or "",
+    }
+    await _update_item_fields(item_id, {"status": new_status}, current_user)
+    await _append_to_item_array(item_id, "status_history", entry)
+    await log_audit("item", item_id, "STATUS_CHANGE", current_user, {
+        "from": item.get("status"), "to": new_status, "notes": entry["notes"],
+    })
+    return {"success": True, "status": new_status}
+
+
+@api_router.post("/items/{item_id}/schedule")
+async def schedule_item(
+    item_id: str,
+    payload: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Definir/atualizar datas planejadas de pickup/execution/delivery."""
+    allowed = {
+        "scheduled_pickup_date", "scheduled_pickup_time",
+        "scheduled_execution_date", "scheduled_execution_time",
+        "scheduled_delivery_date", "scheduled_delivery_time",
+    }
+    fields = {k: v for k, v in payload.items() if k in allowed}
+    if not fields:
+        raise HTTPException(status_code=400, detail="Nenhuma data válida enviada.")
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    await _update_item_fields(item_id, fields, current_user)
+    await log_audit("item", item_id, "SCHEDULE", current_user, {"fields": fields})
+    return {"success": True, "scheduled": fields}
+
+
+@api_router.post("/items/{item_id}/execution-session/start")
+async def start_execution_session(
+    item_id: str,
+    payload: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Inicia uma nova sessão de execução (técnico clicou em 'Iniciar')."""
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+
+    # Bloquear se já existe sessão aberta
+    open_sess = [s for s in (item.get("execution_sessions") or []) if not s.get("finished_at")]
+    if open_sess:
+        raise HTTPException(status_code=400, detail="Já existe uma sessão de execução em andamento.")
+
+    sess = {
+        "id": f"SES-{uuid.uuid4().hex[:10]}",
+        "started_at": datetime.utcnow().isoformat(),
+        "finished_at": None,
+        "technician_id": payload.get("technician_id") or item.get("technician_id"),
+        "technician_name": payload.get("technician_name"),
+        "location": payload.get("location"),
+        "outcome": None,
+        "reason": None,
+        "notes": payload.get("notes") or "",
+        "photos": [],
+    }
+    await _append_to_item_array(item_id, "execution_sessions", sess)
+
+    # Atualiza datas/status do item
+    fields = {"actual_started_at": datetime.utcnow()}
+    if not item.get("technician_id") and sess["technician_id"]:
+        fields["technician_id"] = sess["technician_id"]
+    await _update_item_fields(item_id, fields, current_user)
+    await log_audit("item", item_id, "EXEC_SESSION_START", current_user, {"session_id": sess["id"]})
+    return {"success": True, "session": sess}
+
+
+@api_router.post("/items/{item_id}/execution-session/{session_id}/finish")
+async def finish_execution_session(
+    item_id: str,
+    session_id: str,
+    payload: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Encerra uma sessão de execução. outcome = COMPLETED | PARTIAL | ABORTED."""
+    outcome = payload.get("outcome", "COMPLETED")
+    if outcome not in ("COMPLETED", "PARTIAL", "ABORTED"):
+        raise HTTPException(status_code=400, detail="outcome inválido.")
+
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+
+    sessions = list(item.get("execution_sessions") or [])
+    target_idx = next((i for i, s in enumerate(sessions) if s.get("id") == session_id), None)
+    if target_idx is None:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada.")
+    if sessions[target_idx].get("finished_at"):
+        raise HTTPException(status_code=400, detail="Sessão já encerrada.")
+
+    now = datetime.utcnow().isoformat()
+    sessions[target_idx]["finished_at"] = now
+    sessions[target_idx]["outcome"] = outcome
+    sessions[target_idx]["reason"] = payload.get("reason")
+    sessions[target_idx]["notes"] = payload.get("notes", sessions[target_idx].get("notes") or "")
+    if payload.get("photos"):
+        sessions[target_idx]["photos"] = payload["photos"]
+
+    update_fields = {"execution_sessions": sessions, "updated_at": datetime.utcnow(), "updated_by": current_user.id}
+
+    # Atualizar status conforme outcome
+    new_status = None
+    if outcome == "COMPLETED":
+        new_status = ServiceStatus.EXECUTADO.value
+        update_fields["actual_finished_at"] = datetime.utcnow()
+    elif outcome == "PARTIAL":
+        new_status = ServiceStatus.EXECUCAO_PARCIAL.value
+    elif outcome == "ABORTED":
+        new_status = ServiceStatus.RETOQUE_NECESSARIO.value
+
+    if new_status and new_status != item.get("status"):
+        update_fields["status"] = new_status
+
+    await db.budgets.update_one(
+        {"items.id": item_id},
+        {"$set": {f"items.$.{k}": v for k, v in update_fields.items()}},
+    )
+
+    if new_status and new_status != item.get("status"):
+        entry = {
+            "status": new_status,
+            "at": now,
+            "by_user_id": current_user.id,
+            "by_user_name": current_user.name,
+            "notes": f"Sessão {outcome}: {payload.get('reason') or payload.get('notes') or ''}".strip(),
+        }
+        await _append_to_item_array(item_id, "status_history", entry)
+
+    await log_audit("item", item_id, "EXEC_SESSION_FINISH", current_user, {
+        "session_id": session_id, "outcome": outcome, "reason": payload.get("reason"),
+    })
+    return {"success": True, "session": sessions[target_idx], "new_status": new_status}
+
+
+@api_router.post("/items/{item_id}/payment")
+async def register_item_payment(
+    item_id: str,
+    payload: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Registrar um recebimento (parcial/total) para um item."""
+    method = payload.get("method")
+    value = float(payload.get("value") or 0)
+    if not method:
+        raise HTTPException(status_code=400, detail="Método de pagamento é obrigatório.")
+    if value <= 0:
+        raise HTTPException(status_code=400, detail="Valor deve ser > 0.")
+
+    valid_methods = {m.value for m in PaymentMethod}
+    if method not in valid_methods:
+        raise HTTPException(status_code=400, detail=f"Método inválido. Use um de: {sorted(valid_methods)}")
+
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+
+    record = {
+        "id": f"PAY-{uuid.uuid4().hex[:10]}",
+        "method": method,
+        "value": value,
+        "paid_at": datetime.utcnow().isoformat(),
+        "recorded_by": current_user.id,
+        "recorded_by_name": current_user.name,
+        "notes": payload.get("notes") or "",
+    }
+
+    paid_total = float(item.get("paid_value") or 0) + value
+    total_value = float(item.get("total_value") or 0)
+    if total_value <= 0:
+        payment_status = PaymentStatusItem.PAGO.value if value > 0 else PaymentStatusItem.PENDENTE.value
+    elif paid_total + 0.001 >= total_value:
+        payment_status = PaymentStatusItem.PAGO.value
+    elif paid_total > 0:
+        payment_status = PaymentStatusItem.PARCIAL.value
+    else:
+        payment_status = PaymentStatusItem.PENDENTE.value
+
+    await _append_to_item_array(item_id, "payment_records", record)
+    await _update_item_fields(item_id, {
+        "paid_value": paid_total,
+        "payment_status": payment_status,
+    }, current_user)
+
+    await log_audit("item", item_id, "PAYMENT", current_user, {
+        "method": method, "value": value, "paid_total": paid_total, "new_status": payment_status,
+    })
+    return {"success": True, "record": record, "paid_value": paid_total, "payment_status": payment_status}
+
+
+@api_router.get("/items/{item_id}/timeline")
+async def item_timeline(item_id: str, current_user: UserPublic = Depends(get_current_user)):
+    """Linha do tempo completa do item (histórico unificado)."""
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+
+    events = []
+    for h in (item.get("status_history") or []):
+        events.append({
+            "type": "STATUS",
+            "at": h.get("at"),
+            "label": f"Status → {h.get('status')}",
+            "by": h.get("by_user_name"),
+            "notes": h.get("notes"),
+        })
+    for s in (item.get("execution_sessions") or []):
+        events.append({
+            "type": "EXEC_START",
+            "at": s.get("started_at"),
+            "label": f"Iniciou execução ({s.get('technician_name') or s.get('technician_id') or '—'})",
+            "by": s.get("technician_name"),
+            "notes": s.get("notes"),
+        })
+        if s.get("finished_at"):
+            events.append({
+                "type": "EXEC_END",
+                "at": s.get("finished_at"),
+                "label": f"Encerrou execução: {s.get('outcome')}",
+                "by": s.get("technician_name"),
+                "notes": s.get("reason") or s.get("notes"),
+            })
+    for p in (item.get("payment_records") or []):
+        events.append({
+            "type": "PAYMENT",
+            "at": p.get("paid_at"),
+            "label": f"Pagamento {p.get('method')} — R$ {p.get('value'):.2f}",
+            "by": p.get("recorded_by_name"),
+            "notes": p.get("notes"),
+        })
+
+    # Eventos de rota
+    for rid in (item.get("route_history") or []):
+        events.append({"type": "ROUTE", "at": None, "label": f"Adicionado à rota {rid}", "by": None})
+
+    # Ordenar por data (None último)
+    def keyfn(e):
+        return e.get("at") or "9999-12-31T00:00:00"
+    events.sort(key=keyfn)
+    return {"item_id": item_id, "events": events}
+
+
+@api_router.get("/items")
+async def list_items(
+    status: Optional[str] = None,
+    client_id: Optional[str] = None,
+    technician_id: Optional[str] = None,
+    route_id: Optional[str] = None,
+    payment_status: Optional[str] = None,
+    no_route: Optional[bool] = None,
+    limit: int = 500,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Listagem direta de itens (filtros para Dashboard, Rotas, Financeiro, Técnico)."""
+    match: Dict[str, Any] = {}
+    if status:
+        match["items.status"] = status
+    if client_id:
+        match["items.client_id"] = client_id
+    if technician_id:
+        match["items.technician_id"] = technician_id
+    if route_id:
+        match["items.current_route_id"] = route_id
+    if payment_status:
+        match["items.payment_status"] = payment_status
+    if no_route:
+        match["items.current_route_id"] = None
+
+    pipeline = [
+        {"$unwind": "$items"},
+    ]
+    # Filtros pós-unwind (aplicados ao item)
+    item_match = {}
+    if status: item_match["items.status"] = status
+    if client_id: item_match["items.client_id"] = client_id
+    if technician_id: item_match["items.technician_id"] = technician_id
+    if route_id: item_match["items.current_route_id"] = route_id
+    if payment_status: item_match["items.payment_status"] = payment_status
+    if no_route: item_match["items.current_route_id"] = None
+    if item_match:
+        pipeline.append({"$match": item_match})
+    pipeline.append({"$project": {"_id": 0, "item": "$items", "budget_id": "$id", "budget_payment_method": "$payment_method"}})
+    pipeline.append({"$limit": limit})
+
+    cursor = db.budgets.aggregate(pipeline)
+    out = []
+    async for doc in cursor:
+        out.append(doc)
+    return {"count": len(out), "items": out}
 
 
 # Include the router in the main app

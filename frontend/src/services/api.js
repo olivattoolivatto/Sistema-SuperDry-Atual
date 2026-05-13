@@ -96,6 +96,25 @@ export const budgetsApi = {
   generatePDF: (id) => api.get(`/budgets/${id}/pdf`, { responseType: 'blob' }),
 };
 
+// Items API (item como pilar)
+export const itemsApi = {
+  list: (params = {}) => api.get('/items', { params }),
+  get: (id) => api.get(`/items/${id}`),
+  patch: (id, fields) => api.patch(`/items/${id}`, fields),
+  changeStatus: (id, status, notes) => api.post(`/items/${id}/status`, { status, notes }),
+  schedule: (id, schedule) => api.post(`/items/${id}/schedule`, schedule),
+  startSession: (id, payload = {}) => api.post(`/items/${id}/execution-session/start`, payload),
+  finishSession: (id, sessionId, payload) =>
+    api.post(`/items/${id}/execution-session/${sessionId}/finish`, payload),
+  registerPayment: (id, payload) => api.post(`/items/${id}/payment`, payload),
+  timeline: (id) => api.get(`/items/${id}/timeline`),
+};
+
+// Enums / opções
+export const enumsApi = {
+  serviceStatus: () => api.get('/service-status/options'),
+};
+
 // Places API (Google)
 export const placesApi = {
   search: (query) => api.get('/places/search', { params: { query } }),
