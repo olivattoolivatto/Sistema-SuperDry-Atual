@@ -93,7 +93,7 @@ def format_html_text(text: str) -> str:
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-REDIRECT_URI = os.getenv('REDIRECT_URI', 'https://superdry-laundry.preview.emergentagent.com/agenda')
+REDIRECT_URI = os.getenv('REDIRECT_URI', 'https://lavesuperdry.com.br/agenda')
 
 # Google Calendar helper functions
 def get_google_auth_flow():
@@ -1335,14 +1335,15 @@ async def fix_budget_items_status():
 
 # Google Calendar endpoints
 @api_router.get("/calendar/auth-url")
-async def get_google_auth_url():
-    """Get Google OAuth authorization URL"""
+async def get_google_auth_url(app_url: str = ""):
+    """Get Google OAuth authorization URL. app_url is the frontend origin (passed as state)."""
     try:
         flow = get_google_auth_flow()
         authorization_url, _ = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
-            prompt='consent'
+            prompt='consent',
+            state=app_url  # relay page uses this to redirect back to the correct app
         )
         return {"auth_url": authorization_url}
     except Exception as e:

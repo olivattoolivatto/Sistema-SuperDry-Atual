@@ -78,15 +78,26 @@ export function Agenda() {
   const [sentServicesTotal, setSentServicesTotal] = useState(0);
 
   useEffect(() => {
-    // Check if this is a redirect from Google OAuth
     const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    
+    const code     = urlParams.get('code');
+    const authDone = urlParams.get('auth');
+
     if (code) {
-      // Process OAuth callback
+      // Fallback: código chegou diretamente (URL antiga ainda cadastrada)
       handleOAuthCallback(code);
+    } else if (authDone === 'success') {
+      // Relay do lavesuperdry.com.br já processou o código com sucesso
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setIsGoogleAuthenticated(true);
+      loadSavedRoutes();
+      checkGoogleAuth();
+      loadCalendarEvents();
+      toast({
+        title: "Sucesso!",
+        description: "Google Calendar conectado com sucesso!",
+        variant: "default",
+      });
     } else {
-      // Normal page load
       loadSavedRoutes();
       checkGoogleAuth();
     }
@@ -147,10 +158,10 @@ export function Agenda() {
 
   const authenticateWithGoogle = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/calendar/auth-url`);
+      // Passa a URL atual do app para o relay poder redirecionar de volta
+      const appUrl = window.location.origin;
+      const response = await fetch(`${BACKEND_URL}/api/calendar/auth-url?app_url=${encodeURIComponent(appUrl)}`);
       const data = await response.json();
-      
-      // Redirect to Google OAuth
       window.location.href = data.auth_url;
     } catch (error) {
       console.error('Erro ao iniciar autenticação:', error);

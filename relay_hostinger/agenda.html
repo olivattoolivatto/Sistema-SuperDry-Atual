@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SuperDry – Autenticando Google Calendar...</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f4ff;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: white; border-radius: 16px;
+      padding: 40px 48px; text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,.10);
+      max-width: 420px; width: 90%;
+    }
+    .logo { font-size: 40px; margin-bottom: 16px; }
+    h1 { font-size: 20px; color: #1e293b; margin-bottom: 8px; }
+    p  { font-size: 14px; color: #64748b; margin-bottom: 24px; }
+    .spinner {
+      width: 40px; height: 40px; border: 4px solid #e2e8f0;
+      border-top-color: #2563eb; border-radius: 50%;
+      animation: spin .8s linear infinite; margin: 0 auto 20px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ok  { color: #16a34a; font-weight: 600; font-size: 16px; }
+    .err { color: #dc2626; font-weight: 600; font-size: 16px; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">📅</div>
+  <h1>SuperDry Lavanderia</h1>
+  <p id="msg">Autenticando com Google Calendar, aguarde...</p>
+  <div class="spinner" id="spinner"></div>
+  <p id="status"></p>
+</div>
+
+<script>
+(function () {
+  var REDIRECT_URI = 'https://lavesuperdry.com.br/agenda';
+
+  var params  = new URLSearchParams(window.location.search);
+  var code    = params.get('code');
+  var appUrl  = params.get('state');   // URL do app Emergent (ex: https://geoapify-routes.preview.emergentagent.com)
+  var error   = params.get('error');
+
+  var msgEl     = document.getElementById('msg');
+  var statusEl  = document.getElementById('status');
+  var spinnerEl = document.getElementById('spinner');
+
+  function showError(text) {
+    spinnerEl.style.display = 'none';
+    statusEl.className = 'err';
+    statusEl.textContent = text;
+    msgEl.textContent = 'Feche esta janela e tente novamente na tela de Agenda.';
+  }
+
+  function showOk() {
+    spinnerEl.style.display = 'none';
+    statusEl.className = 'ok';
+    statusEl.textContent = 'Conectado com sucesso! Redirecionando...';
+  }
+
+  // Erro retornado pelo Google (ex: acesso negado)
+  if (error) {
+    showError('Google retornou erro: ' + error);
+    return;
+  }
+
+  if (!code) {
+    showError('Código de autorização não encontrado.');
+    return;
+  }
+
+  if (!appUrl) {
+    showError('URL do aplicativo não encontrada. Reinicie o processo.');
+    return;
+  }
+
+  // Garante que appUrl não tem barra no final
+  appUrl = appUrl.replace(/\/$/, '');
+
+  // Envia o código para o backend da Emergent
+  fetch(appUrl + '/api/calendar/auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      code: code,
+      redirect_uri: REDIRECT_URI
+    })
+  })
+  .then(function (res) {
+    if (!res.ok) {
+      return res.json().then(function(d) {
+        throw new Error(d.detail || 'Erro do servidor: ' + res.status);
+      });
+    }
+    return res.json();
+  })
+  .then(function () {
+    showOk();
+    // Redireciona de volta para a tela de Agenda do app com flag de sucesso
+    setTimeout(function () {
+      window.location.href = appUrl + '/agenda?auth=success';
+    }, 1500);
+  })
+  .catch(function (err) {
+    console.error('Relay error:', err);
+    showError('Erro ao autenticar: ' + err.message);
+  });
+})();
+</script>
+</body>
+</html>
