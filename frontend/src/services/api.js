@@ -91,6 +91,7 @@ export const budgetsApi = {
   create: (data) => api.post('/budgets', data),
   update: (id, data) => api.put(`/budgets/${id}`, data),
   delete: (id) => api.delete(`/budgets/${id}`),
+  forceDelete: (id) => api.delete(`/budgets/${id}/force`),
   addItem: (budgetId, itemData) => api.post(`/budgets/${budgetId}/items`, itemData),
   generateWhatsApp: (id) => api.get(`/budgets/${id}/whatsapp`),
   generatePDF: (id) => api.get(`/budgets/${id}/pdf`, { responseType: 'blob' }),

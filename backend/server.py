@@ -2298,6 +2298,26 @@ async def update_budget(
         raise HTTPException(status_code=400, detail=f"Error updating budget: {str(e)}")
 
 
+@api_router.delete("/budgets/{budget_id}/force")
+async def force_delete_budget(budget_id: str, current_user: UserPublic = Depends(get_current_user)):
+    """Forçar exclusão de orçamento (ADMIN). Limpa vínculos de rota/sessão antes de deletar."""
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem forçar exclusão.")
+    budget = await db.budgets.find_one({"id": budget_id})
+    if not budget:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado.")
+    # Limpa current_route_id de qualquer rota que aponte para estes itens
+    for it in (budget.get("items") or []):
+        route_id = it.get("current_route_id")
+        if route_id:
+            await db.routes.update_one(
+                {"id": route_id},
+                {"$pull": {"stops": {"budget_item_id": it["id"]}}}
+            )
+    await db.budgets.delete_one({"id": budget_id})
+    await log_audit("budget", budget_id, "FORCE_DELETE", current_user, {"reason": "admin force delete"})
+    return {"message": "Orçamento excluído forçadamente."}
+
 @api_router.delete("/budgets/{budget_id}")
 async def delete_budget(budget_id: str, current_user: UserPublic = Depends(get_current_user)):
     """Excluir orçamento (bloqueia se algum item já está em rota ou executado)."""

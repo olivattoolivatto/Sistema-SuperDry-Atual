@@ -4,6 +4,7 @@ import {
   Download, MessageCircle, AlertTriangle, ChevronRight, Layers,
 } from 'lucide-react';
 import { budgetsApi } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import BudgetEditor from './budgets/BudgetEditor';
 import ItemDetailDrawer from './budgets/ItemDetailDrawer';
 import {
@@ -112,6 +113,7 @@ export function Budgets() {
   const [editing, setEditing] = useState(null);
   const [itemDetailId, setItemDetailId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const { user } = useAuth();
 
   const load = async () => {
     try {
@@ -146,6 +148,18 @@ export function Budgets() {
       await load();
     } catch (err) {
       alert(err.response?.data?.detail || 'Erro ao excluir.');
+    }
+  };
+
+  const handleForceDelete = async () => {
+    if (!deleteTarget) return;
+    if (!window.confirm(`FORÇAR exclusão de ${deleteTarget.id}? Vínculos de rota serão removidos.`)) return;
+    try {
+      await budgetsApi.forceDelete(deleteTarget.id);
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Erro ao forçar exclusão.');
     }
   };
 
@@ -266,6 +280,15 @@ export function Budgets() {
               >
                 Excluir
               </button>
+              {user?.role === 'ADMIN' && (
+                <button
+                  onClick={handleForceDelete}
+                  className="flex-1 px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-900 text-sm font-medium"
+                  title="Remove vínculos de rota e exclui forçadamente"
+                >
+                  Forçar
+                </button>
+              )}
             </div>
           </div>
         </div>
