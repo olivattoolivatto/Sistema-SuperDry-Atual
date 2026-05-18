@@ -825,12 +825,32 @@ class SystemConfig(BaseModel):
     
     # Future: user management fields
     enable_user_management: bool = False
+
+    # Payment methods (customizable)
+    payment_methods: List[Dict[str, str]] = Field(default_factory=lambda: [
+        {"value": "PIX_CNPJ_25995295000104", "label": "PIX CNPJ 1"},
+        {"value": "PIX_CNPJ_30369419000186", "label": "PIX CNPJ 2"},
+        {"value": "DINHEIRO",                "label": "Dinheiro"},
+        {"value": "CREDITO_1X",              "label": "Crédito 1x"},
+        {"value": "CREDITO_2X",              "label": "Crédito 2x"},
+        {"value": "CREDITO_3X",              "label": "Crédito 3x"},
+        {"value": "CREDITO_4X",              "label": "Crédito 4x"},
+        {"value": "CREDITO_5X",              "label": "Crédito 5x"},
+        {"value": "CREDITO_6X",              "label": "Crédito 6x"},
+        {"value": "CREDITO_7X",              "label": "Crédito 7x"},
+        {"value": "CREDITO_8X",              "label": "Crédito 8x"},
+        {"value": "DEBITO",                  "label": "Débito"},
+        {"value": "BOLETO",                  "label": "Boleto"},
+        {"value": "LINK_PAGAMENTO",          "label": "Link de Pagamento"},
+        {"value": "TRANSFERENCIA",           "label": "Transferência"},
+        {"value": "PERMUTA",                 "label": "Permuta"},
+    ])
     
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class BudgetCreate(BaseModel):
     client_id: str
-    payment_method: PaymentMethod
+    payment_method: str          # free string — validated against DB list at runtime
     salesperson: Salesperson
     internal_observations: Optional[str] = None
     budget_observations: Optional[str] = None
@@ -2759,6 +2779,16 @@ async def update_budget_config(config: BudgetConfig):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error updating budget config: {str(e)}")
 
+@api_router.get("/payment-methods")
+async def get_payment_methods():
+    """Retorna lista de formas de pagamento configuradas no sistema."""
+    config = await db.system_config.find_one({})
+    if config and config.get("payment_methods"):
+        return {"payment_methods": config["payment_methods"]}
+    # fallback padrão
+    default = SystemConfig()
+    return {"payment_methods": default.payment_methods}
+
 @api_router.get("/system-config", response_model=SystemConfig)
 async def get_system_config():
     """Obter configurações do sistema"""
@@ -4135,8 +4165,12 @@ async def register_item_payment(
         raise HTTPException(status_code=400, detail="Valor deve ser > 0.")
 
     valid_methods = {m.value for m in PaymentMethod}
+    # Accept both enum values and any custom method configured in system_config
+    config = await db.system_config.find_one({})
+    if config and config.get("payment_methods"):
+        valid_methods |= {m["value"] for m in config["payment_methods"]}
     if method not in valid_methods:
-        raise HTTPException(status_code=400, detail=f"Método inválido. Use um de: {sorted(valid_methods)}")
+        raise HTTPException(status_code=400, detail=f"Método inválido: {method}")
 
     budget, item = await _find_budget_and_item(item_id)
     if not item:

@@ -826,18 +826,22 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null); // { type, itemIds }
-
-  const PAYMENT_METHODS = [
+  const [pendingAction, setPendingAction] = useState(null);
+  const [paymentMethods, setPaymentMethods] = useState([
     { value: 'DINHEIRO', label: 'Dinheiro' },
     { value: 'PIX_CNPJ_25995295000104', label: 'PIX SuperDry' },
     { value: 'PIX_CNPJ_30369419000186', label: 'PIX Alternativo' },
     { value: 'DEBITO', label: 'Débito' },
     { value: 'CREDITO_1X', label: 'Crédito 1x' },
-    { value: 'CREDITO_2X', label: 'Crédito 2x' },
-    { value: 'CREDITO_3X', label: 'Crédito 3x' },
     { value: 'LINK_PAGAMENTO', label: 'Link de Pagamento' },
-  ];
+  ]);
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/payment-methods`)
+      .then(r => r.json())
+      .then(d => { if (d.payment_methods?.length) setPaymentMethods(d.payment_methods); })
+      .catch(() => {});
+  }, []);
 
   const handleItemSelect = (itemId, checked) => {
     const newSelected = new Set(selectedItems);
@@ -1162,7 +1166,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
         onConfirm={handlePaymentConfirm}
         onSkip={() => handlePaymentConfirm(null, false)}
         onCancel={() => { setShowPaymentModal(false); setPendingAction(null); }}
-        paymentMethods={PAYMENT_METHODS}
+        paymentMethods={paymentMethods}
       />}
     </div>
   );

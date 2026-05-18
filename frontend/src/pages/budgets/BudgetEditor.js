@@ -104,7 +104,7 @@ function AddressAutocomplete({ value, onSelect, placeholder, compact = false }) 
 }
 
 // Sub-form para um item individual
-function ItemSubForm({ item, services, onChange, onRemove, idx }) {
+function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods = PAYMENT_METHODS }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [serviceSearch, setServiceSearch] = useState('');
   const [showServicePicker, setShowServicePicker] = useState(false);
@@ -490,6 +490,7 @@ export default function BudgetEditor({ budget, onClose, onSaved }) {
   const [step, setStep] = useState(1);
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState(PAYMENT_METHODS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -497,7 +498,7 @@ export default function BudgetEditor({ budget, onClose, onSaved }) {
   const [form, setForm] = useState({
     client_id: budget?.client_id || '',
     client_name: budget?.client_name || '',
-    payment_method: budget?.payment_method || 'PIX_CNPJ_25995295000104',
+    payment_method: budget?.payment_method || '',
     salesperson: budget?.salesperson || 'Gabriela Alcântara',
     internal_observations: budget?.internal_observations || '',
     budget_observations: budget?.budget_observations || '',
@@ -507,12 +508,19 @@ export default function BudgetEditor({ budget, onClose, onSaved }) {
   useEffect(() => {
     (async () => {
       try {
-        const [c, s] = await Promise.all([
+        const [c, s, pm] = await Promise.all([
           clientsApi.getAll({ limit: 1000 }),
           servicesApi.getAll({ active_only: true }),
+          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/payment-methods`).then(r => r.json()),
         ]);
         setClients(c.data || []);
         setServices(s.data || []);
+        const methods = pm.payment_methods || PAYMENT_METHODS;
+        setPaymentMethods(methods);
+        // set default payment method if not editing
+        if (!budget?.payment_method && methods.length > 0) {
+          setForm(prev => ({ ...prev, payment_method: methods[0].value }));
+        }
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();
@@ -696,6 +704,7 @@ export default function BudgetEditor({ budget, onClose, onSaved }) {
                   idx={idx}
                   item={item}
                   services={services}
+                  paymentMethods={paymentMethods}
                   onChange={(it) => updateItem(idx, it)}
                   onRemove={() => removeItem(idx)}
                 />
@@ -731,7 +740,7 @@ export default function BudgetEditor({ budget, onClose, onSaved }) {
                   onChange={(e) => setForm({ ...form, payment_method: e.target.value })}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white"
                 >
-                  {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  {paymentMethods.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
                 <div className="text-[11px] text-gray-500 mt-1">
                   Cada item pode sobrescrever este método em "Opções avançadas".

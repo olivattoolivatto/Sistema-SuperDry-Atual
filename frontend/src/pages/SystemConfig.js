@@ -662,6 +662,9 @@ export const SystemConfig = () => {
           </div>
         </div>
 
+        {/* Formas de Pagamento */}
+        <PaymentMethodsManager config={config} setConfig={setConfig} />
+
         {/* Gestão de Usuários */}
         <UsersManager />
 
@@ -680,6 +683,95 @@ export const SystemConfig = () => {
     </div>
   );
 };
+
+// ============================================================
+// Payment Methods Manager
+// ============================================================
+function PaymentMethodsManager({ config, setConfig }) {
+  const [newLabel, setNewLabel] = useState('');
+  const [newValue, setNewValue] = useState('');
+  const [editIdx, setEditIdx] = useState(null);
+  const [editLabel, setEditLabel] = useState('');
+
+  const methods = config?.payment_methods || [];
+
+  const slugify = (s) => s.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+
+  const add = () => {
+    const label = newLabel.trim();
+    if (!label) return;
+    const value = newValue.trim() || slugify(label);
+    if (methods.find(m => m.value === value)) { alert('Valor/chave já existe.'); return; }
+    setConfig(prev => ({ ...prev, payment_methods: [...methods, { value, label }] }));
+    setNewLabel(''); setNewValue('');
+  };
+
+  const remove = (idx) => {
+    setConfig(prev => ({ ...prev, payment_methods: methods.filter((_, i) => i !== idx) }));
+  };
+
+  const startEdit = (idx) => { setEditIdx(idx); setEditLabel(methods[idx].label); };
+
+  const saveEdit = () => {
+    const updated = methods.map((m, i) => i === editIdx ? { ...m, label: editLabel.trim() || m.label } : m);
+    setConfig(prev => ({ ...prev, payment_methods: updated }));
+    setEditIdx(null);
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 className="text-lg font-semibold text-gray-900 mb-1">Formas de Pagamento</h2>
+      <p className="text-sm text-gray-500 mb-4">Gerencie as opções disponíveis em orçamentos e atendimentos.</p>
+
+      <div className="space-y-2 mb-4">
+        {methods.map((m, idx) => (
+          <div key={m.value} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+            {editIdx === idx ? (
+              <>
+                <input
+                  className="flex-1 px-2 py-1 border border-blue-400 rounded text-sm"
+                  value={editLabel}
+                  onChange={e => setEditLabel(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveEdit()}
+                  autoFocus
+                />
+                <button onClick={saveEdit} className="text-xs px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700">OK</button>
+                <button onClick={() => setEditIdx(null)} className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700"><X className="w-3.5 h-3.5" /></button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm font-medium text-gray-900">{m.label}</span>
+                <span className="text-xs text-gray-400 font-mono bg-gray-100 px-2 py-0.5 rounded">{m.value}</span>
+                <button onClick={() => startEdit(idx)} className="p-1 text-gray-400 hover:text-blue-600"><Edit2 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => remove(idx)} className="p-1 text-gray-400 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5" /></button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          placeholder="Nome (ex: PIX Diego)"
+          value={newLabel}
+          onChange={e => setNewLabel(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && add()}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+        />
+        <input
+          placeholder="Chave opcional (ex: PIX_DIEGO)"
+          value={newValue}
+          onChange={e => setNewValue(e.target.value)}
+          className="w-44 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+        />
+        <button onClick={add} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center gap-1">
+          <Plus className="w-4 h-4" /> Adicionar
+        </button>
+      </div>
+      <p className="text-xs text-gray-400 mt-2">Clique em "Salvar Configurações" para aplicar as alterações.</p>
+    </div>
+  );
+}
 
 // ============================================================
 // Users Manager (admin only)
