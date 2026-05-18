@@ -821,29 +821,34 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
 function ClientDetails({ client, onBack, generateNavigationLink }) {
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [technicianNotes, setTechnicianNotes] = useState('');
-  const [showPhotoCapture, setShowPhotoCapture] = useState(true); // Iniciar com captura de fotos
-  const [itemPhotos, setItemPhotos] = useState({}); // {itemId: [photos]}
+  const [showPhotoCapture, setShowPhotoCapture] = useState(true);
+  const [itemPhotos, setItemPhotos] = useState({});
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // { type, itemIds }
+
+  const PAYMENT_METHODS = [
+    { value: 'DINHEIRO', label: 'Dinheiro' },
+    { value: 'PIX_CNPJ_25995295000104', label: 'PIX SuperDry' },
+    { value: 'PIX_CNPJ_30369419000186', label: 'PIX Alternativo' },
+    { value: 'DEBITO', label: 'Débito' },
+    { value: 'CREDITO_1X', label: 'Crédito 1x' },
+    { value: 'CREDITO_2X', label: 'Crédito 2x' },
+    { value: 'CREDITO_3X', label: 'Crédito 3x' },
+    { value: 'LINK_PAGAMENTO', label: 'Link de Pagamento' },
+  ];
 
   const handleItemSelect = (itemId, checked) => {
     const newSelected = new Set(selectedItems);
-    if (checked) {
-      newSelected.add(itemId);
-    } else {
-      newSelected.delete(itemId);
-    }
+    if (checked) newSelected.add(itemId);
+    else newSelected.delete(itemId);
     setSelectedItems(newSelected);
   };
 
-  // Verificar se todos os itens têm pelo menos uma foto
-  const allItemsHavePhotos = () => {
-    return client.items.every(item => {
-      const photos = itemPhotos[item.id] || [];
-      return photos.length > 0;
-    });
-  };
+  const allItemsHavePhotos = () =>
+    client.items.every(item => (itemPhotos[item.id] || []).length > 0);
 
-  // Prosseguir para o atendimento após captura de fotos
   const proceedToService = () => {
     if (!allItemsHavePhotos()) {
       alert('Por favor, registre pelo menos uma foto para cada item antes de prosseguir.');
@@ -852,10 +857,156 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
     setShowPhotoCapture(false);
   };
 
-  // Se ainda está na fase de captura de fotos
+  // ─── helpers ────────────────────────────────────────────────────────────────
+
+  const getSelectedItemObjects = () =>
+    client.items.filter(i => selectedItems.has(i.id));
+
+  const changeStatus = async (itemId, status, notes = '') => {
+    const token = localStorage.getItem('superdry_token');
+    return fetch(`${BACKEND_URL}/api/items/${itemId}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status, notes }),
+    });
+  };
+
+  const registerPayment = async (itemId, method, value) => {
+    const token = localStorage.getItem('superdry_token');
+    return fetch(`${BACKEND_URL}/api/items/${itemId}/payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ method, value }),
+    });
+  };
+
+  // ─── action: Serviço Concluído ───────────────────────────────────────────────
+  const handleServiceCompleted = () => {
+    if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
+    setPendingAction({ type: 'CONCLUIDO', itemIds: [...selectedItems] });
+    setShowPaymentModal(true);
+  };
+
+  // ─── action: Retirada Efetuada ───────────────────────────────────────────────
+  const handlePickupDone = async () => {
+    if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
+    setProcessing(true);
+    try {
+      for (const id of selectedItems) {
+        await changeStatus(id, 'COLETADO', technicianNotes || 'Retirada efetuada pelo técnico em campo.');
+      }
+      alert(`${selectedItems.size} item(s) marcado(s) como COLETADO. Item segue para lavagem.`);
+      setSelectedItems(new Set());
+      setTechnicianNotes('');
+      onBack();
+    } catch (e) {
+      alert('Erro ao registrar retirada: ' + e.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // ─── action: Entrega Efetuada ────────────────────────────────────────────────
+  const handleDeliveryDone = () => {
+    if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
+    setPendingAction({ type: 'ENTREGUE', itemIds: [...selectedItems] });
+    setShowPaymentModal(true);
+  };
+
+  // ─── action: Cliente Buscou ──────────────────────────────────────────────────
+  const handleClientPickedUp = () => {
+    if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
+    setPendingAction({ type: 'BUSCOU', itemIds: [...selectedItems] });
+    setShowPaymentModal(true);
+  };
+
+  // ─── action: Cancelado pelo Cliente ─────────────────────────────────────────
+  const handleCancelled = async () => {
+    if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
+    if (!window.confirm(`Confirmar cancelamento de ${selectedItems.size} item(s)?`)) return;
+    setProcessing(true);
+    try {
+      for (const id of selectedItems) {
+        await changeStatus(id, 'CANCELADO_PELO_CLIENTE', technicianNotes || 'Cancelado pelo cliente durante atendimento em campo.');
+      }
+      alert(`${selectedItems.size} item(s) cancelado(s).`);
+      setSelectedItems(new Set());
+      setTechnicianNotes('');
+      onBack();
+    } catch (e) {
+      alert('Erro ao cancelar: ' + e.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // ─── action: Reagendar ───────────────────────────────────────────────────────
+  const handleReschedule = async () => {
+    if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
+    if (!window.confirm(`Reagendar ${selectedItems.size} item(s)? O item voltará à fila de rotas.`)) return;
+    setProcessing(true);
+    try {
+      for (const itemObj of getSelectedItemObjects()) {
+        // Volta ao status original conforme tipo: EXECUTAR_NO_LOCAL ou RETIRAR
+        const originalStatus = itemObj.status === 'ENTREGAR' ? 'ENTREGAR'
+          : itemObj.status === 'EXECUTAR_NO_LOCAL' ? 'EXECUTAR_NO_LOCAL'
+          : 'RETIRAR';
+        await changeStatus(itemObj.id, originalStatus, technicianNotes || 'Reagendado — cliente indisponível.');
+        // Limpa vínculo com rota atual
+        const token = localStorage.getItem('superdry_token');
+        await fetch(`${BACKEND_URL}/api/items/${itemObj.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ current_route_id: null, current_route_stop_id: null }),
+        });
+      }
+      alert(`${selectedItems.size} item(s) liberado(s) para reagendamento.`);
+      setSelectedItems(new Set());
+      setTechnicianNotes('');
+      onBack();
+    } catch (e) {
+      alert('Erro ao reagendar: ' + e.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // ─── confirmar pagamento (modal) ─────────────────────────────────────────────
+  const handlePaymentConfirm = async (method, collectNow) => {
+    setShowPaymentModal(false);
+    setProcessing(true);
+    try {
+      const { type, itemIds } = pendingAction;
+      const finalStatus = type === 'CONCLUIDO' ? 'EXECUTADO'
+        : type === 'ENTREGUE' ? 'ENTREGUE'
+        : 'BUSCOU';
+
+      for (const id of itemIds) {
+        const item = client.items.find(i => i.id === id);
+        await changeStatus(id, finalStatus, technicianNotes || `${type} — atendimento em campo.`);
+        if (collectNow && item) {
+          await registerPayment(id, method, item.value);
+        }
+      }
+
+      const label = type === 'CONCLUIDO' ? 'Serviço concluído'
+        : type === 'ENTREGUE' ? 'Entrega efetuada'
+        : 'Cliente buscou';
+      alert(`${label}: ${itemIds.length} item(s) atualizado(s).${collectNow ? ' Pagamento registrado.' : ' Pagamento pendente.'}`);
+      setSelectedItems(new Set());
+      setTechnicianNotes('');
+      setPendingAction(null);
+      onBack();
+    } catch (e) {
+      alert('Erro ao finalizar: ' + e.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   if (showPhotoCapture) {
     return (
-      <PhotoCaptureScreen 
+      <PhotoCaptureScreen
         client={client}
         onBack={onBack}
         itemPhotos={itemPhotos}
@@ -958,33 +1109,109 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
         <div className="bg-white rounded-lg shadow-md p-4">
           <h4 className="font-medium text-gray-800 mb-3">Ações para {selectedItems.size} item(s)</h4>
           <div className="grid grid-cols-2 gap-2">
-            <button className="bg-green-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-green-700 transition-colors flex items-center justify-center space-x-1">
+            <button
+              disabled={processing}
+              onClick={handleServiceCompleted}
+              className="bg-green-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-green-700 transition-colors flex items-center justify-center space-x-1 disabled:opacity-50">
               <CheckCircle className="w-4 h-4" />
               <span>Serviço Concluído</span>
             </button>
-            <button className="bg-blue-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center space-x-1">
+            <button
+              disabled={processing}
+              onClick={handlePickupDone}
+              className="bg-blue-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center space-x-1 disabled:opacity-50">
               <Package className="w-4 h-4" />
               <span>Retirada Efetuada</span>
             </button>
-            <button className="bg-purple-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-purple-700 transition-colors flex items-center justify-center space-x-1">
+            <button
+              disabled={processing}
+              onClick={handleDeliveryDone}
+              className="bg-purple-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-purple-700 transition-colors flex items-center justify-center space-x-1 disabled:opacity-50">
               <Truck className="w-4 h-4" />
               <span>Entrega Efetuada</span>
             </button>
-            <button className="bg-orange-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-orange-700 transition-colors flex items-center justify-center space-x-1">
+            <button
+              disabled={processing}
+              onClick={handleClientPickedUp}
+              className="bg-orange-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-orange-700 transition-colors flex items-center justify-center space-x-1 disabled:opacity-50">
               <User className="w-4 h-4" />
               <span>Cliente Buscou</span>
             </button>
           </div>
           <div className="grid grid-cols-2 gap-2 mt-2">
-            <button className="bg-red-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-red-700 transition-colors">
+            <button
+              disabled={processing}
+              onClick={handleCancelled}
+              className="bg-red-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50">
               Cancelado pelo Cliente
             </button>
-            <button className="bg-yellow-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-yellow-700 transition-colors">
+            <button
+              disabled={processing}
+              onClick={handleReschedule}
+              className="bg-yellow-600 text-white py-2 px-3 rounded-md text-sm font-medium hover:bg-yellow-700 transition-colors disabled:opacity-50">
               Reagendar
             </button>
           </div>
+          {processing && <p className="text-center text-sm text-gray-500 mt-2">Processando...</p>}
         </div>
       )}
+
+      {/* Modal de Pagamento */}
+      {showPaymentModal && <PaymentModal
+        items={getSelectedItemObjects()}
+        onConfirm={handlePaymentConfirm}
+        onSkip={() => handlePaymentConfirm(null, false)}
+        onCancel={() => { setShowPaymentModal(false); setPendingAction(null); }}
+        paymentMethods={PAYMENT_METHODS}
+      />}
+    </div>
+  );
+}
+
+// Modal de Pagamento
+function PaymentModal({ items, onConfirm, onSkip, onCancel, paymentMethods }) {
+  const [method, setMethod] = useState('DINHEIRO');
+  const total = items.reduce((s, i) => s + (i.value || 0), 0);
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end justify-center z-50 p-4">
+      <div className="bg-white rounded-t-2xl w-full max-w-md p-5 space-y-4">
+        <h3 className="text-lg font-bold text-gray-900">Registrar Pagamento</h3>
+        <p className="text-sm text-gray-600">
+          {items.length} item(s) · Total: <strong>R$ {total.toFixed(2)}</strong>
+        </p>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento</label>
+          <select
+            value={method}
+            onChange={e => setMethod(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500"
+          >
+            {paymentMethods.map(m => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <button
+            onClick={() => onConfirm(method, true)}
+            className="bg-green-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-green-700"
+          >
+            Cobrar Agora
+          </button>
+          <button
+            onClick={onSkip}
+            className="bg-gray-200 text-gray-800 py-3 rounded-xl font-semibold text-sm hover:bg-gray-300"
+          >
+            Cobrar Depois
+          </button>
+        </div>
+        <button
+          onClick={onCancel}
+          className="w-full text-center text-sm text-gray-500 py-1"
+        >
+          Cancelar
+        </button>
+      </div>
     </div>
   );
 }
