@@ -50,7 +50,6 @@ function ProtectedShell() {
           <Route path="/agenda" element={<Agenda />} />
           <Route path="/technician" element={<TechnicianMode />} />
           <Route path="/whatsapp" element={<Placeholder title="WhatsApp" />} />
-          <Route path="/washing" element={<Placeholder title="Lavagem / Execução" />} />
           <Route path="/financial" element={<Placeholder title="Financeiro" />} />
           <Route path="/finance-manager" element={<Placeholder title="Gerenciador Financeiro" />} />
           <Route path="/reports" element={<Placeholder title="Relatórios" />} />
