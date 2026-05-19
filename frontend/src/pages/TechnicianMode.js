@@ -1354,7 +1354,7 @@ function Panel({ title, onClose, children }) {
         <h3 className="font-semibold text-gray-900">{title}</h3>
         <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4">{children}</div>
+      <div className="flex-1 overflow-y-auto p-4 bg-white">{children}</div>
     </div>
   );
 }
