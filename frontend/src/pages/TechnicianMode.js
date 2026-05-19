@@ -1662,40 +1662,51 @@ function RecolherPanel({ items, onClose, onDone }) {
   );
 }
 
-// ── RECOLHIMENTO / depósito saída panel ───────────────────────────────────────
+// ── PRONTOS / AGUARDANDO ENTREGA — painel informativo ─────────────────────────
 
-function RecolhimentoPanel({ items, onClose, onDone }) {
-  const eligible = items.filter(i => ['AGUARDANDO_ENTREGA','AGUARDANDO_BUSCAR'].includes(i.status));
-  const [selected, setSelected] = useState(new Set());
-  const [saving, setSaving] = useState(false);
-  const [flash, setFlash] = useState('');
+function ProntosPanel({ items, onClose }) {
+  const eligible = items.filter(i => ['AGUARDANDO_ENTREGA','AGUARDANDO_BUSCAR','ENTREGAR'].includes(i.status));
 
-  const confirm = async () => {
-    if (!selected.size) return;
-    setSaving(true);
-    try {
-      await itemsApi.bulkStatus([...selected], 'ENTREGAR', 'Liberado para rota de entrega');
-      setFlash(`${selected.size} item(s) prontos para entrega`);
-      setTimeout(() => { onDone(); onClose(); }, 1500);
-    } catch(e) { setFlash('Erro: ' + e.message); }
-    setSaving(false);
+  const STATUS_LABEL = {
+    AGUARDANDO_ENTREGA: { label: 'Aguardando Entrega', bg: 'bg-green-100 text-green-800' },
+    AGUARDANDO_BUSCAR:  { label: 'Cliente Busca',       bg: 'bg-purple-100 text-purple-800' },
+    ENTREGAR:           { label: 'Em Rota',              bg: 'bg-blue-100 text-blue-800' },
   };
 
   return (
-    <Panel title="Recolhimento — Depósito Saída" onClose={onClose}>
-      {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
-      <p className="text-xs text-gray-500 mb-3">Itens confirmados aqui entram no status ENTREGAR, disponíveis para rota.</p>
-      <ItemTable items={eligible} selected={selected} setSelected={setSelected}
-        extraColumns={['Etiqueta']}
-        columns={item => (
-          <td className="px-2 py-2"><PartnerLabelBadge label={item.partner_label} /></td>
-        )} />
-      <div className="mt-4 flex justify-end gap-2">
-        <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700">Cancelar</button>
-        <button onClick={confirm} disabled={!selected.size || saving}
-          className="px-5 py-2 rounded-lg bg-orange-600 text-white text-sm font-semibold disabled:opacity-50">
-          {saving ? 'Salvando…' : `Confirmar Recolhimento (${selected.size})`}
-        </button>
+    <Panel title="Tapetes Prontos / Aguardando Entrega" onClose={onClose}>
+      <p className="text-xs text-gray-500 mb-4">
+        Itens que já saíram da lavagem e estão disponíveis para entrega ou retirada pelo cliente.
+      </p>
+      {eligible.length === 0 ? (
+        <div className="text-center py-12 text-gray-400">
+          <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Nenhum item pronto no momento.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {eligible.map(item => {
+            const s = STATUS_LABEL[item.status] || { label: item.status, bg: 'bg-gray-100 text-gray-700' };
+            return (
+              <div key={item.id} className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl">
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-gray-900 text-sm truncate">{item.client_name}</div>
+                  <div className="text-xs text-gray-500">{item.service_name} · {item.neighborhood || '—'}</div>
+                  {item.partner_label && (
+                    <div className="mt-0.5"><PartnerLabelBadge label={item.partner_label} /></div>
+                  )}
+                </div>
+                <div className="text-right shrink-0 space-y-1">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.bg}`}>{s.label}</span>
+                  <div className="text-xs font-bold text-gray-700">R${(item.total_value||0).toFixed(2)}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="mt-4 flex justify-end">
+        <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700">Fechar</button>
       </div>
     </Panel>
   );
@@ -1837,11 +1848,11 @@ function CompanyMode({ onBack }) {
               <span className="text-sm font-semibold">Recolher Tapetes</span>
               <span className="text-[11px] opacity-80">{(byStatus.EM_LAVAGEM||[]).length + (byStatus.EM_LAVAGEM_PARCEIRO||[]).length} disponíveis</span>
             </button>
-            <button onClick={() => setPanel('recolhimento')}
-              className="flex flex-col items-center gap-1 bg-orange-500 text-white py-4 rounded-xl shadow hover:bg-orange-600 transition">
-              <Truck className="w-6 h-6" />
-              <span className="text-sm font-semibold">Recolhimento</span>
-              <span className="text-[11px] opacity-80">{(byStatus.AGUARDANDO_ENTREGA||[]).length + (byStatus.AGUARDANDO_BUSCAR||[]).length} no depósito</span>
+            <button onClick={() => setPanel('prontos')}
+              className="flex flex-col items-center gap-1 bg-teal-600 text-white py-4 rounded-xl shadow hover:bg-teal-700 transition">
+              <CheckCircle className="w-6 h-6" />
+              <span className="text-sm font-semibold">Prontos / Ag. Entrega</span>
+              <span className="text-[11px] opacity-80">{(byStatus.AGUARDANDO_ENTREGA||[]).length + (byStatus.AGUARDANDO_BUSCAR||[]).length + (byStatus.ENTREGAR||[]).length} itens</span>
             </button>
           </div>
         </div>
@@ -1851,7 +1862,7 @@ function CompanyMode({ onBack }) {
       {panel === 'lavagem'      && <LawagemPanel     items={items} onClose={() => setPanel(null)} onDone={load} />}
       {panel === 'measures'     && <MeasuresPanel    items={items} onClose={() => setPanel(null)} onDone={load} />}
       {panel === 'recolher'     && <RecolherPanel    items={items} onClose={() => setPanel(null)} onDone={load} />}
-      {panel === 'recolhimento' && <RecolhimentoPanel items={items} onClose={() => setPanel(null)} onDone={load} />}
+      {panel === 'prontos'      && <ProntosPanel     items={items} onClose={() => setPanel(null)} />}
     </div>
   );
 }
