@@ -2488,7 +2488,7 @@ async def generate_pdf_budget(budget_id: str):
         buffer = BytesIO()
         doc = SimpleDocTemplate(
             buffer, pagesize=A4,
-            leftMargin=1.2*cm,   # ~10% para a esquerda vs padrão 2cm
+            leftMargin=2*cm,     # margem esquerda padrão
             rightMargin=1.8*cm,
             topMargin=0.8*cm,    # margem superior compacta
             bottomMargin=1.5*cm,
