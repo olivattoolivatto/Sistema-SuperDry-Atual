@@ -1356,199 +1356,100 @@ function TabButton({ active, onClick, icon, label }) {
 
 // Componente de Captura de Fotos
 function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadingPhotos, setUploadingPhotos, onProceed, allItemsHavePhotos }) {
-  const [selectedFiles, setSelectedFiles] = useState({});
-  const [photoObservations, setPhotoObservations] = useState({}); // Observações de cada foto
-  const [damageInfo, setDamageInfo] = useState({}); // Informações sobre danos por item
+  const [photoObservations, setPhotoObservations] = useState({});
+  const [damageInfo, setDamageInfo] = useState({});
   const [currentPhotoForObservation, setCurrentPhotoForObservation] = useState(null);
+  const [flash, setFlash] = useState('');
   
-  // Backend URL
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-  const handleFileSelect = (itemId, files) => {
-    const newSelectedFiles = { ...selectedFiles };
-    newSelectedFiles[itemId] = files;
-    setSelectedFiles(newSelectedFiles);
+  const showFlash = (msg) => {
+    setFlash(msg);
+    setTimeout(() => setFlash(''), 2500);
   };
 
-  const handleDamageToggle = (itemId, hasDamage) => {
-    const newDamageInfo = { ...damageInfo };
-    if (!newDamageInfo[itemId]) {
-      newDamageInfo[itemId] = {};
-    }
-    newDamageInfo[itemId].hasDamage = hasDamage;
-    if (!hasDamage) {
-      // Se não tem dano, limpar detalhes
-      newDamageInfo[itemId].damageDetails = '';
-      newDamageInfo[itemId].damagePhotos = [];
-    }
-    setDamageInfo(newDamageInfo);
-  };
-
-  const handleDamageDetailsChange = (itemId, details) => {
-    const newDamageInfo = { ...damageInfo };
-    if (!newDamageInfo[itemId]) {
-      newDamageInfo[itemId] = {};
-    }
-    newDamageInfo[itemId].damageDetails = details;
-    setDamageInfo(newDamageInfo);
-  };
-
-  const handlePhotoUpload = async (itemId) => {
-    const files = selectedFiles[itemId];
-    if (!files || files.length === 0) {
-      alert('Selecione pelo menos uma foto para este item.');
-      return;
-    }
-
+  const handlePhotoUpload = async (itemId, files) => {
+    if (!files || files.length === 0) return;
     setUploadingPhotos(true);
-    
     try {
       const formData = new FormData();
       formData.append('item_id', itemId);
-      formData.append('technician_id', 'TECH-001'); // TODO: Usar técnico logado
+      formData.append('technician_id', 'TECH-001');
       formData.append('photo_type', 'BEFORE');
-      
-      if (client.original_assignment_id) {
-        formData.append('assignment_id', client.original_assignment_id);
-      }
-      
-      // Adicionar todas as fotos ao FormData
-      for (let file of files) {
-        formData.append('files', file);
-      }
-      
-      // Upload real para o backend
-      const response = await fetch(`${BACKEND_URL}/api/technician/upload-photos`, {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Erro no upload: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      console.log('✅ Upload realizado com sucesso:', result);
-      
-      // Criar previews locais das fotos com observações
-      const uploadedPhotos = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const photoId = Date.now() + Math.random() + i;
-        const photoPreview = {
-          id: photoId,
-          file: file,
-          url: URL.createObjectURL(file),
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          timestamp: new Date().toISOString(),
-          observations: '', // Será preenchido pelo usuário
-          photoType: 'NORMAL' // NORMAL ou DAMAGE
-        };
-        uploadedPhotos.push(photoPreview);
-      }
-      
-      // Atualizar estado das fotos
+      if (client.original_assignment_id) formData.append('assignment_id', client.original_assignment_id);
+      for (let file of files) formData.append('files', file);
+
+      const response = await fetch(`${BACKEND_URL}/api/technician/upload-photos`, { method: 'POST', body: formData });
+      if (!response.ok) throw new Error(`${response.status}`);
+
+      const uploadedPhotos = Array.from(files).map((file, i) => ({
+        id: Date.now() + Math.random() + i,
+        file, url: URL.createObjectURL(file),
+        name: file.name, size: file.size, type: file.type,
+        timestamp: new Date().toISOString(), observations: '', photoType: 'NORMAL'
+      }));
+
       const newItemPhotos = { ...itemPhotos };
-      if (!newItemPhotos[itemId]) {
-        newItemPhotos[itemId] = [];
-      }
+      if (!newItemPhotos[itemId]) newItemPhotos[itemId] = [];
       newItemPhotos[itemId] = [...newItemPhotos[itemId], ...uploadedPhotos];
       setItemPhotos(newItemPhotos);
-      
-      // Limpar seleção de arquivos
-      const newSelectedFiles = { ...selectedFiles };
-      delete newSelectedFiles[itemId];
-      setSelectedFiles(newSelectedFiles);
-      
-      alert(`${uploadedPhotos.length} foto(s) enviada(s) com sucesso!`);
-      
+      showFlash(`${uploadedPhotos.length} foto(s) adicionada(s)`);
     } catch (error) {
-      console.error('❌ Erro ao fazer upload das fotos:', error);
-      alert('Erro ao fazer upload das fotos. Verifique sua conexão e tente novamente.');
+      showFlash('Erro no upload — verifique a conexão');
     } finally {
       setUploadingPhotos(false);
     }
   };
 
-  const handleDamagePhotoUpload = async (itemId, files) => {
-    if (!files || files.length === 0) {
-      alert('Selecione pelo menos uma foto do dano.');
-      return;
-    }
+  const handleDamageToggle = (itemId, hasDamage) => {
+    const newDamageInfo = { ...damageInfo };
+    if (!newDamageInfo[itemId]) newDamageInfo[itemId] = {};
+    newDamageInfo[itemId].hasDamage = hasDamage;
+    if (!hasDamage) { newDamageInfo[itemId].damageDetails = ''; newDamageInfo[itemId].damagePhotos = []; }
+    setDamageInfo(newDamageInfo);
+  };
 
+  const handleDamageDetailsChange = (itemId, details) => {
+    const newDamageInfo = { ...damageInfo };
+    if (!newDamageInfo[itemId]) newDamageInfo[itemId] = {};
+    newDamageInfo[itemId].damageDetails = details;
+    setDamageInfo(newDamageInfo);
+  };
+
+  const handleDamagePhotoUpload = async (itemId, files) => {
+    if (!files || files.length === 0) return;
     setUploadingPhotos(true);
-    
     try {
       const formData = new FormData();
       formData.append('item_id', itemId);
       formData.append('technician_id', 'TECH-001');
       formData.append('photo_type', 'DAMAGE');
-      
-      if (client.original_assignment_id) {
-        formData.append('assignment_id', client.original_assignment_id);
-      }
-      
-      for (let file of files) {
-        formData.append('files', file);
-      }
-      
-      const response = await fetch(`${BACKEND_URL}/api/technician/upload-photos`, {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Erro no upload: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      console.log('✅ Upload de fotos de dano realizado:', result);
-      
-      // Criar previews das fotos de dano
-      const damagePhotos = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const photoId = Date.now() + Math.random() + i;
-        const photoPreview = {
-          id: photoId,
-          file: file,
-          url: URL.createObjectURL(file),
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          timestamp: new Date().toISOString(),
-          observations: '',
-          photoType: 'DAMAGE'
-        };
-        damagePhotos.push(photoPreview);
-      }
-      
-      // Adicionar as fotos de dano ao estado
+      if (client.original_assignment_id) formData.append('assignment_id', client.original_assignment_id);
+      for (let file of files) formData.append('files', file);
+
+      const response = await fetch(`${BACKEND_URL}/api/technician/upload-photos`, { method: 'POST', body: formData });
+      if (!response.ok) throw new Error(`${response.status}`);
+
+      const damagePhotos = Array.from(files).map((file, i) => ({
+        id: Date.now() + Math.random() + i,
+        file, url: URL.createObjectURL(file),
+        name: file.name, size: file.size, type: file.type,
+        timestamp: new Date().toISOString(), observations: '', photoType: 'DAMAGE'
+      }));
+
       const newItemPhotos = { ...itemPhotos };
-      if (!newItemPhotos[itemId]) {
-        newItemPhotos[itemId] = [];
-      }
+      if (!newItemPhotos[itemId]) newItemPhotos[itemId] = [];
       newItemPhotos[itemId] = [...newItemPhotos[itemId], ...damagePhotos];
       setItemPhotos(newItemPhotos);
-      
-      // Armazenar as fotos de dano no damageInfo também
+
       const newDamageInfo = { ...damageInfo };
-      if (!newDamageInfo[itemId]) {
-        newDamageInfo[itemId] = {};
-      }
-      if (!newDamageInfo[itemId].damagePhotos) {
-        newDamageInfo[itemId].damagePhotos = [];
-      }
+      if (!newDamageInfo[itemId]) newDamageInfo[itemId] = {};
+      if (!newDamageInfo[itemId].damagePhotos) newDamageInfo[itemId].damagePhotos = [];
       newDamageInfo[itemId].damagePhotos = [...newDamageInfo[itemId].damagePhotos, ...damagePhotos];
       setDamageInfo(newDamageInfo);
-      
-      alert(`${damagePhotos.length} foto(s) de dano enviada(s) com sucesso!`);
-      
+      showFlash(`${damagePhotos.length} foto(s) de dano adicionada(s)`);
     } catch (error) {
-      console.error('❌ Erro ao fazer upload das fotos de dano:', error);
-      alert('Erro ao fazer upload das fotos de dano. Tente novamente.');
+      showFlash('Erro no upload de foto de dano');
     } finally {
       setUploadingPhotos(false);
     }
@@ -1584,6 +1485,11 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
 
   return (
     <div>
+      {flash && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-800 text-white text-sm px-4 py-2 rounded-full shadow-lg pointer-events-none">
+          {flash}
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center mb-4">
         <button onClick={onBack} className="mr-3 text-blue-600">
@@ -1647,15 +1553,16 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
               <div className="p-4">
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Selecionar fotos para este item:
+                    {uploadingPhotos ? 'Enviando...' : 'Tirar/selecionar foto:'}
                   </label>
                   <input
                     type="file"
                     multiple
                     accept="image/*"
                     capture="environment"
-                    onChange={(e) => handleFileSelect(item.id, Array.from(e.target.files))}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    disabled={uploadingPhotos}
+                    onChange={(e) => { handlePhotoUpload(item.id, Array.from(e.target.files)); e.target.value = ''; }}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
                   />
                 </div>
                 
@@ -1717,36 +1624,6 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
                     </div>
                   )}
                 </div>
-
-                {selectedFiles[item.id] && selectedFiles[item.id].length > 0 && (
-                  <div className="mb-3">
-                    <p className="text-sm text-gray-600 mb-2">
-                      {selectedFiles[item.id].length} arquivo(s) selecionado(s):
-                    </p>
-                    <div className="text-xs text-gray-500 space-y-1">
-                      {Array.from(selectedFiles[item.id]).map((file, index) => (
-                        <div key={index}>• {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</div>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => handlePhotoUpload(item.id)}
-                      disabled={uploadingPhotos}
-                      className="mt-2 bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                    >
-                      {uploadingPhotos ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          <span>Enviando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Camera className="w-4 h-4" />
-                          <span>Adicionar Fotos</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
 
                 {/* Preview das Fotos */}
                 {hasPhotos && (
