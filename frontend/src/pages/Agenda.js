@@ -687,21 +687,29 @@ export function Agenda() {
   const loadAllSentServices = async (page = 1, dateFilter = null, append = false) => {
     try {
       setLoadingSentServices(true);
-      console.log(`🔄 AGENDA: Carregando status_items desencapsulados (mesmo do Modo Técnico) - Página: ${page}, Data: ${dateFilter || 'Todas'}`);
-      
-      let allServices = [];
-      
+
+      let status_items = [];
+
       if (dateFilter && dateFilter.trim()) {
-        // Se tem filtro de data, buscar apenas essa data
-        console.log(`📅 Buscando serviços para data específica: ${dateFilter}`);
-        
-        const response = await technicianApi.getDailyTasks('TECH-001', dateFilter);
-        const { status_items } = response.data; // CORREÇÃO: Usar status_items que contêm assignments desencapsulados
-        
-        // Processar status_items (que são assignments desencapsulados) 
-        // da mesma forma que o Modo Técnico
-        const processedServices = status_items.map(item => ({
-          id: `${item.assignment_id}-${item.id}`, // Key única: assignment_id + budget_item_id
+        // Filtro por data específica
+        const response = await technicianApi.getDailyTasks('TECH-001', dateFilter, false);
+        status_items = response.data.status_items || [];
+      } else {
+        // Sem filtro: busca TODOS os pendentes (all=true no backend)
+        const response = await technicianApi.getDailyTasks('TECH-001', null, true);
+        status_items = response.data.status_items || [];
+      }
+
+      // Mapear para formato de exibição, filtrando entradas inválidas
+      const allServices = status_items
+        .filter(item =>
+          item.assignment_id &&
+          item.id && item.id.startsWith('ITM-') &&
+          item.client_name && item.client_name !== 'Cliente não encontrado' &&
+          item.service_name
+        )
+        .map(item => ({
+          id: `${item.assignment_id}-${item.id}`,
           assignment_id: item.assignment_id,
           budget_item_id: item.id,
           client_name: item.client_name,
@@ -713,7 +721,7 @@ export function Agenda() {
           internal_observations: item.internal_observations,
           budget_observations: item.budget_observations,
           client_address: item.client_address,
-          assigned_date: item.assigned_date,
+          assigned_date: item.assigned_date || null,
           assigned_time: '08:00',
           created_at: new Date().toISOString(),
           route_id: item.route_id,
@@ -722,102 +730,32 @@ export function Agenda() {
           clientInfo: item.client_name,
           serviceInfo: `${getServiceEmoji(item.service_name)} ${item.service_name}`,
           routeInfo: item.route_id,
-          salesperson: null // Será buscado se necessário
         }));
-        
-        allServices = processedServices;
-        
-      } else {
-        // AGENDA: Buscar TODOS os serviços dos últimos 7 dias usando status_items desencapsulados
-        console.log(`📅 Buscando TODOS os status_items desencapsulados dos últimos 7 dias...`);
-        
-        const today = new Date();
-        const daysToFetch = 7;
-        const seenIds = new Set();
-        
-        // Gerar datas dos últimos 7 dias
-        const dates = [];
-        for (let i = 0; i < daysToFetch; i++) {
-          const date = new Date(today);
-          date.setDate(today.getDate() - i);
-          dates.push(date.toISOString().split('T')[0]);
-        }
-        
-        // Buscar status_items desencapsulados para cada data
-        for (const date of dates) {
-          try {
-            const response = await technicianApi.getDailyTasks('TECH-001', date);
-            const { status_items } = response.data;
-            
-            // Processar status_items (assignments desencapsulados)
-            const processedServices = status_items
-              .filter(item => !seenIds.has(item.assignment_id)) // Evitar duplicações por assignment_id
-              .map(item => {
-                seenIds.add(item.assignment_id);
-                
-                return {
-                  id: `${item.assignment_id}-${item.id}`, // Key única: assignment_id + budget_item_id
-                  assignment_id: item.assignment_id,
-                  budget_item_id: item.id,
-                  client_name: item.client_name,
-                  client_phone: item.client_phone,
-                  service_name: item.service_name,
-                  service_value: item.service_value,
-                  status: item.assignment_status || 'ASSIGNED',
-                  observations: item.observations,
-                  internal_observations: item.internal_observations,
-                  budget_observations: item.budget_observations,
-                  client_address: item.client_address,
-                  assigned_date: item.assigned_date,
-                  assigned_time: '08:00',
-                  created_at: new Date().toISOString(),
-                  route_id: item.route_id,
-                  type: 'DESENCAPSULATED_ASSIGNMENT',
-                  title: `${item.client_name} - ${getServiceEmoji(item.service_name)} ${item.service_name}`,
-                  clientInfo: item.client_name,
-                  serviceInfo: `${getServiceEmoji(item.service_name)} ${item.service_name}`,
-                  routeInfo: item.route_id,
-                  salesperson: null
-                };
-              });
-            
-            allServices.push(...processedServices);
-            
-          } catch (dateError) {
-            console.warn(`⚠️ Erro ao buscar data ${date}:`, dateError);
-          }
-        }
-      }
-      
-      // Ordenar do mais recente para o mais antigo
+
+      // Ordenar: sem data primeiro (urgente/indefinido), depois por data crescente
       allServices.sort((a, b) => {
-        const dateA = new Date(a.created_at || a.assigned_date);
-        const dateB = new Date(b.created_at || b.assigned_date);
-        return dateB - dateA;
+        if (!a.assigned_date && !b.assigned_date) return 0;
+        if (!a.assigned_date) return -1;
+        if (!b.assigned_date) return 1;
+        return a.assigned_date.localeCompare(b.assigned_date);
       });
-      
-      // Implementar paginação manual
-      const itemsPerPage = 10;
-      const startIndex = (page - 1) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      const pageItems = allServices.slice(startIndex, endIndex);
-      
-      console.log(`✅ AGENDA: Total status_items desencapsulados: ${allServices.length}`);
-      console.log(`📄 Página ${page}: ${pageItems.length} items (${startIndex} - ${endIndex})`);
-      
-      // Atualizar estado
+
+      // Paginação
+      const perPage = 20;
+      const start = (page - 1) * perPage;
+      const pageItems = allServices.slice(start, start + perPage);
+
       if (append && page > 1) {
         setSentServices(prev => [...prev, ...pageItems]);
       } else {
         setSentServices(pageItems);
       }
-      
       setSentServicesTotal(allServices.length);
-      setSentServicesHasMore(endIndex < allServices.length);
+      setSentServicesHasMore(start + perPage < allServices.length);
       setSentServicesPage(page);
-      
+
     } catch (error) {
-      console.error('❌ Erro ao carregar serviços desencapsulados na Agenda:', error);
+      console.error('❌ Erro ao carregar serviços enviados:', error);
       setSentServices([]);
       setSentServicesTotal(0);
       setSentServicesHasMore(false);
@@ -2613,7 +2551,9 @@ export function Agenda() {
                       <div className="text-sm text-gray-500">
                         {/* Mostrar data e horário */}
                         <div>
-                          {new Date(service.assigned_date).toLocaleDateString('pt-BR')}
+                          {service.assigned_date
+                            ? new Date(service.assigned_date + 'T12:00:00').toLocaleDateString('pt-BR')
+                            : 'Sem data'}
                         </div>
                         {service.assigned_time && (
                           <div className="text-xs text-blue-600">

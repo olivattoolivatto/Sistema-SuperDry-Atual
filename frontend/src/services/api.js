@@ -185,8 +185,8 @@ export const budgetItemsApi = {
 // Technician API
 export const technicianApi = {
   assignEvents: (assignment) => api.post('/technician/assign-events', assignment),
-  getDailyTasks: (technicianId, date) => api.get(`/technician/${technicianId}/daily-tasks`, {
-    params: { date }
+  getDailyTasks: (technicianId, date, all = false) => api.get(`/technician/${technicianId}/daily-tasks`, {
+    params: all ? { all: true } : { date }
   }),
   updateAssignmentStatus: (assignmentId, status) => api.put(`/technician/assignment/${assignmentId}/status`, null, {
     params: { status }

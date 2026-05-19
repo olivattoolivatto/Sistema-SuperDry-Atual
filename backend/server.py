@@ -1608,27 +1608,26 @@ async def assign_events_to_technician(assignment: TechnicianAssignment):
 @api_router.get("/technician/{technician_id}/daily-tasks")
 async def get_technician_daily_tasks(
     technician_id: str,
-    date: str = Query(default=datetime.now().strftime('%Y-%m-%d'))
+    date: str = Query(default=datetime.now().strftime('%Y-%m-%d')),
+    all: bool = Query(default=False)
 ):
-    """Get hybrid tasks for technician (agenda + status-based)"""
+    """Get hybrid tasks for technician (agenda + status-based).
+    Pass all=true to return every pending assignment regardless of date."""
     try:
-        tasks = {
-            "agenda_events": [],
-            "status_items": [],
-            "assignments": []
-        }
-        
-        # 1. Buscar assignments da agenda para o técnico
-        assignments_cursor = await db.technician_assignments.find({
+        tasks = {"agenda_events": [], "status_items": [], "assignments": []}
+
+        # Build query — when all=true skip date filter
+        query: dict = {
             "technician_id": technician_id,
-            "assigned_date": date,
             "status": {"$in": ["ASSIGNED", "IN_PROGRESS"]}
-        }).to_list(None)
-        
-        # Convert MongoDB documents to JSON-serializable format
+        }
+        if not all:
+            query["assigned_date"] = date
+
+        assignments_cursor = await db.technician_assignments.find(query).to_list(None)
+
         assignments = []
         for assignment in assignments_cursor:
-            # Remove MongoDB ObjectId fields and convert to dict
             assignment_dict = {
                 "id": assignment.get("id"),
                 "route_id": assignment.get("route_id"),
@@ -1641,61 +1640,50 @@ async def get_technician_daily_tasks(
                 "updated_at": assignment.get("updated_at")
             }
             assignments.append(assignment_dict)
-        
+
         tasks["assignments"] = assignments
-        
-        # 2. DESENCAPSULAR ASSIGNMENTS EM ITENS INDIVIDUAIS
-        # A lógica do sistema por status funcionava melhor porque trabalhava com budget_items individuais
-        # Agora aplicaremos a mesma lógica aos assignments, desencapsulando-os
+
+        # Desencapsular assignments em itens individuais (apenas ITM-* válidos)
         for assignment in assignments:
-            # Para cada event_id no assignment, criar um item individual como status_items
             for event_id in assignment.get("event_ids", []):
-                if event_id.startswith('ITM-'):  # Apenas budget_item_ids válidos
-                    # Buscar dados do budget item específico
-                    budget_found = None
-                    item_found = None
-                    
-                    budgets = await db.budgets.find({}).to_list(None)
-                    for budget in budgets:
-                        if budget.get('items'):
-                            for item in budget['items']:
-                                if item.get('id') == event_id:
-                                    budget_found = budget
-                                    item_found = item
-                                    break
-                        if item_found:
+                if not event_id.startswith('ITM-'):
+                    continue
+                budget_found = None
+                item_found = None
+                async for budget in db.budgets.find({"items.id": event_id}):
+                    for item in budget.get("items", []):
+                        if item.get("id") == event_id:
+                            budget_found = budget
+                            item_found = item
                             break
-                    
-                    if budget_found and item_found:
-                        # Buscar dados do cliente
-                        client = await db.clients.find_one({"id": budget_found.get('client_id')})
-                        
-                        # Criar item desencapsulado no formato que funcionava
-                        desencapsulated_item = {
-                            "id": item_found.get('id'),
-                            "budget_id": budget_found.get('id'),
-                            "client_id": budget_found.get('client_id'),
-                            "client_name": client.get('name') if client else 'Cliente não encontrado',
-                            "client_address": client.get('address') if client else {},
-                            "client_phone": client.get('phone_primary') if client else '',
-                            "service_name": item_found.get('service_name'),
-                            "service_value": item_found.get('total_value', 0),
-                            "status": item_found.get('status'),
-                            "observations": item_found.get('observations', ''),
-                            "internal_observations": budget_found.get('internal_observations', ''),
-                            "budget_observations": budget_found.get('budget_observations', ''),
-                            # Campos extras do assignment para controle
-                            "assignment_id": assignment.get("id"),
-                            "assignment_type": assignment.get("assignment_type"),
-                            "assignment_status": assignment.get("status"),
-                            "assigned_date": assignment.get("assigned_date"),
-                            "route_id": assignment.get("route_id")
-                        }
-                        
-                        tasks["status_items"].append(desencapsulated_item)
-        
+                    if item_found:
+                        break
+
+                if budget_found and item_found:
+                    client = await db.clients.find_one({"id": budget_found.get("client_id")})
+                    tasks["status_items"].append({
+                        "id": item_found.get("id"),
+                        "budget_id": budget_found.get("id"),
+                        "client_id": budget_found.get("client_id"),
+                        "client_name": client.get("name") if client else "Cliente não encontrado",
+                        "client_address": client.get("address") if client else {},
+                        "client_phone": client.get("phone_primary") if client else "",
+                        "service_name": item_found.get("service_name"),
+                        "service_value": item_found.get("total_value", 0),
+                        "status": item_found.get("status"),
+                        "observations": item_found.get("observations", ""),
+                        "internal_observations": budget_found.get("internal_observations", ""),
+                        "budget_observations": budget_found.get("budget_observations", ""),
+                        "assignment_id": assignment.get("id"),
+                        "assignment_type": assignment.get("assignment_type"),
+                        "assignment_status": assignment.get("status"),
+                        "assigned_date": assignment.get("assigned_date"),
+                        "route_id": assignment.get("route_id")
+                    })
+                # ITM não encontrado → ignora silenciosamente (não gera ÓRFÃO)
+
         return tasks
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting technician tasks: {str(e)}")
 
