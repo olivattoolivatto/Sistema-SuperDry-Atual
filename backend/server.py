@@ -466,16 +466,17 @@ class Route(BaseModel):
     vehicle_type: VehicleType
     planned_date: str  # Format: "YYYY-MM-DD"
     planned_start_time: str  # Format: "HH:MM"
-    alias: Optional[str] = None  # Custom route name
+    alias: Optional[str] = None
     status: RouteStatus = RouteStatus.PLANNED
     stops: List[RouteStop] = []
     total_duration: int = 0  # minutes
-    total_distance: float = 0.0  # km
-    company_address: dict  # Start/end point
-    route_geometry: Optional[dict] = None  # OSRM route data
+    total_distance: float = 0.0  # km — deslocamento total incluindo ida e volta à empresa
+    company_address: dict
+    route_geometry: Optional[dict] = None
+    route_provider: Optional[str] = "OSRM"  # "OSRM" | "GEOAPIFY" — origem do cálculo
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    last_edited_by: Optional[str] = "Sistema"  # Future: user who made last edit
+    last_edited_by: Optional[str] = "Sistema"
 
 # OSRM Integration Functions
 OSRM_BASE_URL = "http://router.project-osrm.org"
@@ -3554,6 +3555,7 @@ async def optimize_route_geoapify_endpoint(route_id: str):
                 "total_duration": total_min,
                 "total_distance": round(dist_km, 2),
                 "route_geometry": route_geometry,
+                "route_provider": "GEOAPIFY",
                 "updated_at":     datetime.utcnow(),
                 "last_edited_by": "Geoapify"
             }}
@@ -3569,6 +3571,78 @@ async def optimize_route_geoapify_endpoint(route_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error optimizing route with Geoapify: {str(e)}")
+
+
+@api_router.get("/routes/stats/monthly-distance")
+async def get_monthly_distance_stats(
+    year: Optional[int] = None,
+    current_user: UserPublic = Depends(get_current_user)
+):
+    """
+    Estatísticas mensais de deslocamento.
+    Agrega total_distance por mês/ano, separado por veículo e provedor.
+    Base para futuro relatório de quilometragem mensal.
+    """
+    try:
+        target_year = year or datetime.utcnow().year
+        pipeline = [
+            {
+                "$match": {
+                    "planned_date": {"$regex": f"^{target_year}"},
+                    "total_distance": {"$gt": 0}
+                }
+            },
+            {
+                "$addFields": {
+                    "month": {"$substr": ["$planned_date", 5, 2]}
+                }
+            },
+            {
+                "$group": {
+                    "_id": {
+                        "month":    "$month",
+                        "vehicle":  "$vehicle_type",
+                        "provider": "$route_provider"
+                    },
+                    "total_km":     {"$sum": "$total_distance"},
+                    "routes_count": {"$sum": 1},
+                    "stops_total":  {"$sum": {"$size": {"$ifNull": ["$stops", []]}}}
+                }
+            },
+            {"$sort": {"_id.month": 1, "_id.vehicle": 1}}
+        ]
+
+        cursor = db.routes.aggregate(pipeline)
+        rows = []
+        async for doc in cursor:
+            rows.append({
+                "year":         target_year,
+                "month":        int(doc["_id"]["month"]),
+                "vehicle_type": doc["_id"]["vehicle"],
+                "provider":     doc["_id"].get("provider", "OSRM"),
+                "total_km":     round(doc["total_km"], 2),
+                "routes_count": doc["routes_count"],
+                "stops_total":  doc["stops_total"],
+            })
+
+        # Totais gerais por mês (soma de todos os veículos)
+        monthly_totals: dict = {}
+        for r in rows:
+            m = r["month"]
+            if m not in monthly_totals:
+                monthly_totals[m] = {"month": m, "year": target_year, "total_km": 0.0, "routes_count": 0, "stops_total": 0}
+            monthly_totals[m]["total_km"]     = round(monthly_totals[m]["total_km"] + r["total_km"], 2)
+            monthly_totals[m]["routes_count"] += r["routes_count"]
+            monthly_totals[m]["stops_total"]  += r["stops_total"]
+
+        return {
+            "year":           target_year,
+            "detail":         rows,
+            "monthly_totals": sorted(monthly_totals.values(), key=lambda x: x["month"]),
+            "annual_km":      round(sum(v["total_km"] for v in monthly_totals.values()), 2),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao calcular estatísticas: {str(e)}")
 
 
 @api_router.delete("/routes/{route_id}")
