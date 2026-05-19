@@ -1,11 +1,37 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, Users, FileText, Package, Settings, Cog, Route as RouteIcon, Smartphone,
   MessageSquare, Wallet, BarChart3, Wrench, CalendarDays, Menu, X, LogOut,
-  ShieldCheck, UserCircle, Sparkles, ChevronDown, Droplets, Navigation
+  ShieldCheck, UserCircle, ChevronDown, Droplets, Navigation
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
+function CompanyLogo({ size = 'md' }) {
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/system-config/logo`)
+      .then(r => r.json())
+      .then(d => { if (d.has_custom_logo || d.has_fallback_logo) setSrc(`${BACKEND_URL}/api/system-config/logo/file`); })
+      .catch(() => {});
+  }, []);
+
+  const cls = size === 'sm'
+    ? 'w-7 h-7 rounded-lg overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center'
+    : size === 'xs'
+    ? 'w-8 h-8 rounded-lg overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center'
+    : 'w-9 h-9 rounded-xl overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center';
+
+  return (
+    <div className={cls}>
+      {src
+        ? <img src={src} alt="logo" className="w-full h-full object-contain p-0.5" />
+        : <span className="text-white font-bold text-sm">S</span>}
+    </div>
+  );
+}
 
 const ALL_ITEMS = [
   { path: '/', label: 'Painel', short: 'Painel', icon: Home, roles: ['ADMIN','TECNICO','ATENDENTE','FINANCEIRO','MANUTENCAO'] },
@@ -76,9 +102,7 @@ export function Layout({ children }) {
       {/* ============== Desktop Sidebar ============== */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 flex-col z-30">
         <div className="h-16 flex items-center gap-2 px-5 border-b border-gray-200">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white">
-            <Sparkles className="w-5 h-5" />
-          </div>
+          <CompanyLogo size="md" />
           <div className="leading-tight">
             <div className="font-bold text-gray-900">SuperDry</div>
             <div className="text-[11px] text-gray-500">Lavanderia</div>
@@ -118,9 +142,7 @@ export function Layout({ children }) {
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-1.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white">
-                <Sparkles className="w-4 h-4" />
-              </div>
+              <CompanyLogo size="sm" />
               <span className="font-bold text-gray-900 text-sm">SuperDry</span>
             </div>
           </div>
@@ -158,9 +180,7 @@ export function Layout({ children }) {
           <aside className="fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-2xl lg:hidden flex flex-col">
             <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white">
-                  <Sparkles className="w-4 h-4" />
-                </div>
+                <CompanyLogo size="xs" />
                 <div>
                   <div className="font-bold text-gray-900 text-sm">SuperDry</div>
                   <div className="text-[10px] text-gray-500">Menu</div>
