@@ -49,7 +49,7 @@ function AddressAutocomplete({ value, onSelect, placeholder, compact = false }) 
     let city = p?.city;
     let state = p?.state;
     let fullAddress = p.description || '';
-    if ((!lat || !lng) && p.place_id) {
+    if ((!lat || !lng || !neighborhood || !city || !state) && p.place_id) {
       try {
         const det = await placesApi.getDetails(p.place_id);
         const d = det.data?.details?.result || det.data?.details || {};
