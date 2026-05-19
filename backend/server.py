@@ -365,6 +365,17 @@ class BudgetItem(BaseModel):
     fabric_folds: Optional[int] = None
     fabric_per_fold: Optional[float] = None
 
+    # Identificação de parceiro (lavanderia parceira)
+    partner_label: Optional[Dict[str, Any]] = None
+    # ex: {"type":"COLOR_NUM","color":"AZUL","number":"224"} ou {"type":"TEXT","text":"Joao da Silva"}
+    confirmed_measures: bool = False
+
+    # Auditoria de medidas
+    measures_history: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # Valor original do orçamento antes de ajuste por medição real
+    original_total_value: Optional[float] = None
+
     # Auditoria
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
@@ -2952,6 +2963,160 @@ async def get_dashboard():
         raise HTTPException(status_code=400, detail=f"Error getting dashboard data: {str(e)}")
 
 # Routes endpoints
+# ── Company Mode endpoints ──────────────────────────────────────────────────
+
+COMPANY_STATUSES = [
+    "CLIENTE_TROUXE", "COLETADO",
+    "EM_LAVAGEM", "EM_LAVAGEM_PARCEIRO",
+    "AGUARDANDO_ENTREGA", "AGUARDANDO_BUSCAR", "ENTREGAR"
+]
+
+@api_router.get("/items/company-mode")
+async def get_company_mode_items(current_user: UserPublic = Depends(get_current_user)):
+    """Todos os itens nas etapas do processo interno da empresa."""
+    pipeline = [
+        {"$unwind": "$items"},
+        {"$match": {"items.status": {"$in": COMPANY_STATUSES}}},
+        {"$lookup": {"from": "clients", "localField": "client_id", "foreignField": "id", "as": "client_info"}},
+        {"$unwind": {"path": "$client_info", "preserveNullAndEmptyArrays": True}},
+        {"$project": {
+            "_id": 0,
+            "item":           "$items",
+            "budget_id":      "$id",
+            "client_name":    "$client_name",
+            "salesperson":    "$salesperson",
+            "neighborhood":   "$client_info.address.neighborhood",
+            "city":           "$client_info.address.city",
+        }}
+    ]
+    results = []
+    async for doc in db.budgets.aggregate(pipeline):
+        item = doc["item"]
+        results.append({
+            "id":                   item.get("id"),
+            "budget_id":            doc["budget_id"],
+            "client_name":          doc["client_name"] or item.get("client_name"),
+            "salesperson":          doc.get("salesperson"),
+            "neighborhood":         doc.get("neighborhood", ""),
+            "city":                 doc.get("city", ""),
+            "service_name":         item.get("service_name"),
+            "service_code":         item.get("service_code"),
+            "service_category":     item.get("service_category"),
+            "measure_type":         item.get("measure_type"),
+            "status":               item.get("status"),
+            "total_value":          item.get("total_value", 0),
+            "original_total_value": item.get("original_total_value"),
+            "quantity":             item.get("quantity", 1),
+            "area_m2":              item.get("area_m2"),
+            "linear_meters":        item.get("linear_meters"),
+            "width":                item.get("width"),
+            "height":               item.get("height"),
+            "diameter":             item.get("diameter"),
+            "fabric_folds":         item.get("fabric_folds"),
+            "fabric_per_fold":      item.get("fabric_per_fold"),
+            "partner_label":        item.get("partner_label"),
+            "confirmed_measures":   item.get("confirmed_measures", False),
+            "execution_mode":       item.get("execution_mode"),
+            "payment_status":       item.get("payment_status"),
+            "observations":         item.get("observations"),
+        })
+    return results
+
+
+@api_router.post("/items/bulk-status")
+async def bulk_change_status(
+    payload: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user)
+):
+    """Alterar status de vários itens de uma vez. Body: {item_ids: [...], status: '...', notes: ''}"""
+    item_ids  = payload.get("item_ids", [])
+    new_status = payload.get("status")
+    notes     = payload.get("notes", "")
+    if not item_ids or not new_status:
+        raise HTTPException(status_code=400, detail="item_ids e status são obrigatórios.")
+    valid = {s.value for s in ServiceStatus}
+    if new_status not in valid:
+        raise HTTPException(status_code=400, detail=f"Status inválido: {new_status}")
+    updated = 0
+    for item_id in item_ids:
+        budget, item = await _find_budget_and_item(item_id)
+        if not item or item.get("status") == new_status:
+            continue
+        entry = {"status": new_status, "at": datetime.utcnow().isoformat(),
+                 "by_user_id": current_user.id, "by_user_name": current_user.name, "notes": notes}
+        await _update_item_fields(item_id, {"status": new_status}, current_user)
+        await _append_to_item_array(item_id, "status_history", entry)
+        updated += 1
+    return {"updated": updated, "status": new_status}
+
+
+@api_router.patch("/items/{item_id}/measures")
+async def update_item_measures(
+    item_id: str,
+    payload: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user)
+):
+    """Atualizar medidas e identificação de parceiro, com auditoria e recálculo de valor."""
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+
+    measure_fields = ["width","height","diameter","area_m2","linear_meters",
+                      "fabric_folds","fabric_per_fold","quantity"]
+    before = {f: item.get(f) for f in measure_fields}
+
+    update: Dict[str, Any] = {}
+
+    # Medidas
+    for f in measure_fields:
+        if f in payload:
+            update[f] = payload[f]
+
+    # Recalcular area_m2 se width/height fornecidos
+    w = payload.get("width", item.get("width"))
+    h = payload.get("height", item.get("height"))
+    if w and h and "width" in payload or "height" in payload:
+        update["area_m2"] = round(float(w) * float(h), 4)
+
+    # Recalcular valor se houver mudança de área/metragem
+    new_area = update.get("area_m2", item.get("area_m2"))
+    new_linear = update.get("linear_meters", item.get("linear_meters"))
+    if (new_area or new_linear) and item.get("unit_price"):
+        qty = update.get("quantity", item.get("quantity", 1))
+        base = float(new_area or new_linear or qty)
+        new_value = round(float(item["unit_price"]) * base, 2)
+        if new_value != item.get("total_value"):
+            if not item.get("original_total_value"):
+                update["original_total_value"] = item.get("total_value")
+            update["total_value"] = new_value
+
+    # Partner label
+    if "partner_label" in payload:
+        update["partner_label"] = payload["partner_label"]
+
+    # Confirmação de medidas
+    if "confirmed_measures" in payload:
+        update["confirmed_measures"] = bool(payload["confirmed_measures"])
+
+    # Auditoria de medidas
+    after = {f: update.get(f, item.get(f)) for f in measure_fields}
+    history_entry = {
+        "at": datetime.utcnow().isoformat(),
+        "by_user_id": current_user.id,
+        "by_user_name": current_user.name,
+        "before": before,
+        "after": after,
+        "notes": payload.get("notes", ""),
+    }
+
+    await _update_item_fields(item_id, update, current_user)
+    await _append_to_item_array(item_id, "measures_history", history_entry)
+    await log_audit("item", item_id, "MEASURES_UPDATE", current_user, {"before": before, "after": after})
+
+    return {"success": True, "updated_fields": list(update.keys()),
+            "new_value": update.get("total_value"), "original_value": update.get("original_total_value")}
+
+
 @api_router.get("/budget-items/available-for-routes")
 async def get_available_budget_items_for_routes(current_user: UserPublic = Depends(get_current_user)):
     """Itens disponíveis para rota: status route-eligible + sem rota corrente."""

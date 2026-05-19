@@ -109,6 +109,10 @@ export const itemsApi = {
     api.post(`/items/${id}/execution-session/${sessionId}/finish`, payload),
   registerPayment: (id, payload) => api.post(`/items/${id}/payment`, payload),
   timeline: (id) => api.get(`/items/${id}/timeline`),
+  // Company Mode
+  companyMode: () => api.get('/items/company-mode'),
+  bulkStatus: (item_ids, status, notes = '') => api.post('/items/bulk-status', { item_ids, status, notes }),
+  updateMeasures: (id, payload) => api.patch(`/items/${id}/measures`, payload),
 };
 
 // Enums / opções

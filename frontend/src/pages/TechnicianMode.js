@@ -1,22 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Car, 
-  Building, 
-  Calendar, 
-  MapPin, 
-  Camera, 
-  FileText, 
-  CreditCard,
-  Phone,
-  Settings,
-  Navigation,
-  CheckCircle,
-  Package,
-  Truck,
-  User,
-  Trash2
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Car, Building, Calendar, MapPin, Camera, FileText, CreditCard, Phone,
+  Settings, Navigation, CheckCircle, Package, Truck, User, Trash2,
+  ChevronDown, ChevronUp, ChevronRight, ArrowUpDown, Search, X, Check,
+  Edit3, RefreshCw, Tag
 } from 'lucide-react';
-import { routesApi, budgetItemsApi, technicianApi } from '../services/api';
+import { routesApi, budgetItemsApi, technicianApi, itemsApi } from '../services/api';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -1221,88 +1210,565 @@ function PaymentModal({ items, onConfirm, onSkip, onCancel, paymentMethods }) {
 }
 
 // Componente Modo Empresa (Básico)
-function CompanyMode({ onBack }) {
-  const [statusCounts, setStatusCounts] = useState({
-    CLIENTE_TROUXE: 2,
-    COLETADO: 3, 
-    EM_LAVAGEM: 5,
-    EM_LAVAGEM_PARCEIRO: 3,
-    AGUARDANDO_ENTREGA: 7,
-    AGUARDANDO_BUSCAR: 5
-  });
+// ─── Company Mode ──────────────────────────────────────────────────────────────
+
+const COMPANY_STATUS_LABELS = {
+  CLIENTE_TROUXE: 'Cliente Trouxe', COLETADO: 'Coletado',
+  EM_LAVAGEM: 'Em Lavagem', EM_LAVAGEM_PARCEIRO: 'Em Lavagem (Parceiro)',
+  AGUARDANDO_ENTREGA: 'Aguardando Entrega', AGUARDANDO_BUSCAR: 'Aguardando Buscar',
+  ENTREGAR: 'Entregar',
+};
+const PARTNER_COLORS = ['AZUL','AMARELO','CINZA','LARANJA','ROXO','ROSA','VERDE'];
+const COLOR_HEX = { AZUL:'#3B82F6',AMARELO:'#EAB308',CINZA:'#6B7280',LARANJA:'#F97316',ROXO:'#8B5CF6',ROSA:'#EC4899',VERDE:'#22C55E' };
+
+function useSortFilter(data, defaultSort = 'client_name') {
+  const [sort, setSort] = useState({ field: defaultSort, dir: 1 });
+  const [filter, setFilter] = useState('');
+  const processed = useMemo(() => {
+    let d = data;
+    if (filter) {
+      const q = filter.toLowerCase();
+      d = d.filter(i =>
+        (i.client_name||'').toLowerCase().includes(q) ||
+        (i.neighborhood||'').toLowerCase().includes(q) ||
+        (i.budget_id||'').toLowerCase().includes(q) ||
+        (i.service_name||'').toLowerCase().includes(q)
+      );
+    }
+    return [...d].sort((a, b) => {
+      const av = a[sort.field] ?? ''; const bv = b[sort.field] ?? '';
+      return typeof av === 'string' ? av.localeCompare(bv) * sort.dir : (av - bv) * sort.dir;
+    });
+  }, [data, sort, filter]);
+  const toggle = (field) => setSort(s => ({ field, dir: s.field === field ? -s.dir : 1 }));
+  return { processed, filter, setFilter, sort, toggle };
+}
+
+function SortHeader({ label, field, sort, toggle, onSelectAll, allSelected }) {
+  return (
+    <th className="px-2 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+      <div className="flex items-center gap-1">
+        {onSelectAll !== undefined && (
+          <input type="checkbox" checked={allSelected} onChange={onSelectAll} className="mr-1 h-3.5 w-3.5" />
+        )}
+        <button onClick={() => toggle(field)} className="flex items-center gap-0.5 hover:text-blue-600">
+          {label} <ArrowUpDown className="w-3 h-3" />
+          {sort.field === field && <span>{sort.dir === 1 ? '↑' : '↓'}</span>}
+        </button>
+      </div>
+    </th>
+  );
+}
+
+function fmtMeasure(item) {
+  if (item.diameter) return `Ø${item.diameter}m`;
+  if (item.width && item.height) return `${item.width}x${item.height}m`;
+  if (item.area_m2) return `${item.area_m2}m²`;
+  if (item.linear_meters) return `${item.linear_meters}m lin.`;
+  return '—';
+}
+
+function PartnerLabelBadge({ label }) {
+  if (!label) return <span className="text-gray-400 text-xs">—</span>;
+  if (label.type === 'COLOR_NUM') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-mono font-bold"
+        style={{ color: COLOR_HEX[label.color] || '#666' }}>
+        <span style={{ width: 10, height: 10, borderRadius: 2, background: COLOR_HEX[label.color], display: 'inline-block' }} />
+        {label.color}-{label.number}
+      </span>
+    );
+  }
+  return <span className="text-xs text-gray-700">{label.text}</span>;
+}
+
+// ── ItemTable: reusable selectable + sortable table ─────────────────────────
+
+function ItemTable({ items: raw, selected, setSelected, columns, extraColumns }) {
+  const { processed, filter, setFilter, sort, toggle } = useSortFilter(raw);
+  const allSelected = processed.length > 0 && processed.every(i => selected.has(i.id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(processed.map(i => i.id)));
+  const toggle1 = (id) => setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
   return (
     <div>
-      {/* Header */}
-      <div className="bg-orange-600 text-white p-4 flex items-center">
-        <button onClick={onBack} className="mr-3">
-          <span className="text-xl">←</span>
-        </button>
-        <h2 className="text-lg font-semibold">Modo Empresa</h2>
+      <div className="relative mb-2">
+        <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input value={filter} onChange={e => setFilter(e.target.value)}
+          placeholder="Filtrar por cliente, bairro, orçamento..."
+          className="w-full pl-7 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs" />
       </div>
-
-      <div className="p-4 space-y-4">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Controle Produtivo</h3>
-        
-        {/* Recepção */}
-        <StatusSection 
-          title="📥 RECEPÇÃO" 
-          items={[
-            { status: 'CLIENTE_TROUXE', count: statusCounts.CLIENTE_TROUXE, color: 'yellow' },
-            { status: 'COLETADO', count: statusCounts.COLETADO, color: 'blue' }
-          ]}
-        />
-
-        {/* Lavagem */}
-        <StatusSection 
-          title="🧽 LAVAGEM" 
-          items={[
-            { status: 'EM_LAVAGEM', count: statusCounts.EM_LAVAGEM, color: 'blue' },
-            { status: 'EM_LAVAGEM_PARCEIRO', count: statusCounts.EM_LAVAGEM_PARCEIRO, color: 'indigo' }
-          ]}
-        />
-
-        {/* Depósito Saída */}
-        <StatusSection 
-          title="📦 DEPÓSITO SAÍDA" 
-          items={[
-            { status: 'AGUARDANDO_ENTREGA', count: statusCounts.AGUARDANDO_ENTREGA, color: 'green' },
-            { status: 'AGUARDANDO_BUSCAR', count: statusCounts.AGUARDANDO_BUSCAR, color: 'purple' }
-          ]}
-        />
+      <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50">
+            <tr>
+              <SortHeader label="Cliente" field="client_name" sort={sort} toggle={toggle}
+                onSelectAll={toggleAll} allSelected={allSelected} />
+              <SortHeader label="Bairro" field="neighborhood" sort={sort} toggle={toggle} />
+              <SortHeader label="Orçamento" field="budget_id" sort={sort} toggle={toggle} />
+              <SortHeader label="Serviço" field="service_name" sort={sort} toggle={toggle} />
+              <SortHeader label="Medidas" field="area_m2" sort={sort} toggle={toggle} />
+              <SortHeader label="Status" field="status" sort={sort} toggle={toggle} />
+              {(extraColumns || []).map(c => <th key={c} className="px-2 py-2 text-left text-xs font-semibold text-gray-600">{c}</th>)}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {processed.map(item => (
+              <tr key={item.id} onClick={() => toggle1(item.id)}
+                className={`cursor-pointer hover:bg-blue-50 transition-colors ${selected.has(item.id) ? 'bg-blue-50' : ''}`}>
+                <td className="px-2 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <input type="checkbox" checked={selected.has(item.id)} readOnly className="h-3.5 w-3.5" />
+                    <span className="font-medium text-gray-900">{item.client_name}</span>
+                  </div>
+                </td>
+                <td className="px-2 py-2 text-gray-600">{item.neighborhood || '—'}</td>
+                <td className="px-2 py-2 font-mono text-gray-500">{item.budget_id}</td>
+                <td className="px-2 py-2 text-gray-700">{item.service_name}</td>
+                <td className="px-2 py-2 text-gray-600">{fmtMeasure(item)}</td>
+                <td className="px-2 py-2">
+                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded text-[10px] font-medium">
+                    {COMPANY_STATUS_LABELS[item.status] || item.status}
+                  </span>
+                </td>
+                {columns && columns(item)}
+              </tr>
+            ))}
+            {processed.length === 0 && (
+              <tr><td colSpan={10} className="py-6 text-center text-gray-400 text-xs">Nenhum item</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
+      <div className="mt-1 text-[10px] text-gray-400">{processed.length} item(s)</div>
     </div>
   );
 }
 
-// Componente de Seção de Status
-function StatusSection({ title, items }) {
-  const totalCount = items.reduce((sum, item) => sum + item.count, 0);
-  
+// ── Panel wrapper ─────────────────────────────────────────────────────────────
+
+function Panel({ title, onClose, children }) {
   return (
-    <div className="bg-white rounded-lg shadow-md p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="font-medium text-gray-800">{title}</h4>
-        <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm font-medium">
-          {totalCount} itens
+    <div className="fixed inset-0 bg-black/50 z-50 flex flex-col">
+      <div className="bg-white flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+        <h3 className="font-semibold text-gray-900">{title}</h3>
+        <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4">{children}</div>
+    </div>
+  );
+}
+
+// ── LAVAGEM panel ─────────────────────────────────────────────────────────────
+
+function LawagemPanel({ items, onClose, onDone }) {
+  const eligible = items.filter(i => ['CLIENTE_TROUXE','COLETADO'].includes(i.status));
+  const [selected, setSelected] = useState(new Set());
+  const [isPartner, setIsPartner] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [flash, setFlash] = useState('');
+
+  const confirm = async () => {
+    if (!selected.size) return;
+    setSaving(true);
+    try {
+      const status = isPartner ? 'EM_LAVAGEM_PARCEIRO' : 'EM_LAVAGEM';
+      await itemsApi.bulkStatus([...selected], status, 'Enviado para lavagem');
+      setFlash(`${selected.size} item(s) → ${status}`);
+      setTimeout(() => { onDone(); onClose(); }, 1500);
+    } catch(e) { setFlash('Erro: ' + e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <Panel title="Lavagem — Enviar Itens" onClose={onClose}>
+      {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
+      <div className="mb-3 flex items-center gap-3">
+        <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+          <input type="checkbox" checked={isPartner} onChange={e => setIsPartner(e.target.checked)} />
+          Lavagem Parceiro
+        </label>
+        <span className="text-xs text-gray-400">
+          Status destino: <strong>{isPartner ? 'EM_LAVAGEM_PARCEIRO' : 'EM_LAVAGEM'}</strong>
         </span>
       </div>
-      <div className="space-y-2">
-        {items.map(item => (
-          <div key={item.status} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-            <span className="text-sm text-gray-700">{item.status}</span>
-            <span className={`px-2 py-1 rounded text-xs font-medium
-              ${item.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
-                item.color === 'blue' ? 'bg-blue-100 text-blue-800' :
-                item.color === 'indigo' ? 'bg-indigo-100 text-indigo-800' :
-                item.color === 'green' ? 'bg-green-100 text-green-800' :
-                item.color === 'purple' ? 'bg-purple-100 text-purple-800' :
-                'bg-gray-100 text-gray-800'}`}>
-              {item.count}
-            </span>
-          </div>
-        ))}
+      <ItemTable items={eligible} selected={selected} setSelected={setSelected} />
+      <div className="mt-4 flex justify-end gap-2">
+        <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700">Cancelar</button>
+        <button onClick={confirm} disabled={!selected.size || saving}
+          className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold disabled:opacity-50">
+          {saving ? 'Salvando…' : `Enviado para Lavagem (${selected.size})`}
+        </button>
       </div>
+    </Panel>
+  );
+}
+
+// ── IDENTIFICAÇÃO E MEDIDAS panel ────────────────────────────────────────────
+
+function MeasuresPanel({ items, onClose, onDone }) {
+  const eligible = items.filter(i => ['EM_LAVAGEM','EM_LAVAGEM_PARCEIRO'].includes(i.status));
+  const [edits, setEdits] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [flash, setFlash] = useState('');
+
+  const setField = (id, field, val) =>
+    setEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: val } }));
+
+  const getPartnerLabel = (id) => edits[id]?.partner_label;
+  const setPartnerLabel = (id, label) => setField(id, 'partner_label', label);
+  const isConfirmed = (id) => edits[id]?.confirmed_measures ?? items.find(i=>i.id===id)?.confirmed_measures;
+
+  const saveAll = async () => {
+    setSaving(true);
+    let saved = 0;
+    try {
+      for (const [id, payload] of Object.entries(edits)) {
+        if (Object.keys(payload).length > 0) {
+          await itemsApi.updateMeasures(id, payload);
+          saved++;
+        }
+      }
+      setFlash(`${saved} item(s) atualizado(s)`);
+      setTimeout(() => { onDone(); onClose(); }, 1500);
+    } catch(e) { setFlash('Erro: ' + e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <Panel title="Identificação e Medidas" onClose={onClose}>
+      {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
+      <div className="space-y-4">
+        {eligible.map(item => {
+          const edit = edits[item.id] || {};
+          const pl = edit.partner_label ?? item.partner_label;
+          const plType = pl?.type || null;
+
+          return (
+            <div key={item.id} className="border border-gray-200 rounded-xl p-4 space-y-3 bg-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-gray-900 text-sm">{item.client_name}</div>
+                  <div className="text-xs text-gray-500">{item.budget_id} · {item.service_name} · {item.neighborhood}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {item.original_total_value && (
+                    <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                      Original: R${item.original_total_value.toFixed(2)}
+                    </span>
+                  )}
+                  <span className="text-sm font-bold text-green-700">R${((edit.total_value ?? item.total_value) || 0).toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Medidas */}
+              <div className="grid grid-cols-3 gap-2">
+                {['width','height','diameter','area_m2','linear_meters'].map(f => (
+                  <div key={f}>
+                    <label className="block text-[10px] text-gray-500 mb-0.5">{f}</label>
+                    <input type="number" step="0.01"
+                      value={edit[f] ?? item[f] ?? ''}
+                      onChange={e => setField(item.id, f, e.target.value ? parseFloat(e.target.value) : null)}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-xs" />
+                  </div>
+                ))}
+              </div>
+
+              {/* Confirmação */}
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox"
+                  checked={edit.confirmed_measures ?? item.confirmed_measures ?? false}
+                  onChange={e => setField(item.id, 'confirmed_measures', e.target.checked)} />
+                <span className="font-medium text-gray-700">Confirmado</span>
+              </label>
+
+              {/* Identificação Parceiro */}
+              <div>
+                <div className="text-xs font-medium text-gray-600 mb-1.5">Identificação Parceiro</div>
+                <div className="flex gap-2 mb-2">
+                  {['COLOR_NUM','TEXT','NONE'].map(t => (
+                    <button key={t} onClick={() => setPartnerLabel(item.id, t === 'NONE' ? null : { type: t, color: 'AZUL', number: '001', text: '' })}
+                      className={`px-2 py-1 text-[10px] rounded border ${plType === t || (!plType && t==='NONE') ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600'}`}>
+                      {t === 'COLOR_NUM' ? 'DRY CLEAN' : t === 'TEXT' ? 'OUTROS' : 'Nenhum'}
+                    </button>
+                  ))}
+                </div>
+
+                {plType === 'COLOR_NUM' && (
+                  <div className="flex gap-2 flex-wrap">
+                    {PARTNER_COLORS.map(c => (
+                      <button key={c} onClick={() => setPartnerLabel(item.id, { type:'COLOR_NUM', color:c, number: pl?.number||'001' })}
+                        className="w-6 h-6 rounded border-2 transition"
+                        style={{ background: COLOR_HEX[c], borderColor: pl?.color===c ? '#1e40af' : 'transparent' }} />
+                    ))}
+                    <input type="text" maxLength={3} placeholder="000"
+                      value={pl?.number || ''}
+                      onChange={e => setPartnerLabel(item.id, { type:'COLOR_NUM', color: pl?.color||'AZUL', number: e.target.value.replace(/\D/g,'') })}
+                      className="w-14 px-2 py-1 border border-gray-300 rounded text-xs font-mono" />
+                    {pl?.color && <span className="text-xs font-bold" style={{ color: COLOR_HEX[pl.color] }}>{pl.color}-{pl.number}</span>}
+                  </div>
+                )}
+
+                {plType === 'TEXT' && (
+                  <input placeholder="Nome do cliente do parceiro"
+                    value={pl?.text || ''}
+                    onChange={e => setPartnerLabel(item.id, { type:'TEXT', text: e.target.value })}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs" />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700">Cancelar</button>
+        <button onClick={saveAll} disabled={saving}
+          className="px-5 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold disabled:opacity-50">
+          {saving ? 'Salvando…' : 'Salvar Alterações'}
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+// ── RECOLHER TAPETES panel ────────────────────────────────────────────────────
+
+function RecolherPanel({ items, onClose, onDone }) {
+  const eligible = items.filter(i => ['EM_LAVAGEM','EM_LAVAGEM_PARCEIRO'].includes(i.status));
+  const [selected, setSelected] = useState(new Set());
+  const [saving, setSaving] = useState(false);
+  const [flash, setFlash] = useState('');
+
+  const confirm = async () => {
+    if (!selected.size) return;
+    setSaving(true);
+    try {
+      // Parceiro → AGUARDANDO_BUSCAR, nosso → AGUARDANDO_ENTREGA
+      const partnerIds = [...selected].filter(id => {
+        const item = eligible.find(i => i.id === id);
+        return item?.status === 'EM_LAVAGEM_PARCEIRO' || item?.partner_label;
+      });
+      const ownIds = [...selected].filter(id => !partnerIds.includes(id));
+      if (ownIds.length) await itemsApi.bulkStatus(ownIds, 'AGUARDANDO_ENTREGA', 'Recolhimento confirmado');
+      if (partnerIds.length) await itemsApi.bulkStatus(partnerIds, 'AGUARDANDO_BUSCAR', 'Recolhimento confirmado — parceiro');
+      setFlash(`${selected.size} item(s) recolhido(s)`);
+      setTimeout(() => { onDone(); onClose(); }, 1500);
+    } catch(e) { setFlash('Erro: ' + e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <Panel title="Recolher Tapetes / Itens" onClose={onClose}>
+      {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
+      <p className="text-xs text-gray-500 mb-3">
+        Próprios → AGUARDANDO_ENTREGA · Parceiros → AGUARDANDO_BUSCAR
+      </p>
+      <ItemTable items={eligible} selected={selected} setSelected={setSelected}
+        extraColumns={['Etiqueta Parceiro']}
+        columns={item => (
+          <td className="px-2 py-2"><PartnerLabelBadge label={item.partner_label} /></td>
+        )} />
+      <div className="mt-4 flex justify-end gap-2">
+        <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700">Cancelar</button>
+        <button onClick={confirm} disabled={!selected.size || saving}
+          className="px-5 py-2 rounded-lg bg-purple-600 text-white text-sm font-semibold disabled:opacity-50">
+          {saving ? 'Salvando…' : `Confirmar Recolhimento (${selected.size})`}
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+// ── RECOLHIMENTO / depósito saída panel ───────────────────────────────────────
+
+function RecolhimentoPanel({ items, onClose, onDone }) {
+  const eligible = items.filter(i => ['AGUARDANDO_ENTREGA','AGUARDANDO_BUSCAR'].includes(i.status));
+  const [selected, setSelected] = useState(new Set());
+  const [saving, setSaving] = useState(false);
+  const [flash, setFlash] = useState('');
+
+  const confirm = async () => {
+    if (!selected.size) return;
+    setSaving(true);
+    try {
+      await itemsApi.bulkStatus([...selected], 'ENTREGAR', 'Liberado para rota de entrega');
+      setFlash(`${selected.size} item(s) prontos para entrega`);
+      setTimeout(() => { onDone(); onClose(); }, 1500);
+    } catch(e) { setFlash('Erro: ' + e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <Panel title="Recolhimento — Depósito Saída" onClose={onClose}>
+      {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
+      <p className="text-xs text-gray-500 mb-3">Itens confirmados aqui entram no status ENTREGAR, disponíveis para rota.</p>
+      <ItemTable items={eligible} selected={selected} setSelected={setSelected}
+        extraColumns={['Etiqueta']}
+        columns={item => (
+          <td className="px-2 py-2"><PartnerLabelBadge label={item.partner_label} /></td>
+        )} />
+      <div className="mt-4 flex justify-end gap-2">
+        <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700">Cancelar</button>
+        <button onClick={confirm} disabled={!selected.size || saving}
+          className="px-5 py-2 rounded-lg bg-orange-600 text-white text-sm font-semibold disabled:opacity-50">
+          {saving ? 'Salvando…' : `Confirmar Recolhimento (${selected.size})`}
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+// ── CompanyMode main ──────────────────────────────────────────────────────────
+
+function CompanyMode({ onBack }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [panel, setPanel] = useState(null); // 'lavagem'|'measures'|'recolher'|'recolhimento'
+  const [expanded, setExpanded] = useState({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await itemsApi.companyMode();
+      setItems(res.data || []);
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const byStatus = useMemo(() => {
+    const groups = {};
+    for (const s of Object.keys(COMPANY_STATUS_LABELS)) groups[s] = [];
+    items.forEach(i => { if (groups[i.status]) groups[i.status].push(i); });
+    return groups;
+  }, [items]);
+
+  const sections = [
+    { key: 'recepcao', label: '📥 RECEPÇÃO', statuses: ['CLIENTE_TROUXE','COLETADO'], color: 'yellow' },
+    { key: 'lavagem',  label: '🧽 LAVAGEM',  statuses: ['EM_LAVAGEM','EM_LAVAGEM_PARCEIRO'], color: 'blue' },
+    { key: 'saida',    label: '📦 DEPÓSITO SAÍDA', statuses: ['AGUARDANDO_ENTREGA','AGUARDANDO_BUSCAR','ENTREGAR'], color: 'green' },
+  ];
+
+  const toggleExpand = (key) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const SECTION_COLORS = {
+    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+    blue:   'bg-blue-50  border-blue-200  text-blue-800',
+    green:  'bg-green-50 border-green-200 text-green-800',
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-orange-600 text-white p-4 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={onBack} className="text-xl">←</button>
+        <h2 className="text-lg font-semibold flex-1">Modo Empresa</h2>
+        <button onClick={load} className="p-1.5 hover:bg-orange-500 rounded-lg">
+          <RefreshCw className="w-4 h-4" />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-600" />
+        </div>
+      ) : (
+        <div className="p-4 space-y-3">
+          {/* Resumo por seção — expansível */}
+          {sections.map(sec => {
+            const secItems = sec.statuses.flatMap(s => byStatus[s] || []);
+            const isOpen = expanded[sec.key];
+            const cc = SECTION_COLORS[sec.color];
+            return (
+              <div key={sec.key} className={`rounded-xl border ${cc} overflow-hidden`}>
+                <button onClick={() => toggleExpand(sec.key)}
+                  className="w-full flex items-center justify-between px-4 py-3">
+                  <span className="font-semibold text-sm">{sec.label}</span>
+                  <div className="flex items-center gap-3">
+                    {sec.statuses.map(s => (
+                      <span key={s} className="text-xs">
+                        {COMPANY_STATUS_LABELS[s]}: <strong>{(byStatus[s]||[]).length}</strong>
+                      </span>
+                    ))}
+                    <span className="font-bold">{secItems.length} total</span>
+                    {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="bg-white border-t border-gray-100 overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {['Cliente','Bairro','Orçamento','Serviço','Medidas','Status','Etiqueta','Valor'].map(h => (
+                            <th key={h} className="px-2 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {secItems.map(item => (
+                          <tr key={item.id} className="hover:bg-gray-50">
+                            <td className="px-2 py-2 font-medium text-gray-900 whitespace-nowrap">{item.client_name}</td>
+                            <td className="px-2 py-2 text-gray-500">{item.neighborhood||'—'}</td>
+                            <td className="px-2 py-2 font-mono text-gray-400 text-[10px]">{item.budget_id}</td>
+                            <td className="px-2 py-2 text-gray-700">{item.service_name}</td>
+                            <td className="px-2 py-2 text-gray-600">{fmtMeasure(item)}</td>
+                            <td className="px-2 py-2">
+                              <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded text-[10px]">
+                                {COMPANY_STATUS_LABELS[item.status]||item.status}
+                              </span>
+                            </td>
+                            <td className="px-2 py-2"><PartnerLabelBadge label={item.partner_label} /></td>
+                            <td className="px-2 py-2 font-medium text-gray-900 whitespace-nowrap">
+                              {item.original_total_value && (
+                                <span className="text-amber-600 line-through mr-1 text-[10px]">R${item.original_total_value.toFixed(2)}</span>
+                              )}
+                              R${(item.total_value||0).toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Botões de operação */}
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <button onClick={() => setPanel('lavagem')}
+              className="flex flex-col items-center gap-1 bg-blue-600 text-white py-4 rounded-xl shadow hover:bg-blue-700 transition">
+              <Package className="w-6 h-6" />
+              <span className="text-sm font-semibold">Lavagem</span>
+              <span className="text-[11px] opacity-80">{(byStatus.CLIENTE_TROUXE||[]).length + (byStatus.COLETADO||[]).length} pendentes</span>
+            </button>
+            <button onClick={() => setPanel('measures')}
+              className="flex flex-col items-center gap-1 bg-purple-600 text-white py-4 rounded-xl shadow hover:bg-purple-700 transition">
+              <Tag className="w-6 h-6" />
+              <span className="text-sm font-semibold">Identificação e Medidas</span>
+              <span className="text-[11px] opacity-80">{(byStatus.EM_LAVAGEM||[]).length + (byStatus.EM_LAVAGEM_PARCEIRO||[]).length} em lavagem</span>
+            </button>
+            <button onClick={() => setPanel('recolher')}
+              className="flex flex-col items-center gap-1 bg-green-600 text-white py-4 rounded-xl shadow hover:bg-green-700 transition">
+              <CheckCircle className="w-6 h-6" />
+              <span className="text-sm font-semibold">Recolher Tapetes</span>
+              <span className="text-[11px] opacity-80">{(byStatus.EM_LAVAGEM||[]).length + (byStatus.EM_LAVAGEM_PARCEIRO||[]).length} disponíveis</span>
+            </button>
+            <button onClick={() => setPanel('recolhimento')}
+              className="flex flex-col items-center gap-1 bg-orange-500 text-white py-4 rounded-xl shadow hover:bg-orange-600 transition">
+              <Truck className="w-6 h-6" />
+              <span className="text-sm font-semibold">Recolhimento</span>
+              <span className="text-[11px] opacity-80">{(byStatus.AGUARDANDO_ENTREGA||[]).length + (byStatus.AGUARDANDO_BUSCAR||[]).length} no depósito</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Panels */}
+      {panel === 'lavagem'      && <LawagemPanel     items={items} onClose={() => setPanel(null)} onDone={load} />}
+      {panel === 'measures'     && <MeasuresPanel    items={items} onClose={() => setPanel(null)} onDone={load} />}
+      {panel === 'recolher'     && <RecolherPanel    items={items} onClose={() => setPanel(null)} onDone={load} />}
+      {panel === 'recolhimento' && <RecolhimentoPanel items={items} onClose={() => setPanel(null)} onDone={load} />}
     </div>
   );
 }
