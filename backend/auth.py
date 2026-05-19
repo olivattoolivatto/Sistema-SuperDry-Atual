@@ -50,6 +50,7 @@ class UserPublic(BaseModel):
     email: str
     role: UserRole
     is_active: bool
+    allowed_modules: Optional[List[str]] = None  # None = usa padrão do role
     created_at: datetime
     updated_at: datetime
 
@@ -60,6 +61,7 @@ class UserCreate(BaseModel):
     password: str
     role: UserRole = UserRole.ATENDENTE
     is_active: bool = True
+    allowed_modules: Optional[List[str]] = None
 
 
 class UserUpdate(BaseModel):
@@ -68,6 +70,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+    allowed_modules: Optional[List[str]] = None
 
 
 class LoginRequest(BaseModel):

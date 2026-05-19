@@ -3905,9 +3905,12 @@ async def create_user(
         is_active=payload.is_active,
         password_hash=hash_password(payload.password),
     )
-    await db.users.insert_one(user.dict())
-    await log_audit("user", user.id, "CREATE", current_user, {"after": {**user.dict(), "password_hash": "***"}})
-    return UserPublic(**{k: v for k, v in user.dict().items() if k != "password_hash"})
+    user_dict = user.dict()
+    if payload.allowed_modules is not None:
+        user_dict["allowed_modules"] = payload.allowed_modules
+    await db.users.insert_one(user_dict)
+    await log_audit("user", user.id, "CREATE", current_user, {"after": {**user_dict, "password_hash": "***"}})
+    return UserPublic(**{k: v for k, v in user_dict.items() if k != "password_hash"})
 
 
 @api_router.put("/users/{user_id}", response_model=UserPublic)
@@ -3924,6 +3927,7 @@ async def update_user(
     if payload.email is not None: update_data["email"] = payload.email.strip().lower()
     if payload.role is not None: update_data["role"] = payload.role.value if hasattr(payload.role, "value") else payload.role
     if payload.is_active is not None: update_data["is_active"] = payload.is_active
+    if payload.allowed_modules is not None: update_data["allowed_modules"] = payload.allowed_modules
     if payload.password:
         update_data["password_hash"] = hash_password(payload.password)
     update_data["updated_at"] = datetime.utcnow()

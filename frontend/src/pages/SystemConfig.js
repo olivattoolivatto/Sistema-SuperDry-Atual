@@ -25,6 +25,49 @@ const formatPhone = (value) => {
   return numbers;
 };
 
+// ── Wrapper retrátil genérico ─────────────────────────────────────────────────
+function CollapsibleSection({ label, icon, expanded, onToggle, children }) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200">
+      <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors" onClick={onToggle}>
+        <div className="flex items-center gap-2">
+          <span className="text-base">{icon}</span>
+          <h2 className="text-sm font-semibold text-gray-900">{label}</h2>
+        </div>
+        {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+      </div>
+      {expanded && <div className="border-t border-gray-100 p-4">{children}</div>}
+    </div>
+  );
+}
+
+// ── Módulos disponíveis para permissão ────────────────────────────────────────
+const ALL_MODULES = [
+  { path: '/',               label: 'Painel' },
+  { path: '/clients',        label: 'Clientes' },
+  { path: '/budgets',        label: 'Orçamentos' },
+  { path: '/routes',         label: 'Rotas' },
+  { path: '/routes-geo',     label: 'Rotas Geoapify' },
+  { path: '/agenda',         label: 'Agenda' },
+  { path: '/whatsapp',       label: 'WhatsApp' },
+  { path: '/technician',     label: 'Execução e Lavagem' },
+  { path: '/financial',      label: 'Financeiro' },
+  { path: '/finance-manager',label: 'Ger. Financeiro' },
+  { path: '/reports',        label: 'Relatórios' },
+  { path: '/tickets',        label: 'Chamados' },
+  { path: '/catalog',        label: 'Catálogo' },
+  { path: '/budget-config',  label: 'Config. Orçamento' },
+  { path: '/system-config',  label: 'Config. Sistema' },
+];
+
+const ROLE_DEFAULT_MODULES = {
+  ADMIN:      ALL_MODULES.map(m => m.path),
+  ATENDENTE:  ['/', '/clients', '/budgets', '/routes', '/routes-geo', '/agenda', '/whatsapp'],
+  TECNICO:    ['/', '/agenda', '/technician'],
+  FINANCEIRO: ['/', '/financial', '/finance-manager', '/reports'],
+  MANUTENCAO: ['/', '/tickets'],
+};
+
 export const SystemConfig = () => {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,10 +76,12 @@ export const SystemConfig = () => {
   
   // Estados para controlar expansão das seções
   const [expandedSections, setExpandedSections] = useState({
-    company: false,      // Dados da Empresa - fechado por padrão
-    contact: false,      // Informações de Contato - fechado por padrão  
-    dataPolicy: false,   // Política de Retenção de Dados - fechado por padrão
-    futureFeatures: false // Funcionalidades Futuras - fechado por padrão
+    company: false,
+    contact: false,
+    dataPolicy: false,
+    logo: false,
+    payment: false,
+    users: false,
   });
 
   useEffect(() => {
@@ -311,27 +356,23 @@ export const SystemConfig = () => {
         </p>
       </div>
 
-      <div className="space-y-8">
-        {/* Company Information - Retrátil */}
+      <div className="space-y-2">
+        {/* Company Information */}
         <div className="bg-white rounded-lg border border-gray-200">
-          <div 
-            className="flex items-center justify-between p-6 cursor-pointer hover:bg-gray-50 transition-colors"
+          <div
+            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
             onClick={() => toggleSection('company')}
           >
-            <div className="flex items-center">
-              <Building2 className="w-5 h-5 text-blue-600 mr-2" />
-              <h2 className="text-xl font-semibold text-gray-900">Dados da Empresa</h2>
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-blue-600" />
+              <h2 className="text-sm font-semibold text-gray-900">Dados da Empresa</h2>
             </div>
-            {expandedSections.company ? (
-              <ChevronDown className="w-5 h-5 text-gray-500" />
-            ) : (
-              <ChevronRight className="w-5 h-5 text-gray-500" />
-            )}
+            {expandedSections.company ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
           </div>
 
           {expandedSections.company && (
-            <div className="px-6 pb-6 border-t border-gray-100">
-              <div className="pt-6">
+            <div className="px-4 pb-4 border-t border-gray-100">
+              <div className="pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -505,13 +546,18 @@ export const SystemConfig = () => {
         </div>
 
         {/* Contact Information */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center mb-6">
-            <MapPin className="w-5 h-5 text-green-600 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Informações de Contato</h2>
+        <div className="bg-white rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => toggleSection('contact')}>
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-green-600" />
+              <h2 className="text-sm font-semibold text-gray-900">Informações de Contato</h2>
+            </div>
+            {expandedSections.contact ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {expandedSections.contact && (
+          <div className="px-4 pb-4 border-t border-gray-100 pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Telefone
@@ -580,26 +626,28 @@ export const SystemConfig = () => {
               </div>
             </div>
           </div>
+          </div>
+          )}
         </div>
 
         {/* Data Retention Policy */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center mb-6">
-            <Shield className="w-5 h-5 text-purple-600 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Política de Retenção de Dados</h2>
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-yellow-800 mb-2">
-                Configurações de Privacidade e LGPD
-              </h3>
-              <p className="text-sm text-yellow-700">
-                Configure os prazos de guarda de dados pessoais conforme a Lei Geral de Proteção de Dados (LGPD)
-              </p>
+        <div className="bg-white rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => toggleSection('dataPolicy')}>
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-purple-600" />
+              <h2 className="text-sm font-semibold text-gray-900">Política de Retenção (LGPD)</h2>
             </div>
+            {expandedSections.dataPolicy ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+          </div>
+          {expandedSections.dataPolicy && (
+          <div className="px-4 pb-4 border-t border-gray-100 pt-4">
+          <div className="space-y-4">
+            <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              Configure os prazos de guarda de dados pessoais conforme a LGPD.
+            </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Fotos (anos)
@@ -660,23 +708,36 @@ export const SystemConfig = () => {
               </p>
             </div>
           </div>
+          </div>
+          )}
         </div>
 
         {/* Logo da Empresa */}
-        <LogoManager />
+        <CollapsibleSection
+          sectionKey="logo" label="Logo da Empresa" icon="🖼️"
+          expanded={expandedSections.logo} onToggle={() => toggleSection('logo')}>
+          <LogoManager />
+        </CollapsibleSection>
 
         {/* Formas de Pagamento */}
-        <PaymentMethodsManager config={config} setConfig={setConfig} />
+        <CollapsibleSection
+          sectionKey="payment" label="Formas de Pagamento" icon="💳"
+          expanded={expandedSections.payment} onToggle={() => toggleSection('payment')}>
+          <PaymentMethodsManager config={config} setConfig={setConfig} inline />
+        </CollapsibleSection>
 
         {/* Gestão de Usuários */}
-        <UsersManager />
+        <UsersManager
+          expanded={expandedSections.users}
+          onToggle={() => toggleSection('users')}
+        />
 
         {/* Save Button */}
-        <div className="flex justify-end">
+        <div className="flex justify-end pt-2">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium transition-colors"
           >
             <Save className="w-4 h-4 mr-2" />
             {saving ? 'Salvando...' : 'Salvar Configurações'}
@@ -730,8 +791,7 @@ function LogoManager() {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">Logo da Empresa</h2>
+    <div>
       <p className="text-sm text-gray-500 mb-4">Usada no cabeçalho do PDF de orçamentos.</p>
       {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
       <div className="flex items-center gap-6">
@@ -765,7 +825,7 @@ function LogoManager() {
 // ============================================================
 // Payment Methods Manager
 // ============================================================
-function PaymentMethodsManager({ config, setConfig }) {
+function PaymentMethodsManager({ config, setConfig, inline = false }) {
   const [newLabel, setNewLabel] = useState('');
   const [newValue, setNewValue] = useState('');
   const [editIdx, setEditIdx] = useState(null);
@@ -797,9 +857,8 @@ function PaymentMethodsManager({ config, setConfig }) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">Formas de Pagamento</h2>
-      <p className="text-sm text-gray-500 mb-4">Gerencie as opções disponíveis em orçamentos e atendimentos.</p>
+    <div>
+      <p className="text-sm text-gray-500 mb-3">Gerencie as opções disponíveis em orçamentos e atendimentos.</p>
 
       <div className="space-y-2 mb-4">
         {methods.map((m, idx) => (
@@ -862,47 +921,59 @@ const ROLE_LABELS = {
   MANUTENCAO: 'Manutenção',
 };
 
-function UsersManager() {
+function UsersManager({ expanded, onToggle }) {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'ATENDENTE', is_active: true });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'ATENDENTE', is_active: true, allowed_modules: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [useCustomModules, setUseCustomModules] = useState(false);
+  const [selectedModules, setSelectedModules] = useState([]);
 
   const isAdmin = currentUser?.role === 'ADMIN';
 
   const load = async () => {
-    if (!isAdmin) { setLoading(false); return; }
+    if (!isAdmin) return;
     try {
       setLoading(true);
       const r = await usersApi.list();
       setUsers(r.data || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [isAdmin]);
+  useEffect(() => { if (expanded && isAdmin) load(); }, [expanded, isAdmin]);
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', email: '', password: '', role: 'ATENDENTE', is_active: true });
+    const defaultRole = 'ATENDENTE';
+    setForm({ name: '', email: '', password: '', role: defaultRole, is_active: true, allowed_modules: null });
+    setUseCustomModules(false);
+    setSelectedModules(ROLE_DEFAULT_MODULES[defaultRole] || []);
     setError('');
     setModalOpen(true);
   };
 
   const openEdit = (u) => {
     setEditing(u);
-    setForm({ name: u.name, email: u.email, password: '', role: u.role, is_active: u.is_active });
+    const hasCustom = !!(u.allowed_modules && u.allowed_modules.length > 0);
+    setUseCustomModules(hasCustom);
+    setSelectedModules(hasCustom ? u.allowed_modules : (ROLE_DEFAULT_MODULES[u.role] || []));
+    setForm({ name: u.name, email: u.email, password: '', role: u.role, is_active: u.is_active, allowed_modules: u.allowed_modules });
     setError('');
     setModalOpen(true);
   };
+
+  const handleRoleChange = (role) => {
+    setForm(f => ({ ...f, role }));
+    if (!useCustomModules) setSelectedModules(ROLE_DEFAULT_MODULES[role] || []);
+  };
+
+  const toggleModule = (path) =>
+    setSelectedModules(prev => prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -911,105 +982,73 @@ function UsersManager() {
     if (!editing && !form.password) { setError('Senha obrigatória ao criar usuário.'); return; }
     try {
       setSaving(true);
+      const payload = {
+        ...form,
+        allowed_modules: useCustomModules ? selectedModules : null,
+      };
+      if (!payload.password) delete payload.password;
       if (editing) {
-        const payload = { ...form };
-        if (!payload.password) delete payload.password;
         await usersApi.update(editing.id, payload);
       } else {
-        await usersApi.create(form);
+        await usersApi.create(payload);
       }
       setModalOpen(false);
       await load();
     } catch (err) {
       setError(err.response?.data?.detail || 'Erro ao salvar usuário.');
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   const onDelete = async (u) => {
     if (!window.confirm(`Excluir usuário ${u.name}?`)) return;
-    try {
-      await usersApi.delete(u.id);
-      await load();
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Erro ao excluir.');
-    }
+    try { await usersApi.delete(u.id); await load(); }
+    catch (err) { alert(err.response?.data?.detail || 'Erro ao excluir.'); }
   };
 
   if (!isAdmin) return null;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
-      <div
-        onClick={() => setOpen(v => !v)}
-        className="p-4 sm:p-6 flex items-center justify-between cursor-pointer"
-      >
-        <div className="flex items-center">
-          <Users className="w-5 h-5 text-blue-600 mr-2" />
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Usuários e Permissões</h2>
-        </div>
+      <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors" onClick={onToggle}>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">{users.length} usuário(s)</span>
-          {open ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+          <Users className="w-4 h-4 text-indigo-600" />
+          <h2 className="text-sm font-semibold text-gray-900">Usuários e Permissões</h2>
+          <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{users.length}</span>
         </div>
+        {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
       </div>
 
-      {open && (
-        <div className="border-t border-gray-200 p-4 sm:p-6 space-y-3">
+      {expanded && (
+        <div className="border-t border-gray-100 p-4 space-y-3">
           <div className="flex justify-end">
-            <button
-              onClick={openCreate}
-              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium inline-flex items-center gap-1"
-            >
-              <Plus className="w-4 h-4" /> Novo Usuário
+            <button onClick={openCreate}
+              className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-xs font-medium inline-flex items-center gap-1">
+              <Plus className="w-3.5 h-3.5" /> Novo Usuário
             </button>
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-blue-600" /></div>
+            <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-indigo-600" /></div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-3 py-2 text-[11px] uppercase text-gray-600">Nome</th>
-                    <th className="text-left px-3 py-2 text-[11px] uppercase text-gray-600">Email</th>
-                    <th className="text-left px-3 py-2 text-[11px] uppercase text-gray-600">Perfil</th>
-                    <th className="text-left px-3 py-2 text-[11px] uppercase text-gray-600">Status</th>
-                    <th className="px-3 py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(u => (
-                    <tr key={u.id} className="border-t border-gray-100">
-                      <td className="px-3 py-2 font-medium text-gray-900">{u.name}</td>
-                      <td className="px-3 py-2 text-gray-700">{u.email}</td>
-                      <td className="px-3 py-2">
-                        <span className="px-2 py-0.5 rounded text-[11px] bg-blue-50 text-blue-700">
-                          {ROLE_LABELS[u.role] || u.role}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`px-2 py-0.5 rounded text-[11px] ${u.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-                          {u.is_active ? 'Ativo' : 'Inativo'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <button onClick={() => openEdit(u)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded">
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => onDelete(u)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded ml-1">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {users.length === 0 && (
-                    <tr><td colSpan={5} className="text-center text-gray-500 py-6">Nenhum usuário cadastrado.</td></tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="space-y-2">
+              {users.map(u => (
+                <div key={u.id} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{u.name}</div>
+                    <div className="text-xs text-gray-500 truncate">{u.email}</div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-700 font-medium">{ROLE_LABELS[u.role] || u.role}</span>
+                      {u.allowed_modules && <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">Permissões custom</span>}
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${u.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {u.is_active ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
+                  </div>
+                  <button onClick={() => openEdit(u)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded shrink-0"><Edit2 className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => onDelete(u)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              ))}
+              {users.length === 0 && <p className="text-center text-gray-400 text-sm py-4">Nenhum usuário cadastrado.</p>}
             </div>
           )}
         </div>
@@ -1017,45 +1056,83 @@ function UsersManager() {
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <form onSubmit={onSubmit} className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4">
+          <form onSubmit={onSubmit} className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">{editing ? 'Editar Usuário' : 'Novo Usuário'}</h3>
-              <button type="button" onClick={() => setModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
+              <button type="button" onClick={() => setModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
-              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Email *</label>
-              <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Senha {editing && <span className="text-gray-400">(deixe em branco para manter)</span>}
-              </label>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            {/* Dados básicos */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Email *</label>
+                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Senha {editing && <span className="text-gray-400">(deixe em branco para manter)</span>}
+                </label>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Perfil base *</label>
+                <select value={form.role} onChange={e => handleRoleChange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                  {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Perfil *</label>
-              <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-                {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
+
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} />
               Usuário ativo
             </label>
+
+            {/* Permissões de módulos */}
+            <div className="border border-gray-200 rounded-xl p-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer">
+                <input type="checkbox" checked={useCustomModules}
+                  onChange={e => {
+                    setUseCustomModules(e.target.checked);
+                    if (!e.target.checked) setSelectedModules(ROLE_DEFAULT_MODULES[form.role] || []);
+                  }} />
+                Personalizar acesso por módulo
+              </label>
+
+              {useCustomModules && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Marque os módulos que este usuário pode acessar:</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    {ALL_MODULES.map(m => (
+                      <label key={m.path} className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer select-none">
+                        <input type="checkbox"
+                          checked={selectedModules.includes(m.path)}
+                          onChange={() => toggleModule(m.path)}
+                          className="h-3.5 w-3.5 text-indigo-600" />
+                        {m.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!useCustomModules && (
+                <p className="text-xs text-gray-400">
+                  Módulos padrão do perfil <strong>{ROLE_LABELS[form.role]}</strong>:{' '}
+                  {(ROLE_DEFAULT_MODULES[form.role] || []).map(p => ALL_MODULES.find(m => m.path === p)?.label).filter(Boolean).join(', ')}
+                </p>
+              )}
+            </div>
 
             {error && <div className="text-sm bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
 
@@ -1065,7 +1142,7 @@ function UsersManager() {
                 Cancelar
               </button>
               <button type="submit" disabled={saving}
-                className="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60">
+                className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60">
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />} Salvar
               </button>
             </div>

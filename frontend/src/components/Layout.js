@@ -34,6 +34,12 @@ export function Layout({ children }) {
 
   const items = useMemo(() => {
     if (!user) return [];
+    // Se o usuário tem módulos customizados, filtra por eles; senão usa o role padrão
+    if (user.allowed_modules && user.allowed_modules.length > 0) {
+      return ALL_ITEMS.filter(i =>
+        i.roles.includes(user.role) || user.allowed_modules.includes(i.path)
+      );
+    }
     return ALL_ITEMS.filter(i => i.roles.includes(user.role));
   }, [user]);
 
