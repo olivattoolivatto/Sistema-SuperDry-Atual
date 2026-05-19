@@ -2369,15 +2369,15 @@ async def generate_whatsapp_message(budget_id: str):
         formatted_date = updated_date.strftime("%d/%m/%Y")
         
         # Build WhatsApp message
-        message = f"""*#### ORÇAMENTO PERSONALIZADO ####*
+        message = f"""#### *ORÇAMENTO PERSONALIZADO* ####
 _SuperDry Lavanderia de Tapetes e Estofados_
 
-Código do Orçamento: {budget_id}
-Cliente: {budget.get('client_name', 'N/A')}
-Atendente: {budget.get('salesperson', 'N/A')}
-Data do Orçamento: {formatted_date}
+*Código do Orçamento:* {budget_id}
+*Cliente:* {budget.get('client_name', 'N/A')}
+*Atendente:* {budget.get('salesperson', 'N/A')}
+*Data do Orçamento:* {formatted_date}
 
-Quantidade de Itens: {len(budget.get('items', []))} unid."""
+*Quantidade de Itens:* {len(budget.get('items', []))}"""
 
         # Add items
         for item in budget.get('items', []):
@@ -2386,47 +2386,33 @@ Quantidade de Itens: {len(budget.get('items', []))} unid."""
             # Add measurements based on service type
             if item.get('area_m2', 0) > 0:
                 if item.get('diameter'):
-                    # Tapete redondo
                     item_line += f" - Ø{item.get('diameter'):.1f}m - {item.get('area_m2'):.1f} m²"
                 elif item.get('width') and item.get('height'):
-                    # Tapete retangular
                     item_line += f" - {item.get('width'):.1f} x {item.get('height'):.1f} - {item.get('area_m2'):.1f} m²"
                 else:
-                    # Apenas área sem medidas específicas
                     item_line += f" - {item.get('area_m2'):.1f} m²"
             elif item.get('linear_meters', 0) > 0:
-                # Cortinas - mostrar metragem linear
                 if item.get('fabric_folds') and item.get('fabric_per_fold'):
-                    # Mostrar cálculo das dobras se disponível
                     item_line += f" - {item.get('fabric_folds'):.0f} dobras x {item.get('fabric_per_fold'):.0f}cm - {item.get('linear_meters'):.1f}m lineares"
                 else:
-                    # Apenas metragem linear
                     item_line += f" - {item.get('linear_meters'):.1f}m lineares"
             else:
-                # Unitário
                 quantity = item.get('quantity', 1)
-                if quantity > 1:
-                    item_line += f" - {quantity:.0f} unid."
-                else:
-                    item_line += f" - 1 unid."
+                item_line += f" - {quantity:.0f} unid." if quantity > 1 else " - 1 unid."
             
             item_line += f" - R$ {item.get('total_value', 0):.2f}"
             message += f"\n_{item_line}_"
         
         # Add total
-        message += f"\n\n*VALOR TOTAL: R$ {budget.get('total_value', 0):.2f}*"
+        message += f"\n\n*VALOR TOTAL:* R$ {budget.get('total_value', 0):.2f}"
         
-        # Add footer - shorter version for WhatsApp
-        message += f"""
+        # Footer
+        message += """
 
-*PDF com maiores detalhes em anexo!*
+_PDF com maiores detalhes em anexo! Caso tenha dúvidas, estou à disposição!
+Agradecemos a confiança. -> Orçamento válido por até 30 dias._
 
-_Caso tenha dúvidas, estou à disposição! Agradecemos a confiança._
-
--> Orçamento válido por até 30 dias.
-
-SuperDry Lavanderia
-Instagram: @superdrylavanderia"""
+SuperDry Lavanderia Instagram: @superdrylavanderia"""
 
         # Clean phone number for WhatsApp URL
         phone_raw = client.get('phone_primary', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '')
