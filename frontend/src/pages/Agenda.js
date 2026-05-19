@@ -1646,68 +1646,43 @@ export function Agenda() {
   };
 
   // Função para gerar título do evento com múltiplos serviços
-  const generateEventTitle = (budget, clientName) => {
+  const generateEventTitle = (budget, clientName, serviceStatus = null) => {
     if (!budget.items || budget.items.length === 0) {
       return `✨ ${clientName}`;
     }
 
-    // Agrupar itens por emoji (serviço similar) e coletar status
+    // Agrupar itens por emoji
     const serviceGroups = {};
     
     budget.items.forEach(item => {
       const emoji = getServiceEmoji(item.service_name);
-      const status = item.status || 'EXECUTAR_NO_LOCAL';
+      // Se foi passado serviceStatus (do stop da rota), usa ele.
+      // Senão, usa o status atual do item no orçamento.
+      const status = serviceStatus || item.status || 'EXECUTAR_NO_LOCAL';
       
       if (!serviceGroups[emoji]) {
-        serviceGroups[emoji] = {
-          emoji,
-          statuses: new Set(),
-          services: new Set()
-        };
+        serviceGroups[emoji] = { emoji, statuses: new Set(), services: new Set() };
       }
-      
       serviceGroups[emoji].statuses.add(status);
       serviceGroups[emoji].services.add(item.service_name);
     });
 
-    console.log('🎨 Grupos de serviços para título:', serviceGroups);
-
-    // Construir partes do título
     const titleParts = [];
-    
     Object.values(serviceGroups).forEach(group => {
       let part = group.emoji;
-      
-      // Verificar se tem RETIRAR ou ENTREGAR
-      const hasRetirar = group.statuses.has('RETIRAR');
+      const hasRetirar  = group.statuses.has('RETIRAR');
       const hasEntregar = group.statuses.has('ENTREGAR');
-      
-      if (hasRetirar && hasEntregar) {
-        part += 'RETIRAR/ENTREGAR';
-      } else if (hasRetirar) {
-        part += 'RETIRAR';
-      } else if (hasEntregar) {
-        part += 'ENTREGAR';
-      }
-      // Se for apenas EXECUTAR_NO_LOCAL, não adiciona texto
-      
+      if (hasRetirar && hasEntregar) part += 'RETIRAR/ENTREGAR';
+      else if (hasRetirar)           part += 'RETIRAR';
+      else if (hasEntregar)          part += 'ENTREGAR';
+      // EXECUTAR_NO_LOCAL → sem sufixo
       titleParts.push(part);
     });
 
-    // Juntar partes com "e" e adicionar nome do cliente
-    let title;
-    if (titleParts.length === 1) {
-      title = `${titleParts[0]} ${clientName}`;
-    } else if (titleParts.length === 2) {
-      title = `${titleParts[0]} e ${titleParts[1]} ${clientName}`;
-    } else {
-      // Mais de 2 serviços: usar vírgulas e "e" no final
-      const lastPart = titleParts.pop();
-      title = `${titleParts.join(', ')} e ${lastPart} ${clientName}`;
-    }
-
-    console.log('🎯 Título gerado:', title);
-    return title;
+    if (titleParts.length === 1) return `${titleParts[0]} ${clientName}`;
+    if (titleParts.length === 2) return `${titleParts[0]} e ${titleParts[1]} ${clientName}`;
+    const last = titleParts.pop();
+    return `${titleParts.join(', ')} e ${last} ${clientName}`;
   };
 
   // Função para formatar a descrição do evento
@@ -1913,7 +1888,7 @@ export function Agenda() {
           const { budget, client } = await getBudgetAndClientData(event.id);
           
           // Gerar título inteligente do evento baseado em todos os itens do orçamento
-          const eventTitle = generateEventTitle(budget, client.name);
+          const eventTitle = generateEventTitle(budget, client.name, event.service_status || null);
           
           // Extrair endereço correto do cliente
           const clientAddress = getClientAddress(client);
