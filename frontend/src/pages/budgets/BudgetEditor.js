@@ -528,12 +528,13 @@ export default function BudgetEditor({ budget, onClose, onSaved }) {
 
   const filteredClients = useMemo(() => {
     const q = normalize(clientSearch);
+    const digits = clientSearch.replace(/\D/g, '');
     if (!q) return clients.slice(0, 50);
     return clients.filter(c =>
       normalize(c.name).includes(q) ||
       normalize(c.id).includes(q) ||
       normalize(c.email || '').includes(q) ||
-      (c.phone_primary || '').includes(clientSearch.replace(/\D/g, ''))
+      (digits.length > 0 && (c.phone_primary || '').includes(digits))
     ).slice(0, 50);
   }, [clients, clientSearch]);
 
