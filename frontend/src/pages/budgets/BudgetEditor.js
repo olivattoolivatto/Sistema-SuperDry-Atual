@@ -485,6 +485,140 @@ const newEmptyItem = () => ({
   payment_method: null,
 });
 
+// ── Lançamento em Lote ────────────────────────────────────────────────────────
+function BatchModal({ services, onClose, onAdd }) {
+  const [serviceId, setServiceId] = useState('');
+  const [serviceName, setServiceName] = useState('');
+  const [qty, setQty] = useState(1);
+  const [unitPrice, setUnitPrice] = useState(0);
+  const [execMode, setExecMode] = useState('RETIRAR_E_LEVAR');
+  const [observations, setObservations] = useState('');
+  const [useGenericName, setUseGenericName] = useState(false);
+  const [genericName, setGenericName] = useState('Tapete');
+
+  const selectedSvc = services.find(s => s.id === serviceId);
+
+  const handleServiceChange = (id) => {
+    const svc = services.find(s => s.id === id);
+    setServiceId(id);
+    setServiceName(svc?.name || '');
+    setUnitPrice(svc?.sale_price || 0);
+    setExecMode(svc?.execution_location === 'NO_LOCAL' ? 'EXECUTAR_NO_LOCAL' : 'RETIRAR_E_LEVAR');
+  };
+
+  const generate = () => {
+    if (!serviceId && !useGenericName) return;
+    const name = useGenericName ? genericName : (selectedSvc?.name || serviceName);
+    const code = selectedSvc?.id || 'GEN';
+    const price = parseFloat(unitPrice) || 0;
+    const items = Array.from({ length: qty }, (_, i) => ({
+      id: undefined,
+      service_id: serviceId || '',
+      service_name: name,
+      service_code: code,
+      measure_type: selectedSvc?.measure_type || 'UNITARIO',
+      quantity: 1,
+      unit_price: price,
+      total_value: price,
+      area_m2: null,
+      linear_meters: null,
+      execution_location: execMode === 'EXECUTAR_NO_LOCAL' ? 'NO_LOCAL' : 'RETIRADA',
+      execution_mode: execMode,
+      status: execMode === 'EXECUTAR_NO_LOCAL' ? 'EXECUTAR_NO_LOCAL' : 'RETIRAR',
+      observations: observations || '',
+      is_retoque: false,
+      pickup_address: null, execution_address: null, delivery_address: null,
+      scheduled_pickup_date: '', scheduled_pickup_time: '',
+      scheduled_execution_date: '', scheduled_execution_time: '',
+      scheduled_delivery_date: '', scheduled_delivery_time: '',
+      payment_method: null,
+    }));
+    onAdd(items);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+          <h3 className="font-semibold text-gray-900">Lançamento em Lote</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          {/* Modo genérico para parceiros */}
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={useGenericName} onChange={e => setUseGenericName(e.target.checked)} />
+            <span>Usar nome genérico (registro de parceiro)</span>
+          </label>
+
+          {useGenericName ? (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Nome do item</label>
+              <input value={genericName} onChange={e => setGenericName(e.target.value)}
+                placeholder="Ex: Tapete, Sofá, etc."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Serviço</label>
+              <select value={serviceId} onChange={e => handleServiceChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                <option value="">Selecione…</option>
+                {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Quantidade</label>
+              <input type="number" min={1} max={100} value={qty}
+                onChange={e => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Valor unitário (R$)</label>
+              <input type="number" min={0} step="0.01" value={unitPrice}
+                onChange={e => setUnitPrice(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Modo de execução</label>
+            <select value={execMode} onChange={e => setExecMode(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+              {EXECUTION_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Observações (aplicada a todos)</label>
+            <input value={observations} onChange={e => setObservations(e.target.value)}
+              placeholder="Opcional"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+
+          <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-2 text-sm text-orange-800">
+            Serão criados <strong>{qty}</strong> item(s) — total: <strong>R$ {(parseFloat(unitPrice || 0) * qty).toFixed(2)}</strong>
+          </div>
+        </div>
+        <div className="flex gap-2 px-5 pb-5">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button
+            onClick={generate}
+            disabled={!serviceId && !useGenericName}
+            className="flex-1 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 disabled:opacity-40">
+            Gerar {qty} item(s)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function BudgetEditor({ budget, onClose, onSaved }) {
   const isEdit = Boolean(budget?.id);
   const [step, setStep] = useState(1);
@@ -495,6 +629,7 @@ export default function BudgetEditor({ budget, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [clientSearch, setClientSearch] = useState('');
+  const [batchOpen, setBatchOpen] = useState(false);
   const [form, setForm] = useState({
     client_id: budget?.client_id || '',
     client_name: budget?.client_name || '',
@@ -710,13 +845,32 @@ export default function BudgetEditor({ budget, onClose, onSaved }) {
                   onRemove={() => removeItem(idx)}
                 />
               ))}
-              <button
-                type="button"
-                onClick={addItem}
-                className="w-full py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-medium flex items-center justify-center gap-1"
-              >
-                <Plus className="w-4 h-4" /> Adicionar Item
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="flex-1 py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-medium flex items-center justify-center gap-1"
+                >
+                  <Plus className="w-4 h-4" /> Adicionar Item
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchOpen(true)}
+                  className="flex-1 py-3 rounded-xl border-2 border-dashed border-orange-300 text-orange-600 hover:bg-orange-50 text-sm font-medium flex items-center justify-center gap-1"
+                >
+                  <Plus className="w-4 h-4" /> Lançar em Lote
+                </button>
+              </div>
+              {batchOpen && (
+                <BatchModal
+                  services={services}
+                  onClose={() => setBatchOpen(false)}
+                  onAdd={(newItems) => {
+                    setForm(f => ({ ...f, items: [...(f.items || []), ...newItems] }));
+                    setBatchOpen(false);
+                  }}
+                />
+              )}
             </div>
           )}
 
