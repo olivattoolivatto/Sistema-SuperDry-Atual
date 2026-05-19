@@ -2189,71 +2189,52 @@ export function Agenda() {
       {/* Eventos da Rota Selecionada */}
       {selectedRoute && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Eventos da Rota: {selectedRoute.alias || selectedRoute.id}
-            </h2>
-            
-            <div className="flex items-center space-x-3">
-              <span className="text-sm text-gray-600">
-                {selectedStops.size} de {routeEvents.length} selecionados
+          <div className="mb-4">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <h2 className="text-base font-semibold text-gray-900 leading-tight">
+                {selectedRoute.alias || selectedRoute.id}
+              </h2>
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full shrink-0">
+                {selectedStops.size}/{routeEvents.length} selecionados
               </span>
-              
-              <div className="flex space-x-2">
-                <button
-                  onClick={resetAllTimes}
-                  className="flex items-center px-3 py-2 bg-gray-600 text-white hover:bg-gray-700 rounded-lg transition-colors text-sm"
-                  title="Resetar todos os horários para sequência original"
-                >
-                  <RefreshCw className="w-4 h-4 mr-1" />
-                  Reset Horários
-                </button>
-                
-                <button
-                  onClick={clearAllSelections}
-                  disabled={selectedStops.size === 0}
-                  className="flex items-center px-3 py-2 bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors text-sm"
-                  title="Limpar todas as seleções"
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Limpar Seleções
-                </button>
-                
-                {selectedStops.size > 0 && (
-                  <>
-                    <button
-                      onClick={debugEventData}
-                      className="flex items-center px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors text-sm mr-2"
-                    >
-                      🔍 Debug Dados
-                    </button>
-                    <button
-                      onClick={sendToTechnician}
-                      disabled={sendingToTechnician}
-                      className="flex items-center px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors mr-2"
-                    >
-                      {sendingToTechnician ? (
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Smartphone className="w-4 h-4 mr-2" />
-                      )}
-                      {sendingToTechnician ? 'Enviando...' : 'Enviar para Técnico'}
-                    </button>
-                    <button
-                      onClick={createCalendarEvents}
-                      disabled={creatingEvents || !isGoogleAuthenticated}
-                      className="flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
-                    >
-                      {creatingEvents ? (
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Send className="w-4 h-4 mr-2" />
-                      )}
-                      {creatingEvents ? 'Criando...' : 'Lançar na Agenda'}
-                    </button>
-                  </>
-                )}
-              </div>
+            </div>
+
+            {/* Botões de ação — empilham no mobile */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={resetAllTimes}
+                className="flex items-center px-3 py-1.5 bg-gray-600 text-white hover:bg-gray-700 rounded-lg text-xs"
+                title="Resetar horários"
+              >
+                <RefreshCw className="w-3.5 h-3.5 mr-1" /> Reset Horários
+              </button>
+              <button
+                onClick={clearAllSelections}
+                disabled={selectedStops.size === 0}
+                className="flex items-center px-3 py-1.5 bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 rounded-lg text-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1" /> Limpar Seleções
+              </button>
+              {selectedStops.size > 0 && (
+                <>
+                  <button
+                    onClick={sendToTechnician}
+                    disabled={sendingToTechnician}
+                    className="flex items-center px-3 py-1.5 bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40 rounded-lg text-xs"
+                  >
+                    {sendingToTechnician ? <RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Smartphone className="w-3.5 h-3.5 mr-1" />}
+                    {sendingToTechnician ? 'Enviando…' : 'Enviar ao Técnico'}
+                  </button>
+                  <button
+                    onClick={createCalendarEvents}
+                    disabled={creatingEvents || !isGoogleAuthenticated}
+                    className="flex items-center px-3 py-1.5 bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 rounded-lg text-xs"
+                  >
+                    {creatingEvents ? <RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Send className="w-3.5 h-3.5 mr-1" />}
+                    {creatingEvents ? 'Criando…' : 'Lançar na Agenda'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -2330,69 +2311,53 @@ export function Agenda() {
                     </button>
                   </div>
 
-                  {/* Event Info */}
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div className="flex items-center space-x-2">
-                      <User className="w-4 h-4 text-blue-600" />
-                      <div>
-                        <p className="font-medium text-gray-900">{event.client_name}</p>
-                        <p className="text-xs text-gray-600">{event.service_name}</p>
+                  {/* Event Info — layout mobile-first */}
+                  <div className="flex-1 min-w-0">
+                    {/* Linha 1: nome + bairro */}
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 text-sm truncate">{event.client_name}</p>
+                        <p className="text-xs text-gray-500 truncate">{event.service_name}</p>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-gray-500 shrink-0">
+                        <MapPin className="w-3 h-3 text-red-500" />
+                        <span>{event.neighborhood}</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4 text-red-600" />
-                      <span className="text-sm text-gray-700">{event.neighborhood}</span>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <DollarSign className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-700">
+                    {/* Linha 2: valor + veículo + horário */}
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="text-xs font-semibold text-green-700">
                         R$ {event.service_value?.toFixed(2) || '0,00'}
                       </span>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Truck className="w-4 h-4 text-purple-600" />
-                      <span className="text-sm text-gray-700">{event.vehicle_type}</span>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Clock className="w-4 h-4 text-orange-600" />
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-1">
-                          <input
-                            type="time"
-                            value={event.estimated_start_time}
-                            onChange={(e) => updateEventTime(event.id, e.target.value)}
-                            className="text-sm font-medium text-gray-900 border border-gray-300 rounded px-2 py-1 w-20"
-                          />
-                          <button
-                            onClick={() => recalculateFromTimeChange(event.id)}
-                            className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors"
-                            title="Aplicar mudança de horário aos eventos seguintes"
-                          >
-                            Aplicar
-                          </button>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <input
-                            type="number"
-                            value={event.duration}
-                            onChange={(e) => updateEventDuration(event.id, e.target.value)}
-                            className="text-xs text-gray-600 border border-gray-300 rounded px-1 py-0.5 w-12"
-                            min="1"
-                            max="480"
-                          />
-                          <span className="text-xs text-gray-600">min</span>
-                          <button
-                            onClick={() => recalculateSubsequentTimes(event.id)}
-                            className="ml-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
-                            title="Aplicar mudança de duração aos horários subsequentes"
-                          >
-                            Aplicar
-                          </button>
-                        </div>
+                      <span className="text-xs text-gray-500 flex items-center gap-0.5">
+                        <Truck className="w-3 h-3 text-purple-500" />{event.vehicle_type}
+                      </span>
+                      {/* Horário */}
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Clock className="w-3 h-3 text-orange-500" />
+                        <input
+                          type="time"
+                          value={event.estimated_start_time}
+                          onChange={(e) => updateEventTime(event.id, e.target.value)}
+                          className="text-xs border border-gray-300 rounded px-1.5 py-0.5 w-20"
+                        />
+                        <button
+                          onClick={() => recalculateFromTimeChange(event.id)}
+                          className="px-1.5 py-0.5 bg-green-500 text-white text-[10px] rounded hover:bg-green-600"
+                        >OK</button>
+                        <input
+                          type="number"
+                          value={event.duration}
+                          onChange={(e) => updateEventDuration(event.id, e.target.value)}
+                          className="text-xs border border-gray-300 rounded px-1 py-0.5 w-10"
+                          min="1" max="480"
+                        />
+                        <span className="text-[10px] text-gray-500">min</span>
+                        <button
+                          onClick={() => recalculateSubsequentTimes(event.id)}
+                          className="px-1.5 py-0.5 bg-blue-500 text-white text-[10px] rounded hover:bg-blue-600"
+                        >OK</button>
                       </div>
                     </div>
                   </div>
@@ -2413,57 +2378,39 @@ export function Agenda() {
       {/* Seção de Serviços Enviados ao Técnico */}
       {isGoogleAuthenticated && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Serviços Enviados ao Técnico
-            </h2>
-            
-            <div className="flex items-center space-x-4">
-              {/* Filtro de Data Opcional */}
-              <div className="flex items-center space-x-2">
-                <label className="text-sm text-gray-600">Filtrar por data:</label>
+          <div className="mb-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <h2 className="text-base font-semibold text-gray-900">Serviços Enviados ao Técnico</h2>
+              <span className="text-xs text-gray-500">{sentServices.length}/{sentServicesTotal}</span>
+            </div>
+
+            {/* Filtro + Atualizar — empilham no mobile */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <label className="text-xs text-gray-500 shrink-0">Data:</label>
                 <input
                   type="date"
                   value={sentServicesDate}
                   onChange={(e) => {
                     setSentServicesDate(e.target.value);
-                    if (e.target.value) {
-                      loadSentServices(e.target.value); // Usar filtro específico
-                    } else {
-                      loadAllSentServices(1); // Carregar todos
-                    }
+                    if (e.target.value) loadSentServices(e.target.value);
+                    else loadAllSentServices(1);
                   }}
-                  className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Opcional"
+                  className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 />
                 {sentServicesDate && (
-                  <button
-                    onClick={() => {
-                      setSentServicesDate('');
-                      loadAllSentServices(1); // Voltar para todos
-                    }}
-                    className="text-xs text-gray-500 hover:text-gray-700"
-                    title="Limpar filtro"
-                  >
-                    ✕
-                  </button>
+                  <button onClick={() => { setSentServicesDate(''); loadAllSentServices(1); }}
+                    className="text-gray-400 hover:text-gray-600 text-sm shrink-0">✕</button>
                 )}
               </div>
-              
-              <div className="flex items-center space-x-3">
-                <span className="text-sm text-gray-600">
-                  {sentServices.length} de {sentServicesTotal} serviço(s)
-                </span>
-                
-                <button
-                  onClick={() => sentServicesDate ? loadSentServices(sentServicesDate) : loadAllSentServices(1)}
-                  disabled={loadingSentServices}
-                  className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loadingSentServices ? 'animate-spin' : ''}`} />
-                  <span>Atualizar</span>
-                </button>
-              </div>
+              <button
+                onClick={() => sentServicesDate ? loadSentServices(sentServicesDate) : loadAllSentServices(1)}
+                disabled={loadingSentServices}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50 shrink-0"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingSentServices ? 'animate-spin' : ''}`} />
+                Atualizar
+              </button>
             </div>
           </div>
 
@@ -2473,223 +2420,119 @@ export function Agenda() {
               <p className="mt-2 text-gray-600">Carregando serviços enviados...</p>
             </div>
           ) : sentServices.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {sentServices.map((service) => (
-                <div 
+                <div
                   key={service.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                  className="border border-gray-200 rounded-xl p-3 hover:shadow-sm transition-shadow"
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-3">
-                      {/* Badge do tipo */}
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        service.type === 'ASSIGNMENT' 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {service.type === 'ASSIGNMENT' ? 'Agenda' : 'Status'}
-                      </span>
-                      
-                      <span className="font-medium text-gray-900">
-                        {service.title}
-                      </span>
-                      
-                      {/* Status badge - para assignments */}
-                      {service.type === 'ASSIGNMENT' && (
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          service.status === 'ASSIGNED' ? 'bg-yellow-100 text-yellow-800' :
-                          service.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
-                          service.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                          service.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {service.status === 'ASSIGNED' ? 'Atribuído' :
-                           service.status === 'IN_PROGRESS' ? 'Em Progresso' :
-                           service.status === 'COMPLETED' ? 'Concluído' :
-                           service.status === 'CANCELLED' ? 'Cancelado' :
-                           service.status}
-                        </span>
-                      )}
-                      
-                      {/* Status badge - para status items */}
-                      {service.type === 'STATUS_ITEM' && (
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          service.status === 'EXECUTAR_NO_LOCAL' ? 'bg-purple-100 text-purple-800' :
-                          service.status === 'RETIRAR' ? 'bg-blue-100 text-blue-800' :
-                          service.status === 'ENTREGAR' ? 'bg-green-100 text-green-800' :
-                          service.status === 'CLIENTE_TROUXE' ? 'bg-cyan-100 text-cyan-800' :
-                          service.status === 'COLETADO' ? 'bg-indigo-100 text-indigo-800' :
-                          service.status === 'EM_LAVAGEM' ? 'bg-orange-100 text-orange-800' :
-                          service.status === 'AGUARDANDO_ENTREGA' ? 'bg-yellow-100 text-yellow-800' :
-                          service.status === 'ENTREGUE' ? 'bg-green-100 text-green-800' :
-                          service.status === 'CANCELADO_PELO_CLIENTE' ? 'bg-red-100 text-red-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {service.status === 'EXECUTAR_NO_LOCAL' ? 'Executar no Local' :
-                           service.status === 'RETIRAR' ? 'Retirar' :
-                           service.status === 'ENTREGAR' ? 'Entregar' :
-                           service.status === 'CLIENTE_TROUXE' ? 'Cliente Trouxe' :
-                           service.status === 'COLETADO' ? 'Coletado' :
-                           service.status === 'EM_LAVAGEM' ? 'Em Lavagem' :
-                           service.status === 'AGUARDANDO_ENTREGA' ? 'Aguardando Entrega' :
-                           service.status === 'ENTREGUE' ? 'Entregue' :
-                           service.status === 'CANCELADO_PELO_CLIENTE' ? 'Cancelado' :
-                           service.status}
-                        </span>
-                      )}
-                      
-                      {/* Badge indicador se está PENDENTE para o técnico */}
-                      {((service.type === 'ASSIGNMENT' && ['ASSIGNED', 'IN_PROGRESS'].includes(service.status)) ||
-                        (service.type === 'STATUS_ITEM' && ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'].includes(service.status))) && (
-                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 border border-yellow-300">
-                          🔄 PENDENTE
-                        </span>
-                      )}
+                  {/* Linha 1: título + data + botões */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 leading-tight">{service.client_name || service.title}</p>
+                      <p className="text-xs text-gray-500 truncate">{service.service_name}</p>
                     </div>
-                    
-                    <div className="flex items-center space-x-3">
-                      <div className="text-sm text-gray-500">
-                        {/* Mostrar data e horário */}
-                        <div>
-                          {service.assigned_date
-                            ? new Date(service.assigned_date + 'T12:00:00').toLocaleDateString('pt-BR')
-                            : 'Sem data'}
-                        </div>
-                        {service.assigned_time && (
-                          <div className="text-xs text-blue-600">
-                            {service.assigned_time}
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Botões de Ação */}
-                      <div className="flex items-center space-x-1">
-                        {/* Botão Editar */}
-                        <button
-                          onClick={() => handleEditService(service)}
-                          className="flex items-center space-x-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                          title="Editar serviço"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                          <span>Editar</span>
-                        </button>
-                        
-                        {/* Botão Excluir */}
-                        <button
-                          onClick={() => handleDeleteService(service)}
-                          className="flex items-center space-x-1 px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                          title="Remover serviço"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          <span>Excluir</span>
-                        </button>
-                      </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[10px] text-gray-500">
+                        {service.assigned_date
+                          ? new Date(service.assigned_date + 'T12:00:00').toLocaleDateString('pt-BR')
+                          : 'Sem data'}
+                      </span>
+                      <button onClick={() => handleEditService(service)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDeleteService(service)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
+
+                  {/* Linha 2: badges de status */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {/* Status do item */}
+                    {service.type === 'ASSIGNMENT' && (
+                      <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+                        service.status === 'ASSIGNED' ? 'bg-yellow-100 text-yellow-800' :
+                        service.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
+                        service.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {service.status === 'ASSIGNED' ? 'Atribuído' :
+                         service.status === 'IN_PROGRESS' ? 'Em Andamento' :
+                         service.status === 'COMPLETED' ? 'Concluído' : service.status}
+                      </span>
+                    )}
+                    {service.type === 'STATUS_ITEM' && (
+                      <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+                        service.status === 'EXECUTAR_NO_LOCAL' ? 'bg-purple-100 text-purple-800' :
+                        service.status === 'RETIRAR' ? 'bg-blue-100 text-blue-800' :
+                        service.status === 'ENTREGAR' ? 'bg-green-100 text-green-800' :
+                        service.status === 'COLETADO' ? 'bg-indigo-100 text-indigo-800' :
+                        service.status === 'EM_LAVAGEM' ? 'bg-orange-100 text-orange-800' :
+                        service.status === 'AGUARDANDO_ENTREGA' ? 'bg-yellow-100 text-yellow-800' :
+                        service.status === 'ENTREGUE' ? 'bg-green-100 text-green-800' :
+                        service.status === 'CANCELADO_PELO_CLIENTE' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {service.status === 'EXECUTAR_NO_LOCAL' ? 'No Local' :
+                         service.status === 'RETIRAR' ? 'Retirar' :
+                         service.status === 'ENTREGAR' ? 'Entregar' :
+                         service.status === 'COLETADO' ? 'Coletado' :
+                         service.status === 'EM_LAVAGEM' ? 'Em Lavagem' :
+                         service.status === 'AGUARDANDO_ENTREGA' ? 'Ag. Entrega' :
+                         service.status === 'ENTREGUE' ? 'Entregue' :
+                         service.status === 'CANCELADO_PELO_CLIENTE' ? 'Cancelado' :
+                         service.status}
+                      </span>
+                    )}
+                    {((service.type === 'ASSIGNMENT' && ['ASSIGNED','IN_PROGRESS'].includes(service.status)) ||
+                      (service.type === 'STATUS_ITEM' && ['EXECUTAR_NO_LOCAL','RETIRAR','ENTREGAR'].includes(service.status))) && (
+                      <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-yellow-100 text-yellow-800 border border-yellow-300">
+                        🔄 PENDENTE
+                      </span>
+                    )}
+                    {service.route_id && (
+                      <span className="px-2 py-0.5 text-[10px] text-gray-500 bg-gray-100 rounded-full font-mono">
+                        {service.route_id}
+                      </span>
+                    )}
+                    {service.service_value > 0 && (
+                      <span className="px-2 py-0.5 text-[10px] font-semibold text-green-700 bg-green-50 rounded-full">
+                        R$ {Number(service.service_value).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
                   
-                  {/* Conteúdo específico por tipo */}
+                  {/* Conteúdo específico — compacto no mobile */}
                   {service.type === 'ASSIGNMENT' ? (
-                    <div className="space-y-3">
-                      {/* Informações da Rota */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-700">Rota:</span>
-                          <p className="text-gray-600">{service.route_id || 'N/A'}</p>
-                        </div>
-                        
-                        <div>
-                          <span className="font-medium text-gray-700">Eventos:</span>
-                          <p className="text-gray-600">{service.event_ids?.length || 0} item(s)</p>
-                        </div>
-                        
-                        <div>
-                          <span className="font-medium text-gray-700">Técnico:</span>
-                          <p className="text-gray-600">{service.technician_id}</p>
-                        </div>
-                      </div>
-                      
-                      {/* Informações dos Clientes da Data (baseado nos status_items) */}
-                      <div className="bg-blue-50 rounded-lg p-3">
-                        <div className="text-sm font-medium text-blue-800 mb-2">
-                          📋 Clientes e Serviços para esta Data:
-                        </div>
-                        {service.availableStatusItems && service.availableStatusItems.length > 0 ? (
-                          <div className="space-y-1">
-                            {service.availableStatusItems.slice(0, 3).map((item, index) => (
-                              <div key={index} className="text-sm text-blue-700">
-                                <span className="font-medium">{item.client_name}:</span> {getServiceEmoji(item.service_name)} {item.service_name}
-                              </div>
-                            ))}
-                            {service.availableStatusItems.length > 3 && (
-                              <div className="text-xs text-blue-600 mt-1">
-                                + {service.availableStatusItems.length - 3} outros serviços...
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-blue-700">
-                            Nenhum serviço específico encontrado para esta data.
-                          </div>
-                        )}
-                      </div>
+                    <div className="mt-2 pt-2 border-t border-gray-100 grid grid-cols-3 gap-2 text-xs text-gray-600">
+                      <div><span className="font-medium text-gray-700 block">Rota</span>{service.route_id || 'N/A'}</div>
+                      <div><span className="font-medium text-gray-700 block">Eventos</span>{service.event_ids?.length || 0} item(s)</div>
+                      <div><span className="font-medium text-gray-700 block">Técnico</span>{service.technician_id}</div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium text-gray-700">Cliente:</span>
-                        <p className="text-gray-600">{service.client_name}</p>
-                      </div>
-                      
-                      <div>
-                        <span className="font-medium text-gray-700">Telefone:</span>
-                        <p className="text-gray-600">{service.client_phone || 'N/A'}</p>
-                      </div>
-                      
-                      <div>
-                        <span className="font-medium text-gray-700">Valor:</span>
-                        <p className="text-gray-600">R$ {parseFloat(service.service_value || 0).toFixed(2)}</p>
-                      </div>
+                    <div className="mt-2 pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-xs text-gray-600">
+                      <div><span className="font-medium text-gray-700 block">Cliente</span>{service.client_name}</div>
+                      <div><span className="font-medium text-gray-700 block">Telefone</span>{service.client_phone || '—'}</div>
                     </div>
                   )}
                   
-                  {/* Observações do serviço individual */}
-                  {service.observations && (
-                    <div className="mt-3 p-2 bg-yellow-50 rounded">
-                      <span className="text-xs font-medium text-yellow-800">📝 Observações do Serviço:</span>
-                      <p className="text-xs text-yellow-700 mt-1">{service.observations}</p>
+                  {/* Observações — colapsadas e compactas */}
+                  {(service.observations || service.internal_observations || service.budget_observations) && (
+                    <div className="mt-2 space-y-1">
+                      {service.observations && (
+                        <p className="text-[11px] text-yellow-700 bg-yellow-50 rounded px-2 py-1">📝 {service.observations}</p>
+                      )}
+                      {service.internal_observations && service.internal_observations.trim() && (
+                        <p className="text-[11px] text-blue-700 bg-blue-50 rounded px-2 py-1">🔒 {service.internal_observations}</p>
+                      )}
+                      {service.budget_observations && service.budget_observations.trim() && (
+                        <p className="text-[11px] text-green-700 bg-green-50 rounded px-2 py-1">💬 {service.budget_observations}</p>
+                      )}
                     </div>
                   )}
-                  
-                  {/* Observações Internas e do Orçamento - SEMPRE EXIBIR */}
-                  <div className="mt-3 space-y-2">
-                    <div className="p-2 bg-blue-50 rounded">
-                      <span className="text-xs font-medium text-blue-800">📝 Observações Internas:</span>
-                      <p className="text-xs text-blue-700 mt-1">
-                        {service.internal_observations && service.internal_observations.trim() 
-                          ? service.internal_observations 
-                          : 'Sem informações'}
-                      </p>
-                    </div>
-                    <div className="p-2 bg-green-50 rounded">
-                      <span className="text-xs font-medium text-green-800">💰 Observações do Orçamento:</span>
-                      <p className="text-xs text-green-700 mt-1">
-                        {service.budget_observations && service.budget_observations.trim() 
-                          ? service.budget_observations 
-                          : 'Sem informações'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Status detalhado (placeholder para implementação futura) */}
-                  <div className="mt-3 pt-3 border-t border-gray-100">
-                    <div className="flex items-center space-x-4 text-xs text-gray-500">
-                      <span>👁️ Visualizado: -</span>
-                      <span>📍 Localização: -</span>
-                      <span>📞 Atendeu: -</span>
-                      <span>📷 Fotos: -</span>
-                      <span>📝 Observações: -</span>
-                    </div>
-                  </div>
                 </div>
               ))}
             </div>
