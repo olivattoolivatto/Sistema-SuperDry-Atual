@@ -805,6 +805,23 @@ export function RoutesGeoapify() {
                 Ordem Otimizada das Paradas
               </h3>
               <div className="space-y-2">
+
+                {/* Ponto de início — Empresa */}
+                <div className="flex items-center p-3 bg-green-50 border-2 border-green-300 rounded-lg">
+                  <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-lg mr-3 shrink-0">
+                    🏢
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-green-800">
+                      {optimizedRoute.company_address?.full_address
+                        ? optimizedRoute.company_address.full_address.split(',')[0]
+                        : 'Empresa — SuperDry'}
+                    </div>
+                    <div className="text-xs text-green-600">{optimizedRoute.company_address?.neighborhood || 'Ponto de saída'}</div>
+                  </div>
+                  <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">SAÍDA</span>
+                </div>
+
                 {[...optimizedRoute.stops]
                   .sort((a, b) => (a.order_sequence || 0) - (b.order_sequence || 0))
                   .map((stop, idx) => (
@@ -827,6 +844,28 @@ export function RoutesGeoapify() {
                       </div>
                     </div>
                   ))}
+
+                {/* Ponto de retorno — Empresa */}
+                <div className="flex items-center p-3 bg-green-50 border-2 border-green-300 rounded-lg">
+                  <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-lg mr-3 shrink-0">
+                    🏢
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-green-800">
+                      {optimizedRoute.company_address?.full_address
+                        ? optimizedRoute.company_address.full_address.split(',')[0]
+                        : 'Empresa — SuperDry'}
+                    </div>
+                    <div className="text-xs text-green-600">{optimizedRoute.company_address?.neighborhood || 'Ponto de retorno'}</div>
+                  </div>
+                  <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">RETORNO</span>
+                </div>
+              </div>
+
+              {/* Resumo do deslocamento total */}
+              <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600 flex items-center justify-between">
+                <span>Deslocamento total (saída → paradas → retorno)</span>
+                <span className="font-bold text-gray-900">{optimizedRoute.total_distance || 0} km</span>
               </div>
             </div>
 
