@@ -533,9 +533,11 @@ function BatchModal({ services, onClose, onAdd }) {
       total_value: price,
       area_m2: null,
       linear_meters: null,
-      execution_location: execMode === 'EXECUTAR_NO_LOCAL' ? 'NO_LOCAL' : 'RETIRADA',
+      execution_location: execMode === 'EXECUTAR_NO_LOCAL' ? 'NO_LOCAL'
+        : execMode === 'CLIENTE_TROUXE' || execMode === 'CLIENTE_LEVARA' ? 'CLIENTE_TROUXE'
+        : 'RETIRADA',
       execution_mode: execMode,
-      status: execMode === 'EXECUTAR_NO_LOCAL' ? 'EXECUTAR_NO_LOCAL' : 'RETIRAR',
+      status: EXEC_MODE_TO_STATUS[execMode] || 'RETIRAR',
       observations: observations || '',
       is_retoque: false,
       pickup_address: null, execution_address: null, delivery_address: null,
