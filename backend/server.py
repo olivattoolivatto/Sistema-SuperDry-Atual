@@ -878,95 +878,85 @@ class DashboardSummary(BaseModel):
 # Google Places API integration
 @api_router.get("/places/search")
 async def search_places(query: str):
-    """Hybrid search using Places API and Geocoding API"""
+    """Hybrid search: Places Autocomplete (endereços) + Text Search (locais por nome)"""
     try:
         results = []
-        
-        # Search using Places API (for locations, businesses, landmarks)
+        seen_place_ids = set()
+
+        # 1. Places Autocomplete — melhor para endereços digitados
         try:
-            places_response = gmaps.places_autocomplete(
-                query, 
-                language='pt-BR', 
-                components=[{'country': 'BR'}]
+            autocomplete = gmaps.places_autocomplete(
+                query, language='pt-BR', components=[{'country': 'BR'}]
             )
-            
-            # Add Places API results
-            if isinstance(places_response, list):
-                for place in places_response:
+            if isinstance(autocomplete, list):
+                for place in autocomplete:
                     if isinstance(place, dict):
-                        results.append({
-                            **place,
-                            'source': 'places'
-                        })
-        except Exception as places_error:
-            print(f"Places API error: {places_error}")
-        
-        # Search using Geocoding API (for addresses)
+                        pid = place.get('place_id')
+                        if pid and pid not in seen_place_ids:
+                            seen_place_ids.add(pid)
+                            results.append({**place, 'source': 'places'})
+        except Exception as e:
+            print(f"Places autocomplete error: {e}")
+
+        # 2. Text Search — melhor para nomes de locais, condomínios, edifícios, etc.
         try:
-            geocode_response = gmaps.geocode(
-                query, 
-                language='pt-BR'
-            )
-            
-            # Add unique Geocoding API results
-            existing_place_ids = {p.get('place_id') for p in results if p.get('place_id')}
-            
-            if isinstance(geocode_response, list):
-                for geocode in geocode_response:
-                    if isinstance(geocode, dict) and geocode.get('place_id') not in existing_place_ids:
-                        formatted_address = geocode.get('formatted_address', '')
-                        
-                        # Parsing baseado no padrão: rua, número - bairro, cidade - estado, CEP, país
-                        parts = [p.strip() for p in formatted_address.split(',')]
-                        
-                        # Bairro
-                        neighborhood = None
-                        if len(parts) >= 2:
-                            first_part = parts[1]
-                            if '-' in first_part:
-                                neighborhood = first_part.split('-')[1].strip()
-                            else:
-                                neighborhood = first_part
-                        
-                        # Cidade e estado
-                        city = None
-                        state = None
-                        if len(parts) >= 3 and '-' in parts[2]:
-                            city = parts[2].split('-')[0].strip()
-                            state = parts[2].split('-')[1].strip()
-                        
-                        # Rua (main_text) e complemento (secondary_text)
-                        main_text = parts[0] if len(parts) >= 1 else formatted_address
-                        secondary_text = ', '.join(parts[1:]) if len(parts) > 1 else ''
-                        
-                        # Get geometry/coordinates from geocode result
-                        geometry = geocode.get('geometry', {})
-                        location = geometry.get('location', {})
-                        latitude = location.get('lat') if isinstance(location, dict) else None
-                        longitude = location.get('lng') if isinstance(location, dict) else None
-                        
-                        formatted_result = {
-                            'place_id': geocode.get('place_id'),
-                            'description': formatted_address,
-                            'structured_formatting': {
-                                'main_text': main_text,
-                                'secondary_text': secondary_text
-                            },
-                            'neighborhood': neighborhood,
-                            'city': city,
-                            'state': state,
-                            'geometry': {
-                                'location': {
-                                    'lat': latitude,
-                                    'lng': longitude
-                                }
-                            } if latitude and longitude else None,
-                            'source': 'geocoding'
-                        }
-                        results.append(formatted_result)
-        except Exception as geocode_error:
-            print(f"Geocoding API error: {geocode_error}")
-        
+            text_response = gmaps.places(query, language='pt-BR', region='br')
+            for place in (text_response.get('results') or [])[:5]:
+                pid = place.get('place_id')
+                if not pid or pid in seen_place_ids:
+                    continue
+                seen_place_ids.add(pid)
+                geo = place.get('geometry', {}).get('location', {})
+                name = place.get('name', '')
+                addr = place.get('formatted_address', place.get('vicinity', ''))
+                description = f"{name} — {addr}" if name and name.lower() not in addr.lower() else addr
+                results.insert(0, {   # coloca no topo pois é match por nome
+                    'place_id': pid,
+                    'description': description,
+                    'structured_formatting': {
+                        'main_text': name,
+                        'secondary_text': addr,
+                    },
+                    'geometry': {'location': geo} if geo else None,
+                    'source': 'text_search',
+                })
+        except Exception as e:
+            print(f"Text search error: {e}")
+
+        # 3. Geocoding — fallback para endereços completos
+        try:
+            geocoded = gmaps.geocode(query, language='pt-BR')
+            for geocode in (geocoded or []):
+                pid = geocode.get('place_id')
+                if not pid or pid in seen_place_ids:
+                    continue
+                seen_place_ids.add(pid)
+                formatted_address = geocode.get('formatted_address', '')
+                parts = [p.strip() for p in formatted_address.split(',')]
+                neighborhood = city = state = None
+                if len(parts) >= 2:
+                    p1 = parts[1]
+                    neighborhood = p1.split('-')[1].strip() if '-' in p1 else p1
+                if len(parts) >= 3 and '-' in parts[2]:
+                    city  = parts[2].split('-')[0].strip()
+                    state = parts[2].split('-')[1].strip()
+                geo = geocode.get('geometry', {}).get('location', {})
+                results.append({
+                    'place_id': pid,
+                    'description': formatted_address,
+                    'structured_formatting': {
+                        'main_text': parts[0] if parts else formatted_address,
+                        'secondary_text': ', '.join(parts[1:]) if len(parts) > 1 else '',
+                    },
+                    'neighborhood': neighborhood,
+                    'city': city,
+                    'state': state,
+                    'geometry': {'location': geo} if geo else None,
+                    'source': 'geocoding',
+                })
+        except Exception as e:
+            print(f"Geocoding error: {e}")
+
         return {"results": results}
     except Exception as e:
         print(f"General search error: {str(e)}")

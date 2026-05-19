@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Search, Edit2, Trash2, History as HistoryIcon, MessageCircle,
   Mail, MapPin, X, Save, Phone, AtSign, Instagram, FileText,
-  ChevronDown, ChevronUp, Loader2, AlertTriangle, ExternalLink, Check
+  ChevronDown, ChevronUp, Loader2, AlertTriangle, ExternalLink, Check, Building2
 } from 'lucide-react';
 import { clientsApi, placesApi } from '../services/api';
 import MiniMap from '../components/MiniMap';
@@ -152,27 +152,40 @@ function AddressAutocomplete({ value, onSelect, placeholder }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => results.length && setOpen(true)}
-          placeholder={placeholder || 'Buscar endereço, bairro, local…'}
+          placeholder={placeholder || 'Endereço, bairro, condomínio, local…'}
           className="w-full pl-9 pr-9 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
         />
         {loading && <Loader2 className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />}
       </div>
       {open && results.length > 0 && (
         <ul className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
-          {results.slice(0, 10).map((p) => (
-            <li
-              key={p.place_id || p.description}
-              onClick={() => handleChoose(p)}
-              className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-100 last:border-0"
-            >
-              <div className="font-medium text-gray-900 truncate">
-                {p.structured_formatting?.main_text || p.description}
-              </div>
-              <div className="text-xs text-gray-500 truncate">
-                {p.structured_formatting?.secondary_text || ''}
-              </div>
-            </li>
-          ))}
+          {results.slice(0, 10).map((p) => {
+            const isPlace = p.source === 'text_search';
+            return (
+              <li
+                key={p.place_id || p.description}
+                onClick={() => handleChoose(p)}
+                className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-100 last:border-0"
+              >
+                <div className="flex items-start gap-2">
+                  {isPlace
+                    ? <Building2 className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                    : <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />}
+                  <div className="min-w-0">
+                    <div className="font-medium text-gray-900 truncate">
+                      {p.structured_formatting?.main_text || p.description}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">
+                      {p.structured_formatting?.secondary_text || ''}
+                    </div>
+                    {isPlace && (
+                      <span className="text-[10px] text-blue-600 font-medium">Local</span>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
