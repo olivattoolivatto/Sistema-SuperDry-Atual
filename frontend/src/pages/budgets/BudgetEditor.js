@@ -495,15 +495,26 @@ function BatchModal({ services, onClose, onAdd }) {
   const [observations, setObservations] = useState('');
   const [useGenericName, setUseGenericName] = useState(false);
   const [genericName, setGenericName] = useState('Tapete');
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [showServicePicker, setShowServicePicker] = useState(false);
 
   const selectedSvc = services.find(s => s.id === serviceId);
 
-  const handleServiceChange = (id) => {
-    const svc = services.find(s => s.id === id);
-    setServiceId(id);
-    setServiceName(svc?.name || '');
-    setUnitPrice(svc?.sale_price || 0);
-    setExecMode(svc?.execution_location === 'NO_LOCAL' ? 'EXECUTAR_NO_LOCAL' : 'RETIRAR_E_LEVAR');
+  const filteredServices = useMemo(() => {
+    const q = normalize(serviceSearch);
+    return services.filter(s => s.is_active !== false && (
+      !q || normalize(s.name).includes(q) || normalize(s.id).includes(q) ||
+      normalize(s.category || '').includes(q)
+    )).slice(0, 30);
+  }, [services, serviceSearch]);
+
+  const selectService = (svc) => {
+    setServiceId(svc.id);
+    setServiceName(svc.name);
+    setUnitPrice(svc.sale_price || 0);
+    setExecMode(svc.execution_location === 'NO_LOCAL' ? 'EXECUTAR_NO_LOCAL' : 'RETIRAR_E_LEVAR');
+    setShowServicePicker(false);
+    setServiceSearch('');
   };
 
   const generate = () => {
@@ -560,11 +571,53 @@ function BatchModal({ services, onClose, onAdd }) {
           ) : (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Serviço</label>
-              <select value={serviceId} onChange={e => handleServiceChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                <option value="">Selecione…</option>
-                {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowServicePicker(v => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-left"
+                >
+                  <span className={serviceId ? 'text-gray-900' : 'text-gray-400'}>
+                    {selectedSvc?.name || 'Buscar serviço…'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+                </button>
+                {showServicePicker && (
+                  <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col">
+                    <div className="p-2 border-b border-gray-100">
+                      <div className="relative">
+                        <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          value={serviceSearch}
+                          onChange={e => setServiceSearch(e.target.value)}
+                          placeholder="Buscar serviço…"
+                          className="w-full pl-8 pr-2 py-1.5 text-sm border border-gray-200 rounded-md"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                      {filteredServices.length === 0 && (
+                        <div className="p-3 text-sm text-gray-500 text-center">Nenhum serviço encontrado.</div>
+                      )}
+                      {filteredServices.map(s => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => selectService(s)}
+                          className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0"
+                        >
+                          <div className="font-medium text-gray-900">{s.name}</div>
+                          <div className="text-xs text-gray-500 flex justify-between">
+                            <span>{s.id} • {s.category}</span>
+                            <span className="text-blue-700 font-semibold">{fmtMoney(s.sale_price)}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
