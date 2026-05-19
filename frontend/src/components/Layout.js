@@ -18,17 +18,21 @@ function CompanyLogo({ size = 'md' }) {
       .catch(() => {});
   }, []);
 
-  const cls = size === 'sm'
-    ? 'w-7 h-7 rounded-lg overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center'
-    : size === 'xs'
-    ? 'w-8 h-8 rounded-lg overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center'
-    : 'w-9 h-9 rounded-xl overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center';
+  const sizeMap = {
+    md:  'w-9 h-9 rounded-xl',
+    sm:  'w-7 h-7 rounded-lg',
+    xs:  'w-8 h-8 rounded-lg',
+  };
+
+  const baseCls = `${sizeMap[size] || sizeMap.md} overflow-hidden flex items-center justify-center`;
+  const fallbackCls = `${baseCls} bg-white border border-blue-200`;
+  const imgCls = `${baseCls} bg-white`;
 
   return (
-    <div className={cls}>
+    <div className={src ? imgCls : fallbackCls}>
       {src
         ? <img src={src} alt="logo" className="w-full h-full object-contain p-0.5" />
-        : <span className="text-white font-bold text-sm">S</span>}
+        : <span className="text-blue-600 font-bold text-sm">S</span>}
     </div>
   );
 }
