@@ -1413,11 +1413,25 @@ function MeasuresPanel({ items, onClose, onDone }) {
   const [flash, setFlash] = useState('');
 
   const setField = (id, field, val) =>
-    setEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: val } }));
+    setEdits(prev => {
+      const cur = { ...(prev[id] || {}), [field]: val };
+
+      // Auto-calcular area_m2
+      const w = field === 'width'    ? val : (cur.width    ?? items.find(i=>i.id===id)?.width);
+      const h = field === 'height'   ? val : (cur.height   ?? items.find(i=>i.id===id)?.height);
+      const d = field === 'diameter' ? val : (cur.diameter ?? items.find(i=>i.id===id)?.diameter);
+
+      if (d && parseFloat(d) > 0) {
+        cur.area_m2 = parseFloat((Math.PI * Math.pow(parseFloat(d)/2, 2)).toFixed(4));
+      } else if (w && h && parseFloat(w) > 0 && parseFloat(h) > 0) {
+        cur.area_m2 = parseFloat((parseFloat(w) * parseFloat(h)).toFixed(4));
+      }
+
+      return { ...prev, [id]: cur };
+    });
 
   const getPartnerLabel = (id) => edits[id]?.partner_label;
   const setPartnerLabel = (id, label) => setField(id, 'partner_label', label);
-  const isConfirmed = (id) => edits[id]?.confirmed_measures ?? items.find(i=>i.id===id)?.confirmed_measures;
 
   const saveAll = async () => {
     setSaving(true);
@@ -1435,6 +1449,8 @@ function MeasuresPanel({ items, onClose, onDone }) {
     setSaving(false);
   };
 
+  const val = (id, field) => edits[id]?.[field] ?? items.find(i=>i.id===id)?.[field] ?? '';
+
   return (
     <Panel title="Identificação e Medidas" onClose={onClose}>
       {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
@@ -1446,6 +1462,7 @@ function MeasuresPanel({ items, onClose, onDone }) {
 
           return (
             <div key={item.id} className="border border-gray-200 rounded-xl p-4 space-y-3 bg-white">
+              {/* Cabeçalho do item */}
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-semibold text-gray-900 text-sm">{item.client_name}</div>
@@ -1461,17 +1478,85 @@ function MeasuresPanel({ items, onClose, onDone }) {
                 </div>
               </div>
 
-              {/* Medidas */}
-              <div className="grid grid-cols-3 gap-2">
-                {['width','height','diameter','area_m2','linear_meters'].map(f => (
-                  <div key={f}>
-                    <label className="block text-[10px] text-gray-500 mb-0.5">{f}</label>
-                    <input type="number" step="0.01"
-                      value={edit[f] ?? item[f] ?? ''}
-                      onChange={e => setField(item.id, f, e.target.value ? parseFloat(e.target.value) : null)}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-xs" />
+              {/* ── Grupos de medidas ────────────────────────────────── */}
+              <div className="space-y-2">
+
+                {/* Tapete Quadrado — azul */}
+                <div className="border-2 border-blue-300 rounded-lg p-3 bg-blue-50">
+                  <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wide mb-2">Tapete Quadrado / Retangular</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-blue-600 mb-0.5">Largura (m)</label>
+                      <input type="number" step="0.01" placeholder="0.00"
+                        value={val(item.id, 'width')}
+                        onChange={e => setField(item.id, 'width', e.target.value ? parseFloat(e.target.value) : null)}
+                        className="w-full px-2 py-1 border border-blue-300 rounded text-xs bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-blue-600 mb-0.5">Comprimento (m)</label>
+                      <input type="number" step="0.01" placeholder="0.00"
+                        value={val(item.id, 'height')}
+                        onChange={e => setField(item.id, 'height', e.target.value ? parseFloat(e.target.value) : null)}
+                        className="w-full px-2 py-1 border border-blue-300 rounded text-xs bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-blue-600 mb-0.5">Área m² (auto)</label>
+                      <input type="number" step="0.0001" placeholder="—"
+                        value={val(item.id, 'area_m2')}
+                        onChange={e => setField(item.id, 'area_m2', e.target.value ? parseFloat(e.target.value) : null)}
+                        className="w-full px-2 py-1 border border-blue-300 rounded text-xs bg-blue-100 font-semibold" />
+                    </div>
                   </div>
-                ))}
+                </div>
+
+                {/* Tapete Redondo — verde */}
+                <div className="border-2 border-green-300 rounded-lg p-3 bg-green-50">
+                  <div className="text-[10px] font-bold text-green-700 uppercase tracking-wide mb-2">Tapete Redondo</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-green-600 mb-0.5">Diâmetro (m)</label>
+                      <input type="number" step="0.01" placeholder="0.00"
+                        value={val(item.id, 'diameter')}
+                        onChange={e => setField(item.id, 'diameter', e.target.value ? parseFloat(e.target.value) : null)}
+                        className="w-full px-2 py-1 border border-green-300 rounded text-xs bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-green-600 mb-0.5">Área m² (auto)</label>
+                      <input type="number" step="0.0001" placeholder="—"
+                        value={val(item.id, 'area_m2')}
+                        readOnly
+                        className="w-full px-2 py-1 border border-green-300 rounded text-xs bg-green-100 font-semibold cursor-default" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cortina — laranja */}
+                <div className="border-2 border-orange-300 rounded-lg p-3 bg-orange-50">
+                  <div className="text-[10px] font-bold text-orange-700 uppercase tracking-wide mb-2">Cortina / Metro Linear</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-orange-600 mb-0.5">Metro linear (m)</label>
+                      <input type="number" step="0.01" placeholder="0.00"
+                        value={val(item.id, 'linear_meters')}
+                        onChange={e => setField(item.id, 'linear_meters', e.target.value ? parseFloat(e.target.value) : null)}
+                        className="w-full px-2 py-1 border border-orange-300 rounded text-xs bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-orange-600 mb-0.5">Nº dobras</label>
+                      <input type="number" step="1" placeholder="0"
+                        value={val(item.id, 'fabric_folds')}
+                        onChange={e => setField(item.id, 'fabric_folds', e.target.value ? parseInt(e.target.value) : null)}
+                        className="w-full px-2 py-1 border border-orange-300 rounded text-xs bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-orange-600 mb-0.5">Cm por dobra</label>
+                      <input type="number" step="1" placeholder="0"
+                        value={val(item.id, 'fabric_per_fold')}
+                        onChange={e => setField(item.id, 'fabric_per_fold', e.target.value ? parseFloat(e.target.value) : null)}
+                        className="w-full px-2 py-1 border border-orange-300 rounded text-xs bg-white" />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Confirmação */}
@@ -1493,7 +1578,6 @@ function MeasuresPanel({ items, onClose, onDone }) {
                     </button>
                   ))}
                 </div>
-
                 {plType === 'COLOR_NUM' && (
                   <div className="flex gap-2 flex-wrap">
                     {PARTNER_COLORS.map(c => (
@@ -1508,7 +1592,6 @@ function MeasuresPanel({ items, onClose, onDone }) {
                     {pl?.color && <span className="text-xs font-bold" style={{ color: COLOR_HEX[pl.color] }}>{pl.color}-{pl.number}</span>}
                   </div>
                 )}
-
                 {plType === 'TEXT' && (
                   <input placeholder="Nome do cliente do parceiro"
                     value={pl?.text || ''}
