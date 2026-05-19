@@ -2479,95 +2479,106 @@ async def generate_pdf_budget(budget_id: str):
         if not client:
             raise HTTPException(status_code=404, detail="Client not found")
         
-        # Get budget configuration for risk texts
         config = await db.budget_config.find_one({})
         if not config:
-            # Create default config if doesn't exist
             config = BudgetConfig().dict()
             await db.budget_config.insert_one(config)
         
-        # Create PDF in memory
+        # Create PDF — margens reduzidas: top menor, esquerda mais próxima da borda
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            leftMargin=1.2*cm,   # ~10% para a esquerda vs padrão 2cm
+            rightMargin=1.8*cm,
+            topMargin=0.8*cm,    # margem superior compacta
+            bottomMargin=1.5*cm,
+        )
         styles = getSampleStyleSheet()
         story = []
         
-        # Custom styles
+        # Custom styles — seções com spaceBefore/spaceAfter reduzidos em ~40%
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=16,
-            spaceAfter=10,
-            alignment=1  # Center
+            fontSize=14,
+            spaceAfter=6,
+            alignment=1
         )
         
         section_style = ParagraphStyle(
             'SectionHeader',
             parent=styles['Heading2'],
-            fontSize=14,
-            spaceAfter=12,
-            spaceBefore=20,
+            fontSize=12,
+            spaceAfter=6,   # era 12 → 40% menos
+            spaceBefore=12, # era 20 → 40% menos
             textColor=colors.black
         )
 
         big_style = ParagraphStyle(
             'BigNormal',
             parent=styles['Normal'],
-            fontSize=int(styles['Normal'].fontSize * 1.5),   # 50% maior
-            leading=int(styles['Normal'].leading * 0.6),     # 40% menor
-            alignment=1  # Center
+            fontSize=11,
+            leading=13,
+            alignment=1
         )
         
-        # Header
+        # Header title
         story.append(Paragraph(f"ORÇAMENTO {budget_id}", title_style))
         story.append(Paragraph("SuperDry Lavanderia de Tapetes & Estofados", big_style))
-        story.append(Spacer(1, 30))
+        story.append(Spacer(1, 12))  # era 30 → compacto
         
-        # Client information with logo - using table layout
+        # Client info + logo side by side
         updated_date = budget.get("updated_at", datetime.utcnow())
         if isinstance(updated_date, str):
             updated_date = datetime.fromisoformat(updated_date.replace('Z', '+00:00'))
         formatted_date = updated_date.strftime("%d/%m/%Y")
         
-        # Create client info as HTML for proper formatting
-        client_info_html = f"""
-        <b>Cliente:</b> {budget.get('client_name', 'N/A')}<br/>
-        <b>Telefone:</b> {client.get('phone_primary', 'N/A')}<br/>
-        <b>Vendedor:</b> {budget.get('salesperson', 'N/A')}<br/>
-        <b>Forma de Pagamento:</b> {budget.get('payment_method', 'N/A')}<br/>
-        <b>Data:</b> {formatted_date}
-        """
-        
+        client_info_html = (
+            f"<b>Cliente:</b> {budget.get('client_name', 'N/A')}<br/>"
+            f"<b>Telefone:</b> {client.get('phone_primary', 'N/A')}<br/>"
+            f"<b>Vendedor:</b> {budget.get('salesperson', 'N/A')}<br/>"
+            f"<b>Forma de Pagamento:</b> {budget.get('payment_method', 'N/A')}<br/>"
+            f"<b>Data:</b> {formatted_date}"
+        )
         client_info_paragraph = Paragraph(client_info_html, styles['Normal'])
         
-        # Add logo if exists
-        logo_path = "/app/backend/logo-superdry.png"
-        if os.path.exists(logo_path):
-            try:
-                # Create logo image with fixed sizing
-                logo = Image(logo_path, width=1.1*inch, height=0.88*inch)
-                
-                # Create table with client info and logo
-                info_table_data = [[client_info_paragraph, logo]]
-                info_table = Table(info_table_data, colWidths=[4*inch, 2*inch])
-                info_table.setStyle(TableStyle([
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-                ]))
-                story.append(info_table)
-            except Exception as e:
-                # Fallback if logo fails to load
-                print(f"Warning: Could not load logo: {e}")
-                story.append(client_info_paragraph)
+        # Logo: prefer uploaded logo, fallback to original
+        logo_paths = [
+            "/app/backend/uploads/logo.png",
+            "/app/backend/logo-superdry.png",
+        ]
+        logo_element = None
+        for lp in logo_paths:
+            if os.path.exists(lp):
+                try:
+                    logo_element = Image(lp, width=1.6*inch, height=1.3*inch)
+                    break
+                except Exception as e:
+                    print(f"Warning: Could not load logo {lp}: {e}")
+
+        if logo_element:
+            page_width = A4[0] - 1.2*cm - 1.8*cm  # usable width
+            info_col = page_width - 1.8*inch
+            info_table = Table(
+                [[client_info_paragraph, logo_element]],
+                colWidths=[info_col, 1.8*inch]
+            )
+            info_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('LEFTPADDING', (0, 0), (0, 0), 0),
+                ('RIGHTPADDING', (1, 0), (1, 0), 0),
+            ]))
+            story.append(info_table)
         else:
-            # No logo file, just add client info
             story.append(client_info_paragraph)
         
         # Budget observations
         if budget.get('budget_observations'):
-            story.append(Paragraph(f"<b>Observações do Orçamento:</b> {budget.get('budget_observations')}", styles['Normal']))
+            story.append(Spacer(1, 6))
+            story.append(Paragraph(f"<b>Observações:</b> {budget.get('budget_observations')}", styles['Normal']))
         
-        story.append(Spacer(1, 20))
+        story.append(Spacer(1, 10))  # era 20 → compacto
         
         # Section 1: Services table
         story.append(Paragraph("1. SERVIÇOS", section_style))
@@ -2676,7 +2687,7 @@ async def generate_pdf_budget(budget_id: str):
         ]))
 
         story.append(table)
-        story.append(Spacer(1, 30))
+        story.append(Spacer(1, 18))  # era 30 → compacto
         
         # Section 2: Risk texts based on service categories
         if service_categories:
@@ -2704,7 +2715,7 @@ async def generate_pdf_budget(budget_id: str):
                     category_name = category_labels.get(category, category.replace('risks_', '').upper())
                     story.append(Paragraph(f"<b>{category_name}:</b>", styles['Normal']))
                     story.append(Paragraph(formatted_text, styles['Normal']))
-                    story.append(Spacer(1, 10))
+                    story.append(Spacer(1, 6))   # era 10 → compacto
         
         # Section 3: General conditions
         general_conditions = config.get('general_conditions', '')
@@ -2712,10 +2723,10 @@ async def generate_pdf_budget(budget_id: str):
             story.append(Paragraph("3. CONDIÇÕES GERAIS", section_style))
             formatted_conditions = format_html_text(general_conditions)
             story.append(Paragraph(formatted_conditions, styles['Normal']))
-            story.append(Spacer(1, 20))
+            story.append(Spacer(1, 12))  # era 20 → compacto
         
         # Signature section
-        story.append(Spacer(1, 30))
+        story.append(Spacer(1, 18))  # era 30 → compacto
         story.append(Paragraph("_" * 60, styles['Normal']))
         story.append(Paragraph("Assinatura do cliente", styles['Normal']))
         
@@ -2777,6 +2788,45 @@ async def get_payment_methods():
     # fallback padrão
     default = SystemConfig()
     return {"payment_methods": default.payment_methods}
+
+@api_router.post("/system-config/logo")
+async def upload_company_logo(
+    file: UploadFile = File(...),
+    current_user: UserPublic = Depends(get_current_user)
+):
+    """Upload/troca da logo da empresa usada no PDF."""
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem alterar a logo.")
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Apenas imagens são aceitas.")
+    os.makedirs("/app/backend/uploads", exist_ok=True)
+    contents = await file.read()
+    logo_path = "/app/backend/uploads/logo.png"
+    with open(logo_path, "wb") as f:
+        f.write(contents)
+    return {"message": "Logo atualizada com sucesso.", "path": logo_path}
+
+
+@api_router.get("/system-config/logo")
+async def get_logo_status():
+    """Verifica se existe logo personalizada."""
+    exists = os.path.exists("/app/backend/uploads/logo.png")
+    fallback = os.path.exists("/app/backend/logo-superdry.png")
+    return {
+        "has_custom_logo": exists,
+        "has_fallback_logo": fallback,
+        "logo_url": f"/api/system-config/logo/file" if exists else None
+    }
+
+
+@api_router.get("/system-config/logo/file")
+async def serve_logo():
+    """Serve o arquivo de logo atual."""
+    for path in ["/app/backend/uploads/logo.png", "/app/backend/logo-superdry.png"]:
+        if os.path.exists(path):
+            return FileResponse(path, media_type="image/png")
+    raise HTTPException(status_code=404, detail="Logo não encontrada.")
+
 
 @api_router.get("/system-config", response_model=SystemConfig)
 async def get_system_config():

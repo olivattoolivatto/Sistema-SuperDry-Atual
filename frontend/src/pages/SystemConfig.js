@@ -662,6 +662,9 @@ export const SystemConfig = () => {
           </div>
         </div>
 
+        {/* Logo da Empresa */}
+        <LogoManager />
+
         {/* Formas de Pagamento */}
         <PaymentMethodsManager config={config} setConfig={setConfig} />
 
@@ -683,6 +686,81 @@ export const SystemConfig = () => {
     </div>
   );
 };
+
+// ============================================================
+// Logo Manager
+// ============================================================
+function LogoManager() {
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+  const [status, setStatus] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [flash, setFlash] = useState('');
+  const inputRef = React.useRef();
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/system-config/logo`)
+      .then(r => r.json())
+      .then(setStatus)
+      .catch(() => {});
+  }, []);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const token = localStorage.getItem('superdry_token');
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch(`${BACKEND_URL}/api/system-config/logo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!r.ok) throw new Error((await r.json()).detail);
+      setFlash('Logo atualizada com sucesso!');
+      setStatus(s => ({ ...s, has_custom_logo: true, logo_url: `/api/system-config/logo/file` }));
+      setTimeout(() => setFlash(''), 3000);
+    } catch (err) {
+      setFlash('Erro: ' + err.message);
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 className="text-lg font-semibold text-gray-900 mb-1">Logo da Empresa</h2>
+      <p className="text-sm text-gray-500 mb-4">Usada no cabeçalho do PDF de orçamentos.</p>
+      {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
+      <div className="flex items-center gap-6">
+        <div className="w-32 h-24 border border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex items-center justify-center">
+          {status?.has_custom_logo || status?.has_fallback_logo ? (
+            <img
+              src={`${BACKEND_URL}/api/system-config/logo/file?t=${Date.now()}`}
+              alt="Logo atual"
+              className="object-contain w-full h-full p-1"
+            />
+          ) : (
+            <span className="text-xs text-gray-400">Sem logo</span>
+          )}
+        </div>
+        <div>
+          <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {uploading ? 'Enviando…' : status?.has_custom_logo ? 'Trocar Logo' : 'Enviar Logo'}
+          </button>
+          <p className="text-xs text-gray-400 mt-2">PNG recomendado · máx. 2 MB</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ============================================================
 // Payment Methods Manager
