@@ -815,39 +815,31 @@ export function Routes() {
 
   const handleVehicleAssignment = (item, vehicleType) => {
     logAction('VEHICLE_ASSIGNMENT_START', { item: item.budget_item_id, vehicleType, clientName: item.client_name });
-    
-    console.log('🚗 handleVehicleAssignment called:', { item: item.budget_item_id, vehicleType });
-    console.log('🚗 Current carRouteItems:', carRouteItems);
-    console.log('🚗 Current motoRouteItems:', motoRouteItems);
-    
-    if (vehicleType === 'CARRO') {
-      console.log('🚗 Adding to car route items');
-      setCarRouteItems(prev => {
-        const newItems = [...prev, item];
-        console.log('🚗 New car route items:', newItems);
-        return newItems;
+
+    // Validar endereço antes de adicionar à rota
+    const addr = item.address;
+    if (!addr || !addr.latitude || !addr.longitude || !addr.full_address) {
+      toast({
+        title: 'Endereço incompleto!',
+        description: `${item.client_name} não possui endereço com coordenadas. Complete o cadastro antes de incluir em rota.`,
+        variant: 'destructive',
       });
+      logAction('VEHICLE_ASSIGNMENT_BLOCKED_NO_ADDRESS', { item: item.budget_item_id, clientName: item.client_name });
+      return;
+    }
+
+    if (vehicleType === 'CARRO') {
+      setCarRouteItems(prev => [...prev, item]);
       logAction('ITEM_ADDED_TO_CAR', { item: item.budget_item_id, clientName: item.client_name });
     } else {
-      console.log('🏍️ Adding to moto route items');
-      setMotoRouteItems(prev => {
-        const newItems = [...prev, item];
-        console.log('🏍️ New moto route items:', newItems);
-        return newItems;
-      });
+      setMotoRouteItems(prev => [...prev, item]);
       logAction('ITEM_ADDED_TO_MOTO', { item: item.budget_item_id, clientName: item.client_name });
     }
-    
-    // Remove from available items
-    console.log('➖ Removing from available items');
+
     setAvailableItems(prev => prev.filter(i => i.budget_item_id !== item.budget_item_id));
-    
-    // Remove from selection
     const newSelected = new Set(selectedItems);
     newSelected.delete(item.budget_item_id);
     setSelectedItems(newSelected);
-    
-    console.log('✅ Vehicle assignment completed');
     logAction('VEHICLE_ASSIGNMENT_COMPLETED', { vehicleType, remainingAvailable: availableItems.length - 1 });
   };
 

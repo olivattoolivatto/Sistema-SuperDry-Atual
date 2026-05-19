@@ -619,9 +619,8 @@ function BatchModal({ services, onClose, onAdd }) {
   );
 }
 
-export default function BudgetEditor({ budget, onClose, onSaved }) {
+export default function BudgetEditor({ budget, onClose, onSaved, preselectedClient = null }) {
   const isEdit = Boolean(budget?.id);
-  const [step, setStep] = useState(1);
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState(PAYMENT_METHODS);
@@ -631,14 +630,16 @@ export default function BudgetEditor({ budget, onClose, onSaved }) {
   const [clientSearch, setClientSearch] = useState('');
   const [batchOpen, setBatchOpen] = useState(false);
   const [form, setForm] = useState({
-    client_id: budget?.client_id || '',
-    client_name: budget?.client_name || '',
+    client_id: budget?.client_id || preselectedClient?.id || '',
+    client_name: budget?.client_name || preselectedClient?.name || '',
     payment_method: budget?.payment_method || '',
     salesperson: budget?.salesperson || 'Gabriela Alcântara',
     internal_observations: budget?.internal_observations || '',
     budget_observations: budget?.budget_observations || '',
     items: budget?.items?.length ? budget.items : [],
   });
+  // If preselectedClient provided, skip to step 2 directly
+  const [step, setStep] = useState(preselectedClient ? 2 : 1);
 
   useEffect(() => {
     (async () => {

@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   Plus, Search, FileText, Loader2, Edit2, Trash2, Eye,
   Download, MessageCircle, AlertTriangle, ChevronRight, Layers,
+  User, Phone, X,
 } from 'lucide-react';
-import { budgetsApi } from '../services/api';
+import { budgetsApi, clientsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import BudgetEditor from './budgets/BudgetEditor';
 import ItemDetailDrawer from './budgets/ItemDetailDrawer';
@@ -105,6 +106,182 @@ function BudgetCard({ budget, onEdit, onDelete, onItemClick, onPDF, onWhats }) {
   );
 }
 
+// ── Cadastro Rápido ──────────────────────────────────────────────────────────
+function QuickRegisterModal({ initialName = '', onClose, onCreated }) {
+  const [name, setName] = useState(initialName);
+  const [phone, setPhone] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const save = async () => {
+    if (!name.trim()) { setError('Nome obrigatório.'); return; }
+    setSaving(true);
+    try {
+      const r = await clientsApi.create({
+        name: name.trim(),
+        phone_primary: phone.trim() || '(sem telefone)',
+        address: { full_address: '', neighborhood: '', city: '', state: '', latitude: null, longitude: null },
+      });
+      onCreated(r.data);
+    } catch (e) {
+      setError(e.response?.data?.detail || 'Erro ao cadastrar.');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-gray-900">Cadastro Rápido</h3>
+          <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
+        </div>
+        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Endereço não informado — este cliente não poderá ser incluído em rotas até o endereço ser cadastrado.
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
+          <input autoFocus value={name} onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && save()}
+            placeholder="Nome do cliente"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Telefone (opcional)</label>
+          <input value={phone} onChange={e => setPhone(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && save()}
+            placeholder="(65) 9 9999-9999"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+        </div>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose}
+            className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-700">Cancelar</button>
+          <button onClick={save} disabled={saving}
+            className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold disabled:opacity-50">
+            {saving ? 'Salvando…' : 'Cadastrar e Abrir Orçamento'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Smart Search Bar ──────────────────────────────────────────────────────────
+function SmartSearchBar({ budgets, search, setSearch, onOpenBudget, onQuickCreate, onOpenClientBudget }) {
+  const [clients, setClients] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loadingClients, setLoadingClients] = useState(false);
+  const debRef = useRef(null);
+  const boxRef = useRef(null);
+  const q = normalize(search);
+
+  // Debounce client search
+  useEffect(() => {
+    if (debRef.current) clearTimeout(debRef.current);
+    if (!q || q.length < 2) { setClients([]); return; }
+    debRef.current = setTimeout(async () => {
+      setLoadingClients(true);
+      try {
+        const r = await clientsApi.getAll({ limit: 8 });
+        const all = r.data || [];
+        setClients(all.filter(c =>
+          normalize(c.name).includes(q) ||
+          (c.phone_primary || '').replace(/\D/g, '').includes(search.replace(/\D/g, ''))
+        ).slice(0, 5));
+      } catch { setClients([]); }
+      setLoadingClients(false);
+    }, 300);
+  }, [q]);
+
+  // Close on outside click
+  useEffect(() => {
+    const h = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const matchedBudgets = useMemo(() => {
+    if (!q) return [];
+    return budgets.filter(b =>
+      normalize(b.id).includes(q) ||
+      normalize(b.client_name || '').includes(q) ||
+      (b.items || []).some(it => normalize(it.service_name || '').includes(q))
+    ).slice(0, 4);
+  }, [budgets, q]);
+
+  const showDropdown = open && q.length >= 2 && (matchedBudgets.length > 0 || clients.length > 0 || true);
+
+  // Clients already with a budget in results → exclude from client section
+  const budgetClientIds = new Set(matchedBudgets.map(b => b.client_id));
+  const clientsWithoutBudget = clients.filter(c => !budgetClientIds.has(c.id));
+
+  return (
+    <div className="relative flex-1" ref={boxRef}>
+      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+      {loadingClients && <Loader2 className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />}
+      <input
+        value={search}
+        onChange={e => { setSearch(e.target.value); setOpen(true); }}
+        onFocus={() => q.length >= 2 && setOpen(true)}
+        placeholder="Buscar orçamento, cliente ou cadastrar novo…"
+        className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+      />
+
+      {showDropdown && (
+        <div className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-80 overflow-y-auto">
+          {/* Orçamentos */}
+          {matchedBudgets.length > 0 && (
+            <div>
+              <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide bg-gray-50">Orçamentos</div>
+              {matchedBudgets.map(b => (
+                <button key={b.id} onClick={() => { setOpen(false); onOpenBudget(b); }}
+                  className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-50 flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{b.client_name}</div>
+                    <div className="text-xs text-gray-400">{b.id} · {b.items?.length || 0} item(s)</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Clientes cadastrados */}
+          {clientsWithoutBudget.length > 0 && (
+            <div>
+              <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide bg-gray-50">Clientes cadastrados</div>
+              {clientsWithoutBudget.map(c => (
+                <button key={c.id} onClick={() => { setOpen(false); setSearch(''); onOpenClientBudget(c); }}
+                  className="w-full text-left px-3 py-2 hover:bg-green-50 border-b border-gray-50 flex items-center gap-2">
+                  <User className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{c.name}</div>
+                    <div className="text-xs text-gray-400">{c.phone_primary} {!c.address?.full_address && '· Sem endereço'}</div>
+                  </div>
+                  <span className="ml-auto text-[10px] text-green-600 font-medium shrink-0">Novo orçamento</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Cadastro rápido */}
+          <button
+            onClick={() => { setOpen(false); onQuickCreate(search); }}
+            className="w-full text-left px-3 py-2.5 hover:bg-orange-50 flex items-center gap-2 border-t border-gray-100">
+            <Plus className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+            <div>
+              <div className="text-sm font-medium text-orange-600">Cadastro rápido</div>
+              <div className="text-xs text-gray-400">
+                {search.trim() ? `Cadastrar "${search.trim()}" e abrir orçamento` : 'Cadastrar novo cliente sem endereço'}
+              </div>
+            </div>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Budgets() {
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +290,8 @@ export function Budgets() {
   const [editing, setEditing] = useState(null);
   const [itemDetailId, setItemDetailId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [quickRegisterName, setQuickRegisterName] = useState(null); // null=closed, string=open
+  const [preselectedClient, setPreselectedClient] = useState(null);
   const { user } = useAuth();
 
   const load = async () => {
@@ -137,8 +316,21 @@ export function Budgets() {
     );
   }, [budgets, search]);
 
-  const openNew = () => { setEditing(null); setEditorOpen(true); };
-  const openEdit = (b) => { setEditing(b); setEditorOpen(true); };
+  const openNew = () => { setPreselectedClient(null); setEditing(null); setEditorOpen(true); };
+  const openEdit = (b) => { setPreselectedClient(null); setEditing(b); setEditorOpen(true); };
+
+  // Open new budget pre-filled with an existing client
+  const openClientBudget = (client) => {
+    setPreselectedClient(client);
+    setEditing(null);
+    setEditorOpen(true);
+  };
+
+  // After quick-register, open budget editor with the new client
+  const handleQuickCreated = (client) => {
+    setQuickRegisterName(null);
+    openClientBudget(client);
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -188,15 +380,14 @@ export function Budgets() {
       {/* Header / busca */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 sm:p-4">
         <div className="flex flex-col sm:flex-row gap-2">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por ORC-, cliente, item…"
-              className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-            />
-          </div>
+          <SmartSearchBar
+            budgets={budgets}
+            search={search}
+            setSearch={setSearch}
+            onOpenBudget={openEdit}
+            onOpenClientBudget={openClientBudget}
+            onQuickCreate={(name) => setQuickRegisterName(name)}
+          />
           <button
             onClick={openNew}
             className="px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 hover:bg-blue-700"
@@ -233,15 +424,6 @@ export function Budgets() {
             />
           ))}
         </div>
-      )}
-
-      {/* Editor modal */}
-      {editorOpen && (
-        <BudgetEditor
-          budget={editing}
-          onClose={() => { setEditorOpen(false); setEditing(null); }}
-          onSaved={() => load()}
-        />
       )}
 
       {/* Item detail drawer */}
@@ -292,6 +474,23 @@ export function Budgets() {
             </div>
           </div>
         </div>
+      )}
+      {/* Quick Register Modal */}
+      {quickRegisterName !== null && (
+        <QuickRegisterModal
+          initialName={quickRegisterName}
+          onClose={() => setQuickRegisterName(null)}
+          onCreated={handleQuickCreated}
+        />
+      )}
+
+      {editorOpen && (
+        <BudgetEditor
+          budget={editing}
+          preselectedClient={preselectedClient}
+          onClose={() => { setEditorOpen(false); setPreselectedClient(null); }}
+          onSaved={() => { setEditorOpen(false); setPreselectedClient(null); load(); }}
+        />
       )}
     </div>
   );

@@ -262,6 +262,17 @@ export function RoutesGeoapify() {
   // ── item / vehicle assignment ──────────────────────────────────────────────
 
   const handleVehicleAssignment = (item, vehicleType) => {
+    // Validar endereço antes de adicionar à rota
+    const addr = item.address;
+    if (!addr || !addr.latitude || !addr.longitude || !addr.full_address) {
+      toast({
+        title: 'Endereço incompleto!',
+        description: `${item.client_name} não possui endereço com coordenadas cadastrado. Complete o cadastro do cliente antes de incluí-lo em uma rota.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (vehicleType === 'CARRO')
       setCarRouteItems(prev => [...prev, item]);
     else
