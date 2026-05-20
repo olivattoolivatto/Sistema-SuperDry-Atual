@@ -700,7 +700,12 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
             )}
           </div>
         </div>
-        <p className="text-sm text-gray-600 mt-1">{getClientAddress(client)}</p>
+        <div>
+          <p className="text-sm text-gray-600 mt-1">{getClientAddress(client)}</p>
+          {client.complement && client.complement !== 'NENHUM' && (
+            <p className="text-xs text-gray-500 mt-0.5">Compl.: {client.complement}</p>
+          )}
+        </div>
         
         {/* Observações do Orçamento e Internas - APÓS O ENDEREÇO */}
         <div className="mt-2 space-y-1">
@@ -1038,9 +1043,14 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
       {/* Client Info */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-4">
         <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <MapPin className="w-4 h-4 text-blue-600" />
-            <span className="text-sm text-gray-700">{getClientAddress(client)}</span>
+          <div className="flex items-start space-x-2">
+            <MapPin className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+            <div>
+              <span className="text-sm text-gray-700">{getClientAddress(client)}</span>
+              {client.complement && client.complement !== 'NENHUM' && (
+                <span className="block text-xs text-gray-500">Compl.: {client.complement}</span>
+              )}
+            </div>
           </div>
           <div className="flex items-center space-x-2">
             <Phone className="w-4 h-4 text-green-600" />
