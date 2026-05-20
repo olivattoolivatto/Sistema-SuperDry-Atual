@@ -4101,6 +4101,123 @@ async def delete_user(
     return {"success": True}
 
 
+# ── Comissões ────────────────────────────────────────────────────────────────
+#
+# REGRA DE CÁLCULO (definitiva):
+#   comissão_valor = item.paid_value × (item.commission_pct / 100)
+#
+# - item.paid_value = valor EFETIVAMENTE RECEBIDO para aquele item
+#   (já considera pagamentos parciais e descontos)
+# - commission_pct = % acordada no orçamento para aquele item
+# - O cálculo é sempre sobre o recebido real, nunca sobre o valor orçado
+#
+@api_router.get("/commissions/summary")
+async def commissions_summary(
+    user_id: Optional[str] = None,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """
+    Resumo de comissões por usuário.
+    Filtra por user_id, ano e/ou mês (baseado em updated_at do item).
+    Retorna: comissão devida (sobre pago) e comissão potencial (sobre total do orçamento).
+    """
+    pipeline = [
+        {"$unwind": "$items"},
+        {"$match": {
+            "items.commission_enabled": True,
+            "items.commission_user_id": {"$ne": None},
+            "items.commission_pct": {"$gt": 0},
+        }},
+    ]
+
+    if user_id:
+        pipeline.append({"$match": {"items.commission_user_id": user_id}})
+
+    # Filtro de período (usa updated_at do item)
+    if year:
+        date_filter: dict = {}
+        start = f"{year}-01-01"
+        end   = f"{year}-12-31"
+        if month:
+            import calendar
+            last_day = calendar.monthrange(year, month)[1]
+            start = f"{year}-{month:02d}-01"
+            end   = f"{year}-{month:02d}-{last_day}"
+        pipeline.append({"$match": {
+            "items.updated_at": {"$gte": datetime.fromisoformat(start),
+                                  "$lte": datetime.fromisoformat(end + "T23:59:59")}
+        }})
+
+    pipeline += [
+        {"$project": {
+            "_id": 0,
+            "budget_id":            "$id",
+            "client_name":          "$client_name",
+            "item_id":              "$items.id",
+            "service_name":         "$items.service_name",
+            "commission_user_id":   "$items.commission_user_id",
+            "commission_user_name": "$items.commission_user_name",
+            "commission_pct":       "$items.commission_pct",
+            "total_value":          "$items.total_value",
+            "paid_value":           "$items.paid_value",
+            "payment_status":       "$items.payment_status",
+            # comissão devida = sobre o PAGO (regra definitiva)
+            "commission_earned": {
+                "$multiply": [
+                    {"$ifNull": ["$items.paid_value", 0]},
+                    {"$divide": [{"$ifNull": ["$items.commission_pct", 0]}, 100]}
+                ]
+            },
+            # comissão potencial = sobre o ORÇADO (referência)
+            "commission_potential": {
+                "$multiply": [
+                    {"$ifNull": ["$items.total_value", 0]},
+                    {"$divide": [{"$ifNull": ["$items.commission_pct", 0]}, 100]}
+                ]
+            },
+        }},
+        {"$group": {
+            "_id": {"user_id": "$commission_user_id", "user_name": "$commission_user_name"},
+            "total_earned":    {"$sum": "$commission_earned"},
+            "total_potential": {"$sum": "$commission_potential"},
+            "items_count":     {"$sum": 1},
+            "details":         {"$push": {
+                "budget_id":      "$budget_id",
+                "client_name":    "$client_name",
+                "item_id":        "$item_id",
+                "service_name":   "$service_name",
+                "commission_pct": "$commission_pct",
+                "total_value":    "$total_value",
+                "paid_value":     "$paid_value",
+                "payment_status": "$payment_status",
+                "commission_earned":    "$commission_earned",
+                "commission_potential": "$commission_potential",
+            }}
+        }},
+        {"$sort": {"_id.user_name": 1}},
+    ]
+
+    results = []
+    async for doc in db.budgets.aggregate(pipeline):
+        results.append({
+            "user_id":          doc["_id"]["user_id"],
+            "user_name":        doc["_id"]["user_name"],
+            "total_earned":     round(doc["total_earned"], 2),
+            "total_potential":  round(doc["total_potential"], 2),
+            "items_count":      doc["items_count"],
+            "details":          doc["details"],
+        })
+
+    return {
+        "summary": results,
+        "grand_total_earned":    round(sum(r["total_earned"] for r in results), 2),
+        "grand_total_potential": round(sum(r["total_potential"] for r in results), 2),
+        "calculation_rule": "commission = item.paid_value × (commission_pct / 100)",
+    }
+
+
 @api_router.get("/audit-logs")
 async def list_audit_logs(
     entity_type: Optional[str] = None,
