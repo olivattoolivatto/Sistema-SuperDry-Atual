@@ -3216,6 +3216,13 @@ async def bulk_change_status(
     valid = {s.value for s in ServiceStatus}
     if new_status not in valid:
         raise HTTPException(status_code=400, detail=f"Status inválido: {new_status}")
+    CLEAR_ROUTE_ON = {
+        ServiceStatus.COLETADO.value, ServiceStatus.EM_LAVAGEM.value,
+        ServiceStatus.EM_LAVAGEM_PARCEIRO.value, ServiceStatus.AGUARDANDO_ENTREGA.value,
+        ServiceStatus.AGUARDANDO_BUSCAR.value, ServiceStatus.ENTREGUE.value,
+        ServiceStatus.EXECUTADO.value, ServiceStatus.BUSCOU.value,
+        ServiceStatus.CANCELADO_PELO_CLIENTE.value,
+    }
     updated = 0
     for item_id in item_ids:
         budget, item = await _find_budget_and_item(item_id)
@@ -3223,7 +3230,11 @@ async def bulk_change_status(
             continue
         entry = {"status": new_status, "at": datetime.utcnow().isoformat(),
                  "by_user_id": current_user.id, "by_user_name": current_user.name, "notes": notes}
-        await _update_item_fields(item_id, {"status": new_status}, current_user)
+        update_fields: Dict[str, Any] = {"status": new_status}
+        if new_status in CLEAR_ROUTE_ON and item.get("current_route_id"):
+            update_fields["current_route_id"] = None
+            update_fields["current_route_stop_id"] = None
+        await _update_item_fields(item_id, update_fields, current_user)
         await _append_to_item_array(item_id, "status_history", entry)
         updated += 1
     return {"updated": updated, "status": new_status}
@@ -4576,10 +4587,31 @@ async def change_item_status(
         "by_user_name": current_user.name,
         "notes": payload.get("notes") or "",
     }
-    await _update_item_fields(item_id, {"status": new_status}, current_user)
+
+    # Statuses que indicam que o item saiu do ciclo da rota atual.
+    # Ao atingir qualquer um deles, o vínculo com a rota anterior é limpo
+    # automaticamente para que o item possa entrar em uma nova rota no futuro.
+    CLEAR_ROUTE_ON = {
+        ServiceStatus.COLETADO.value,           # retirado pelo técnico → vai para lavagem
+        ServiceStatus.EM_LAVAGEM.value,         # entrou no processo interno
+        ServiceStatus.EM_LAVAGEM_PARCEIRO.value,
+        ServiceStatus.AGUARDANDO_ENTREGA.value, # pronto → disponível para rota de entrega
+        ServiceStatus.AGUARDANDO_BUSCAR.value,
+        ServiceStatus.ENTREGUE.value,           # ciclo encerrado
+        ServiceStatus.EXECUTADO.value,
+        ServiceStatus.BUSCOU.value,
+        ServiceStatus.CANCELADO_PELO_CLIENTE.value,
+    }
+    update_fields: Dict[str, Any] = {"status": new_status}
+    if new_status in CLEAR_ROUTE_ON and item.get("current_route_id"):
+        update_fields["current_route_id"] = None
+        update_fields["current_route_stop_id"] = None
+
+    await _update_item_fields(item_id, update_fields, current_user)
     await _append_to_item_array(item_id, "status_history", entry)
     await log_audit("item", item_id, "STATUS_CHANGE", current_user, {
         "from": item.get("status"), "to": new_status, "notes": entry["notes"],
+        "route_cleared": new_status in CLEAR_ROUTE_ON,
     })
     return {"success": True, "status": new_status}
 
