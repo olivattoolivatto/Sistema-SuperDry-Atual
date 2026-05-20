@@ -42,7 +42,7 @@ const ALL_ITEMS = [
   { path: '/clients', label: 'Clientes', short: 'Clientes', icon: Users, roles: ['ADMIN','ATENDENTE'] },
   { path: '/budgets', label: 'Orçamentos', short: 'Orç.', icon: FileText, roles: ['ADMIN','ATENDENTE'] },
   { path: '/routes', label: 'Rotas', short: 'Rotas', icon: RouteIcon, roles: ['ADMIN','ATENDENTE'] },
-  { path: '/routes-geo', label: 'Rotas Geoapify', short: 'Geo', icon: Navigation, roles: ['ADMIN','ATENDENTE'] },
+  { path: '/routes-geo', label: 'Rotas Geoapify', short: 'Rotas', icon: Navigation, roles: ['ADMIN','ATENDENTE'] },
   { path: '/agenda', label: 'Agenda', short: 'Agenda', icon: CalendarDays, roles: ['ADMIN','ATENDENTE','TECNICO'] },
   { path: '/whatsapp', label: 'WhatsApp', short: 'WhatsApp', icon: MessageSquare, roles: ['ADMIN','ATENDENTE'] },
   { path: '/technician', label: 'Execução e Lavagem', short: 'Execução', icon: Smartphone, roles: ['ADMIN','TECNICO'] },
@@ -73,9 +73,12 @@ export function Layout({ children }) {
     return ALL_ITEMS.filter(i => i.roles.includes(user.role));
   }, [user]);
 
-  // For mobile bottom nav: keep up to 4 main + "Mais"
-  const primary = items.slice(0, 4);
-  const overflow = items.slice(4);
+  // Mobile bottom nav: ordem fixa preferencial — mostra só os que o usuário tem acesso
+  const BOTTOM_NAV_PATHS = ['/', '/budgets', '/routes-geo', '/technician', '/financial'];
+  const primary = BOTTOM_NAV_PATHS
+    .map(p => items.find(i => i.path === p))
+    .filter(Boolean);
+  const overflow = items.filter(i => !BOTTOM_NAV_PATHS.includes(i.path));
 
   const currentLabel = items.find(i => i.path === location.pathname)?.label
     || ALL_ITEMS.find(i => i.path === location.pathname)?.label
