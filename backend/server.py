@@ -2310,23 +2310,64 @@ async def update_budget(
 
 @api_router.delete("/budgets/{budget_id}/force")
 async def force_delete_budget(budget_id: str, current_user: UserPublic = Depends(get_current_user)):
-    """Forçar exclusão de orçamento (ADMIN). Limpa vínculos de rota/sessão antes de deletar."""
+    """Exclusão TOTAL (ADMIN): remove orçamento + todos os rastros no sistema
+    (rotas, paradas, assignments, eventos de calendário, audit logs)."""
     if current_user.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Apenas administradores podem forçar exclusão.")
     budget = await db.budgets.find_one({"id": budget_id})
     if not budget:
         raise HTTPException(status_code=404, detail="Orçamento não encontrado.")
-    # Limpa current_route_id de qualquer rota que aponte para estes itens
+
+    item_ids = [it["id"] for it in (budget.get("items") or [])]
+    removed = {}
+
+    # 1. Remover paradas das rotas + limpar current_route_id
     for it in (budget.get("items") or []):
         route_id = it.get("current_route_id")
         if route_id:
-            await db.routes.update_one(
+            r = await db.routes.update_one(
                 {"id": route_id},
                 {"$pull": {"stops": {"budget_item_id": it["id"]}}}
             )
+            removed.setdefault("route_stops", 0)
+            removed["route_stops"] += r.modified_count
+
+    # 2. Excluir rotas que ficaram sem paradas E foram geradas só por este orçamento
+    #    (rotas onde TODOS os stops eram deste orçamento)
+    async for route in db.routes.find({"stops": {"$size": 0}}):
+        await db.routes.delete_one({"id": route["id"]})
+        removed.setdefault("empty_routes", 0)
+        removed["empty_routes"] += 1
+
+    # 3. Cancelar / excluir assignments de técnico que referenciam os itens deste orçamento
+    if item_ids:
+        # Assignments que têm event_ids com qualquer item deste orçamento
+        asgn_result = await db.technician_assignments.delete_many(
+            {"event_ids": {"$in": item_ids}}
+        )
+        removed["assignments"] = asgn_result.deleted_count
+
+    # 4. Remover eventos de calendário vinculados
+    cal_result = await db.calendar_events.delete_many(
+        {"$or": [{"budget_id": budget_id}, {"event_ids": {"$in": item_ids}}]}
+    )
+    removed["calendar_events"] = cal_result.deleted_count
+
+    # 5. Excluir audit_logs relacionados
+    audit_result = await db.audit_logs.delete_many(
+        {"$or": [{"entity_id": budget_id}, {"entity_id": {"$in": item_ids}}]}
+    )
+    removed["audit_logs"] = audit_result.deleted_count
+
+    # 6. Excluir o orçamento
     await db.budgets.delete_one({"id": budget_id})
-    await log_audit("budget", budget_id, "FORCE_DELETE", current_user, {"reason": "admin force delete"})
-    return {"message": "Orçamento excluído forçadamente."}
+    removed["budget"] = 1
+
+    print(f"[FORCE_DELETE] {budget_id} by {current_user.email}: {removed}")
+    return {
+        "message": f"Orçamento {budget_id} e todos os rastros excluídos.",
+        "removed": removed
+    }
 
 @api_router.delete("/budgets/{budget_id}")
 async def delete_budget(budget_id: str, current_user: UserPublic = Depends(get_current_user)):

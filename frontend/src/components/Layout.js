@@ -61,10 +61,25 @@ export function Layout({ children }) {
   const { user, logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [editingNav, setEditingNav] = useState(false);
+
+  const STORAGE_KEY = `quicknav_${user?.id || 'default'}`;
+  const DEFAULT_NAV = ['/', '/budgets', '/routes-geo', '/technician', '/financial'];
+
+  const [quickNavPaths, setQuickNavPaths] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`quicknav_${user?.id || 'default'}`);
+      return saved ? JSON.parse(saved) : DEFAULT_NAV;
+    } catch { return DEFAULT_NAV; }
+  });
+
+  const saveQuickNav = (paths) => {
+    setQuickNavPaths(paths);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(paths));
+  };
 
   const items = useMemo(() => {
     if (!user) return [];
-    // Se o usuário tem módulos customizados, filtra por eles; senão usa o role padrão
     if (user.allowed_modules && user.allowed_modules.length > 0) {
       return ALL_ITEMS.filter(i =>
         i.roles.includes(user.role) || user.allowed_modules.includes(i.path)
@@ -73,12 +88,11 @@ export function Layout({ children }) {
     return ALL_ITEMS.filter(i => i.roles.includes(user.role));
   }, [user]);
 
-  // Mobile bottom nav: ordem fixa preferencial — mostra só os que o usuário tem acesso
-  const BOTTOM_NAV_PATHS = ['/', '/budgets', '/routes-geo', '/technician', '/financial'];
-  const primary = BOTTOM_NAV_PATHS
+  // Bottom nav: usa caminhos salvos, filtra só os que o usuário tem acesso
+  const primary = quickNavPaths
     .map(p => items.find(i => i.path === p))
-    .filter(Boolean);
-  const overflow = items.filter(i => !BOTTOM_NAV_PATHS.includes(i.path));
+    .filter(Boolean)
+    .slice(0, 5);
 
   const currentLabel = items.find(i => i.path === location.pathname)?.label
     || ALL_ITEMS.find(i => i.path === location.pathname)?.label
@@ -225,19 +239,63 @@ export function Layout({ children }) {
 
       {/* ============== Mobile Bottom Nav ============== */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 safe-area-inset-bottom">
-        <div className="grid grid-cols-5 gap-0">
+        <div className={`grid gap-0`} style={{ gridTemplateColumns: `repeat(${primary.length + 1}, 1fr)` }}>
           {primary.map(it => <NavLink key={it.path} item={it} compact />)}
-          {overflow.length > 0 && (
-            <button
-              onClick={() => setDrawerOpen(true)}
-              className="flex flex-col items-center gap-0.5 py-2 text-gray-600 hover:bg-gray-50"
-            >
-              <Menu className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Mais</span>
-            </button>
-          )}
+          {/* Botão de configuração da barra */}
+          <button
+            onClick={() => setEditingNav(true)}
+            className="flex flex-col items-center gap-0.5 py-2 text-gray-400 hover:bg-gray-50"
+          >
+            <Settings className="w-4 h-4" />
+            <span className="text-[9px] font-medium">Config.</span>
+          </button>
         </div>
       </nav>
+
+      {/* ============== Modal configuração da barra de acesso rápido ============== */}
+      {editingNav && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
+          <div className="bg-white rounded-t-2xl w-full max-w-md p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900">Acesso Rápido</h3>
+              <button onClick={() => setEditingNav(false)}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Selecione até 5 atalhos para a barra inferior.</p>
+            <div className="space-y-1.5 max-h-72 overflow-y-auto">
+              {items.map(it => {
+                const selected = quickNavPaths.includes(it.path);
+                const Icon = it.icon;
+                return (
+                  <label key={it.path} className="flex items-center gap-3 p-2.5 rounded-xl cursor-pointer hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => {
+                        if (selected) {
+                          saveQuickNav(quickNavPaths.filter(p => p !== it.path));
+                        } else if (quickNavPaths.length < 5) {
+                          saveQuickNav([...quickNavPaths, it.path]);
+                        }
+                      }}
+                      disabled={!selected && quickNavPaths.length >= 5}
+                      className="h-4 w-4 text-blue-600 rounded"
+                    />
+                    <Icon className="w-4 h-4 text-gray-500 shrink-0" />
+                    <span className="text-sm text-gray-800">{it.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-gray-400 mt-3">{quickNavPaths.length}/5 selecionados</p>
+            <button
+              onClick={() => { saveQuickNav(['/', '/budgets', '/routes-geo', '/technician', '/financial']); }}
+              className="mt-3 w-full py-2 text-xs text-gray-500 bg-gray-100 rounded-xl hover:bg-gray-200"
+            >
+              Restaurar padrão
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -466,9 +466,9 @@ export function Budgets() {
                 <button
                   onClick={handleForceDelete}
                   className="flex-1 px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-900 text-sm font-medium"
-                  title="Remove vínculos de rota e exclui forçadamente"
+                  title="Remove TODOS os rastros: rotas, assignments, eventos, financeiro"
                 >
-                  Forçar
+                  Excluir Tudo
                 </button>
               )}
             </div>
