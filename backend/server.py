@@ -454,17 +454,18 @@ class RouteStatus(str, Enum):
 class RouteStop(BaseModel):
     id: str = Field(default_factory=lambda: f"STP-{str(uuid.uuid4().int)[:7].zfill(7)}")
     route_id: str
-    budget_item_id: str
+    budget_item_id: str                           # item principal (1º do endereço)
+    extra_budget_item_ids: List[str] = []         # demais itens do mesmo endereço (merge)
     client_id: str
     client_name: str
     service_name: str
     service_value: float
-    address: dict  # Contains full_address, latitude, longitude, neighborhood
+    address: dict
     priority: Priority = Priority.AUTOMATICA
-    estimated_duration: int = 30  # minutes (30 for Retirar/Entregar, 120 for Executar)
+    estimated_duration: int = 30
     service_status: ServiceStatus
-    order_sequence: int = 0  # Optimized route order from OSRM
-    delivery_order: int = 0  # Actual delivery sequence (may differ from route order)
+    order_sequence: int = 0
+    delivery_order: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Route(BaseModel):
@@ -3488,19 +3489,22 @@ async def optimize_route(route_id: str, route_type: str = "CURTA"):
         # Optimize stops with priorities
         optimized_stops = await optimize_route_with_priorities(stops, company_coords)
         
-        # Merge stops at same address (same lat/lng)
+        # Merge stops at same address (same lat/lng) — preserva TODOS os budget_item_ids
         merged_stops = []
         address_groups = {}
         
         for stop in optimized_stops:
             address_key = f"{stop.address['latitude']},{stop.address['longitude']}"
             if address_key in address_groups:
-                # Merge with existing stop - add 60 minutes for additional service
                 existing_stop = address_groups[address_key]
                 existing_stop.estimated_duration += 60
                 existing_stop.service_name += f" + {stop.service_name}"
                 existing_stop.service_value += stop.service_value
+                # Preserva o budget_item_id do stop mesclado
+                if stop.budget_item_id not in existing_stop.extra_budget_item_ids:
+                    existing_stop.extra_budget_item_ids.append(stop.budget_item_id)
             else:
+                stop.extra_budget_item_ids = []
                 address_groups[address_key] = stop
                 merged_stops.append(stop)
         
@@ -3576,7 +3580,7 @@ async def optimize_route_geoapify_endpoint(route_id: str):
         optimized_stops, dist_km, travel_min, route_geometry = \
             await optimize_route_with_priorities_geoapify(stops, company_coords, vehicle_type)
 
-        # Merge stops at same address
+        # Merge stops at same address — preserva TODOS os budget_item_ids
         merged_stops    = []
         address_groups  = {}
         for stop in optimized_stops:
@@ -3585,7 +3589,10 @@ async def optimize_route_geoapify_endpoint(route_id: str):
                 address_groups[key].estimated_duration += 60
                 address_groups[key].service_name       += f" + {stop.service_name}"
                 address_groups[key].service_value      += stop.service_value
+                if stop.budget_item_id not in address_groups[key].extra_budget_item_ids:
+                    address_groups[key].extra_budget_item_ids.append(stop.budget_item_id)
             else:
+                stop.extra_budget_item_ids = []
                 address_groups[key] = stop
                 merged_stops.append(stop)
 

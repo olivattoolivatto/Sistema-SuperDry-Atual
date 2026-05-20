@@ -276,9 +276,14 @@ export function Agenda() {
       
       // Criar objeto completamente novo (deep copy)
       const newEvent = {
-        id: String(eventId), // Garantir que é string
-        budget_item_id: stop.budget_item_id, // CRÍTICO: Preservar budget_item_id para assignments
-        order_sequence: Number(index + 1), // Usar posição atual no array ordenado
+        id: String(eventId),
+        budget_item_id: stop.budget_item_id,
+        // Preserva todos os IDs de itens mesclados no mesmo endereço
+        all_budget_item_ids: [
+          stop.budget_item_id,
+          ...((stop.extra_budget_item_ids || []).filter(id => id !== stop.budget_item_id))
+        ],
+        order_sequence: Number(index + 1),
         client_name: String(stop.client_name || ''),
         service_name: String(stop.service_name || ''),
         service_value: Number(stop.service_value || 0),
@@ -1737,19 +1742,14 @@ export function Agenda() {
       // Preparar dados para assignment usando budget_item_ids corretos E data/horários reais
       const assignmentData = {
         route_id: selectedRoute.id,
-        event_ids: selectedEvents.map(event => {
-          // CORREÇÃO CRÍTICA: Usar budget_item_id se disponível, senão usar event.id
-          // Isto resolve o problema onde event_ids como EVT-003 causavam 404 errors
-          // no TechnicianMode ao tentar buscar dados de orçamento
-          const budget_item_id = event.budget_item_id || event.id;
-          console.log(`📋 Mapeando evento ${event.id} → budget_item_id: ${budget_item_id}`);
-          return budget_item_id;
-        }),
-        technician_id: 'TECH-001', // TODO: Permitir seleção do técnico
-        assigned_date: customEventDate, // Data escolhida para lançar na agenda
-        assigned_time: selectedEvents[0]?.estimated_start_time || '08:00', // Horário do primeiro evento
+        // Usa all_budget_item_ids para garantir que stops mesclados enviem TODOS os IDs
+        event_ids: selectedEvents.flatMap(event =>
+          event.all_budget_item_ids || [event.budget_item_id || event.id]
+        ),
+        technician_id: 'TECH-001',
+        assigned_date: customEventDate,
+        assigned_time: selectedEvents[0]?.estimated_start_time || '08:00',
         assignment_type: 'AGENDA',
-        // NOVO: Incluir dados de horários para sincronização
         events_schedule: eventsWithDateTime.map(event => ({
           event_id: event.budget_item_id || event.id,
           client_name: event.client_name,
