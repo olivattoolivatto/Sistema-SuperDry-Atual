@@ -4512,38 +4512,54 @@ async def generate_item_receipt(item_id: str):
     for lp in logo_paths:
         if os.path.exists(lp):
             try:
-                logo_element = Image(lp, width=1.2*inch, height=0.96*inch)
+                logo_element = Image(lp, width=0.75*inch, height=0.6*inch)
                 break
             except Exception:
                 pass
 
-    company_name = system_config.get('company_name', 'SuperDry Lavanderia')
-    company_phone = system_config.get('phone', '')
+    company_name     = system_config.get('company_name', 'SuperDry Lavanderia')
+    company_cnpj     = system_config.get('cnpj', '')
+    company_phone    = system_config.get('phone', '')
     company_whatsapp = system_config.get('whatsapp', '')
-    company_instagram = system_config.get('instagram', '')
+    company_instagram= system_config.get('instagram', '')
+    company_email    = system_config.get('email', '')
+    company_address  = system_config.get('address_full', '')
+    company_city     = system_config.get('city', '')
+    company_state    = system_config.get('state', '')
 
-    header_text = (
-        f"<b>{company_name}</b><br/>"
-        f"<font size='8' color='#666666'>"
-        + (f"📞 {company_phone}  " if company_phone else '')
-        + (f"📱 {company_whatsapp}  " if company_whatsapp else '')
-        + (f"@{company_instagram}" if company_instagram else '')
-        + "</font>"
-    )
-    header_para = Paragraph(header_text, sub_style)
+    company_lines = [f"<b><font size='11'>{company_name}</font></b>"]
+    if company_address:
+        city_state = f", {company_city}/{company_state}" if company_city else ""
+        company_lines.append(f"<font size='7.5' color='#555555'>{company_address}{city_state}</font>")
+    contact_parts = []
+    if company_phone:     contact_parts.append(f"Tel: {company_phone}")
+    if company_whatsapp:  contact_parts.append(f"WhatsApp: {company_whatsapp}")
+    if company_email:     contact_parts.append(company_email)
+    if company_instagram: contact_parts.append(f"@{company_instagram}")
+    if company_cnpj:      contact_parts.append(f"CNPJ: {company_cnpj}")
+    if contact_parts:
+        company_lines.append(f"<font size='7.5' color='#555555'>{' | '.join(contact_parts[:3])}</font>")
+        if len(contact_parts) > 3:
+            company_lines.append(f"<font size='7.5' color='#555555'>{' | '.join(contact_parts[3:])}</font>")
+
+    company_para = Paragraph("<br/>".join(company_lines),
+        ParagraphStyle('CompanyHeader', parent=styles['Normal'], fontSize=10, leading=13))
 
     if logo_element:
         from reportlab.lib.pagesizes import A5 as A5_size
         page_w = A5_size[0] - 3*cm
-        header_table = Table([[logo_element, header_para]], colWidths=[1.4*inch, page_w - 1.4*inch])
+        logo_col = 0.85*inch
+        header_table = Table([[logo_element, company_para]],
+            colWidths=[logo_col, page_w - logo_col])
         header_table.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('ALIGN', (1,0), (1,0), 'LEFT'),
-            ('LEFTPADDING', (0,0), (0,0), 0),
+            ('ALIGN',  (1,0), (1,0),  'LEFT'),
+            ('LEFTPADDING',  (0,0), (0,0), 0),
+            ('RIGHTPADDING', (0,0), (0,0), 8),
         ]))
         story.append(header_table)
     else:
-        story.append(Paragraph(f"<b>{company_name}</b>", title_style))
+        story.append(company_para)
 
     story.append(Spacer(1, 8))
 
@@ -4670,8 +4686,7 @@ async def generate_item_receipt(item_id: str):
     story.append(Spacer(1, 4))
 
     receipt_date = datetime.utcnow().strftime("%d/%m/%Y às %H:%M")
-    story.append(Paragraph(f"Recibo emitido em {receipt_date}", small_style))
-    story.append(Paragraph(f"{company_name}", small_style))
+    story.append(Paragraph(f"Recibo emitido em {receipt_date} — {company_name}", small_style))
 
     if pay_status == 'PAGO':
         story.append(Spacer(1, 12))
