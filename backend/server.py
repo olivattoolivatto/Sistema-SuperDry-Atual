@@ -4280,10 +4280,18 @@ async def get_dashboard_summary(current_user: UserPublic = Depends(get_current_u
             if has_pending:
                 active_budgets += 1
 
-        # 3) Execução de hoje (assignments do técnico)
+        # 3) Execução de hoje — só conta event_ids que ainda existem como itens válidos
         execution_today = 0
+        # Coleta todos os ITM-* válidos para cross-check
+        valid_item_ids: set = set()
+        async for b in db.budgets.find({}, {"items.id": 1}):
+            for it in (b.get("items") or []):
+                if it.get("id"):
+                    valid_item_ids.add(it["id"])
+
         async for a in db.technician_assignments.find({"assigned_date": today, "status": {"$ne": "CANCELLED"}}):
-            execution_today += len(a.get("event_ids") or [])
+            valid_events = [e for e in (a.get("event_ids") or []) if e in valid_item_ids]
+            execution_today += len(valid_events)
 
         # 4) Em lavagem/execução
         wash_statuses = [
