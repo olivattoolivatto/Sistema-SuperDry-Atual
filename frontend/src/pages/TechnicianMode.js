@@ -843,10 +843,6 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
     client.items.every(item => (itemPhotos[item.id] || []).length > 0);
 
   const proceedToService = () => {
-    if (!allItemsHavePhotos()) {
-      alert('Por favor, registre pelo menos uma foto para cada item antes de prosseguir.');
-      return;
-    }
     setShowPhotoCapture(false);
   };
 
@@ -2063,10 +2059,9 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
         <div className="flex items-start space-x-2">
           <Camera className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
           <div>
-            <h4 className="font-medium text-yellow-800 mb-2">Antes de iniciar o serviço registre a situação inicial do Item:</h4>
+            <h4 className="font-medium text-yellow-800 mb-2">Registro Fotográfico (opcional)</h4>
             <p className="text-sm text-yellow-700">
-              Capture fotos do estado atual de cada item antes de iniciar o trabalho. 
-              É obrigatório registrar pelo menos uma foto para cada item listado abaixo.
+              Capture fotos do estado atual dos itens se desejar registrar. Clique em "Prosseguir" para continuar sem fotos.
             </p>
           </div>
         </div>
@@ -2081,7 +2076,7 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
           return (
             <div key={item.id} className="bg-white rounded-lg shadow-md border border-gray-200">
               {/* Header do Item */}
-              <div className={`p-4 border-b border-gray-100 ${hasPhotos ? 'bg-green-50' : 'bg-red-50'}`}>
+              <div className={`p-4 border-b border-gray-100 ${hasPhotos ? 'bg-green-50' : 'bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     {hasPhotos ? (
@@ -2257,21 +2252,12 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
             <p className="text-sm text-gray-600">
               Progresso: {Object.values(itemPhotos).filter(photos => photos.length > 0).length} de {client.items.length} itens fotografados
             </p>
-            {!allItemsHavePhotos() && (
-              <p className="text-sm text-red-600 mt-1">
-                Registre fotos para todos os itens antes de prosseguir.
-              </p>
-            )}
-            
-            {/* Validação de danos */}
+            {/* Validação de danos — ainda obrigatória se marcou dano */}
             {(() => {
-              const itemsWithDamage = client.items.filter(item => damageInfo[item.id]?.hasDamage);
-              const invalidDamageItems = itemsWithDamage.filter(item => {
+              const invalidDamageItems = client.items.filter(item => {
                 const info = damageInfo[item.id];
-                return !info.damageDetails || !info.damageDetails.trim() || 
-                       !info.damagePhotos || info.damagePhotos.length === 0;
+                return info?.hasDamage && (!info.damageDetails?.trim() || !info.damagePhotos?.length);
               });
-              
               if (invalidDamageItems.length > 0) {
                 return (
                   <p className="text-sm text-orange-600 mt-1">
@@ -2283,29 +2269,14 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
           </div>
           <button
             onClick={onProceed}
-            disabled={!allItemsHavePhotos() || (() => {
-              // Validação adicional para danos
-              const itemsWithDamage = client.items.filter(item => damageInfo[item.id]?.hasDamage);
-              const invalidDamageItems = itemsWithDamage.filter(item => {
+            disabled={(() => {
+              const invalidDamageItems = client.items.filter(item => {
                 const info = damageInfo[item.id];
-                return !info.damageDetails || !info.damageDetails.trim() || 
-                       !info.damagePhotos || info.damagePhotos.length === 0;
+                return info?.hasDamage && (!info.damageDetails?.trim() || !info.damagePhotos?.length);
               });
               return invalidDamageItems.length > 0;
             })()}
-            className={`py-2 px-6 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
-              allItemsHavePhotos() && (() => {
-                const itemsWithDamage = client.items.filter(item => damageInfo[item.id]?.hasDamage);
-                const invalidDamageItems = itemsWithDamage.filter(item => {
-                  const info = damageInfo[item.id];
-                  return !info.damageDetails || !info.damageDetails.trim() || 
-                         !info.damagePhotos || info.damagePhotos.length === 0;
-                });
-                return invalidDamageItems.length === 0;
-              })()
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
+            className="py-2 px-6 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
           >
             <CheckCircle className="w-4 h-4" />
             <span>Prosseguir para Atendimento</span>
