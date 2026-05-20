@@ -3,9 +3,9 @@ import {
   X, Save, Plus, Trash2, ChevronDown, ChevronUp, Loader2, MapPin,
   Calendar, User as UserIcon, CreditCard, FileText, Search, AlertCircle,
 } from 'lucide-react';
-import { clientsApi, servicesApi, placesApi, budgetsApi } from '../../services/api';
+import { clientsApi, servicesApi, placesApi, budgetsApi, usersApi } from '../../services/api';
 import {
-  EXECUTION_MODES, EXEC_MODE_TO_STATUS, PAYMENT_METHODS, SALESPERSONS,
+  EXECUTION_MODES, EXEC_MODE_TO_STATUS, PAYMENT_METHODS,
   fmtMoney, normalize,
 } from './_constants';
 
@@ -679,6 +679,7 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState(PAYMENT_METHODS);
+  const [salespersons, setSalespersons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -699,16 +700,22 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
   useEffect(() => {
     (async () => {
       try {
-        const [c, s, pm] = await Promise.all([
+        const [c, s, pm, sp] = await Promise.all([
           clientsApi.getAll({ limit: 1000 }),
           servicesApi.getAll({ active_only: true }),
           fetch(`${process.env.REACT_APP_BACKEND_URL}/api/payment-methods`).then(r => r.json()),
+          usersApi.salespersons(),
         ]);
         setClients(c.data || []);
         setServices(s.data || []);
         const methods = pm.payment_methods || PAYMENT_METHODS;
         setPaymentMethods(methods);
-        // set default payment method if not editing
+        setSalespersons(sp.data || []);
+        // default salesperson: first user if not editing
+        if (!budget?.salesperson && (sp.data || []).length > 0) {
+          const first = sp.data[0];
+          setForm(prev => ({ ...prev, salesperson: first.display_name || first.name }));
+        }
         if (!budget?.payment_method && methods.length > 0) {
           setForm(prev => ({ ...prev, payment_method: methods[0].value }));
         }
@@ -940,7 +947,11 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
                   onChange={(e) => setForm({ ...form, salesperson: e.target.value })}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white"
                 >
-                  {SALESPERSONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {salespersons.map(s => (
+                    <option key={s.id} value={s.display_name || s.name}>
+                      {s.display_name || s.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

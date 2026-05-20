@@ -46,17 +46,19 @@ class User(BaseModel):
 class UserPublic(BaseModel):
     """Representação pública do usuário (sem hash)"""
     id: str
-    name: str
+    name: str                              # identificador interno / apelido
+    display_name: Optional[str] = None    # nome formal usado em documentos
     email: str
     role: UserRole
     is_active: bool
-    allowed_modules: Optional[List[str]] = None  # None = usa padrão do role
+    allowed_modules: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
 
 
 class UserCreate(BaseModel):
     name: str
+    display_name: Optional[str] = None
     email: str
     password: str
     role: UserRole = UserRole.ATENDENTE
@@ -66,6 +68,7 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
+    display_name: Optional[str] = None
     email: Optional[str] = None
     password: Optional[str] = None
     role: Optional[UserRole] = None

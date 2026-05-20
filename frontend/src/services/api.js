@@ -70,6 +70,7 @@ export const authApi = {
 // Users API (admin)
 export const usersApi = {
   list: () => api.get('/users'),
+  salespersons: () => api.get('/users/salespersons'),
   create: (data) => api.post('/users', data),
   update: (id, data) => api.put(`/users/${id}`, data),
   delete: (id) => api.delete(`/users/${id}`),

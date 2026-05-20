@@ -927,7 +927,7 @@ function UsersManager({ expanded, onToggle }) {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'ATENDENTE', is_active: true, allowed_modules: null });
+  const [form, setForm] = useState({ name: '', display_name: '', email: '', password: '', role: 'ATENDENTE', is_active: true, allowed_modules: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [useCustomModules, setUseCustomModules] = useState(false);
@@ -950,7 +950,7 @@ function UsersManager({ expanded, onToggle }) {
   const openCreate = () => {
     setEditing(null);
     const defaultRole = 'ATENDENTE';
-    setForm({ name: '', email: '', password: '', role: defaultRole, is_active: true, allowed_modules: null });
+    setForm({ name: '', display_name: '', email: '', password: '', role: defaultRole, is_active: true, allowed_modules: null });
     setUseCustomModules(false);
     setSelectedModules(ROLE_DEFAULT_MODULES[defaultRole] || []);
     setError('');
@@ -962,7 +962,7 @@ function UsersManager({ expanded, onToggle }) {
     const hasCustom = !!(u.allowed_modules && u.allowed_modules.length > 0);
     setUseCustomModules(hasCustom);
     setSelectedModules(hasCustom ? u.allowed_modules : (ROLE_DEFAULT_MODULES[u.role] || []));
-    setForm({ name: u.name, email: u.email, password: '', role: u.role, is_active: u.is_active, allowed_modules: u.allowed_modules });
+    setForm({ name: u.name, display_name: u.display_name || '', email: u.email, password: '', role: u.role, is_active: u.is_active, allowed_modules: u.allowed_modules });
     setError('');
     setModalOpen(true);
   };
@@ -978,7 +978,7 @@ function UsersManager({ expanded, onToggle }) {
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!form.name.trim() || !form.email.trim()) { setError('Nome e email são obrigatórios.'); return; }
+    if (!form.name.trim() || !form.email.trim()) { setError('Usuário e email são obrigatórios.'); return; }
     if (!editing && !form.password) { setError('Senha obrigatória ao criar usuário.'); return; }
     try {
       setSaving(true);
@@ -1065,8 +1065,19 @@ function UsersManager({ expanded, onToggle }) {
             {/* Dados básicos */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Usuário * <span className="text-gray-400 font-normal">(apelido/login)</span>
+                </label>
                 <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                  placeholder="ex: diego"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Nome do Usuário <span className="text-gray-400 font-normal">(aparece em documentos)</span>
+                </label>
+                <input value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })}
+                  placeholder="ex: Diego Olivatto"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
@@ -1075,6 +1086,13 @@ function UsersManager({ expanded, onToggle }) {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Perfil base *</label>
+                <select value={form.role} onChange={e => handleRoleChange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                  {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   Senha {editing && <span className="text-gray-400">(deixe em branco para manter)</span>}
                 </label>
@@ -1083,13 +1101,6 @@ function UsersManager({ expanded, onToggle }) {
                   <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
                     className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Perfil base *</label>
-                <select value={form.role} onChange={e => handleRoleChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                  {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
               </div>
             </div>
 
