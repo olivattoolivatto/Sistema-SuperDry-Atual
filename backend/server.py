@@ -3152,6 +3152,7 @@ async def get_available_budget_items_for_routes(current_user: UserPublic = Depen
             ServiceStatus.RETIRAR.value,
             ServiceStatus.EXECUTAR_NO_LOCAL.value,
             ServiceStatus.ENTREGAR.value,
+            ServiceStatus.AGUARDANDO_ENTREGA.value,  # Pronto para rota de entrega
         ]
         pipeline = [
             {"$unwind": "$items"},
@@ -3186,7 +3187,7 @@ async def get_available_budget_items_for_routes(current_user: UserPublic = Depen
             # Endereço específico por etapa, com fallback no cliente
             if status == ServiceStatus.RETIRAR.value:
                 addr = item.get("pickup_address") or doc.get("client_address") or {}
-            elif status == ServiceStatus.ENTREGAR.value:
+            elif status in (ServiceStatus.ENTREGAR.value, ServiceStatus.AGUARDANDO_ENTREGA.value):
                 addr = item.get("delivery_address") or doc.get("client_address") or {}
             else:
                 addr = item.get("execution_address") or doc.get("client_address") or {}
@@ -3205,7 +3206,7 @@ async def get_available_budget_items_for_routes(current_user: UserPublic = Depen
                 "address": addr,
                 "scheduled_date": (
                     item.get("scheduled_pickup_date") if status == ServiceStatus.RETIRAR.value
-                    else item.get("scheduled_delivery_date") if status == ServiceStatus.ENTREGAR.value
+                    else item.get("scheduled_delivery_date") if status in (ServiceStatus.ENTREGAR.value, ServiceStatus.AGUARDANDO_ENTREGA.value)
                     else item.get("scheduled_execution_date")
                 ),
             })

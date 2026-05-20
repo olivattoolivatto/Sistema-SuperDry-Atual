@@ -83,15 +83,13 @@ export function Routes() {
       await budgetItemsApi.updateStatus(item.budget_item_id, newStatus);
       
       // Update the item in availableItems
+      const validStatuses = ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR', 'AGUARDANDO_ENTREGA'];
       setAvailableItems(prev => {
-        const updatedItems = prev.map(i => 
-          i.budget_item_id === item.budget_item_id 
+        const updatedItems = prev.map(i =>
+          i.budget_item_id === item.budget_item_id
             ? { ...i, status: newStatus }
             : i
         );
-        
-        // Filter out items that should not appear in routes
-        const validStatuses = ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'];
         return updatedItems.filter(i => validStatuses.includes(i.status));
       });
 
@@ -109,7 +107,6 @@ export function Routes() {
       });
 
       // If the new status is not valid for routes, show removal message
-      const validStatuses = ['EXECUTAR_NO_LOCAL', 'RETIRAR', 'ENTREGAR'];
       if (!validStatuses.includes(newStatus)) {
         toast({
           title: "Item removido",
