@@ -110,6 +110,8 @@ export const itemsApi = {
   registerPayment: (id, payload) => api.post(`/items/${id}/payment`, payload),
   timeline: (id) => api.get(`/items/${id}/timeline`),
   receiptUrl: (id) => `${process.env.REACT_APP_BACKEND_URL}/api/items/${id}/receipt`,
+  pickupReceiptUrl: (id) => `${process.env.REACT_APP_BACKEND_URL}/api/items/${id}/pickup-receipt`,
+  whatsappReceipt: (id, type = 'receipt') => api.get(`/items/${id}/whatsapp-receipt`, { params: { doc_type: type } }),
   // Company Mode
   companyMode: () => api.get('/items/company-mode'),
   bulkStatus: (item_ids, status, notes = '') => api.post('/items/bulk-status', { item_ids, status, notes }),

@@ -4702,6 +4702,208 @@ async def generate_item_receipt(item_id: str):
     )
 
 
+@api_router.get("/items/{item_id}/pickup-receipt")
+async def generate_pickup_receipt(item_id: str):
+    """Comprovante de retirada — gerado quando o técnico coleta o item."""
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+
+    client = await db.clients.find_one({"id": budget.get("client_id")})
+    system_config = await db.system_config.find_one({}) or {}
+
+    buffer = BytesIO()
+    from reportlab.lib.pagesizes import A5
+    doc = SimpleDocTemplate(buffer, pagesize=A5,
+        leftMargin=1.5*cm, rightMargin=1.5*cm, topMargin=1*cm, bottomMargin=1.5*cm)
+    styles = getSampleStyleSheet()
+    story = []
+
+    label_style = ParagraphStyle('PLabel', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#444444'))
+    value_style = ParagraphStyle('PValue', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold')
+    small_style = ParagraphStyle('PSmall', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#777777'))
+    center_style = ParagraphStyle('PCenter', parent=styles['Normal'], fontSize=9, alignment=1)
+    title_style  = ParagraphStyle('PTitle', parent=styles['Heading1'], fontSize=14, spaceAfter=4, alignment=1,
+                                   textColor=colors.HexColor('#1e3a5f'))
+
+    # Cabeçalho com logo + dados empresa
+    logo_paths = ["/app/backend/uploads/logo.png", "/app/backend/logo-superdry.png"]
+    logo_element = None
+    for lp in logo_paths:
+        if os.path.exists(lp):
+            try: logo_element = Image(lp, width=0.75*inch, height=0.6*inch); break
+            except Exception: pass
+
+    company_name     = system_config.get('company_name', 'SuperDry Lavanderia')
+    company_phone    = system_config.get('phone', '')
+    company_whatsapp = system_config.get('whatsapp', '')
+    company_address  = system_config.get('address_full', '')
+    company_city     = system_config.get('city', '')
+    company_state    = system_config.get('state', '')
+    company_cnpj     = system_config.get('cnpj', '')
+
+    lines = [f"<b><font size='11'>{company_name}</font></b>"]
+    if company_address:
+        cs = f", {company_city}/{company_state}" if company_city else ""
+        lines.append(f"<font size='7.5' color='#555555'>{company_address}{cs}</font>")
+    contacts = []
+    if company_phone:    contacts.append(f"Tel: {company_phone}")
+    if company_whatsapp: contacts.append(f"WhatsApp: {company_whatsapp}")
+    if company_cnpj:     contacts.append(f"CNPJ: {company_cnpj}")
+    if contacts:
+        lines.append(f"<font size='7.5' color='#555555'>{' | '.join(contacts)}</font>")
+
+    company_para = Paragraph("<br/>".join(lines),
+        ParagraphStyle('CH', parent=styles['Normal'], fontSize=10, leading=13))
+
+    if logo_element:
+        from reportlab.lib.pagesizes import A5 as A5s
+        page_w = A5s[0] - 3*cm
+        ht = Table([[logo_element, company_para]], colWidths=[0.85*inch, page_w - 0.85*inch])
+        ht.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+                                 ('LEFTPADDING',(0,0),(0,0),0),('RIGHTPADDING',(0,0),(0,0),8)]))
+        story.append(ht)
+    else:
+        story.append(company_para)
+
+    story.append(Spacer(1, 8))
+    story.append(Table([['']], colWidths=['100%'],
+        style=TableStyle([('LINEABOVE',(0,0),(-1,-1),1,colors.HexColor('#1e3a5f'))])))
+    story.append(Spacer(1, 6))
+
+    story.append(Paragraph("COMPROVANTE DE RETIRADA", title_style))
+    story.append(Paragraph(f"Nº RET-{item_id}", small_style))
+    story.append(Spacer(1, 8))
+
+    # Data/hora da coleta
+    coletado_at = None
+    for h in reversed(item.get("status_history", [])):
+        if h.get("status") == "COLETADO":
+            coletado_at = h.get("at"); break
+    if not coletado_at:
+        coletado_at = datetime.utcnow().isoformat()
+    try:
+        dt = datetime.fromisoformat(coletado_at.replace('Z','+00:00'))
+        coleta_str = dt.strftime("%d/%m/%Y às %H:%M")
+    except Exception:
+        coleta_str = coletado_at[:16] if coletado_at else "—"
+
+    client_name  = item.get("client_name") or budget.get("client_name", "N/A")
+    client_phone = client.get("phone_primary", "N/A") if client else "N/A"
+    client_addr  = ""
+    if client and client.get("address"):
+        a = client["address"]
+        client_addr = a.get("full_address") or f"{a.get('neighborhood','')}, {a.get('city','')}".strip(", ")
+
+    from reportlab.lib.pagesizes import A5 as A5s2
+    col_w = (A5s2[0] - 3*cm)
+    cw   = [col_w*0.38, col_w*0.62]
+
+    info = [
+        [Paragraph("<b>Cliente:</b>",         label_style), Paragraph(client_name,  value_style)],
+        [Paragraph("<b>Telefone:</b>",         label_style), Paragraph(client_phone, value_style)],
+        [Paragraph("<b>Serviço:</b>",          label_style), Paragraph(item.get("service_name","—"), value_style)],
+        [Paragraph("<b>Orçamento:</b>",        label_style), Paragraph(budget.get("id","—"), value_style)],
+        [Paragraph("<b>Data da Coleta:</b>",   label_style), Paragraph(coleta_str, value_style)],
+    ]
+    if client_addr:
+        info.append([Paragraph("<b>Endereço:</b>", label_style),
+                     Paragraph(client_addr, ParagraphStyle('Addr', parent=styles['Normal'], fontSize=8))])
+
+    it = Table(info, colWidths=cw)
+    it.setStyle(TableStyle([('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),4),
+                             ('BOTTOMPADDING',(0,0),(-1,-1),4),('VALIGN',(0,0),(-1,-1),'TOP')]))
+    story.append(it)
+    story.append(Spacer(1, 12))
+
+    # Declaração
+    decl = (f"Declaro que recebi os itens acima identificados para realização dos serviços contratados, "
+            f"comprometendo-me a devolvê-los após a conclusão. "
+            f"Orçamento nº {budget.get('id','—')}, salvo conforme acordado.")
+    story.append(Paragraph(decl,
+        ParagraphStyle('Decl', parent=styles['Normal'], fontSize=8,
+                       textColor=colors.HexColor('#444444'), leading=12)))
+    story.append(Spacer(1, 20))
+
+    # Assinaturas
+    from reportlab.lib.pagesizes import A5 as A5s3
+    col_w3 = (A5s3[0] - 3*cm)
+    sig = Table([
+        [Paragraph("_"*28, center_style), Paragraph("_"*28, center_style)],
+        [Paragraph("Assinatura do Cliente", center_style), Paragraph("Assinatura do Técnico", center_style)],
+    ], colWidths=[col_w3/2, col_w3/2])
+    sig.setStyle(TableStyle([('ALIGN',(0,0),(-1,-1),'CENTER'), ('BOTTOMPADDING',(0,0),(-1,-1),4)]))
+    story.append(sig)
+
+    story.append(Spacer(1, 8))
+    story.append(Table([['']], colWidths=['100%'],
+        style=TableStyle([('LINEABOVE',(0,0),(-1,-1),0.5,colors.HexColor('#aaaaaa'))])))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        f"Comprovante emitido em {datetime.utcnow().strftime('%d/%m/%Y às %H:%M')} — {company_name}",
+        small_style))
+
+    doc.build(story)
+    buffer.seek(0)
+    return StreamingResponse(BytesIO(buffer.read()), media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=comprovante_retirada_{item_id}.pdf"})
+
+
+@api_router.get("/items/{item_id}/whatsapp-receipt")
+async def whatsapp_receipt_link(item_id: str, doc_type: str = "receipt"):
+    """Gera link wa.me com URL do PDF para compartilhar com o cliente."""
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    client = await db.clients.find_one({"id": budget.get("client_id")})
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    phone_raw = (client.get("phone_primary") or "").replace(" ","").replace("-","").replace("(","").replace(")","").replace("+","")
+    if not phone_raw.startswith("55"):
+        phone_raw = "55" + phone_raw
+
+    system_config = await db.system_config.find_one({}) or {}
+    company_name = system_config.get('company_name', 'SuperDry Lavanderia')
+
+    # URL pública do PDF (endpoint sem auth)
+    # O REACT_APP_BACKEND_URL não está disponível no backend, usamos variável de ambiente
+    backend_url = os.environ.get("REACT_APP_BACKEND_URL", "")
+    if not backend_url:
+        raise HTTPException(status_code=500, detail="REACT_APP_BACKEND_URL não configurado no backend.")
+
+    client_name = item.get("client_name") or budget.get("client_name", "")
+    service_name = item.get("service_name", "")
+
+    if doc_type == "pickup":
+        pdf_url = f"{backend_url}/api/items/{item_id}/pickup-receipt"
+        msg = (
+            f"Olá {client_name}! 👋\n\n"
+            f"Segue o comprovante de retirada do seu {service_name}.\n\n"
+            f"📄 Acesse o comprovante pelo link:\n{pdf_url}\n\n"
+            f"Qualquer dúvida, estamos à disposição!\n"
+            f"— {company_name}"
+        )
+    else:
+        pdf_url = f"{backend_url}/api/items/{item_id}/receipt"
+        total = float(item.get("total_value", 0))
+        paid  = float(item.get("paid_value", 0))
+        pay_status = item.get("payment_status", "PENDENTE")
+        status_txt = "✅ QUITADO" if pay_status == "PAGO" else f"⚡ Pago: R$ {paid:.2f} de R$ {total:.2f}"
+        msg = (
+            f"Olá {client_name}! 👋\n\n"
+            f"Segue o recibo do serviço: {service_name}\n"
+            f"Situação: {status_txt}\n\n"
+            f"📄 Acesse o recibo pelo link:\n{pdf_url}\n\n"
+            f"Agradecemos a confiança!\n"
+            f"— {company_name}"
+        )
+
+    import urllib.parse
+    whatsapp_url = f"https://wa.me/{phone_raw}?text={urllib.parse.quote(msg)}"
+    return {"whatsapp_url": whatsapp_url, "pdf_url": pdf_url, "phone": phone_raw}
+
+
 @api_router.get("/items/{item_id}/timeline")
 async def item_timeline(item_id: str, current_user: UserPublic = Depends(get_current_user)):
     """Linha do tempo completa do item (histórico unificado)."""

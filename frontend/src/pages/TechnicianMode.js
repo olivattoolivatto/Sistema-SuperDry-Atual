@@ -881,10 +881,27 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
     if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
     setProcessing(true);
     try {
-      for (const id of selectedItems) {
+      const collectedIds = [...selectedItems];
+      for (const id of collectedIds) {
         await changeStatus(id, 'COLETADO', technicianNotes || 'Retirada efetuada pelo técnico em campo.');
       }
-      alert(`${selectedItems.size} item(s) marcado(s) como COLETADO. Item segue para lavagem.`);
+      // Oferecer envio do comprovante via WhatsApp para cada item
+      for (const itemId of collectedIds) {
+        try {
+          const r = await fetch(
+            `${BACKEND_URL}/api/items/${itemId}/whatsapp-receipt?doc_type=pickup`,
+            { headers: { Authorization: `Bearer ${localStorage.getItem('superdry_token')}` } }
+          );
+          if (r.ok) {
+            const data = await r.json();
+            if (data.whatsapp_url && window.confirm(
+              `Enviar comprovante de retirada para o cliente via WhatsApp?`
+            )) {
+              window.open(data.whatsapp_url, '_blank');
+            }
+          }
+        } catch (_) {}
+      }
       setSelectedItems(new Set());
       setTechnicianNotes('');
       onBack();
