@@ -4,6 +4,7 @@ import {
   Calendar, User as UserIcon, CreditCard, FileText, Search, AlertCircle,
 } from 'lucide-react';
 import { clientsApi, servicesApi, placesApi, budgetsApi, usersApi } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   EXECUTION_MODES, EXEC_MODE_TO_STATUS, PAYMENT_METHODS,
   fmtMoney, normalize,
@@ -104,7 +105,7 @@ function AddressAutocomplete({ value, onSelect, placeholder, compact = false }) 
 }
 
 // Sub-form para um item individual
-function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods = PAYMENT_METHODS }) {
+function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods = PAYMENT_METHODS, salespersons = [] }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [serviceSearch, setServiceSearch] = useState('');
   const [showServicePicker, setShowServicePicker] = useState(false);
@@ -452,6 +453,59 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
             </div>
           </div>
         )}
+
+        {/* Comissão do técnico */}
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={!!item.commission_enabled}
+              onChange={e => onChange({ ...item, commission_enabled: e.target.checked,
+                commission_user_id: e.target.checked ? item.commission_user_id : null,
+                commission_user_name: e.target.checked ? item.commission_user_name : null,
+                commission_pct: e.target.checked ? item.commission_pct : null,
+              })}
+              className="h-4 w-4 text-indigo-600 rounded"
+            />
+            <span className="font-medium text-gray-700">Comissão do Técnico</span>
+          </label>
+          {item.commission_enabled && (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs text-gray-500 mb-0.5">Técnico / Usuário</label>
+                <select
+                  value={item.commission_user_id || ''}
+                  onChange={e => {
+                    const sp = salespersons.find(s => s.id === e.target.value);
+                    onChange({ ...item,
+                      commission_user_id: e.target.value || null,
+                      commission_user_name: sp ? (sp.display_name || sp.name) : null,
+                    });
+                  }}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white"
+                >
+                  <option value="">Selecione…</option>
+                  {salespersons.map(s => (
+                    <option key={s.id} value={s.id}>{s.display_name || s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-0.5">% Comissão</label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number" min={0} max={100} step={0.5}
+                    value={item.commission_pct ?? ''}
+                    onChange={e => onChange({ ...item, commission_pct: e.target.value ? parseFloat(e.target.value) : null })}
+                    placeholder="0"
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+                  />
+                  <span className="text-xs text-gray-500 shrink-0">%</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -676,6 +730,7 @@ function BatchModal({ services, onClose, onAdd }) {
 
 export default function BudgetEditor({ budget, onClose, onSaved, preselectedClient = null }) {
   const isEdit = Boolean(budget?.id);
+  const { user: currentUser } = useAuth();
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState(PAYMENT_METHODS);
@@ -689,7 +744,7 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
     client_id: budget?.client_id || preselectedClient?.id || '',
     client_name: budget?.client_name || preselectedClient?.name || '',
     payment_method: budget?.payment_method || '',
-    salesperson: budget?.salesperson || 'Gabriela Alcântara',
+    salesperson: budget?.salesperson || currentUser?.display_name || currentUser?.name || '',
     internal_observations: budget?.internal_observations || '',
     budget_observations: budget?.budget_observations || '',
     items: budget?.items?.length ? budget.items : [],
@@ -711,11 +766,6 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
         const methods = pm.payment_methods || PAYMENT_METHODS;
         setPaymentMethods(methods);
         setSalespersons(sp.data || []);
-        // default salesperson: first user if not editing
-        if (!budget?.salesperson && (sp.data || []).length > 0) {
-          const first = sp.data[0];
-          setForm(prev => ({ ...prev, salesperson: first.display_name || first.name }));
-        }
         if (!budget?.payment_method && methods.length > 0) {
           setForm(prev => ({ ...prev, payment_method: methods[0].value }));
         }
@@ -904,6 +954,7 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
                   item={item}
                   services={services}
                   paymentMethods={paymentMethods}
+                  salespersons={salespersons}
                   onChange={(it) => updateItem(idx, it)}
                   onRemove={() => removeItem(idx)}
                 />

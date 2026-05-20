@@ -365,6 +365,12 @@ class BudgetItem(BaseModel):
     fabric_folds: Optional[int] = None
     fabric_per_fold: Optional[float] = None
 
+    # Comissão do técnico
+    commission_enabled: bool = False
+    commission_user_id: Optional[str] = None
+    commission_user_name: Optional[str] = None   # display_name do usuário
+    commission_pct: Optional[float] = None       # % acordada para este item
+
     # Identificação de parceiro (lavanderia parceira)
     partner_label: Optional[Dict[str, Any]] = None
     # ex: {"type":"COLOR_NUM","color":"AZUL","number":"224"} ou {"type":"TEXT","text":"Joao da Silva"}
@@ -4041,6 +4047,8 @@ async def create_user(
         user_dict["allowed_modules"] = payload.allowed_modules
     if payload.display_name:
         user_dict["display_name"] = payload.display_name.strip()
+    if payload.commission_pct is not None:
+        user_dict["commission_pct"] = payload.commission_pct
     await db.users.insert_one(user_dict)
     await log_audit("user", user.id, "CREATE", current_user, {"after": {**user_dict, "password_hash": "***"}})
     return UserPublic(**{k: v for k, v in user_dict.items() if k != "password_hash"})
@@ -4058,6 +4066,7 @@ async def update_user(
     update_data: Dict[str, Any] = {}
     if payload.name is not None: update_data["name"] = payload.name.strip()
     if payload.display_name is not None: update_data["display_name"] = payload.display_name.strip()
+    if payload.commission_pct is not None: update_data["commission_pct"] = payload.commission_pct
     if payload.email is not None: update_data["email"] = payload.email.strip().lower()
     if payload.role is not None: update_data["role"] = payload.role.value if hasattr(payload.role, "value") else payload.role
     if payload.is_active is not None: update_data["is_active"] = payload.is_active

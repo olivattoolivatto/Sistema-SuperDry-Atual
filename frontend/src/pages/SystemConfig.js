@@ -927,7 +927,7 @@ function UsersManager({ expanded, onToggle }) {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', display_name: '', email: '', password: '', role: 'ATENDENTE', is_active: true, allowed_modules: null });
+  const [form, setForm] = useState({ name: '', display_name: '', email: '', password: '', role: 'ATENDENTE', is_active: true, commission_pct: null, allowed_modules: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [useCustomModules, setUseCustomModules] = useState(false);
@@ -950,7 +950,7 @@ function UsersManager({ expanded, onToggle }) {
   const openCreate = () => {
     setEditing(null);
     const defaultRole = 'ATENDENTE';
-    setForm({ name: '', display_name: '', email: '', password: '', role: defaultRole, is_active: true, allowed_modules: null });
+    setForm({ name: '', display_name: '', email: '', password: '', role: defaultRole, is_active: true, commission_pct: null, allowed_modules: null });
     setUseCustomModules(false);
     setSelectedModules(ROLE_DEFAULT_MODULES[defaultRole] || []);
     setError('');
@@ -962,7 +962,7 @@ function UsersManager({ expanded, onToggle }) {
     const hasCustom = !!(u.allowed_modules && u.allowed_modules.length > 0);
     setUseCustomModules(hasCustom);
     setSelectedModules(hasCustom ? u.allowed_modules : (ROLE_DEFAULT_MODULES[u.role] || []));
-    setForm({ name: u.name, display_name: u.display_name || '', email: u.email, password: '', role: u.role, is_active: u.is_active, allowed_modules: u.allowed_modules });
+    setForm({ name: u.name, display_name: u.display_name || '', email: u.email, password: '', role: u.role, is_active: u.is_active, commission_pct: u.commission_pct ?? null, allowed_modules: u.allowed_modules });
     setError('');
     setModalOpen(true);
   };
@@ -1108,6 +1108,23 @@ function UsersManager({ expanded, onToggle }) {
               <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} />
               Usuário ativo
             </label>
+
+            {/* Comissão padrão */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                % Comissão padrão <span className="text-gray-400 font-normal">(usada nos cálculos de relatório)</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min={0} max={100} step={0.5}
+                  value={form.commission_pct ?? ''}
+                  onChange={e => setForm({ ...form, commission_pct: e.target.value ? parseFloat(e.target.value) : null })}
+                  placeholder="0"
+                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                />
+                <span className="text-sm text-gray-500">%</span>
+              </div>
+            </div>
 
             {/* Permissões de módulos */}
             <div className="border border-gray-200 rounded-xl p-3 space-y-3">

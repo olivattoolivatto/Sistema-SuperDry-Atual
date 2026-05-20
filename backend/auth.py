@@ -51,6 +51,7 @@ class UserPublic(BaseModel):
     email: str
     role: UserRole
     is_active: bool
+    commission_pct: Optional[float] = None  # % comissão padrão (0-100)
     allowed_modules: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
@@ -63,6 +64,7 @@ class UserCreate(BaseModel):
     password: str
     role: UserRole = UserRole.ATENDENTE
     is_active: bool = True
+    commission_pct: Optional[float] = None
     allowed_modules: Optional[List[str]] = None
 
 
@@ -73,6 +75,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+    commission_pct: Optional[float] = None
     allowed_modules: Optional[List[str]] = None
 
 
