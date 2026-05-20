@@ -109,6 +109,7 @@ export const itemsApi = {
     api.post(`/items/${id}/execution-session/${sessionId}/finish`, payload),
   registerPayment: (id, payload) => api.post(`/items/${id}/payment`, payload),
   timeline: (id) => api.get(`/items/${id}/timeline`),
+  receiptUrl: (id) => `${process.env.REACT_APP_BACKEND_URL}/api/items/${id}/receipt`,
   // Company Mode
   companyMode: () => api.get('/items/company-mode'),
   bulkStatus: (item_ids, status, notes = '') => api.post('/items/bulk-status', { item_ids, status, notes }),

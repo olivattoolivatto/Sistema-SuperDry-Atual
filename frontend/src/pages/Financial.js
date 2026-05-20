@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   DollarSign, CheckCircle, Clock, AlertCircle, RefreshCw,
-  Search, Filter, CreditCard, X, ChevronDown, ChevronUp
+  Search, Filter, CreditCard, X, ChevronDown, ChevronUp, FileText
 } from 'lucide-react';
 import { itemsApi } from '../services/api';
 import { fmtMoney } from './budgets/_constants';
@@ -154,13 +154,25 @@ function ItemCard({ doc, onRegisterPayment }) {
             {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             {item.payment_records?.length || 0} pagamento(s)
           </button>
-          {item.payment_status !== 'PAGO' && item.payment_status !== 'CORTESIA' && (
-            <button
-              onClick={() => onRegisterPayment(doc)}
-              className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700">
-              <CreditCard className="w-3 h-3" /> Registrar Pagamento
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {item.payment_records?.length > 0 && (
+              <a
+                href={itemsApi.receiptUrl(item.id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700"
+              >
+                <FileText className="w-3 h-3" /> Recibo
+              </a>
+            )}
+            {item.payment_status !== 'PAGO' && item.payment_status !== 'CORTESIA' && (
+              <button
+                onClick={() => onRegisterPayment(doc)}
+                className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700">
+                <CreditCard className="w-3 h-3" /> Registrar Pagamento
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

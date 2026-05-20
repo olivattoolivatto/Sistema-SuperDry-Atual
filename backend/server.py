@@ -4467,6 +4467,226 @@ async def register_item_payment(
     return {"success": True, "record": record, "paid_value": paid_total, "payment_status": payment_status}
 
 
+@api_router.get("/items/{item_id}/receipt")
+async def generate_item_receipt(item_id: str):
+    """Gerar recibo de pagamento em PDF para um item quitado ou com pagamentos."""
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+
+    payment_records = item.get("payment_records", [])
+    if not payment_records:
+        raise HTTPException(status_code=400, detail="Este item não possui pagamentos registrados.")
+
+    client = await db.clients.find_one({"id": budget.get("client_id")})
+    system_config = await db.system_config.find_one({}) or {}
+
+    buffer = BytesIO()
+    # Recibo em formato A5 (metade do A4) para compactar
+    from reportlab.lib.pagesizes import A5
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A5,
+        leftMargin=1.5*cm, rightMargin=1.5*cm,
+        topMargin=1*cm, bottomMargin=1.5*cm,
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    # ── Estilos ────────────────────────────────────────────────────────────────
+    title_style = ParagraphStyle('RTitle', parent=styles['Heading1'],
+        fontSize=14, spaceAfter=4, alignment=1, textColor=colors.HexColor('#1e3a5f'))
+    sub_style = ParagraphStyle('RSub', parent=styles['Normal'],
+        fontSize=9, spaceAfter=2, alignment=1, textColor=colors.HexColor('#555555'))
+    label_style = ParagraphStyle('RLabel', parent=styles['Normal'],
+        fontSize=9, textColor=colors.HexColor('#444444'))
+    value_style = ParagraphStyle('RValue', parent=styles['Normal'],
+        fontSize=9, fontName='Helvetica-Bold')
+    small_style = ParagraphStyle('RSmall', parent=styles['Normal'],
+        fontSize=8, textColor=colors.HexColor('#777777'))
+    center_style = ParagraphStyle('RCenter', parent=styles['Normal'],
+        fontSize=9, alignment=1)
+
+    # ── Logo + cabeçalho ───────────────────────────────────────────────────────
+    logo_paths = ["/app/backend/uploads/logo.png", "/app/backend/logo-superdry.png"]
+    logo_element = None
+    for lp in logo_paths:
+        if os.path.exists(lp):
+            try:
+                logo_element = Image(lp, width=1.2*inch, height=0.96*inch)
+                break
+            except Exception:
+                pass
+
+    company_name = system_config.get('company_name', 'SuperDry Lavanderia')
+    company_phone = system_config.get('phone', '')
+    company_whatsapp = system_config.get('whatsapp', '')
+    company_instagram = system_config.get('instagram', '')
+
+    header_text = (
+        f"<b>{company_name}</b><br/>"
+        f"<font size='8' color='#666666'>"
+        + (f"📞 {company_phone}  " if company_phone else '')
+        + (f"📱 {company_whatsapp}  " if company_whatsapp else '')
+        + (f"@{company_instagram}" if company_instagram else '')
+        + "</font>"
+    )
+    header_para = Paragraph(header_text, sub_style)
+
+    if logo_element:
+        from reportlab.lib.pagesizes import A5 as A5_size
+        page_w = A5_size[0] - 3*cm
+        header_table = Table([[logo_element, header_para]], colWidths=[1.4*inch, page_w - 1.4*inch])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (1,0), (1,0), 'LEFT'),
+            ('LEFTPADDING', (0,0), (0,0), 0),
+        ]))
+        story.append(header_table)
+    else:
+        story.append(Paragraph(f"<b>{company_name}</b>", title_style))
+
+    story.append(Spacer(1, 8))
+
+    # ── Título do recibo ───────────────────────────────────────────────────────
+    recibo_num = f"REC-{item_id}"
+    story.append(Paragraph("RECIBO DE PAGAMENTO", title_style))
+    story.append(Paragraph(f"Nº {recibo_num}", small_style))
+    story.append(Spacer(1, 6))
+
+    # ── Linha divisória ────────────────────────────────────────────────────────
+    story.append(Table([['']], colWidths=['100%'],
+        style=TableStyle([('LINEABOVE', (0,0), (-1,-1), 1, colors.HexColor('#1e3a5f'))])))
+    story.append(Spacer(1, 6))
+
+    # ── Dados do cliente e serviço ─────────────────────────────────────────────
+    client_name = item.get("client_name") or budget.get("client_name", "N/A")
+    client_phone = client.get("phone_primary", "N/A") if client else "N/A"
+    service_name = item.get("service_name", "N/A")
+    budget_id = budget.get("id", "N/A")
+
+    info_data = [
+        [Paragraph("<b>Cliente:</b>", label_style), Paragraph(client_name, value_style)],
+        [Paragraph("<b>Telefone:</b>", label_style), Paragraph(client_phone, value_style)],
+        [Paragraph("<b>Serviço:</b>", label_style), Paragraph(service_name, value_style)],
+        [Paragraph("<b>Orçamento:</b>", label_style), Paragraph(budget_id, value_style)],
+    ]
+    from reportlab.lib.pagesizes import A5 as A5_sz
+    col_w = (A5_sz[0] - 3*cm) / 2
+    info_table = Table(info_data, colWidths=[col_w*0.35, col_w*1.65])
+    info_table.setStyle(TableStyle([
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 8))
+
+    # ── Tabela de pagamentos ───────────────────────────────────────────────────
+    story.append(Paragraph("<b>Pagamentos Registrados</b>", label_style))
+    story.append(Spacer(1, 4))
+
+    centered = ParagraphStyle('RC', parent=styles['Normal'], fontSize=8, alignment=1)
+
+    pay_header = [
+        Paragraph("<b><font color='white'>Data</font></b>", centered),
+        Paragraph("<b><font color='white'>Forma</font></b>", centered),
+        Paragraph("<b><font color='white'>Valor</font></b>", centered),
+    ]
+    pay_rows = [pay_header]
+    for rec in payment_records:
+        paid_at_raw = rec.get("paid_at", "")
+        try:
+            paid_dt = datetime.fromisoformat(paid_at_raw.replace('Z','+00:00'))
+            paid_date_str = paid_dt.strftime("%d/%m/%Y")
+        except Exception:
+            paid_date_str = paid_at_raw[:10] if paid_at_raw else "—"
+
+        method_raw = rec.get("method", "—")
+        method_label = (method_raw
+            .replace("PIX_CNPJ_", "PIX ")
+            .replace("CREDITO_", "Créd. ")
+            .replace("LINK_PAGAMENTO", "Link Pag.")
+            .replace("_", " "))
+
+        pay_rows.append([
+            Paragraph(paid_date_str, centered),
+            Paragraph(method_label, centered),
+            Paragraph(f"R$ {float(rec.get('value',0)):.2f}", centered),
+        ])
+
+    col_w3 = (A5_sz[0] - 3*cm)
+    pay_table = Table(pay_rows, colWidths=[col_w3*0.28, col_w3*0.44, col_w3*0.28])
+    pay_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e3a5f')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#f8fafc'), colors.white]),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
+        ('FONTSIZE', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+    ]))
+    story.append(pay_table)
+    story.append(Spacer(1, 8))
+
+    # ── Totais ─────────────────────────────────────────────────────────────────
+    total_value = float(item.get("total_value", 0))
+    paid_total  = float(item.get("paid_value", 0))
+    remaining   = total_value - paid_total
+    pay_status  = item.get("payment_status", "PENDENTE")
+
+    totals_data = [
+        [Paragraph("Valor do Serviço:", label_style), Paragraph(f"R$ {total_value:.2f}", value_style)],
+        [Paragraph("Total Pago:", label_style),       Paragraph(f"R$ {paid_total:.2f}", value_style)],
+    ]
+    if remaining > 0.01:
+        totals_data.append([
+            Paragraph("Saldo em Aberto:", label_style),
+            Paragraph(f"R$ {remaining:.2f}", ParagraphStyle('Rem', parent=styles['Normal'],
+                fontSize=9, fontName='Helvetica-Bold', textColor=colors.HexColor('#cc0000')))
+        ])
+
+    totals_table = Table(totals_data, colWidths=[col_w3*0.55, col_w3*0.45])
+    totals_table.setStyle(TableStyle([
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+    ]))
+    story.append(totals_table)
+    story.append(Spacer(1, 6))
+
+    # ── Status final ───────────────────────────────────────────────────────────
+    status_color = '#16a34a' if pay_status == 'PAGO' else '#ca8a04' if pay_status == 'PARCIAL' else '#dc2626'
+    status_label = {'PAGO':'✓ QUITADO','PARCIAL':'⚡ PARCIALMENTE PAGO','PENDENTE':'⚠ EM ABERTO'}.get(pay_status, pay_status)
+    story.append(Paragraph(
+        f"<font color='{status_color}'><b>{status_label}</b></font>",
+        ParagraphStyle('Status', parent=styles['Normal'], fontSize=11, alignment=1)
+    ))
+    story.append(Spacer(1, 8))
+
+    # ── Linha divisória + rodapé ───────────────────────────────────────────────
+    story.append(Table([['']], colWidths=['100%'],
+        style=TableStyle([('LINEABOVE', (0,0), (-1,-1), 0.5, colors.HexColor('#aaaaaa'))])))
+    story.append(Spacer(1, 4))
+
+    receipt_date = datetime.utcnow().strftime("%d/%m/%Y às %H:%M")
+    story.append(Paragraph(f"Recibo emitido em {receipt_date}", small_style))
+    story.append(Paragraph(f"{company_name}", small_style))
+
+    if pay_status == 'PAGO':
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("_" * 45, center_style))
+        story.append(Paragraph("Assinatura / Carimbo", center_style))
+
+    doc.build(story)
+    buffer.seek(0)
+    return StreamingResponse(
+        BytesIO(buffer.read()),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=recibo_{item_id}.pdf"}
+    )
+
+
 @api_router.get("/items/{item_id}/timeline")
 async def item_timeline(item_id: str, current_user: UserPublic = Depends(get_current_user)):
     """Linha do tempo completa do item (histórico unificado)."""
