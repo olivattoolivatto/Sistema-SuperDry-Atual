@@ -368,8 +368,11 @@ class BudgetItem(BaseModel):
     # Comissão do técnico
     commission_enabled: bool = False
     commission_user_id: Optional[str] = None
-    commission_user_name: Optional[str] = None   # display_name do usuário
-    commission_pct: Optional[float] = None       # % acordada para este item
+    commission_user_name: Optional[str] = None
+    commission_pct: Optional[float] = None
+
+    # Cliente desistiu: mantém no histórico mas sai das rotas
+    client_desisted: bool = False
 
     # Identificação de parceiro (lavanderia parceira)
     partner_label: Optional[Dict[str, Any]] = None
@@ -1592,6 +1595,107 @@ class TechnicianAssignment(BaseModel):
     status: str = "ASSIGNED"  # "ASSIGNED" | "IN_PROGRESS" | "COMPLETED"
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+@api_router.patch("/items/{item_id}/desist")
+async def mark_client_desisted(item_id: str, current_user: UserPublic = Depends(get_current_user)):
+    """Marca item como 'cliente desistiu' — mantém no histórico, sai das rotas."""
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    await _update_item_fields(item_id, {"client_desisted": True}, current_user)
+    await _append_to_item_array(item_id, "status_history", {
+        "status": item.get("status"), "at": datetime.utcnow().isoformat(),
+        "by_user_id": current_user.id, "by_user_name": current_user.name,
+        "notes": "Cliente desistiu — item inabilitado para rota"
+    })
+    await log_audit("item", item_id, "CLIENT_DESISTED", current_user, {})
+    return {"success": True}
+
+
+@api_router.post("/technician/finalize-today")
+async def finalize_today_agenda(current_user: UserPublic = Depends(get_current_user)):
+    """
+    Finaliza a agenda do dia:
+    - Itens finalizados (EXECUTADO/ENTREGUE/BUSCOU) → já no fluxo financeiro
+    - Itens coletados (COLETADO/EM_LAVAGEM*) → já no modo empresa
+    - Itens sem execução (RETIRAR/EXECUTAR_NO_LOCAL/ENTREGAR/AGUARDANDO_ENTREGA) → AGENDADO + libera rota
+    - Cancelados → mantém status, libera rota
+    Assignments do dia → marcados como COMPLETED
+    """
+    from datetime import date as _date
+    today = _date.today().isoformat()
+
+    FINAL_STATUSES   = {"EXECUTADO", "ENTREGUE", "BUSCOU", "ENTREGUE"}
+    EMPRESA_STATUSES = {"COLETADO", "EM_LAVAGEM", "EM_LAVAGEM_PARCEIRO",
+                        "AGUARDANDO_ENTREGA", "AGUARDANDO_BUSCAR"}
+    PENDING_STATUSES = {"RETIRAR", "EXECUTAR_NO_LOCAL", "ENTREGAR",
+                        "AGUARDANDO_ENTREGA", "AGENDADO"}
+
+    results = {"rescheduled": 0, "finalized": 0, "empresa": 0,
+               "cancelled": 0, "assignments_completed": 0}
+
+    # Busca assignments de hoje
+    assignments = await db.technician_assignments.find(
+        {"assigned_date": today, "status": {"$ne": "CANCELLED"}}
+    ).to_list(None)
+
+    processed_items: set = set()
+
+    for asgn in assignments:
+        for item_id in (asgn.get("event_ids") or []):
+            if item_id in processed_items:
+                continue
+            processed_items.add(item_id)
+
+            budget, item = await _find_budget_and_item(item_id)
+            if not item:
+                continue
+
+            status = item.get("status", "")
+
+            if status in FINAL_STATUSES:
+                results["finalized"] += 1
+                # Já está no fluxo correto, sem ação
+
+            elif status in EMPRESA_STATUSES:
+                results["empresa"] += 1
+                # Já está no modo empresa, sem ação
+
+            elif status == "CANCELADO_PELO_CLIENTE":
+                results["cancelled"] += 1
+                # Libera vínculo de rota
+                await _update_item_fields(item_id, {
+                    "current_route_id": None,
+                    "current_route_stop_id": None
+                }, current_user)
+
+            else:
+                # Não executado → reagendar (volta para disponibilidade de rota)
+                await _update_item_fields(item_id, {
+                    "current_route_id": None,
+                    "current_route_stop_id": None
+                }, current_user)
+                await _append_to_item_array(item_id, "status_history", {
+                    "status": status,
+                    "at": datetime.utcnow().isoformat(),
+                    "by_user_id": current_user.id,
+                    "by_user_name": current_user.name,
+                    "notes": "Reagendado automaticamente ao finalizar agenda do dia"
+                })
+                results["rescheduled"] += 1
+
+        # Marca assignment como COMPLETED
+        await db.technician_assignments.update_one(
+            {"id": asgn["id"]},
+            {"$set": {"status": "COMPLETED", "updated_at": datetime.utcnow()}}
+        )
+        results["assignments_completed"] += 1
+
+    await log_audit("system", "FINALIZE_TODAY", "FINALIZE_TODAY", current_user, {
+        "date": today, "results": results
+    })
+    return {"success": True, "date": today, "results": results}
+
 
 @api_router.post("/technician/assign-events")
 async def assign_events_to_technician(assignment: TechnicianAssignment):
@@ -3206,6 +3310,7 @@ async def get_available_budget_items_for_routes(current_user: UserPublic = Depen
             {"$unwind": "$items"},
             {"$match": {
                 "items.status": {"$in": route_statuses},
+                "items.client_desisted": {"$ne": True},   # exclui desistências
                 "$or": [
                     {"items.current_route_id": None},
                     {"items.current_route_id": {"$exists": False}},

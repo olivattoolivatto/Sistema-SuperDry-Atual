@@ -1548,6 +1548,22 @@ export function Routes() {
                         <Bike className="w-3 h-3 sm:mr-1" />
                         <span className="hidden sm:inline ml-1">Moto</span>
                       </button>
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm(`Marcar "${item.client_name}" como desistência?\nO orçamento será mantido no histórico mas sairá das rotas.`)) return;
+                          try {
+                            const token = localStorage.getItem('superdry_token');
+                            await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/items/${item.budget_item_id}/desist`, {
+                              method: 'PATCH', headers: { Authorization: `Bearer ${token}` }
+                            });
+                            setAvailableItems(prev => prev.filter(i => i.budget_item_id !== item.budget_item_id));
+                          } catch(e) { alert('Erro: ' + e.message); }
+                        }}
+                        className="inline-flex items-center justify-center px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full hover:bg-red-100 hover:text-red-700 min-w-0"
+                        title="Cliente desistiu"
+                      >
+                        <span className="text-[10px]">✕ Desistiu</span>
+                      </button>
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap hidden">

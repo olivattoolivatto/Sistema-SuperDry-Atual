@@ -198,7 +198,9 @@ export const technicianApi = {
   }),
   updateAssignmentStatus: (assignmentId, status) => api.put(`/technician/assignment/${assignmentId}/status`, null, {
     params: { status }
-  })
+  }),
+  finalizeToday: () => api.post('/technician/finalize-today', {}),
+  markDesisted: (itemId) => api.patch(`/items/${itemId}/desist`),
 };
 
 export default api;

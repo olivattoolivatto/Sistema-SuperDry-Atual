@@ -294,11 +294,41 @@ function ModeSelection({ onModeSelect }) {
 }
 
 // Componente Modo Rua
+// ── Utilitário: status visual do atendimento ──────────────────────────────────
+const DONE_STATUSES = new Set(['EXECUTADO','ENTREGUE','BUSCOU','COLETADO','EM_LAVAGEM',
+  'EM_LAVAGEM_PARCEIRO','AGUARDANDO_ENTREGA','AGUARDANDO_BUSCAR']);
+const CANCEL_STATUSES = new Set(['CANCELADO_PELO_CLIENTE']);
+const RESCHEDULE_STATUSES = new Set(['RETIRAR','EXECUTAR_NO_LOCAL','ENTREGAR','AGENDADO']);
+
+function getCardExecutionStatus(items) {
+  if (!items || items.length === 0) return 'pending';
+  const statuses = items.map(i => i.status || 'RETIRAR');
+  const done     = statuses.filter(s => DONE_STATUSES.has(s)).length;
+  const cancelled= statuses.filter(s => CANCEL_STATUSES.has(s)).length;
+  const resched  = statuses.filter(s => RESCHEDULE_STATUSES.has(s)).length;
+  const total    = statuses.length;
+
+  if (done === total)                        return 'completed';   // verde
+  if (cancelled === total)                   return 'cancelled';   // vermelho
+  if (resched === total)                     return 'reschedule';  // laranja
+  if (done + cancelled + resched === total && done > 0) return 'partial'; // amarelo
+  return 'pending';
+}
+
+const CARD_STYLES = {
+  completed:  { border: 'border-green-400',  bg: 'bg-green-50',  label: '✅ Concluído',            labelCls: 'text-green-700 bg-green-100' },
+  partial:    { border: 'border-yellow-400', bg: 'bg-yellow-50', label: '⚡ Parcialmente concluído', labelCls: 'text-yellow-800 bg-yellow-100' },
+  reschedule: { border: 'border-orange-400', bg: 'bg-orange-50', label: '🔄 Reagendar',             labelCls: 'text-orange-800 bg-orange-100' },
+  cancelled:  { border: 'border-red-400',    bg: 'bg-red-50',    label: '✕ Cancelado',             labelCls: 'text-red-700 bg-red-100' },
+  pending:    { border: 'border-gray-200',   bg: 'bg-white',     label: null,                      labelCls: '' },
+};
+
 function StreetMode({ onBack }) {
   const [activeTab, setActiveTab] = useState('agenda');
   const [dailyClients, setDailyClients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showOnlyToday, setShowOnlyToday] = useState(true); // Novo filtro por data
+  const [showOnlyToday, setShowOnlyToday] = useState(true);
+  const [finalizing, setFinalizing] = useState(false);
 
   useEffect(() => {
     loadDailyAgenda();
@@ -499,11 +529,30 @@ function StreetMode({ onBack }) {
   return (
     <div>
       {/* Header com botão voltar */}
-      <div className="bg-blue-600 text-white p-4 flex items-center">
-        <button onClick={onBack} className="mr-3">
-          <span className="text-xl">←</span>
+      <div className="bg-blue-600 text-white p-4 flex items-center justify-between">
+        <div className="flex items-center">
+          <button onClick={onBack} className="mr-3">
+            <span className="text-xl">←</span>
+          </button>
+          <h2 className="text-lg font-semibold">Modo Rua</h2>
+        </div>
+        <button
+          onClick={async () => {
+            if (!window.confirm('Finalizar agenda de hoje?\n\nServiços não executados serão reagendados automaticamente e liberados para nova rota.')) return;
+            setFinalizing(true);
+            try {
+              const r = await technicianApi.finalizeToday();
+              const res = r.data.results;
+              alert(`Agenda finalizada!\n✅ Finalizados: ${res.finalized}\n🔄 Reagendados: ${res.rescheduled}\n📦 Empresa: ${res.empresa}\n✕ Cancelados: ${res.cancelled}`);
+              loadDailyAgenda();
+            } catch(e) { alert('Erro: ' + (e.response?.data?.detail || e.message)); }
+            finally { setFinalizing(false); }
+          }}
+          disabled={finalizing}
+          className="text-xs bg-white text-blue-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-50"
+        >
+          {finalizing ? '...' : '✓ Finalizar Hoje'}
         </button>
-        <h2 className="text-lg font-semibold">Modo Rua</h2>
       </div>
 
       {/* Tabs de navegação */}
@@ -630,33 +679,17 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
   const { wazeUrl, mapsUrl } = generateNavigationLink(getClientAddress(client));
   
   const totalValue = client.items.reduce((sum, item) => sum + item.value, 0);
-  
+  const execStatus = getCardExecutionStatus(client.items);
+  const cardStyle  = CARD_STYLES[execStatus];
+
   const handleRemoveAssignment = async (assignmentId) => {
     try {
-      console.log(`🗑️ Removendo assignment ${assignmentId} da agenda`);
-      
-      // Confirmar ação com o usuário
-      if (!window.confirm('Tem certeza que deseja remover este serviço da sua agenda? Esta ação não pode ser desfeita.')) {
-        return;
-      }
-      
-      // Marcar assignment como CANCELLED (não existe endpoint DELETE)
-      const response = await technicianApi.updateAssignmentStatus(assignmentId, 'CANCELLED');
-      
-      console.log(`✅ Assignment ${assignmentId} marcado como cancelado:`, response.data);
-      
+      if (!window.confirm('Tem certeza que deseja remover este serviço da sua agenda?')) return;
+      await technicianApi.updateAssignmentStatus(assignmentId, 'CANCELLED');
       alert('Serviço removido da sua agenda com sucesso!');
-      
-      // Recarregar dados da agenda
-      window.location.reload(); // Solução temporária - TODO: implementar reload otimizado
-      
+      window.location.reload();
     } catch (error) {
-      console.error(`❌ Erro ao remover assignment ${assignmentId}:`, error);
-      
-      // CORREÇÃO: Tratar especificamente erro 404 (assignment não existe)
-      if (error.response && error.response.status === 404) {
-        alert('Este serviço não existe mais na agenda. A lista será atualizada.');
-        console.log('🔄 Assignment não encontrado, recarregando lista...');
+      if (error.response?.status === 404) {
         window.location.reload();
       } else {
         alert('Erro ao remover da agenda. Tente novamente.');
@@ -665,18 +698,22 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
   };
   
   return (
-    <div className="bg-white rounded-lg shadow-md border border-gray-200">
+    <div className={`rounded-lg shadow-md border-2 ${cardStyle.border} ${cardStyle.bg}`}>
       {/* Header do card */}
       <div className="p-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            {/* Ícone específico por tipo de source */}
             {client.source === 'AGENDA_ASSIGNMENT' ? (
               <Calendar className="w-4 h-4 text-purple-600" />
             ) : (
               <MapPin className="w-4 h-4 text-blue-600" />
             )}
             <span className="font-semibold text-gray-800">{client.name}</span>
+            {cardStyle.label && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cardStyle.labelCls}`}>
+                {cardStyle.label}
+              </span>
+            )}
             
             {/* CORREÇÃO: Mostrar data + horário ao invés de apenas horário */}
             <div className="flex flex-col">
