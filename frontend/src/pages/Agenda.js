@@ -2503,6 +2503,17 @@ export function Agenda() {
                         R$ {Number(service.service_value).toFixed(2)}
                       </span>
                     )}
+                    {/* Indicador de conclusão + link para financeiro */}
+                    {['ENTREGUE','EXECUTADO','BUSCOU'].includes(service.status) && (
+                      <span className="px-2 py-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
+                        ✅ Concluído
+                      </span>
+                    )}
+                    {['COLETADO'].includes(service.status) && (
+                      <span className="px-2 py-0.5 text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full">
+                        📦 Coletado — aguardando lavagem
+                      </span>
+                    )}
                   </div>
                   
                   {/* Conteúdo específico — compacto no mobile */}
