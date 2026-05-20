@@ -92,7 +92,7 @@ export function Layout({ children }) {
   const primary = quickNavPaths
     .map(p => items.find(i => i.path === p))
     .filter(Boolean)
-    .slice(0, 5);
+    .slice(0, 6);
 
   const currentLabel = items.find(i => i.path === location.pathname)?.label
     || ALL_ITEMS.find(i => i.path === location.pathname)?.label
@@ -273,11 +273,11 @@ export function Layout({ children }) {
                       onChange={() => {
                         if (selected) {
                           saveQuickNav(quickNavPaths.filter(p => p !== it.path));
-                        } else if (quickNavPaths.length < 5) {
+                        } else if (quickNavPaths.length < 6) {
                           saveQuickNav([...quickNavPaths, it.path]);
                         }
                       }}
-                      disabled={!selected && quickNavPaths.length >= 5}
+                      disabled={!selected && quickNavPaths.length >= 6}
                       className="h-4 w-4 text-blue-600 rounded"
                     />
                     <Icon className="w-4 h-4 text-gray-500 shrink-0" />
@@ -286,7 +286,7 @@ export function Layout({ children }) {
                 );
               })}
             </div>
-            <p className="text-[11px] text-gray-400 mt-3">{quickNavPaths.length}/5 selecionados</p>
+            <p className="text-xs text-gray-400 mt-3">{quickNavPaths.length}/6 selecionados</p>
             <button
               onClick={() => { saveQuickNav(['/', '/budgets', '/routes-geo', '/technician', '/financial']); }}
               className="mt-3 w-full py-2 text-xs text-gray-500 bg-gray-100 rounded-xl hover:bg-gray-200"
