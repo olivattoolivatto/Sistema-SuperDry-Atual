@@ -84,3 +84,9 @@ code {
     @apply bg-background text-foreground;
     }
 }
+/* Previne zoom automático no iOS em campos de formulário */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea {
+    font-size: max(16px, 1em) !important;
+  }
+}

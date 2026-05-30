@@ -10,6 +10,7 @@ import { Budgets } from "./pages/Budgets";
 import { Routes as RoutesPage } from "./pages/Routes";
 import { RoutesGeoapify } from "./pages/RoutesGeoapify";
 import { Financial } from "./pages/Financial";
+import { Automations } from "./pages/Automations";
 import { BudgetConfig } from "./pages/BudgetConfig";
 import { SystemConfig } from "./pages/SystemConfig";
 import { Agenda } from "./pages/Agenda";
@@ -52,6 +53,7 @@ function ProtectedShell() {
           <Route path="/technician" element={<TechnicianMode />} />
           <Route path="/whatsapp" element={<Placeholder title="WhatsApp" />} />
           <Route path="/financial" element={<Financial />} />
+          <Route path="/automations" element={<Automations />} />
           <Route path="/finance-manager" element={<Placeholder title="Gerenciador Financeiro" />} />
           <Route path="/reports" element={<Placeholder title="Relatórios" />} />
           <Route path="/tickets" element={<Placeholder title="Chamados e Manutenção" />} />

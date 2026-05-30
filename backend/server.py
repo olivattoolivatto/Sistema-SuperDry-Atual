@@ -2918,6 +2918,345 @@ async def update_budget_config(config: BudgetConfig):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error updating budget config: {str(e)}")
 
+# ── Automações ────────────────────────────────────────────────────────────────
+#
+# Dois fluxos independentes:
+#   1. auto-budget  → texto com dados do cliente + itens → cria cliente + orçamento
+#   2. auto-measures → texto com medidas de tapetes → preenche Identificação e Medidas
+#
+# O formato das mensagens será definido pelo usuário.
+# Por enquanto o parser aceita linhas separadas por \n.
+# Cada automação retorna um "preview" antes de confirmar a criação.
+#
+
+class AutoBudgetLine(BaseModel):
+    raw_text: str          # texto bruto (uma linha por dado)
+    # campos interpretados pelo parser (preenchidos pelo backend)
+    client_name:   Optional[str] = None
+    client_phone:  Optional[str] = None
+    client_address:Optional[str] = None
+    items:         List[Dict[str, Any]] = []
+    notes:         Optional[str] = None
+
+class AutoMeasureLine(BaseModel):
+    raw_text: str
+    items: List[Dict[str, Any]] = []  # [{client_name, service_name, width, height, diameter, partner_label}]
+
+
+def _parse_budget_text(text: str) -> AutoBudgetLine:
+    """
+    Parser básico para automação de orçamento.
+    Formato esperado (definido pelo usuário — a ser refinado):
+      Linha 1: Nome do cliente
+      Linha 2: Telefone
+      Linha 3: Endereço
+      Linha 4+: Item - Valor (ex: "Lavagem Sofá 3L - 350")
+      Última linha com 'obs:': observações (opcional)
+    """
+    lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
+    result = AutoBudgetLine(raw_text=text)
+    if not lines:
+        return result
+
+    result.client_name  = lines[0] if len(lines) > 0 else None
+    result.client_phone = lines[1] if len(lines) > 1 else None
+    result.client_address = lines[2] if len(lines) > 2 else None
+
+    import re
+    for line in lines[3:]:
+        if line.lower().startswith('obs:'):
+            result.notes = line[4:].strip()
+            continue
+        # Tenta separar "serviço - valor" ou "serviço: valor"
+        match = re.split(r'\s[-:]\s|\s[-:]\s?|[-:]\s', line, maxsplit=1)
+        if len(match) == 2:
+            service_name = match[0].strip()
+            try:
+                value = float(re.sub(r'[^\d.,]', '', match[1]).replace(',', '.'))
+            except Exception:
+                value = 0.0
+            result.items.append({"service_name": service_name, "value": value})
+        elif line:
+            result.items.append({"service_name": line, "value": 0.0})
+
+    return result
+
+
+def _parse_measures_text(text: str) -> AutoMeasureLine:
+    """
+    Parser básico para automação de medidas.
+    Formato esperado (a ser refinado pelo usuário):
+      Cada linha: [cliente] - [serviço] [medida]
+      ex: "João Silva - Tapete Sala 2.0x3.0"
+      Parceiro: "[PARCEIRO: DryClean] João - Tapete 2x3 AZUL-224"
+    """
+    import re
+    lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
+    result = AutoMeasureLine(raw_text=text)
+
+    current_partner = None
+
+    for line in lines:
+        # Detecta bloco de parceiro
+        partner_match = re.match(r'\[PARCEIRO:\s*(.+?)\]', line, re.IGNORECASE)
+        if partner_match:
+            current_partner = partner_match.group(1).strip()
+            line = re.sub(r'\[PARCEIRO:\s*.+?\]\s*', '', line, flags=re.IGNORECASE).strip()
+            if not line:
+                continue
+
+        # Tenta extrair medidas: formatos 2.0x3.0 / Ø1.5 / 3m
+        item: Dict[str, Any] = {"raw": line, "partner": current_partner}
+
+        dim_match = re.search(r'([\d.,]+)\s*[xX×]\s*([\d.,]+)', line)
+        diam_match = re.search(r'[ØDd]\s*([\d.,]+)', line)
+        lin_match  = re.search(r'([\d.,]+)\s*m(?:l|lin|linear)?(?:\s|$)', line)
+
+        if dim_match:
+            item["width"]  = float(dim_match.group(1).replace(',', '.'))
+            item["height"] = float(dim_match.group(2).replace(',', '.'))
+            item["area_m2"]= round(item["width"] * item["height"], 4)
+        elif diam_match:
+            d = float(diam_match.group(1).replace(',', '.'))
+            item["diameter"] = d
+            item["area_m2"]  = round(3.14159 * (d/2)**2, 4)
+        elif lin_match:
+            item["linear_meters"] = float(lin_match.group(1).replace(',', '.'))
+
+        # Tenta extrair nome do cliente (antes do primeiro "-")
+        parts = re.split(r'\s[-–]\s', line, maxsplit=1)
+        if len(parts) >= 2:
+            item["client_name"]  = parts[0].strip()
+            item["service_name"] = re.sub(r'([\d.,]+\s*[xX×]\s*[\d.,]+|[ØDd]\s*[\d.,]+|[\d.,]+\s*ml?).*', '', parts[1]).strip()
+        else:
+            item["service_name"] = line
+
+        # Etiqueta de parceiro (ex: AZUL-224)
+        label_match = re.search(r'\b(AZUL|AMARELO|CINZA|LARANJA|ROXO|ROSA|VERDE)[- _](\d{1,3})\b', line, re.IGNORECASE)
+        if label_match:
+            item["partner_label"] = {
+                "type": "COLOR_NUM",
+                "color": label_match.group(1).upper(),
+                "number": label_match.group(2)
+            }
+        elif current_partner:
+            item["partner_label"] = {"type": "TEXT", "text": current_partner}
+
+        result.items.append(item)
+
+    return result
+
+
+@api_router.post("/automation/preview-budget")
+async def preview_budget(payload: Dict[str, Any], current_user: UserPublic = Depends(get_current_user)):
+    """Preview do que será criado a partir do texto de automação de orçamento."""
+    text = payload.get("text", "")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Texto vazio.")
+    parsed = _parse_budget_text(text)
+    # Verifica se cliente já existe
+    existing_client = None
+    if parsed.client_phone:
+        phone_clean = re.sub(r'\D', '', parsed.client_phone)
+        existing_client = await db.clients.find_one({"phone_primary": {"$regex": phone_clean[-8:]}})
+    return {
+        "client_name":    parsed.client_name,
+        "client_phone":   parsed.client_phone,
+        "client_address": parsed.client_address,
+        "items":          parsed.items,
+        "notes":          parsed.notes,
+        "client_exists":  bool(existing_client),
+        "existing_client_id": existing_client.get("id") if existing_client else None,
+    }
+
+
+@api_router.post("/automation/execute-budget")
+async def execute_budget_automation(payload: Dict[str, Any], current_user: UserPublic = Depends(get_current_user)):
+    """
+    Executa a automação de orçamento:
+    1. Cria ou usa cliente existente
+    2. Cria orçamento com os itens fornecidos
+    3. Retorna IDs criados
+    """
+    import re as re2
+
+    client_name    = payload.get("client_name", "").strip()
+    client_phone   = payload.get("client_phone", "").strip()
+    client_address = payload.get("client_address", "").strip()
+    items          = payload.get("items", [])
+    notes          = payload.get("notes", "")
+    existing_id    = payload.get("existing_client_id")
+    payment_method = payload.get("payment_method", "PIX_CNPJ_25995295000104")
+    salesperson    = payload.get("salesperson", current_user.display_name or current_user.name)
+
+    if not client_name:
+        raise HTTPException(status_code=400, detail="Nome do cliente obrigatório.")
+
+    # 1. Cliente
+    if existing_id:
+        client = await db.clients.find_one({"id": existing_id})
+        client_id = existing_id
+    else:
+        from uuid import uuid4
+        client_counter = await db.clients.count_documents({}) + 1
+        client_id = f"CLI-{str(client_counter).zfill(4)}"
+        addr_obj = {
+            "full_address": client_address,
+            "neighborhood": "",
+            "city": "",
+            "state": "",
+            "latitude": None,
+            "longitude": None,
+        }
+        new_client = {
+            "id": client_id,
+            "name": client_name,
+            "phone_primary": client_phone,
+            "email": "",
+            "address": addr_obj,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        await db.clients.insert_one(new_client)
+        await log_audit("client", client_id, "AUTO_CREATE", current_user, {"source": "automation"})
+
+    # 2. Orçamento
+    sys_cfg = await db.system_config.find_one({}) or {}
+    salesperson_val = salesperson or sys_cfg.get("salesperson_default", "Sistema")
+
+    bud_counter = await db.budgets.count_documents({}) + 1
+    budget_id = f"ORC-{str(bud_counter).zfill(7)}"
+
+    budget_items = []
+    for raw_item in items:
+        item_counter = len(budget_items) + 1
+        item_id = f"ITM-AUTO-{budget_id}-{item_counter}"
+        budget_items.append({
+            "id": item_id,
+            "service_id": None,
+            "service_name": raw_item.get("service_name", "Serviço"),
+            "service_code": "AUTO",
+            "quantity": 1,
+            "unit_price": float(raw_item.get("value", 0)),
+            "total_value": float(raw_item.get("value", 0)),
+            "status": "RETIRAR",
+            "payment_status": "PENDENTE",
+            "paid_value": 0.0,
+            "execution_mode": "RETIRAR_E_LEVAR",
+            "current_route_id": None,
+        })
+
+    budget_doc = {
+        "id": budget_id,
+        "client_id": client_id,
+        "client_name": client_name,
+        "payment_method": payment_method,
+        "salesperson": salesperson_val,
+        "budget_observations": notes or "",
+        "internal_observations": "Criado via Automação",
+        "items": budget_items,
+        "total_value": sum(float(i.get("value", 0)) for i in items),
+        "payment_status": "PENDENTE",
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+        "source": "AUTOMATION",
+    }
+    await db.budgets.insert_one(budget_doc)
+    await log_audit("budget", budget_id, "AUTO_CREATE", current_user, {"source": "automation"})
+
+    return {
+        "success": True,
+        "client_id": client_id,
+        "budget_id": budget_id,
+        "items_created": len(budget_items),
+        "client_created": not bool(existing_id),
+    }
+
+
+@api_router.post("/automation/preview-measures")
+async def preview_measures(payload: Dict[str, Any], current_user: UserPublic = Depends(get_current_user)):
+    """Preview do que será preenchido a partir do texto de medidas."""
+    text = payload.get("text", "")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Texto vazio.")
+    parsed = _parse_measures_text(text)
+    return {"items": parsed.items, "count": len(parsed.items)}
+
+
+@api_router.post("/automation/execute-measures")
+async def execute_measures_automation(payload: Dict[str, Any], current_user: UserPublic = Depends(get_current_user)):
+    """
+    Para cada item de medida: busca orçamento existente ou cria um novo,
+    depois atualiza as medidas no item via updateMeasures.
+    """
+    items = payload.get("items", [])
+    payment_method = payload.get("payment_method", "PIX_CNPJ_25995295000104")
+    results = []
+
+    for item_data in items:
+        client_name  = (item_data.get("client_name") or "").strip()
+        service_name = (item_data.get("service_name") or "Tapete").strip()
+        if not client_name:
+            results.append({"status": "skipped", "reason": "sem nome"})
+            continue
+
+        # Busca cliente existente
+        client = await db.clients.find_one({"name": {"$regex": f"^{re.escape(client_name)}$", "$options": "i"}})
+        if not client:
+            ctr = await db.clients.count_documents({}) + 1
+            cid = f"CLI-{str(ctr).zfill(4)}"
+            await db.clients.insert_one({
+                "id": cid, "name": client_name, "phone_primary": "",
+                "address": {"full_address":"","latitude":None,"longitude":None},
+                "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(),
+            })
+            client_id = cid
+        else:
+            client_id = client["id"]
+
+        # Busca orçamento existente com item EM_LAVAGEM para esse cliente
+        budget = await db.budgets.find_one({
+            "client_id": client_id,
+            "items.status": {"$in": ["EM_LAVAGEM","EM_LAVAGEM_PARCEIRO","CLIENTE_TROUXE","COLETADO"]}
+        })
+
+        if budget:
+            # Pega o primeiro item elegível
+            target_item = next((i for i in budget["items"]
+                if i.get("status") in ["EM_LAVAGEM","EM_LAVAGEM_PARCEIRO","CLIENTE_TROUXE","COLETADO"]), None)
+            if target_item:
+                measures = {k: item_data[k] for k in ["width","height","diameter","area_m2","linear_meters","partner_label"]
+                            if k in item_data and item_data[k] is not None}
+                measures["confirmed_measures"] = True
+                await _update_item_fields(target_item["id"], measures, current_user)
+                results.append({"status": "updated", "item_id": target_item["id"], "budget_id": budget["id"]})
+                continue
+
+        # Cria novo orçamento
+        btr = await db.budgets.count_documents({}) + 1
+        bid = f"ORC-{str(btr).zfill(7)}"
+        iid = f"ITM-{bid}-1"
+        measures = {k: item_data[k] for k in ["width","height","diameter","area_m2","linear_meters"] if k in item_data and item_data[k] is not None}
+        budget_item = {
+            "id": iid, "service_name": service_name, "service_code": "AUTO-MEASURES",
+            "quantity": 1, "unit_price": 0.0, "total_value": 0.0,
+            "status": "CLIENTE_TROUXE", "payment_status": "PENDENTE", "paid_value": 0.0,
+            "execution_mode": "RETIRAR_E_LEVAR", "confirmed_measures": True,
+            **measures,
+            "partner_label": item_data.get("partner_label"),
+        }
+        await db.budgets.insert_one({
+            "id": bid, "client_id": client_id, "client_name": client_name,
+            "payment_method": payment_method, "salesperson": current_user.display_name or current_user.name,
+            "budget_observations": "", "internal_observations": "Criado via Automação de Medidas",
+            "items": [budget_item], "total_value": 0.0, "payment_status": "PENDENTE",
+            "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "source": "AUTOMATION_MEASURES",
+        })
+        results.append({"status": "created", "budget_id": bid, "item_id": iid})
+
+    return {"success": True, "processed": len(results), "results": results}
+
+
 @api_router.get("/payment-methods")
 async def get_payment_methods():
     """Retorna lista de formas de pagamento configuradas no sistema."""

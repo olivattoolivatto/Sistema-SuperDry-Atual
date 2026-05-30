@@ -1525,15 +1525,14 @@ function MeasuresPanel({ items, onClose, onDone }) {
 
       {/* ── Tabela compacta ── */}
       <div className="overflow-x-auto rounded-lg border border-gray-200">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs" style={{tableLayout:'fixed'}}>
           <thead className="bg-gray-50">
             <tr>
               <SortTh field="client_name" label="Cliente" />
-              <SortTh field="service_name" label="Serviço" />
               <SortTh field="area_m2" label="Medidas" />
               <SortTh field="status" label="Status" />
-              <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500">Etiqueta</th>
-              <th className="px-2 py-2 w-6" />
+              <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500">Etiq.</th>
+              <th className="px-1 py-2 w-4" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -1545,7 +1544,7 @@ function MeasuresPanel({ items, onClose, onDone }) {
               const area = val(item.id, 'area_m2');
               const w = val(item.id, 'width'); const h = val(item.id, 'height');
               const d = val(item.id, 'diameter'); const lm = val(item.id, 'linear_meters');
-              const measureStr = d ? `Ø${d}m` : (w && h) ? `${w}×${h}m` : area ? `${area}m²` : lm ? `${lm}m lin.` : '—';
+              const measureStr = d ? `Ø${d}m` : (w && h) ? `${w}×${h}` : area ? `${area}m²` : lm ? `${lm}ml` : '—';
               const confirmed = edit.confirmed_measures ?? item.confirmed_measures;
 
               return (
@@ -1555,102 +1554,86 @@ function MeasuresPanel({ items, onClose, onDone }) {
                     className={`cursor-pointer transition-colors ${isOpen ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                     onClick={() => setExpandedId(isOpen ? null : item.id)}
                   >
-                    <td className="px-2 py-2 font-medium text-gray-900 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        {confirmed && <span className="text-green-500 text-[10px]">✓</span>}
-                        {item.client_name}
+                    <td className="px-2 py-2 font-medium text-gray-900">
+                      <div className="flex items-center gap-1">
+                        {confirmed && <span className="text-green-500">✓</span>}
+                        <span className="truncate block max-w-[90px]">{item.client_name}</span>
                       </div>
+                      <span className="text-[10px] text-gray-400 truncate block max-w-[90px]">{item.service_name}</span>
                     </td>
-                    <td className="px-2 py-2 text-gray-600 max-w-[120px] truncate">{item.service_name}</td>
-                    <td className="px-2 py-2 text-gray-600 whitespace-nowrap">{measureStr}</td>
-                    <td className="px-2 py-2">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                    <td className="px-1 py-2 text-gray-600 whitespace-nowrap">{measureStr}</td>
+                    <td className="px-1 py-2">
+                      <span className={`text-[9px] px-1 py-0.5 rounded-full font-medium ${
                         item.status === 'EM_LAVAGEM_PARCEIRO' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'
-                      }`}>{item.status === 'EM_LAVAGEM_PARCEIRO' ? 'Parceiro' : 'Lavagem'}</span>
+                      }`}>{item.status === 'EM_LAVAGEM_PARCEIRO' ? 'Parc.' : 'Lav.'}</span>
                     </td>
-                    <td className="px-2 py-2"><PartnerLabelBadge label={pl} /></td>
-                    <td className="px-2 py-2 text-gray-400">{isOpen ? '▲' : '▼'}</td>
+                    <td className="px-1 py-2"><PartnerLabelBadge label={pl} /></td>
+                    <td className="px-1 py-2 text-gray-400 text-center">{isOpen ? '▲' : '▼'}</td>
                   </tr>
 
                   {/* Card expandido */}
                   {isOpen && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-3 bg-blue-50 border-b border-blue-200">
-                        <div className="space-y-3">
-                          <div className="font-semibold text-gray-900 text-sm flex items-center justify-between">
-                            <span>{item.client_name} — {item.service_name}</span>
-                            <div className="flex items-center gap-2">
-                              {item.original_total_value && (
-                                <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                                  Original: R${item.original_total_value.toFixed(2)}
-                                </span>
-                              )}
-                              <span className="text-sm font-bold text-green-700">
-                                R${((edit.total_value ?? item.total_value) || 0).toFixed(2)}
-                              </span>
-                            </div>
+                      <td colSpan={5} className="px-2 py-3 bg-blue-50 border-b border-blue-200">
+                        <div className="space-y-2">
+                          <div className="font-semibold text-gray-900 text-xs flex items-center justify-between flex-wrap gap-1">
+                            <span className="truncate">{item.client_name}</span>
+                            <span className="text-sm font-bold text-green-700 shrink-0">
+                              R${((edit.total_value ?? item.total_value) || 0).toFixed(2)}
+                            </span>
                           </div>
 
                           {/* Tapete Quadrado */}
-                          <div className="border-2 border-blue-300 rounded-lg p-2.5 bg-blue-50">
-                            <div className="text-[10px] font-bold text-blue-700 uppercase mb-1.5">Tapete Quadrado / Retangular</div>
-                            <div className="grid grid-cols-3 gap-2">
-                              {[['width','Largura (m)'],['height','Comprimento (m)']].map(([f,l]) => (
+                          <div className="border-2 border-blue-300 rounded-lg p-2 bg-blue-50">
+                            <div className="text-[9px] font-bold text-blue-700 uppercase mb-1">Tapete Quad./Ret.</div>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {[['width','Larg.(m)'],['height','Comp.(m)'],['area_m2','Área m²']].map(([f,l]) => (
                                 <div key={f}>
-                                  <label className="block text-[10px] text-blue-600 mb-0.5">{l}</label>
+                                  <label className="block text-[9px] text-blue-600 mb-0.5">{l}</label>
                                   <input type="number" step="0.01" placeholder="0.00"
                                     value={val(item.id, f)}
+                                    readOnly={f==='area_m2' && !!d}
                                     onChange={e => setField(item.id, f, e.target.value ? parseFloat(e.target.value) : null)}
-                                    className="w-full px-2 py-1 border border-blue-300 rounded text-xs bg-white" />
+                                    className={`w-full px-1.5 py-1 border border-blue-300 rounded text-[11px] ${f==='area_m2'?'bg-blue-100 font-semibold':'bg-white'}`} />
                                 </div>
                               ))}
-                              <div>
-                                <label className="block text-[10px] text-blue-600 mb-0.5">Área m² (auto)</label>
-                                <input type="number" step="0.0001" placeholder="—"
-                                  value={val(item.id, 'area_m2')}
-                                  onChange={e => setField(item.id, 'area_m2', e.target.value ? parseFloat(e.target.value) : null)}
-                                  className="w-full px-2 py-1 border border-blue-300 rounded text-xs bg-blue-100 font-semibold" />
-                              </div>
                             </div>
                           </div>
 
                           {/* Tapete Redondo */}
-                          <div className="border-2 border-green-300 rounded-lg p-2.5 bg-green-50">
-                            <div className="text-[10px] font-bold text-green-700 uppercase mb-1.5">Tapete Redondo</div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-[10px] text-green-600 mb-0.5">Diâmetro (m)</label>
-                                <input type="number" step="0.01" placeholder="0.00"
-                                  value={val(item.id, 'diameter')}
-                                  onChange={e => setField(item.id, 'diameter', e.target.value ? parseFloat(e.target.value) : null)}
-                                  className="w-full px-2 py-1 border border-green-300 rounded text-xs bg-white" />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] text-green-600 mb-0.5">Área m² (auto)</label>
-                                <input readOnly value={val(item.id, 'area_m2')}
-                                  className="w-full px-2 py-1 border border-green-300 rounded text-xs bg-green-100 font-semibold cursor-default" />
-                              </div>
+                          <div className="border-2 border-green-300 rounded-lg p-2 bg-green-50">
+                            <div className="text-[9px] font-bold text-green-700 uppercase mb-1">Tapete Redondo</div>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {[['diameter','Diâm.(m)'],['area_m2','Área m² (auto)']].map(([f,l]) => (
+                                <div key={f}>
+                                  <label className="block text-[9px] text-green-600 mb-0.5">{l}</label>
+                                  <input type="number" step="0.01" placeholder="0.00"
+                                    value={val(item.id, f)} readOnly={f==='area_m2'}
+                                    onChange={e => f!=='area_m2' && setField(item.id, f, e.target.value ? parseFloat(e.target.value) : null)}
+                                    className={`w-full px-1.5 py-1 border border-green-300 rounded text-[11px] ${f==='area_m2'?'bg-green-100 font-semibold cursor-default':'bg-white'}`} />
+                                </div>
+                              ))}
                             </div>
                           </div>
 
                           {/* Cortina */}
-                          <div className="border-2 border-orange-300 rounded-lg p-2.5 bg-orange-50">
-                            <div className="text-[10px] font-bold text-orange-700 uppercase mb-1.5">Cortina / Metro Linear</div>
-                            <div className="grid grid-cols-3 gap-2">
-                              {[['linear_meters','Metro linear (m)'],['fabric_folds','Nº dobras'],['fabric_per_fold','Cm/dobra']].map(([f,l]) => (
+                          <div className="border-2 border-orange-300 rounded-lg p-2 bg-orange-50">
+                            <div className="text-[9px] font-bold text-orange-700 uppercase mb-1">Cortina / M. Linear</div>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {[['linear_meters','M. lin.'],['fabric_folds','Dobras'],['fabric_per_fold','Cm/dob.']].map(([f,l]) => (
                                 <div key={f}>
-                                  <label className="block text-[10px] text-orange-600 mb-0.5">{l}</label>
-                                  <input type="number" step={f==='fabric_per_fold'?1:0.01} placeholder="0"
+                                  <label className="block text-[9px] text-orange-600 mb-0.5">{l}</label>
+                                  <input type="number" step="0.01" placeholder="0"
                                     value={val(item.id, f)}
                                     onChange={e => setField(item.id, f, e.target.value ? parseFloat(e.target.value) : null)}
-                                    className="w-full px-2 py-1 border border-orange-300 rounded text-xs bg-white" />
+                                    className="w-full px-1.5 py-1 border border-orange-300 rounded text-[11px] bg-white" />
                                 </div>
                               ))}
                             </div>
                           </div>
 
                           {/* Confirmação */}
-                          <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <label className="flex items-center gap-2 text-xs cursor-pointer">
                             <input type="checkbox"
                               checked={edit.confirmed_measures ?? item.confirmed_measures ?? false}
                               onChange={e => setField(item.id, 'confirmed_measures', e.target.checked)} />
@@ -1659,38 +1642,36 @@ function MeasuresPanel({ items, onClose, onDone }) {
 
                           {/* Identificação Parceiro */}
                           <div>
-                            <div className="text-xs font-medium text-gray-600 mb-1.5">Identificação Parceiro</div>
-                            <div className="flex gap-2 mb-2">
+                            <div className="text-[10px] font-medium text-gray-600 mb-1">Identificação Parceiro</div>
+                            <div className="flex gap-1.5 mb-1.5">
                               {['COLOR_NUM','TEXT','NONE'].map(t => (
-                                <button key={t} onClick={() => setPartnerLabel(item.id, t==='NONE' ? null : {type:t,color:'AZUL',number:'001',text:''})}
-                                  className={`px-2 py-1 text-[10px] rounded border ${plType===t||(!plType&&t==='NONE')?'bg-blue-600 text-white border-blue-600':'border-gray-300 text-gray-600'}`}>
+                                <button key={t} onClick={() => setPartnerLabel(item.id, t==='NONE'?null:{type:t,color:'AZUL',number:'001',text:''})}
+                                  className={`px-2 py-0.5 text-[9px] rounded border ${plType===t||(!plType&&t==='NONE')?'bg-blue-600 text-white border-blue-600':'border-gray-300 text-gray-600'}`}>
                                   {t==='COLOR_NUM'?'DRY CLEAN':t==='TEXT'?'OUTROS':'Nenhum'}
                                 </button>
                               ))}
                             </div>
                             {plType==='COLOR_NUM' && (
-                              <div className="flex gap-2 flex-wrap">
+                              <div className="flex gap-1.5 flex-wrap items-center">
                                 {PARTNER_COLORS.map(c => (
                                   <button key={c} onClick={() => setPartnerLabel(item.id, {type:'COLOR_NUM',color:c,number:pl?.number||'001'})}
-                                    className="w-6 h-6 rounded border-2 transition"
+                                    className="w-5 h-5 rounded border-2 transition shrink-0"
                                     style={{background:COLOR_HEX[c],borderColor:pl?.color===c?'#1e40af':'transparent'}} />
                                 ))}
                                 <input type="text" maxLength={3} placeholder="000"
                                   value={pl?.number||''}
                                   onChange={e => setPartnerLabel(item.id, {type:'COLOR_NUM',color:pl?.color||'AZUL',number:e.target.value.replace(/\D/g,'')})}
-                                  className="w-14 px-2 py-1 border border-gray-300 rounded text-xs font-mono" />
-                                {pl?.color && <span className="text-xs font-bold" style={{color:COLOR_HEX[pl.color]}}>{pl.color}-{pl.number}</span>}
+                                  className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-[11px] font-mono" />
                               </div>
                             )}
                             {plType==='TEXT' && (
                               <input placeholder="Nome do cliente do parceiro"
                                 value={pl?.text||''}
                                 onChange={e => setPartnerLabel(item.id, {type:'TEXT',text:e.target.value})}
-                                className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs" />
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs" />
                             )}
                           </div>
 
-                          {/* Botão OK — fecha o card */}
                           <div className="flex justify-end pt-1">
                             <button onClick={() => setExpandedId(null)}
                               className="px-5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700">
