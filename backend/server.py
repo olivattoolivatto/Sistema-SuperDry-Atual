@@ -3083,6 +3083,7 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
     client_name    = payload.get("client_name", "").strip()
     client_phone   = payload.get("client_phone", "").strip()
     client_address = payload.get("client_address", "").strip()
+    client_address_obj = payload.get("client_address_obj")  # endereço com lat/lng da busca
     items          = payload.get("items", [])
     notes          = payload.get("notes", "")
     existing_id    = payload.get("existing_client_id")
@@ -3100,14 +3101,18 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
         from uuid import uuid4
         client_counter = await db.clients.count_documents({}) + 1
         client_id = f"CLI-{str(client_counter).zfill(4)}"
-        addr_obj = {
-            "full_address": client_address,
-            "neighborhood": "",
-            "city": "",
-            "state": "",
-            "latitude": None,
-            "longitude": None,
-        }
+        # Usa endereço com coordenadas se disponível, senão usa texto simples
+        if client_address_obj and client_address_obj.get("latitude"):
+            addr_obj = client_address_obj
+        else:
+            addr_obj = {
+                "full_address": client_address,
+                "neighborhood": "",
+                "city": "",
+                "state": "",
+                "latitude": None,
+                "longitude": None,
+            }
         new_client = {
             "id": client_id,
             "name": client_name,

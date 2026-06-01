@@ -1,12 +1,101 @@
-import React, { useState, useCallback } from 'react';
-import { Zap, FileText, Ruler, Play, Check, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Edit3 } from 'lucide-react';
-import api from '../services/api';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Zap, FileText, Ruler, Play, Check, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, MapPin, Building2, Loader2 } from 'lucide-react';
+import api, { placesApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
-
-// ── helpers ────────────────────────────────────────────────────────────────────
 const post = (path, body) => api.post(path, body);
+
+// ── AddressAutocomplete (mesma lógica do Clients.js) ──────────────────────────
+function AddressAutocomplete({ value, onSelect, placeholder }) {
+  const [query, setQuery] = useState(value?.full_address || '');
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debRef = useRef(null);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    if (debRef.current) clearTimeout(debRef.current);
+    if (!query || query.length < 3) { setResults([]); setOpen(false); return; }
+    debRef.current = setTimeout(async () => {
+      try {
+        setLoading(true);
+        const r = await placesApi.search(query);
+        setResults(r.data?.results || []);
+        setOpen(true);
+      } catch { setResults([]); }
+      finally { setLoading(false); }
+    }, 350);
+  }, [query]);
+
+  useEffect(() => {
+    const h = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const handleChoose = async (p) => {
+    setOpen(false);
+    setQuery(p.description || '');
+    let lat = p?.geometry?.location?.lat;
+    let lng = p?.geometry?.location?.lng;
+    let neighborhood = p?.neighborhood, city = p?.city, state = p?.state;
+    let fullAddress = p.description || '';
+    if ((!lat || !lng || !neighborhood || !city || !state) && p.place_id) {
+      try {
+        const det = await placesApi.getDetails(p.place_id);
+        const d = det.data?.details?.result || det.data?.details || {};
+        fullAddress = d.formatted_address || fullAddress;
+        const geo = d.geometry?.location;
+        if (geo) { lat = geo.lat; lng = geo.lng; }
+        (d.address_components || []).forEach(c => {
+          const t = c.types || [];
+          if (t.includes('sublocality') || t.includes('sublocality_level_1') || t.includes('neighborhood'))
+            neighborhood = c.long_name;
+          if (t.includes('administrative_area_level_2') || t.includes('locality'))
+            city = c.long_name;
+          if (t.includes('administrative_area_level_1'))
+            state = c.short_name || c.long_name;
+        });
+      } catch {}
+    }
+    onSelect({ full_address: fullAddress, neighborhood: neighborhood || '', city: city || '', state: state || '', latitude: lat || null, longitude: lng || null });
+  };
+
+  return (
+    <div className="relative" ref={boxRef}>
+      <div className="relative">
+        <MapPin className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input type="text" value={query} onChange={e => setQuery(e.target.value)}
+          onFocus={() => results.length && setOpen(true)}
+          placeholder={placeholder || 'Buscar endereço, bairro, condomínio…'}
+          className="w-full pl-8 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+        {loading && <Loader2 className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />}
+      </div>
+      {open && results.length > 0 && (
+        <ul className="absolute z-40 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+          {results.slice(0, 8).map(p => {
+            const isPlace = p.source === 'text_search';
+            return (
+              <li key={p.place_id || p.description} onClick={() => handleChoose(p)}
+                className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-100 last:border-0 flex items-start gap-2">
+                {isPlace
+                  ? <Building2 className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                  : <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />}
+                <div className="min-w-0">
+                  <div className="font-medium text-gray-900 truncate text-xs">{p.structured_formatting?.main_text || p.description}</div>
+                  <div className="text-[10px] text-gray-500 truncate">{p.structured_formatting?.secondary_text || ''}</div>
+                  {isPlace && <span className="text-[10px] text-blue-600">Local</span>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 // ── AutoBudget ─────────────────────────────────────────────────────────────────
 function AutoBudget() {
@@ -15,6 +104,7 @@ function AutoBudget() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [editableItems, setEditableItems] = useState([]);
+  const [addressObj, setAddressObj] = useState(null); // endereço com coords
   const [showFormat, setShowFormat] = useState(false);
 
   const handlePreview = async () => {
@@ -25,6 +115,7 @@ function AutoBudget() {
       const r = await post('/automation/preview-budget', { text });
       setPreview(r.data);
       setEditableItems(r.data.items || []);
+      setAddressObj(null); // reset endereço para nova busca
     } catch (e) {
       toast({ title: 'Erro', description: e.response?.data?.detail || e.message, variant: 'destructive' });
     } finally { setLoading(false); }
@@ -37,6 +128,7 @@ function AutoBudget() {
       const r = await post('/automation/execute-budget', {
         ...preview,
         items: editableItems,
+        client_address_obj: addressObj, // endereço com lat/lng
       });
       setResult(r.data);
       setPreview(null);
@@ -103,16 +195,37 @@ function AutoBudget() {
             Confirme antes de criar
           </h4>
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-1 gap-2 text-xs">
             <div className="bg-white rounded-lg p-2.5 border border-blue-200">
               <div className="text-[10px] text-gray-500 mb-0.5">Cliente</div>
               <div className="font-semibold text-gray-900">{preview.client_name || '—'}</div>
-              <div className="text-gray-600">{preview.client_phone || '—'}</div>
-              <div className="text-gray-500 text-[10px] mt-0.5 truncate">{preview.client_address || '—'}</div>
+              <div className="text-gray-600 text-xs">{preview.client_phone || '—'}</div>
               {preview.client_exists && (
                 <span className="inline-block mt-1 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
                   ✓ Já cadastrado
                 </span>
+              )}
+            </div>
+
+            {/* Endereço com busca */}
+            <div className="col-span-2 bg-white rounded-lg p-2.5 border border-blue-200">
+              <div className="text-[10px] text-gray-500 mb-1.5 flex items-center justify-between">
+                <span>Endereço</span>
+                {addressObj?.latitude
+                  ? <span className="text-green-600 font-medium">✓ Coordenadas confirmadas</span>
+                  : <span className="text-amber-600">Busque para confirmar coordenadas</span>}
+              </div>
+              <AddressAutocomplete
+                value={addressObj || { full_address: preview.client_address || '' }}
+                onSelect={setAddressObj}
+                placeholder={preview.client_address || 'Buscar endereço…'}
+              />
+              {addressObj?.full_address && (
+                <div className="mt-1.5 text-[10px] text-gray-500 space-y-0.5">
+                  {addressObj.neighborhood && <span className="mr-2">📍 {addressObj.neighborhood}</span>}
+                  {addressObj.city && <span className="mr-2">{addressObj.city}/{addressObj.state}</span>}
+                  {addressObj.latitude && <span className="text-green-600">lat: {addressObj.latitude?.toFixed(4)}</span>}
+                </div>
               )}
             </div>
             <div className="bg-white rounded-lg p-2.5 border border-blue-200">
