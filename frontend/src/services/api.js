@@ -1,6 +1,6 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+import { BACKEND_URL } from '../lib/backendUrl';
 const API_BASE = `${BACKEND_URL}/api`;
 
 // Create axios instance
@@ -110,13 +110,19 @@ export const itemsApi = {
     api.post(`/items/${id}/execution-session/${sessionId}/finish`, payload),
   registerPayment: (id, payload) => api.post(`/items/${id}/payment`, payload),
   timeline: (id) => api.get(`/items/${id}/timeline`),
-  receiptUrl: (id) => `${process.env.REACT_APP_BACKEND_URL}/api/items/${id}/receipt`,
-  pickupReceiptUrl: (id) => `${process.env.REACT_APP_BACKEND_URL}/api/items/${id}/pickup-receipt`,
+  receiptUrl: (id) => `${BACKEND_URL}/api/items/${id}/receipt`,
+  pickupReceiptUrl: (id) => `${BACKEND_URL}/api/items/${id}/pickup-receipt`,
   whatsappReceipt: (id, type = 'receipt') => api.get(`/items/${id}/whatsapp-receipt`, { params: { doc_type: type } }),
   // Company Mode
   companyMode: () => api.get('/items/company-mode'),
   bulkStatus: (item_ids, status, notes = '') => api.post('/items/bulk-status', { item_ids, status, notes }),
   updateMeasures: (id, payload) => api.patch(`/items/${id}/measures`, payload),
+};
+
+// Cobrança consolidada (vários itens / responsável financeiro)
+export const consolidatedPaymentApi = {
+  create: (payload) => api.post('/payments/consolidated', payload),
+  whatsapp: (cpid) => api.get(`/payments/consolidated/${cpid}/whatsapp`),
 };
 
 // Enums / opções
@@ -128,6 +134,7 @@ export const enumsApi = {
 export const placesApi = {
   search: (query) => api.get('/places/search', { params: { query } }),
   getDetails: (placeId) => api.get('/places/details', { params: { place_id: placeId } }),
+  resolveLocation: (text) => api.post('/places/resolve-location', { text }),
 };
 
 // Dashboard API
@@ -157,7 +164,8 @@ export const routesApi = {
   update: (routeId, updateData) => api.put(`/routes/${routeId}`, updateData),
   addStops: (routeId, stops) => api.put(`/routes/${routeId}/stops`, stops),
   optimize: (routeId, routeType) => api.post(`/routes/${routeId}/optimize`, { route_type: routeType }),
-  optimizeGeoapify: (routeId) => api.post(`/routes/${routeId}/optimize-geoapify`, {}),
+  optimizeGeoapify: (routeId, considerTraffic = false) =>
+    api.post(`/routes/${routeId}/optimize-geoapify`, {}, { params: { traffic: considerTraffic } }),
   delete: (routeId) => api.delete(`/routes/${routeId}`)
 };
 
@@ -199,8 +207,9 @@ export const technicianApi = {
   updateAssignmentStatus: (assignmentId, status) => api.put(`/technician/assignment/${assignmentId}/status`, null, {
     params: { status }
   }),
-  finalizeToday: () => api.post('/technician/finalize-today', {}),
-  markDesisted: (itemId) => api.patch(`/items/${itemId}/desist`),
+  finalizeToday: (date) => api.post('/technician/finalize-today', {}, { params: date ? { date } : {} }),
+  markDesisted:   (itemId) => api.patch(`/items/${itemId}/desist`),
+  reactivateItem: (itemId) => api.patch(`/items/${itemId}/reactivate`),
 };
 
 export default api;
