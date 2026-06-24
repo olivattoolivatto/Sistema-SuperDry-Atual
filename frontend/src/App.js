@@ -14,6 +14,7 @@ import { Automations } from "./pages/Automations";
 import { BudgetConfig } from "./pages/BudgetConfig";
 import { SystemConfig } from "./pages/SystemConfig";
 import { Agenda } from "./pages/Agenda";
+import { Reports } from "./pages/Reports";
 import TechnicianMode from "./pages/TechnicianMode";
 import { Toaster } from "./components/ui/sonner";
 import "./App.css";
@@ -55,7 +56,7 @@ function ProtectedShell() {
           <Route path="/financial" element={<Financial />} />
           <Route path="/automations" element={<Automations />} />
           <Route path="/finance-manager" element={<Placeholder title="Gerenciador Financeiro" />} />
-          <Route path="/reports" element={<Placeholder title="Relatórios" />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="/tickets" element={<Placeholder title="Chamados e Manutenção" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
