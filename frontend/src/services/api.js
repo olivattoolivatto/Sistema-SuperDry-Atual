@@ -212,4 +212,9 @@ export const technicianApi = {
   reactivateItem: (itemId) => api.patch(`/items/${itemId}/reactivate`),
 };
 
+// Relatórios
+export const reportsApi = {
+  partnerItems: (params = {}) => api.get('/reports/partner-items', { params }),
+};
+
 export default api;
