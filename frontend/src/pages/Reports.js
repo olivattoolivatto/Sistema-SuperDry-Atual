@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
-import { BarChart3, FileSpreadsheet, ChevronRight, ChevronLeft, Printer, Lock, Ruler, Loader2, Search } from 'lucide-react';
+import { BarChart3, FileSpreadsheet, ChevronRight, ChevronLeft, Printer, Lock, Ruler, Loader2, Search, Columns3, RotateCcw } from 'lucide-react';
 import { reportsApi } from '../services/api';
+
+const COL_LABELS = ['Data ref.', 'Parceiro', 'Objeto', 'Identificação', 'Medidas', 'Área', 'Valor'];
+const DEFAULT_COL_WIDTHS = [10, 20, 22, 14, 12, 9, 13];
+const COL_WIDTHS_KEY = 'partnerReportColWidths';
+
+function loadColWidths() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY));
+    if (Array.isArray(saved) && saved.length === DEFAULT_COL_WIDTHS.length) return saved;
+  } catch {}
+  return [...DEFAULT_COL_WIDTHS];
+}
 
 const fmtMoney = (n) => (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtArea = (n) => `${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²`;
@@ -38,6 +50,25 @@ function PartnerBillingReport({ onBack }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null); // { rows, totals_by_partner }
+  const [colWidths, setColWidths] = useState(loadColWidths);
+  const [showColPanel, setShowColPanel] = useState(false);
+
+  const updateColWidth = (idx, value) => {
+    const v = Math.max(4, Math.min(50, Number(value) || 0));
+    setColWidths(prev => {
+      const next = [...prev];
+      next[idx] = v;
+      localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const resetColWidths = () => {
+    setColWidths([...DEFAULT_COL_WIDTHS]);
+    localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(DEFAULT_COL_WIDTHS));
+  };
+
+  const colWidthSum = colWidths.reduce((s, v) => s + v, 0);
 
   const runReport = async () => {
     setLoading(true);
@@ -65,7 +96,50 @@ function PartnerBillingReport({ onBack }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <style>{`
+        @media print {
+          @page { margin: 5mm; }
+          html, body { overflow: visible !important; width: 100% !important; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .no-print { display: none !important; }
+          .print-card { border: none !important; box-shadow: none !important; width: 100% !important; }
+          .print-table-wrap { overflow: visible !important; width: 100% !important; }
+          .print-header { padding: 3px 16px !important; display: flex !important; align-items: baseline !important; gap: 10px !important; width: 100% !important; box-sizing: border-box !important; }
+          .print-header h2 { font-size: 10px !important; margin: 0 !important; }
+          .print-header p { font-size: 7px !important; margin: 0 !important; }
+          .print-meta { padding: 2px 16px !important; gap: 14px !important; width: 100% !important; box-sizing: border-box !important; }
+          .print-meta > div { display: flex !important; gap: 4px !important; align-items: baseline !important; }
+          .print-meta .meta-label { font-size: 6px !important; }
+          .print-meta .meta-value { font-size: 8px !important; }
+          .print-table { width: 100% !important; table-layout: fixed !important; }
+          .print-table th, .print-table td { padding: 0px 14px !important; line-height: 1.05 !important; overflow: hidden !important; text-overflow: ellipsis !important; word-break: break-word !important; }
+          .print-table th { font-size: 6.5px !important; }
+          .print-table td { font-size: 8px !important; }
+          .print-summary { padding: 3px 16px !important; width: 100% !important; box-sizing: border-box !important; }
+          .print-summary h3 { font-size: 8px !important; margin-bottom: 1px !important; }
+          .print-summary-row { padding: 1px 12px !important; }
+          .print-summary-box { padding: 2px 12px !important; }
+          /* Evita que blocos sejam cortados na virada de página, deixando uma
+             sobra (faixa cinza) sozinha numa segunda folha quase vazia. */
+          .print-card, .print-header, .print-meta, .print-summary {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+          .print-table tr {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+          /* O <thead> de uma <table> HTML repete automaticamente em toda nova
+             página quando o navegador decide quebrar a tabela (mesmo que reste
+             só 1 linha vazia) — é essa repetição que aparece como a "faixa
+             cinza" sozinha na 2ª folha. Desativando o papel de table-header-group
+             ele para de repetir. */
+          .print-table thead {
+            display: table-row-group !important;
+          }
+        }
+      `}</style>
+      <div className="flex items-center justify-between no-print">
         <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700">
           <ChevronLeft className="w-4 h-4" /> Voltar aos relatórios
         </button>
@@ -77,7 +151,7 @@ function PartnerBillingReport({ onBack }) {
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 grid gap-3 sm:grid-cols-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 grid gap-3 sm:grid-cols-4 no-print">
         <div className="sm:col-span-2">
           <label className="text-[10px] text-gray-400 uppercase tracking-wide">Parceiro</label>
           <select
@@ -121,32 +195,32 @@ function PartnerBillingReport({ onBack }) {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{error}</div>
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 no-print">{error}</div>
       )}
 
       {result && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="bg-[#1F4E8C] text-white px-5 py-4">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden print-card">
+          <div className="bg-[#1F4E8C] text-white px-5 py-4 print-header">
             <h2 className="text-base font-bold">Fechamento de Cobrança — Parceiro</h2>
             <p className="text-xs text-blue-100 mt-0.5">Tapetes e Cortinas terceirizados</p>
           </div>
 
-          <div className="px-5 py-3 border-b border-gray-100 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+          <div className="px-5 py-3 border-b border-gray-100 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm print-meta">
             <div>
-              <div className="text-[10px] text-gray-400 uppercase tracking-wide">Parceiro</div>
-              <div className="font-semibold text-gray-900">{partnerId ? (PARTNERS.find(p => p.id === partnerId)?.label || partnerId) : 'Todos os parceiros'}</div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-wide meta-label">Parceiro</div>
+              <div className="font-semibold text-gray-900 meta-value">{partnerId ? (PARTNERS.find(p => p.id === partnerId)?.label || partnerId) : 'Todos os parceiros'}</div>
             </div>
             <div>
-              <div className="text-[10px] text-gray-400 uppercase tracking-wide">Período de referência</div>
-              <div className="font-medium text-gray-700">{fmtDateBR(startDate)} a {fmtDateBR(endDate)}</div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-wide meta-label">Período de referência</div>
+              <div className="font-medium text-gray-700 meta-value">{fmtDateBR(startDate)} a {fmtDateBR(endDate)}</div>
             </div>
             <div>
-              <div className="text-[10px] text-gray-400 uppercase tracking-wide">Gerado em</div>
-              <div className="font-medium text-gray-700">{new Date().toLocaleDateString('pt-BR')}</div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-wide meta-label">Gerado em</div>
+              <div className="font-medium text-gray-700 meta-value">{new Date().toLocaleDateString('pt-BR')}</div>
             </div>
           </div>
 
-          <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-700">
+          <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-700 no-print">
             As datas filtram pela data de referência de cada item (medição/coleta extraída do WhatsApp, com fallback na criação do orçamento).
           </div>
 
@@ -156,34 +230,90 @@ function PartnerBillingReport({ onBack }) {
             </div>
           ) : (
             <>
+              {/* Painel de ajuste de largura das colunas (não imprime) */}
+              <div className="px-5 py-3 border-b border-gray-100 no-print">
+                <button
+                  onClick={() => setShowColPanel(v => !v)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900"
+                >
+                  <Columns3 className="w-3.5 h-3.5" />
+                  Ajustar largura das colunas
+                  <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showColPanel ? 'rotate-90' : ''}`} />
+                </button>
+                {showColPanel && (
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {COL_LABELS.map((label, idx) => (
+                      <div key={label} className="flex flex-col gap-1">
+                        <label className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min={4}
+                            max={40}
+                            value={colWidths[idx]}
+                            onChange={(e) => updateColWidth(idx, e.target.value)}
+                            className="flex-1"
+                          />
+                          <input
+                            type="number"
+                            min={4}
+                            max={40}
+                            value={colWidths[idx]}
+                            onChange={(e) => updateColWidth(idx, e.target.value)}
+                            className="w-12 text-xs border border-gray-200 rounded px-1 py-0.5"
+                          />
+                          <span className="text-[10px] text-gray-400">%</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-end justify-between col-span-2 sm:col-span-4 pt-1">
+                      <span className={`text-xs ${colWidthSum === 100 ? 'text-gray-400' : 'text-amber-600'}`}>
+                        Soma atual: {colWidthSum}% {colWidthSum !== 100 && '(não precisa ser exatamente 100%)'}
+                      </span>
+                      <button
+                        onClick={resetColWidths}
+                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        <RotateCcw className="w-3 h-3" /> Restaurar padrão
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Tabela */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto print-table-wrap">
+                <table className="w-full text-sm print-table" style={{ tableLayout: 'fixed' }}>
+                  <colgroup>
+                    {colWidths.map((w, idx) => (
+                      <col key={idx} style={{ width: `${w}%` }} />
+                    ))}
+                  </colgroup>
                   <thead>
                     <tr className="bg-gray-50 text-[11px] text-gray-500 uppercase tracking-wide">
-                      <th className="text-left px-3 py-2">Data ref.</th>
-                      <th className="text-left px-3 py-2">Parceiro</th>
-                      <th className="text-left px-3 py-2">Objeto</th>
-                      <th className="text-left px-3 py-2">Identificação</th>
-                      <th className="text-right px-3 py-2">Medidas</th>
-                      <th className="text-right px-3 py-2">Área</th>
-                      <th className="text-right px-3 py-2">Valor</th>
+                      <th className="text-left px-3 py-1">Data ref.</th>
+                      <th className="text-left px-3 py-1">Parceiro</th>
+                      <th className="text-left px-3 py-1">Objeto</th>
+                      <th className="text-left px-3 py-1">Identificação</th>
+                      <th className="text-right px-3 py-1">Medidas</th>
+                      <th className="text-right px-3 py-1">Área</th>
+                      <th className="text-right px-3 py-1">Valor</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {rows.map((r, i) => (
                       <tr key={r.item_id || i} className={i % 2 ? 'bg-gray-50/40' : ''}>
-                        <td className="px-3 py-1.5 text-gray-500 text-xs">{fmtDateBR(r.data_referencia)}</td>
-                        <td className="px-3 py-1.5 text-xs text-gray-700">{r.parceiro}</td>
-                        <td className="px-3 py-1.5 text-xs text-gray-700">{r.objeto}</td>
-                        <td className="px-3 py-1.5 text-xs text-gray-700">
+                        <td className="px-3 py-0.5 text-gray-500 text-xs">{fmtDateBR(r.data_referencia)}</td>
+                        <td className="px-3 py-0.5 text-xs text-gray-700">{r.parceiro}</td>
+                        <td className="px-3 py-0.5 text-xs text-gray-700">{r.objeto}</td>
+                        <td className="px-3 py-0.5 text-xs text-gray-700">
                           {r.etiqueta ? <span className="font-medium">{r.etiqueta}</span> : <span className="text-gray-400 italic">sem nome</span>}
                         </td>
-                        <td className="px-3 py-1.5 text-right text-xs text-gray-600 font-mono">
+                        <td className="px-3 py-0.5 text-right text-xs text-gray-600 font-mono">
                           {r.diametro ? `Ø ${Number(r.diametro).toFixed(2)}m` : (r.largura && r.comprimento ? `${Number(r.largura).toFixed(2)}×${Number(r.comprimento).toFixed(2)}m` : '—')}
                         </td>
-                        <td className="px-3 py-1.5 text-right text-xs text-gray-700">{r.area_m2 != null ? fmtArea(r.area_m2) : '—'}</td>
-                        <td className="px-3 py-1.5 text-right text-sm font-semibold text-gray-900">{fmtMoney(r.valor)}</td>
+                        <td className="px-3 py-0.5 text-right text-xs text-gray-700">{r.area_m2 != null ? fmtArea(r.area_m2) : '—'}</td>
+                        <td className="px-3 py-0.5 text-right text-sm font-semibold text-gray-900">{fmtMoney(r.valor)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -191,11 +321,11 @@ function PartnerBillingReport({ onBack }) {
               </div>
 
               {/* Resumo */}
-              <div className="px-5 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="px-5 py-4 bg-gray-50 border-t border-gray-200 print-summary">
                 <h3 className="text-xs font-bold text-[#1F4E8C] uppercase tracking-wide mb-2">Resumo por parceiro</h3>
                 <div className="grid gap-2 mb-3">
                   {Object.entries(totalsByPartner).map(([nome, t]) => (
-                    <div key={nome} className="bg-white rounded-lg border border-gray-200 px-3 py-2 flex items-center justify-between text-sm">
+                    <div key={nome} className="bg-white rounded-lg border border-gray-200 px-3 py-2 flex items-center justify-between text-sm print-summary-row">
                       <span className="font-medium text-gray-800">{nome}</span>
                       <span className="text-xs text-gray-500">{t.qtd} itens · {fmtArea(t.area_m2)}</span>
                       <span className="font-semibold text-gray-900">{fmtMoney(t.valor)}</span>
@@ -203,15 +333,15 @@ function PartnerBillingReport({ onBack }) {
                   ))}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                  <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+                  <div className="bg-white rounded-lg border border-gray-200 px-3 py-2 print-summary-box">
                     <div className="text-[10px] text-gray-400">Itens</div>
                     <div className="font-semibold text-gray-900">{qtdTotal}</div>
                   </div>
-                  <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+                  <div className="bg-white rounded-lg border border-gray-200 px-3 py-2 print-summary-box">
                     <div className="text-[10px] text-gray-400 flex items-center gap-1"><Ruler className="w-3 h-3" /> Metragem total lavada</div>
                     <div className="font-semibold text-gray-900">{fmtArea(areaTotal)}</div>
                   </div>
-                  <div className="bg-[#8CC63F] rounded-lg px-3 py-2 text-white sm:col-span-2">
+                  <div className="bg-[#8CC63F] rounded-lg px-3 py-2 text-white sm:col-span-2 print-summary-box">
                     <div className="text-[10px] text-green-50">Total a cobrar</div>
                     <div className="font-bold text-lg">{fmtMoney(valorTotal)}</div>
                   </div>

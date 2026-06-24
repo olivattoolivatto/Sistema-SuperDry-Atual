@@ -4414,13 +4414,31 @@ async def execute_measures_automation(payload: Dict[str, Any], current_user: Use
     return {"success": True, "processed": created, "duplicates": dupes, "skipped": skipped, "results": results}
 
 
-def _format_partner_tag(item: Dict[str, Any]) -> str:
-    """Formata a etiqueta do parceiro (cor+número ou texto livre) para exibição no relatório."""
+def _format_service_name(service_name: str) -> str:
+    """Remove o sufixo com o nome do parceiro do nome do serviço para exibição no
+    relatório (todos os parceiros têm essa descrição completa, mas o nome do parceiro
+    já aparece na coluna 'Parceiro' — não precisa repetir). Corta tanto em ' - ...'
+    quanto a partir da palavra 'Parceiro' (ex: 'Lavagem de Cortinas / Blackouts
+    Parceiro Leonardo Dry Clean' -> 'Lavagem de Cortinas / Blackouts')."""
+    name = service_name or "Tapete"
+    name = name.split(" - ", 1)[0]
+    name = re.split(r'\bParceiro\b', name, maxsplit=1, flags=re.IGNORECASE)[0]
+    return name.strip()
+
+
+def _format_partner_tag(item: Dict[str, Any], partner_name: str = "") -> str:
+    """Formata a etiqueta do parceiro (cor+número ou texto livre) para exibição no relatório.
+    Quando o texto livre é apenas o nome do próprio parceiro/cliente (sem identificação real
+    do item, ex: "Leonardo - Dry Clean USA"), trata como ausente -> aparece "sem nome"."""
     label = item.get("partner_label") or {}
     if label.get("type") == "COLOR_NUM":
         return f"{label.get('color', '')} {label.get('number', '')}".strip()
     if label.get("type") == "TEXT":
-        return label.get("text", "")
+        text = (label.get("text") or "").strip()
+        pname = (partner_name or "").strip().lower()
+        if text and pname and (text.lower() == pname or text.lower() in pname or pname in text.lower()):
+            return ""
+        return text
     return ""
 
 
@@ -4469,8 +4487,8 @@ async def partner_items_report(
             area = float(it.get("area_m2") or 0)
             rows.append({
                 "parceiro": partner_name,
-                "objeto": it.get("service_name", "Tapete"),
-                "etiqueta": _format_partner_tag(it),
+                "objeto": _format_service_name(it.get("service_name")),
+                "etiqueta": _format_partner_tag(it, partner_name),
                 "largura": it.get("width"),
                 "comprimento": it.get("height"),
                 "diametro": it.get("diameter"),

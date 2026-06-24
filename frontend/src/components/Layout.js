@@ -1,13 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  Home, Users, FileText, Package, Settings, Cog, Route as RouteIcon, Smartphone,
+  Home, Users, FileText, Settings, Cog, Route as RouteIcon, Smartphone,
   MessageSquare, Wallet, BarChart3, Wrench, CalendarDays, Menu, X, LogOut,
   ShieldCheck, UserCircle, ChevronDown, Droplets, Navigation, Zap
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+import { BACKEND_URL } from '../lib/backendUrl';
 
 function CompanyLogo({ size = 'md' }) {
   const [src, setSrc] = useState(null);
@@ -38,22 +37,21 @@ function CompanyLogo({ size = 'md' }) {
 }
 
 const ALL_ITEMS = [
-  { path: '/', label: 'Painel', short: 'Painel', icon: Home, roles: ['ADMIN','TECNICO','ATENDENTE','FINANCEIRO','MANUTENCAO'] },
-  { path: '/clients', label: 'Clientes', short: 'Clientes', icon: Users, roles: ['ADMIN','ATENDENTE'] },
-  { path: '/budgets', label: 'Orçamentos', short: 'Orç.', icon: FileText, roles: ['ADMIN','ATENDENTE'] },
-  { path: '/routes', label: 'Rotas', short: 'Rotas', icon: RouteIcon, roles: ['ADMIN','ATENDENTE'] },
-  { path: '/routes-geo', label: 'Rotas Geoapify', short: 'Rotas', icon: Navigation, roles: ['ADMIN','ATENDENTE'] },
-  { path: '/agenda', label: 'Agenda', short: 'Agenda', icon: CalendarDays, roles: ['ADMIN','ATENDENTE','TECNICO'] },
-  { path: '/whatsapp', label: 'WhatsApp', short: 'WhatsApp', icon: MessageSquare, roles: ['ADMIN','ATENDENTE'] },
-  { path: '/technician', label: 'Execução e Lavagem', short: 'Execução', icon: Smartphone, roles: ['ADMIN','TECNICO'] },
-  { path: '/financial',      label: 'Financeiro',     short: 'Finan.',    icon: Wallet,    roles: ['ADMIN','FINANCEIRO'] },
-  { path: '/automations',   label: 'Automações',     short: 'Auto',      icon: Zap,       roles: ['ADMIN','ATENDENTE'] },
-  { path: '/finance-manager', label: 'Gerenciador Financeiro', short: 'Ger.Fin.', icon: BarChart3, roles: ['ADMIN','FINANCEIRO'] },
-  { path: '/reports', label: 'Relatórios', short: 'Relat.', icon: BarChart3, roles: ['ADMIN','FINANCEIRO'] },
-  { path: '/tickets', label: 'Chamados e Manutenção', short: 'Chamados', icon: Wrench, roles: ['ADMIN','MANUTENCAO'] },
-  { path: '/catalog', label: 'Catálogo', short: 'Catálogo', icon: Package, roles: ['ADMIN'] },
-  { path: '/budget-config', label: 'Config. Orçamento', short: 'Cfg.Orç.', icon: Settings, roles: ['ADMIN'] },
-  { path: '/system-config', label: 'Config. Sistema', short: 'Cfg.Sist.', icon: Cog, roles: ['ADMIN'] },
+  { path: '/',               label: 'Painel',               short: 'Painel',   icon: Home,         roles: ['ADMIN','TECNICO','ATENDENTE','FINANCEIRO','MANUTENCAO'] },
+  { path: '/budgets',        label: 'Orçamentos',           short: 'Orç.',     icon: FileText,     roles: ['ADMIN','ATENDENTE'] },
+  { path: '/routes-geo',     label: 'Rotas',                short: 'Rotas',    icon: Navigation,   roles: ['ADMIN','ATENDENTE'] },
+  { path: '/agenda',         label: 'Agenda',               short: 'Agenda',   icon: CalendarDays, roles: ['ADMIN','ATENDENTE','TECNICO'] },
+  { path: '/technician',     label: 'Execução e Lavagem',   short: 'Execução', icon: Smartphone,   roles: ['ADMIN','TECNICO'] },
+  { path: '/financial',      label: 'Financeiro',           short: 'Finan.',   icon: Wallet,       roles: ['ADMIN','FINANCEIRO'] },
+  { path: '/automations',    label: 'Automações',           short: 'Auto',     icon: Zap,          roles: ['ADMIN','ATENDENTE'] },
+  { path: '/whatsapp',       label: 'WhatsApp',             short: 'WhatsApp', icon: MessageSquare,roles: ['ADMIN','ATENDENTE'] },
+  { path: '/tickets',        label: 'Chamados e Manutenção',short: 'Chamados', icon: Wrench,       roles: ['ADMIN','MANUTENCAO'] },
+  { path: '/reports',        label: 'Relatórios',           short: 'Relat.',   icon: BarChart3,    roles: ['ADMIN','FINANCEIRO'] },
+  { path: '/finance-manager',label: 'Gerenciador Financeiro',short:'Ger.Fin.', icon: BarChart3,    roles: ['ADMIN','FINANCEIRO'] },
+  { path: '/clients',        label: 'Clientes',             short: 'Clientes', icon: Users,        roles: ['ADMIN','ATENDENTE'] },
+  { path: '/system-config',  label: 'Configurações',        short: 'Config.',  icon: Cog,          roles: ['ADMIN'] },
+  // ── Rotas alternativo (uso esporádico, no fim) ─────────────────────────
+  { path: '/routes',         label: 'ROTAS (alternativo)',  short: 'Rotas A.', icon: RouteIcon,    roles: ['ADMIN','ATENDENTE'] },
 ];
 
 export function Layout({ children }) {
@@ -65,7 +63,7 @@ export function Layout({ children }) {
   const [editingNav, setEditingNav] = useState(false);
 
   const STORAGE_KEY = `quicknav_${user?.id || 'default'}`;
-  const DEFAULT_NAV = ['/', '/budgets', '/routes-geo', '/technician', '/financial'];
+  const DEFAULT_NAV = ['/', '/budgets', '/automations', '/technician', '/financial'];
 
   const [quickNavPaths, setQuickNavPaths] = useState(() => {
     try {
@@ -102,17 +100,20 @@ export function Layout({ children }) {
   const NavLink = ({ item, compact = false }) => {
     const Icon = item.icon;
     const active = location.pathname === item.path;
+    const indented = !compact && item.indent;
     return (
       <button
         onClick={() => { navigate(item.path); setDrawerOpen(false); }}
-        className={`w-full flex items-center ${compact ? 'flex-col gap-0.5 py-2' : 'gap-3 px-3 py-2.5'} rounded-lg transition-colors ${
+        className={`w-full flex items-center ${compact ? 'flex-col gap-0.5 py-2' : `gap-3 py-2 ${indented ? 'pl-7 pr-3' : 'px-3'}`} rounded-lg transition-colors ${
           active
             ? 'bg-blue-600 text-white shadow-sm'
-            : 'text-gray-700 hover:bg-gray-100'
+            : indented
+              ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+              : 'text-gray-700 hover:bg-gray-100'
         }`}
       >
-        <Icon className={`${compact ? 'w-5 h-5' : 'w-5 h-5'} shrink-0`} />
-        <span className={compact ? 'text-[10px] font-medium leading-tight' : 'text-sm font-medium'}>
+        <Icon className={`${compact ? 'w-5 h-5' : indented ? 'w-4 h-4' : 'w-5 h-5'} shrink-0`} />
+        <span className={compact ? 'text-[10px] font-medium leading-tight' : indented ? 'text-xs font-medium' : 'text-sm font-medium'}>
           {compact ? item.short : item.label}
         </span>
       </button>
@@ -120,9 +121,9 @@ export function Layout({ children }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen print:min-h-0 bg-gray-50">
       {/* ============== Desktop Sidebar ============== */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 flex-col z-30">
+      <aside className="hidden lg:flex print:hidden fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 flex-col z-30">
         <div className="h-16 flex items-center gap-2 px-5 border-b border-gray-200">
           <CompanyLogo size="md" />
           <div className="leading-tight">
@@ -153,7 +154,7 @@ export function Layout({ children }) {
       </aside>
 
       {/* ============== Mobile Top Header ============== */}
-      <header className="lg:hidden sticky top-0 z-40 bg-white border-b border-gray-200">
+      <header className="lg:hidden print:hidden sticky top-0 z-40 bg-white border-b border-gray-200">
         <div className="h-14 px-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
@@ -228,18 +229,18 @@ export function Layout({ children }) {
       )}
 
       {/* ============== Main content ============== */}
-      <main className="lg:pl-64 pb-20 lg:pb-0 min-h-screen">
-        <div className="hidden lg:flex h-16 items-center justify-between bg-white border-b border-gray-200 px-6 sticky top-0 z-20">
+      <main className="lg:pl-64 print:pl-0 pb-20 lg:pb-0 print:pb-0 min-h-screen print:min-h-0">
+        <div className="hidden lg:flex print:hidden h-16 items-center justify-between bg-white border-b border-gray-200 px-6 sticky top-0 z-20">
           <h1 className="text-xl font-semibold text-gray-900">{currentLabel}</h1>
           <div className="text-xs text-gray-500">{new Date().toLocaleDateString('pt-BR')}</div>
         </div>
-        <div className="p-3 sm:p-4 lg:p-6 max-w-7xl mx-auto">
+        <div className="p-3 sm:p-4 lg:p-6 print:p-0 max-w-7xl mx-auto">
           {children}
         </div>
       </main>
 
       {/* ============== Mobile Bottom Nav ============== */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 safe-area-inset-bottom">
+      <nav className="lg:hidden print:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 safe-area-inset-bottom">
         <div className={`grid gap-0`} style={{ gridTemplateColumns: `repeat(${primary.length + 1}, 1fr)` }}>
           {primary.map(it => <NavLink key={it.path} item={it} compact />)}
           {/* Botão de configuração da barra */}
@@ -289,7 +290,7 @@ export function Layout({ children }) {
             </div>
             <p className="text-xs text-gray-400 mt-3">{quickNavPaths.length}/6 selecionados</p>
             <button
-              onClick={() => { saveQuickNav(['/', '/budgets', '/routes-geo', '/technician', '/financial']); }}
+              onClick={() => { saveQuickNav(['/', '/budgets', '/automations', '/technician', '/financial']); }}
               className="mt-3 w-full py-2 text-xs text-gray-500 bg-gray-100 rounded-xl hover:bg-gray-200"
             >
               Restaurar padrão
