@@ -1,5 +1,15 @@
+import sys as _sys
+# Garante UTF-8 no stdout/stderr — evita UnicodeEncodeError com emojis nos logs
+# em consoles Windows (cp1252). Sem isto, prints com emoji crasham funções.
+try:
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    _sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 from fastapi import FastAPI, APIRouter, HTTPException, Query, UploadFile, File, Form
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -20,6 +30,7 @@ import re
 import requests
 import math
 from typing import Tuple
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
@@ -34,9 +45,30 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from fastapi import Depends
+from fastapi import Request as HttpRequest
+import payment_providers
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Caminhos de arquivos (portáveis — relativos ao diretório do backend, não /app)
+UPLOADS_DIR = ROOT_DIR / "uploads"
+
+
+def _logo_candidates():
+    """Caminhos candidatos da logo, em ordem de preferência (multiplataforma)."""
+    return [
+        str(UPLOADS_DIR / "logo.png"),
+        str(ROOT_DIR / "logo-superdry.png"),
+        str(UPLOADS_DIR / "logo-superdry.png"),
+    ]
+
+
+def _find_logo():
+    for p in _logo_candidates():
+        if os.path.exists(p):
+            return p
+    return None
 
 # Import auth module (Phase 1)
 from auth import (
@@ -247,6 +279,8 @@ class Client(BaseModel):
     name_normalized: Optional[str] = None
     phone_digits: Optional[str] = None
     cpf_cnpj_digits: Optional[str] = None
+    # Observações livres sobre o cliente
+    observations: Optional[str] = None
     # Auditoria
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
@@ -297,9 +331,9 @@ class BudgetItem(BaseModel):
     client_phone: Optional[str] = None
 
     # Serviço
-    service_id: str
-    service_name: str
-    service_code: str
+    service_id: Optional[str] = None
+    service_name: str = "Tapete"
+    service_code: str = "AUTO"
     service_category: Optional[str] = None
     measure_type: Optional[str] = None
     quantity: float = 1.0
@@ -316,7 +350,7 @@ class BudgetItem(BaseModel):
     # Modo de execução logístico
     execution_mode: ExecutionMode = ExecutionMode.RETIRAR_E_LEVAR
     is_retoque: bool = False
-    execution_location: ExecutionLocation
+    execution_location: Optional[ExecutionLocation] = ExecutionLocation.CLIENTE_TROUXE
 
     # Endereços por etapa (override do endereço do cliente)
     pickup_address: Optional[Dict[str, Any]] = None
@@ -417,6 +451,12 @@ class Budget(BaseModel):
     total_area_m2: float = 0.0
     total_linear_meters: float = 0.0
     total_units: int = 0
+    # Condição de pagamento padrão sugerida pelo valor (apenas sugestão; o
+    # pagamento real é selecionado no Financeiro). Regra em suggest_credit_installments.
+    suggested_payment_method: Optional[str] = "CREDITO"
+    suggested_installments: Optional[int] = None
+    payment_status: Optional[str] = "PENDENTE"
+    source: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -496,11 +536,17 @@ GEOAPIFY_API_KEY = os.environ.get("GEOAPIFY_API_KEY", "01c4cd29f11547d49cbcd1366
 GEOAPIFY_ROUTE_PLANNER_URL = "https://api.geoapify.com/v1/routeplanner"
 
 
-async def calculate_route_geoapify(stops: list, company_coords: tuple, vehicle_type: str = "CARRO") -> dict:
-    """Calculate optimized route using Geoapify Route Planner API."""
+async def calculate_route_geoapify(stops: list, company_coords: tuple, vehicle_type: str = "CARRO",
+                                   start_coords: tuple = None, end_coords: tuple = None,
+                                   use_traffic: bool = False) -> dict:
+    """Calculate optimized route using Geoapify Route Planner API.
+    start_coords/end_coords (lon, lat) permitem ancorar o início/fim da otimização.
+    use_traffic=True considera o tráfego médio/típico da região no cálculo da ORDEM."""
     try:
         mode = "drive"  # Geoapify uses drive for both car and motorcycle
         company_lon, company_lat = company_coords
+        s_lon, s_lat = start_coords if start_coords else (company_lon, company_lat)
+        e_lon, e_lat = end_coords if end_coords else (company_lon, company_lat)
         jobs = []
         for stop in stops:
             jobs.append({
@@ -511,12 +557,14 @@ async def calculate_route_geoapify(stops: list, company_coords: tuple, vehicle_t
         body = {
             "mode": mode,
             "agents": [{
-                "start_location": [company_lon, company_lat],
-                "end_location":   [company_lon, company_lat],
+                "start_location": [s_lon, s_lat],
+                "end_location":   [e_lon, e_lat],
                 "time_windows":   [[0, 86400]]
             }],
             "jobs": jobs
         }
+        if use_traffic:
+            body["traffic"] = "approximated"
         print(f"🌍 Geoapify: {len(jobs)} jobs, mode={mode}, vehicle={vehicle_type}")
         print(f"📤 Geoapify request body: {json.dumps(body, indent=2)[:500]}")
         resp = requests.post(
@@ -534,8 +582,39 @@ async def calculate_route_geoapify(stops: list, company_coords: tuple, vehicle_t
         return {"error": str(e)}
 
 
-async def optimize_route_with_priorities_geoapify(stops: list, company_coords: tuple, vehicle_type: str = "CARRO"):
+GEOAPIFY_ROUTING_URL = "https://api.geoapify.com/v1/routing"
+
+def get_road_geometry_geoapify(ordered_latlng: list, use_traffic: bool = False):
+    """Busca o traçado REAL por ruas para uma sequência de pontos já ordenada.
+    ordered_latlng = [(lat, lng), ...] incluindo empresa no início e fim.
+    use_traffic=True → tempo reflete o tráfego médio/típico da região.
+    Retorna (geometry_dict, distance_km, time_min).
+    """
+    if len(ordered_latlng) < 2:
+        return None, 0.0, 0.0
+    try:
+        waypoints = "|".join(f"{lat},{lng}" for lat, lng in ordered_latlng)
+        params = {"waypoints": waypoints, "mode": "drive", "apiKey": GEOAPIFY_API_KEY}
+        if use_traffic:
+            params["traffic"] = "approximated"
+        resp = requests.get(GEOAPIFY_ROUTING_URL, params=params, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        feats = data.get("features", [])
+        if not feats:
+            return None, 0.0, 0.0
+        props = feats[0].get("properties", {})
+        geom = feats[0].get("geometry")
+        return geom, props.get("distance", 0) / 1000, props.get("time", 0) / 60
+    except Exception as e:
+        print(f"Geoapify routing geometry error: {e}")
+        return None, 0.0, 0.0
+
+
+async def optimize_route_with_priorities_geoapify(stops: list, company_coords: tuple, vehicle_type: str = "CARRO",
+                                                  use_traffic: bool = False):
     """Optimize route using Geoapify, respecting manual priorities.
+    use_traffic=True → considera tráfego médio/típico da região (ordem + tempo).
     Returns (final_stops, dist_km, travel_min, geometry).
     """
     if not stops:
@@ -551,9 +630,20 @@ async def optimize_route_with_priorities_geoapify(stops: list, company_coords: t
     total_travel_min  = 0.0
     route_geometry    = None
 
+    # Ancoragem: o miolo AUTOMÁTICO começa após a última PRIMEIRA e termina antes
+    # da primeira ÚLTIMA, dando ao otimizador o contexto geográfico real.
+    # (lon, lat) — default = empresa quando não há prioridade. Sem risco de descartar paradas.
+    def _coords(stop):
+        a = stop.address or {}
+        return (float(a["longitude"]), float(a["latitude"])) if a.get("latitude") and a.get("longitude") else None
+    start_anchor = _coords(primeira_stops[-1]) if primeira_stops else None
+    end_anchor   = _coords(ultima_stops[0])    if ultima_stops   else None
+
     if auto_stops:
         try:
-            result   = await calculate_route_geoapify(auto_stops, company_coords, vehicle_type)
+            result   = await calculate_route_geoapify(auto_stops, company_coords, vehicle_type,
+                                                       start_coords=start_anchor, end_coords=end_anchor,
+                                                       use_traffic=use_traffic)
             features = result.get('features', [])
             if features:
                 feat  = features[0]
@@ -580,6 +670,24 @@ async def optimize_route_with_priorities_geoapify(stops: list, company_coords: t
     for i, stop in enumerate(final_order):
         stop.order_sequence = i + 1
         stop.delivery_order = i + 1
+
+    # Traçado REAL por ruas para a ordem final exata (empresa → paradas → empresa).
+    # Garante geometria seguindo as vias e distância/tempo corretos para QUALQUER
+    # configuração de prioridade — não apenas as paradas automáticas.
+    comp_lng, comp_lat = company_coords
+    ordered_latlng = [(comp_lat, comp_lng)]
+    for s in final_order:
+        a = s.address or {}
+        if a.get("latitude") and a.get("longitude"):
+            ordered_latlng.append((float(a["latitude"]), float(a["longitude"])))
+    ordered_latlng.append((comp_lat, comp_lng))
+
+    geom2, dist2, time2 = get_road_geometry_geoapify(ordered_latlng, use_traffic=use_traffic)
+    if geom2:
+        route_geometry    = geom2
+        total_distance_km = dist2
+        total_travel_min  = time2
+
     return final_order, total_distance_km, total_travel_min, route_geometry
 
 def format_coordinates_for_osrm(coordinates: List[Tuple[float, float]]) -> str:
@@ -861,13 +969,36 @@ class SystemConfig(BaseModel):
         {"value": "CREDITO_6X",              "label": "Crédito 6x"},
         {"value": "CREDITO_7X",              "label": "Crédito 7x"},
         {"value": "CREDITO_8X",              "label": "Crédito 8x"},
+        {"value": "CREDITO_9X",              "label": "Crédito 9x"},
+        {"value": "CREDITO_10X",             "label": "Crédito 10x"},
+        {"value": "CREDITO_11X",             "label": "Crédito 11x"},
+        {"value": "CREDITO_12X",             "label": "Crédito 12x"},
         {"value": "DEBITO",                  "label": "Débito"},
         {"value": "BOLETO",                  "label": "Boleto"},
         {"value": "LINK_PAGAMENTO",          "label": "Link de Pagamento"},
         {"value": "TRANSFERENCIA",           "label": "Transferência"},
         {"value": "PERMUTA",                 "label": "Permuta"},
     ])
-    
+
+    # Taxas (%) por forma de pagamento — para estimar o valor LÍQUIDO a receber.
+    # Pré-configurado com as taxas de crédito InfinitePay (1x–12x). Demais = 0
+    # (ajustável em Configurações). O líquido é estimativa; o valor real liquidado
+    # será confirmado pela integração/Open Finance no futuro.
+    payment_fees: Dict[str, float] = Field(default_factory=lambda: {
+        "PIX_CNPJ_25995295000104": 0.0,
+        "PIX_CNPJ_30369419000186": 0.0,
+        "DINHEIRO": 0.0,
+        "DEBITO": 0.0,
+        "BOLETO": 0.0,
+        "TRANSFERENCIA": 0.0,
+        "PERMUTA": 0.0,
+        "LINK_PAGAMENTO": 0.0,
+        "CREDITO_1X": 4.20,  "CREDITO_2X": 6.09,  "CREDITO_3X": 7.01,
+        "CREDITO_4X": 7.91,  "CREDITO_5X": 8.80,  "CREDITO_6X": 9.67,
+        "CREDITO_7X": 12.59, "CREDITO_8X": 13.42, "CREDITO_9X": 14.25,
+        "CREDITO_10X": 15.06, "CREDITO_11X": 15.87, "CREDITO_12X": 16.66,
+    })
+
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class BudgetCreate(BaseModel):
@@ -1013,6 +1144,91 @@ async def get_place_details(place_id: str):
                 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error getting place details: {str(e)}")
+
+
+@api_router.post("/places/resolve-location")
+async def resolve_location(payload: Dict[str, Any]):
+    """
+    Resolve uma localização compartilhada pelo WhatsApp em coordenadas exatas.
+    Aceita:
+      - Coordenadas cruas: "-15.5918, -56.0618"
+      - Link Google Maps: ...?q=lat,lng  /  ...@lat,lng,17z  /  ...!3dlat!4dlng
+      - Link curto: maps.app.goo.gl/... ou goo.gl/maps/... (segue o redirect)
+    Retorna lat/lng + endereço legível (reverse geocode).
+    """
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Cole o link ou as coordenadas da localização.")
+
+    lat = lng = None
+
+    def _extract_coords(s: str):
+        # padrões de lat,lng em URL ou texto (Google Maps, Apple Maps, Waze, coords cruas)
+        for pat in [
+            r'[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)',
+            r'[?&]ll=(-?\d+\.\d+),\s*(-?\d+\.\d+)',
+            r'[?&]sll=(-?\d+\.\d+),\s*(-?\d+\.\d+)',
+            r'coordinate=(-?\d+\.\d+),\s*(-?\d+\.\d+)',   # Apple Maps
+            r'@(-?\d+\.\d+),(-?\d+\.\d+)',
+            r'!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)',
+            r'destination=(-?\d+\.\d+),\s*(-?\d+\.\d+)',
+            r'[?&]daddr=(-?\d+\.\d+),\s*(-?\d+\.\d+)',     # Apple "direções para"
+            r'^\s*(-?\d+[.,]?\d*)\s*[,;]\s*(-?\d+[.,]?\d*)\s*$',  # coords cruas (vírgula ou ;)
+        ]:
+            m = re.search(pat, s)
+            if m:
+                try:
+                    return float(m.group(1)), float(m.group(2))
+                except ValueError:
+                    continue
+        return None, None
+
+    lat, lng = _extract_coords(text)
+
+    # Link curto / Apple place → segue o redirect para obter a URL final com coordenadas
+    if lat is None and re.search(r'(maps\.app\.goo\.gl|goo\.gl/maps|maps\.google\.[a-z.]+/url|maps\.apple\.com)', text):
+        try:
+            url_match = re.search(r'https?://\S+', text)
+            short_url = url_match.group(0) if url_match else text
+            resp = requests.get(short_url, allow_redirects=True, timeout=10,
+                                headers={"User-Agent": "Mozilla/5.0"})
+            final_url = resp.url
+            lat, lng = _extract_coords(final_url)
+            if lat is None:
+                lat, lng = _extract_coords(resp.text[:5000])
+        except Exception as e:
+            print(f"Erro ao resolver link curto: {e}")
+
+    if lat is None or lng is None:
+        raise HTTPException(status_code=422,
+            detail="Não consegui extrair as coordenadas. Cole o link de localização do WhatsApp ou no formato '-15.59, -56.06'.")
+
+    # Reverse geocode para um endereço legível
+    full_address = f"Localização GPS ({lat:.5f}, {lng:.5f})"
+    neighborhood = city = state = ""
+    try:
+        rev = gmaps.reverse_geocode((lat, lng), language='pt-BR')
+        if rev:
+            r0 = rev[0]
+            full_address = r0.get('formatted_address', full_address)
+            for c in r0.get('address_components', []):
+                t = c.get('types', [])
+                if 'sublocality' in t or 'neighborhood' in t or 'sublocality_level_1' in t:
+                    neighborhood = c.get('long_name', '')
+                if 'administrative_area_level_2' in t or 'locality' in t:
+                    city = c.get('long_name', '')
+                if 'administrative_area_level_1' in t:
+                    state = c.get('short_name') or c.get('long_name', '')
+    except Exception as e:
+        print(f"Reverse geocode falhou: {e}")
+
+    return {
+        "latitude": lat, "longitude": lng,
+        "full_address": full_address,
+        "neighborhood": neighborhood, "city": city, "state": state,
+        "source": "WHATSAPP_GPS",
+    }
+
 
 # Client endpoints
 @api_router.post("/clients", response_model=Client)
@@ -1612,18 +1828,39 @@ async def mark_client_desisted(item_id: str, current_user: UserPublic = Depends(
     return {"success": True}
 
 
+@api_router.patch("/items/{item_id}/reactivate")
+async def reactivate_item(item_id: str, current_user: UserPublic = Depends(get_current_user)):
+    """Reativa item que estava marcado como desistência — volta a aparecer nas rotas."""
+    budget, item = await _find_budget_and_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    if not item.get("client_desisted"):
+        raise HTTPException(status_code=400, detail="Item não está marcado como desistência.")
+    await _update_item_fields(item_id, {"client_desisted": False}, current_user)
+    await _append_to_item_array(item_id, "status_history", {
+        "status": item.get("status"), "at": datetime.utcnow().isoformat(),
+        "by_user_id": current_user.id, "by_user_name": current_user.name,
+        "notes": "Item reativado — voltou a aparecer nas rotas"
+    })
+    await log_audit("item", item_id, "ITEM_REACTIVATED", current_user, {})
+    return {"success": True}
+
+
 @api_router.post("/technician/finalize-today")
-async def finalize_today_agenda(current_user: UserPublic = Depends(get_current_user)):
+async def finalize_today_agenda(
+    date: str = Query(default=None),
+    current_user: UserPublic = Depends(get_current_user),
+):
     """
-    Finaliza a agenda do dia:
+    Finaliza a agenda de uma data (padrão = hoje):
     - Itens finalizados (EXECUTADO/ENTREGUE/BUSCOU) → já no fluxo financeiro
     - Itens coletados (COLETADO/EM_LAVAGEM*) → já no modo empresa
-    - Itens sem execução (RETIRAR/EXECUTAR_NO_LOCAL/ENTREGAR/AGUARDANDO_ENTREGA) → AGENDADO + libera rota
+    - Itens sem execução → libera rota para reagendamento
     - Cancelados → mantém status, libera rota
-    Assignments do dia → marcados como COMPLETED
+    Assignments da data → marcados como COMPLETED
     """
     from datetime import date as _date
-    today = _date.today().isoformat()
+    today = date or _date.today().isoformat()
 
     FINAL_STATUSES   = {"EXECUTADO", "ENTREGUE", "BUSCOU", "ENTREGUE"}
     EMPRESA_STATUSES = {"COLETADO", "EM_LAVAGEM", "EM_LAVAGEM_PARCEIRO",
@@ -2243,12 +2480,45 @@ async def enrich_budget_item(
     return item
 
 
+def suggest_credit_installments(total) -> int:
+    """
+    Sugestão de parcelamento padrão (cartão de crédito) pelo valor do orçamento:
+      até R$200 → 2x | até R$300 → 3x | até R$400 → 4x | até R$500 → 5x | R$600+ → 6x (teto).
+    É apenas uma sugestão exibida no orçamento; o pagamento real é definido no Financeiro.
+    """
+    t = round(float(total or 0), 2)
+    if t <= 0:
+        return 1
+    return min(6, max(2, math.ceil(t / 100)))
+
+
+async def get_payment_fees() -> Dict[str, float]:
+    """Tabela de taxas (%) por forma de pagamento (system_config)."""
+    cfg = await db.system_config.find_one({}) or {}
+    fees = cfg.get("payment_fees")
+    if not fees:
+        fees = SystemConfig().payment_fees
+    return fees
+
+
+def compute_net(gross, fee_pct) -> dict:
+    """Calcula taxa e líquido a partir do bruto e do percentual."""
+    gross = round(float(gross or 0), 2)
+    pct = float(fee_pct or 0)
+    fee = round(gross * pct / 100.0, 2)
+    return {"fee_pct": pct, "fee_amount": fee, "net_value": round(gross - fee, 2)}
+
+
 def calc_budget_totals(items: List[dict]) -> dict:
+    total_value = sum(float(i.get("total_value", 0) or 0) for i in items)
     return {
-        "total_value": sum(float(i.get("total_value", 0) or 0) for i in items),
+        "total_value": total_value,
         "total_area_m2": sum(float(i.get("area_m2", 0) or 0) for i in items),
         "total_linear_meters": sum(float(i.get("linear_meters", 0) or 0) for i in items),
         "total_units": len(items),
+        # Condição de pagamento padrão sugerida (não vincula o pagamento real)
+        "suggested_payment_method": "CREDITO",
+        "suggested_installments": suggest_credit_installments(total_value),
     }
 
 
@@ -2480,6 +2750,16 @@ async def force_delete_budget(budget_id: str, current_user: UserPublic = Depends
         "removed": removed
     }
 
+
+@api_router.delete("/automation/measures/cleanup")
+async def cleanup_automation_measures(current_user: UserPublic = Depends(get_current_user)):
+    """Remove apenas os orçamentos criados pela automação de medidas (source=AUTOMATION_MEASURES).
+    NÃO remove clientes — preserva todos os cadastros."""
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Apenas administradores.")
+    r = await db.budgets.delete_many({"source": "AUTOMATION_MEASURES"})
+    return {"message": f"{r.deleted_count} orçamento(s) de automação removidos. Clientes preservados."}
+
 @api_router.delete("/budgets/{budget_id}")
 async def delete_budget(budget_id: str, current_user: UserPublic = Depends(get_current_user)):
     """Excluir orçamento (bloqueia se algum item já está em rota ou executado)."""
@@ -2522,8 +2802,8 @@ async def generate_whatsapp_message(budget_id: str):
         formatted_date = updated_date.strftime("%d/%m/%Y")
         
         # Build WhatsApp message
-        message = f"""#### *ORÇAMENTO PERSONALIZADO* ####
-_SuperDry Lavanderia de Tapetes e Estofados_
+        message = f"""░▒▒▓▓ *ORÇAMENTO PERSONALIZADO* ▓▓▒▒░
+     _SuperDry Lavanderia de Tapetes e Estofados_
 
 *Código do Orçamento:* {budget_id}
 *Cliente:* {budget.get('client_name', 'N/A')}
@@ -2559,13 +2839,25 @@ _SuperDry Lavanderia de Tapetes e Estofados_
         # Add total
         message += f"\n\n*VALOR TOTAL:* R$ {budget.get('total_value', 0):.2f}"
         
+        # Link público do PDF (servido pelo backend via Tailscale Funnel ou servidor de produção)
+        sys_cfg = await db.system_config.find_one({}) or {}
+        public_url = (
+            os.environ.get("PUBLIC_WEBHOOK_URL", "")
+            .replace("/api/webhooks/payment", "")
+            .strip("/")
+        )
+        pdf_line = ""
+        if public_url:
+            pdf_line = f"\n✉ *PDF do orçamento com mais informações sobre o serviço:* ✉\n{public_url}/api/budgets/{budget_id}/pdf"
+
         # Footer
-        message += """
+        message += f"""
 
-_PDF com maiores detalhes em anexo! Caso tenha dúvidas, estou à disposição!
-Agradecemos a confiança. -> Orçamento válido por até 30 dias._
+{pdf_line}
+_Caso tenha dúvidas, estou à disposição!_
+_Agradecemos a confiança. Orçamento válido por 30 dias._
 
-SuperDry Lavanderia Instagram: @superdrylavanderia"""
+SuperDry Lavanderia | @superdrylavanderia"""
 
         # Clean phone number for WhatsApp URL
         phone_raw = client.get('phone_primary', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '')
@@ -2661,56 +2953,89 @@ async def generate_pdf_budget(budget_id: str):
             alignment=1
         )
         
-        # Header title
-        story.append(Paragraph(f"ORÇAMENTO {budget_id}", title_style))
-        story.append(Paragraph("SuperDry Lavanderia de Tapetes & Estofados", big_style))
-        story.append(Spacer(1, 12))  # era 30 → compacto
-        
-        # Client info + logo side by side
+        # ── Paleta da marca SuperDry (extraída da logo) ──────────────────────
+        BLUE        = colors.HexColor("#1F4E8C")
+        GREEN       = colors.HexColor("#8CC63F")
+        BLUE_LIGHT  = colors.HexColor("#EAF0F8")
+        GREEN_LIGHT = colors.HexColor("#F1F7E6")
+        GREY_TXT    = colors.HexColor("#444444")
+        usable = A4[0] - 2*cm - 1.8*cm   # largura útil (margens do doc)
+
+        # Helper: cabeçalho de seção em barra azul com texto branco
+        def section(num, title):
+            t = Table([[Paragraph(
+                f"<font color='white'><b>{num}. {title}</b></font>",
+                styles['Normal'])]], colWidths=[usable])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), BLUE),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            return t
+
+        # ── Cabeçalho com marca + logo ───────────────────────────────────────
+        brand_block = Paragraph(
+            f"<font color='#1F4E8C' size=22><b>ORÇAMENTO</b></font> "
+            f"<font color='#8CC63F' size=22><b>{budget_id}</b></font><br/>"
+            f"<font color='#444444' size=9>SuperDry · Lavanderia de Tapetes e Estofados Especializada</font>",
+            styles['Normal'])
+        logo_file = _find_logo()
+        if logo_file:
+            logo_el = Image(logo_file, width=1.5*inch, height=1.2*inch)
+            header = Table([[brand_block, logo_el]], colWidths=[usable - 1.6*inch, 1.6*inch])
+            header.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (1, 0), (1, 0), 0),
+            ]))
+            story.append(header)
+        else:
+            story.append(brand_block)
+
+        # Régua bicolor azul/verde
+        rule = Table([['', '']], colWidths=[usable * 0.62, usable * 0.38], rowHeights=[3])
+        rule.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, 0), BLUE),
+            ('BACKGROUND', (1, 0), (1, 0), GREEN),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        story.append(rule)
+        story.append(Spacer(1, 10))
+
+        # ── Card de dados do cliente ─────────────────────────────────────────
         updated_date = budget.get("updated_at", datetime.utcnow())
         if isinstance(updated_date, str):
             updated_date = datetime.fromisoformat(updated_date.replace('Z', '+00:00'))
         formatted_date = updated_date.strftime("%d/%m/%Y")
-        
-        client_info_html = (
-            f"<b>Cliente:</b> {budget.get('client_name', 'N/A')}<br/>"
-            f"<b>Telefone:</b> {client.get('phone_primary', 'N/A')}<br/>"
-            f"<b>Vendedor:</b> {budget.get('salesperson', 'N/A')}<br/>"
-            f"<b>Forma de Pagamento:</b> {budget.get('payment_method', 'N/A')}<br/>"
-            f"<b>Data:</b> {formatted_date}"
-        )
-        client_info_paragraph = Paragraph(client_info_html, styles['Normal'])
-        
-        # Logo: prefer uploaded logo, fallback to original
-        logo_paths = [
-            "/app/backend/uploads/logo.png",
-            "/app/backend/logo-superdry.png",
-        ]
-        logo_element = None
-        for lp in logo_paths:
-            if os.path.exists(lp):
-                try:
-                    logo_element = Image(lp, width=1.6*inch, height=1.3*inch)
-                    break
-                except Exception as e:
-                    print(f"Warning: Could not load logo {lp}: {e}")
 
-        if logo_element:
-            page_width = A4[0] - 1.2*cm - 1.8*cm  # usable width
-            info_col = page_width - 1.8*inch
-            info_table = Table(
-                [[client_info_paragraph, logo_element]],
-                colWidths=[info_col, 1.8*inch]
-            )
-            info_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-                ('LEFTPADDING', (0, 0), (0, 0), 0),
-                ('RIGHTPADDING', (1, 0), (1, 0), 0),
-            ]))
-            story.append(info_table)
-        else:
-            story.append(client_info_paragraph)
+        pm_raw = budget.get('payment_method', 'N/A') or 'N/A'
+        pm_label = pm_raw.replace('CREDITO_', 'Crédito ').replace('PIX_CNPJ_', 'PIX ').replace('_', ' ')
+
+        addr_obj = client.get('address') or {}
+        addr_str = addr_obj.get('full_address') or ''
+        addr_line = (
+            f"<br/><font color='#1F4E8C'><b>Endereço:</b></font> {addr_str}"
+            if addr_str else ""
+        )
+        client_card_html = (
+            f"<font color='#1F4E8C'><b>Cliente:</b></font> {budget.get('client_name', 'N/A')}&nbsp;&nbsp;&nbsp;"
+            f"<font color='#1F4E8C'><b>Telefone:</b></font> {client.get('phone_primary', 'N/A')}"
+            f"{addr_line}<br/>"
+            f"<font color='#1F4E8C'><b>Vendedor:</b></font> {budget.get('salesperson', 'N/A')}&nbsp;&nbsp;&nbsp;"
+            f"<font color='#1F4E8C'><b>Pagamento:</b></font> {pm_label}&nbsp;&nbsp;&nbsp;"
+            f"<font color='#1F4E8C'><b>Data:</b></font> {formatted_date}"
+        )
+        client_card = Table([[Paragraph(client_card_html, styles['Normal'])]], colWidths=[usable])
+        client_card.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), BLUE_LIGHT),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10), ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('LINEBELOW', (0, 0), (-1, -1), 2, GREEN),
+        ]))
+        story.append(client_card)
         
         # Budget observations
         if budget.get('budget_observations'):
@@ -2720,7 +3045,9 @@ async def generate_pdf_budget(budget_id: str):
         story.append(Spacer(1, 10))  # era 20 → compacto
         
         # Section 1: Services table
-        story.append(Paragraph("1. SERVIÇOS", section_style))
+        story.append(Spacer(1, 12))
+        story.append(section("1", "SERVIÇOS"))
+        story.append(Spacer(1, 4))
 
         # Create centered style for table content
         centered_style = ParagraphStyle(
@@ -2766,30 +3093,48 @@ async def generate_pdf_budget(budget_id: str):
 
                 total_value += total_val
 
-                # Determine service category for risk texts
-                service_name = (item.get('service_name') or '').upper()
-                if any(word in service_name for word in ['SOFÁ', 'CADEIRA', 'POLTRONA', 'ALMOFADA', 'ESTOFADO']):
-                        service_categories.add('risks_estofados')
-                elif any(word in service_name for word in ['COLCHÃO', 'COLCHAO']):
-                        service_categories.add('risks_colchoes')
-                elif 'BOX' in service_name:
-                        service_categories.add('risks_box')
-                elif any(word in service_name for word in ['TAPETE', 'CARPETE']) and 'LOCAL' in service_name:
-                        service_categories.add('risks_carpetes_tapetes_local')
-                elif any(word in service_name for word in ['TAPETE', 'CARPETE']):
-                        service_categories.add('risks_tapetes')
-                elif 'CORTINA' in service_name:
-                        service_categories.add('risks_cortinas')
-                elif 'PERSIANA' in service_name:
-                        service_categories.add('risks_persianas')
-                elif any(word in service_name for word in ['CARRINHO', 'CADEIRINHA', 'BEBÊ', 'BEBE', 'INFANTIL']):
-                        service_categories.add('risks_itens_infantis')
-                elif any(word in service_name for word in ['VEÍCULO', 'VEICULO', 'BANCO', 'CARRO']):
-                        service_categories.add('risks_veiculos')
-                elif 'IMPERMEABILIZAÇÃO' in service_name or 'IMPERMEABILIZACAO' in service_name:
-                        service_categories.add('risks_impermeabilizacao')
-                else:
-                        service_categories.add('risks_outros_itens')
+                # Categoria de risco: usa o service_category REAL do item (vindo do
+                # catálogo) — corrige o caso "Impermeabilização de Sofá" cair em ESTOFADOS.
+                CAT_TO_RISK = {
+                        'ESTOFADOS': 'risks_estofados',
+                        'COLCHOES': 'risks_colchoes',
+                        'BOX': 'risks_box',
+                        'TAPETES': 'risks_tapetes',
+                        'CARPETES_E_TAPETES_NO_LOCAL': 'risks_carpetes_tapetes_local',
+                        'CORTINAS': 'risks_cortinas',
+                        'PERSIANAS': 'risks_persianas',
+                        'ITENS_INFANTIS': 'risks_itens_infantis',
+                        'VEICULOS': 'risks_veiculos',
+                        'IMPERMEABILIZACAO': 'risks_impermeabilizacao',
+                        'OUTROS_ITENS': 'risks_outros_itens',
+                }
+                risk_key = CAT_TO_RISK.get(item.get('service_category'))
+                if not risk_key:
+                        # Fallback por palavra-chave — IMPERMEABILIZAÇÃO checada ANTES de estofado
+                        sn = (item.get('service_name') or '').upper()
+                        if 'IMPERMEAB' in sn:
+                                risk_key = 'risks_impermeabilizacao'
+                        elif any(w in sn for w in ['SOFÁ', 'SOFA', 'CADEIRA', 'POLTRONA', 'ALMOFADA', 'ESTOFADO', 'PUFF']):
+                                risk_key = 'risks_estofados'
+                        elif 'COLCH' in sn:
+                                risk_key = 'risks_colchoes'
+                        elif 'BOX' in sn:
+                                risk_key = 'risks_box'
+                        elif ('TAPETE' in sn or 'CARPETE' in sn) and 'LOCAL' in sn:
+                                risk_key = 'risks_carpetes_tapetes_local'
+                        elif 'TAPETE' in sn or 'CARPETE' in sn:
+                                risk_key = 'risks_tapetes'
+                        elif 'CORTINA' in sn:
+                                risk_key = 'risks_cortinas'
+                        elif 'PERSIANA' in sn:
+                                risk_key = 'risks_persianas'
+                        elif any(w in sn for w in ['CARRINHO', 'CADEIRINHA', 'BEBÊ', 'BEBE', 'INFANTIL']):
+                                risk_key = 'risks_itens_infantis'
+                        elif any(w in sn for w in ['VEÍCULO', 'VEICULO', 'BANCO', 'CARRO']):
+                                risk_key = 'risks_veiculos'
+                        else:
+                                risk_key = 'risks_outros_itens'
+                service_categories.add(risk_key)
 
                 table_data.append([
                         Paragraph(item.get('service_name') or 'N/A', centered_style),
@@ -2815,14 +3160,27 @@ async def generate_pdf_budget(budget_id: str):
 
         table = Table(table_data, colWidths=col_widths)
         table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                # Cabeçalho azul da marca
+                ('BACKGROUND', (0, 0), (-1, 0), BLUE),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
-                ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ('TOPPADDING', (0, 0), (-1, 0), 7),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 7),
+                # Linhas do corpo: alternância branco / azul claro
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, BLUE_LIGHT]),
+                ('TOPPADDING', (0, 1), (-1, -2), 5),
+                ('BOTTOMPADDING', (0, 1), (-1, -2), 5),
+                # Linha do TOTAL em verde
+                ('BACKGROUND', (0, -1), (-1, -1), GREEN_LIGHT),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('TEXTCOLOR', (0, -1), (-1, -1), BLUE),
+                ('LINEABOVE', (0, -1), (-1, -1), 1.5, GREEN),
+                ('TOPPADDING', (0, -1), (-1, -1), 7),
+                ('BOTTOMPADDING', (0, -1), (-1, -1), 7),
+                # Grade sutil
+                ('LINEBELOW', (0, 0), (-1, -2), 0.5, colors.HexColor("#D8DEE8")),
+                ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor("#C7CEDA")),
         ]))
 
         story.append(table)
@@ -2830,7 +3188,9 @@ async def generate_pdf_budget(budget_id: str):
         
         # Section 2: Risk texts based on service categories
         if service_categories:
-            story.append(Paragraph("2. RISCOS E ADVERTÊNCIAS", section_style))
+            story.append(Spacer(1, 14))
+            story.append(section("2", "RISCOS E ADVERTÊNCIAS"))
+            story.append(Spacer(1, 4))
             
             category_labels = {
                 'risks_estofados': 'ESTOFADOS',
@@ -2852,22 +3212,27 @@ async def generate_pdf_budget(budget_id: str):
                     # Convert WhatsApp formatting to HTML
                     formatted_text = format_html_text(risk_text)
                     category_name = category_labels.get(category, category.replace('risks_', '').upper())
-                    story.append(Paragraph(f"<b>{category_name}:</b>", styles['Normal']))
+                    story.append(Paragraph(f"<font color='#1F4E8C'><b>{category_name}</b></font>", styles['Normal']))
                     story.append(Paragraph(formatted_text, styles['Normal']))
                     story.append(Spacer(1, 6))   # era 10 → compacto
         
         # Section 3: General conditions
         general_conditions = config.get('general_conditions', '')
         if general_conditions:
-            story.append(Paragraph("3. CONDIÇÕES GERAIS", section_style))
+            story.append(Spacer(1, 14))
+            story.append(section("3", "CONDIÇÕES GERAIS"))
+            story.append(Spacer(1, 4))
             formatted_conditions = format_html_text(general_conditions)
             story.append(Paragraph(formatted_conditions, styles['Normal']))
             story.append(Spacer(1, 12))  # era 20 → compacto
         
-        # Signature section
-        story.append(Spacer(1, 18))  # era 30 → compacto
-        story.append(Paragraph("_" * 60, styles['Normal']))
-        story.append(Paragraph("Assinatura do cliente", styles['Normal']))
+        # Signature section — centralizada
+        sig_style = ParagraphStyle('SigStyle', parent=styles['Normal'], alignment=1)
+        story.append(Spacer(1, 28))
+        story.append(Paragraph("_" * 55, sig_style))
+        story.append(Spacer(1, 4))
+        story.append(Paragraph(
+            "<font color='#1F4E8C'>Assinatura do cliente</font>", sig_style))
         
         # Footer
         footer_text = config.get('footer_text', '')
@@ -2943,30 +3308,266 @@ class AutoMeasureLine(BaseModel):
     items: List[Dict[str, Any]] = []  # [{client_name, service_name, width, height, diameter, partner_label}]
 
 
+# ── Casamento de item com o catálogo (Camada A da automação de orçamento) ──────
+# Recebe uma descrição livre ("sofá 3 lugares", "tapete 2x3") e encontra o serviço
+# mais provável no catálogo, trazendo preço e tipo de medida. Apenas sugestão — o
+# preview é confirmável. Ver memory/FLUXO_TRABALHO_E_AUTOMACAO.md (§2 Camada A).
+import unicodedata as _ud
+
+_SVC_STOP = {'de', 'da', 'do', 'e', 'ou', 'com', 'a', 'o', 'para', 'no', 'na', 'dos', 'das'}
+
+
+def _svc_norm(s: str) -> str:
+    return _ud.normalize('NFKD', s or '').encode('ascii', 'ignore').decode().lower()
+
+
+def _svc_strip_measures(q: str) -> str:
+    """Remove medidas da query (NxM, decimais, m²) — elas são tratadas à parte."""
+    q = re.sub(r'\d+[.,]?\d*\s*[xX×]\s*\d+[.,]?\d*', ' ', q)
+    q = re.sub(r'\b\d+[.,]\d+\b', ' ', q)
+    q = re.sub(r'm²|\bm2\b', ' ', q, flags=re.IGNORECASE)
+    return q
+
+
+def _svc_tokens(s: str):
+    return [t for t in re.findall(r'[a-z]+|\d+', _svc_norm(s))
+            if t not in _SVC_STOP and (len(t) >= 2 or t.isdigit())]
+
+
+def _svc_tok_match(q: str, s: str) -> bool:
+    if q.isdigit() or s.isdigit():
+        return q == s
+    if q == s:
+        return True
+    short, long = sorted([q, s], key=len)
+    if len(short) >= 4 and long.startswith(short):
+        return True
+    c = 0
+    for a, b in zip(q, s):
+        if a == b:
+            c += 1
+        else:
+            break
+    return c >= 6
+
+
+def _svc_score(query: str, svc: dict) -> float:
+    qt = _svc_tokens(_svc_strip_measures(query))
+    nt = _svc_tokens(svc.get('name', ''))
+    if not qt or not nt:
+        return -99.0
+    matched = sum(1 for q in qt if any(_svc_tok_match(q, n) for n in nt))
+    extras = sum(1 for n in nt if not any(_svc_tok_match(q, n) for q in qt))
+    cov = matched / len(qt)
+    sc = cov * 2 + matched * 0.2 - 0.15 * extras - 0.03 * len(nt)
+    qn = _svc_norm(query)
+    if 'imperme' not in qn and svc.get('category') == 'IMPERMEABILIZACAO':
+        sc -= 1.2  # sem "imperme" na query, prioriza lavagem
+    if 'local' not in qn and 'local' in _svc_norm(svc.get('name', '')):
+        sc -= 0.6  # prefere a variante padrão (na empresa) à "no local"
+    return sc
+
+
+async def match_service_in_catalog(query: str, services=None):
+    """Melhor serviço do catálogo para a descrição. None se nada razoável."""
+    if not (query or '').strip():
+        return None
+    if services is None:
+        services = await db.services.find({"is_active": True}).to_list(length=1000)
+    if not services:
+        return None
+    best = max(services, key=lambda s: _svc_score(query, s))
+    sc = _svc_score(query, best)
+    if sc <= -1:
+        return None
+    return {
+        "service_id": best["id"],
+        "service_name": best["name"],
+        "service_code": best["id"],
+        "category": best.get("category"),
+        "measure_type": best.get("measure_type"),
+        "sale_price": best.get("sale_price"),
+        "match_score": round(sc, 2),
+        "low_confidence": sc < 1.3,
+    }
+
+
+_ADDR_KW = re.compile(
+    r'\b(rua|r\.|av\.?|avenida|alameda|al\.|travessa|tv\.|rodovia|estrada|'
+    r'pra[çc]a|bairro|quadra|lote|condom[ií]nio|cep|apto|apartamento|bloco|'
+    r'casa\s*\d|n[º°]|setor|jardim|jd\.|res\.|residencial)\b', re.IGNORECASE)
+
+
+def _extract_value(line: str) -> float:
+    """Extrai um valor explícito de 'serviço - 350' / 'serviço: 350'. 0 se não houver."""
+    parts = re.split(r'\s[-:]\s|\s[-:]\s?|[-:]\s', line, maxsplit=1)
+    if len(parts) == 2:
+        try:
+            return float(re.sub(r'[^\d.,]', '', parts[1]).replace('.', '').replace(',', '.')
+                         if parts[1].count(',') else re.sub(r'[^\d.]', '', parts[1]))
+        except Exception:
+            return 0.0
+    return 0.0
+
+
+def _item_name_only(line: str) -> str:
+    """Remove um eventual ' - valor' do fim, deixando só a descrição do item."""
+    return re.split(r'\s[-:]\s|\s[-:]\s?|[-:]\s', line, maxsplit=1)[0].strip()
+
+
+def _parse_line_measures(line: str) -> dict:
+    """
+    Extrai medidas de uma linha de item: NxM → largura×altura (área);
+    número único com 'redondo'/Ø → diâmetro. Aplica heurística cm/m (>10 = cm).
+    Ex: 'Persiana rolo 2.1x3.5' → {width:2.1, height:3.5, area_m2:7.35}
+    """
+    res = {}
+
+    def to_f(s):
+        try:
+            return float(str(s).replace(',', '.'))
+        except Exception:
+            return 0.0
+
+    dim = re.search(r'(\d+(?:[.,]\d+)?)\s*[xX×]\s*(\d+(?:[.,]\d+)?)', line)
+    circ = re.search(r'redondo\s+(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*redondo|[Øø]\s*(\d+(?:[.,]\d+)?)',
+                     line, re.IGNORECASE)
+    if dim:
+        w, h = to_f(dim.group(1)), to_f(dim.group(2))
+        if w > 10 and h > 10:
+            w, h = w / 100, h / 100
+        elif w > 10:
+            w = w / 100
+        elif h > 10:
+            h = h / 100
+        res['width'] = round(w, 4)
+        res['height'] = round(h, 4)
+        res['area_m2'] = round(w * h, 4)
+    elif circ:
+        d = to_f(next((g for g in circ.groups() if g), 0))
+        if d > 10:
+            d = d / 100
+        res['diameter'] = round(d, 4)
+        res['area_m2'] = round(3.14159 * (d / 2) ** 2, 4)
+    return res
+
+
+def _smart_parse_budget(text: str, services: list) -> AutoBudgetLine:
+    """
+    Parser por CONTEÚDO (não posicional). Classifica cada linha:
+      - 'obs:' → observações
+      - telefone (8–13 dígitos, quase só dígitos)
+      - item (casa com o catálogo) — caso da maioria das linhas do dono
+      - endereço (palavras-chave de logradouro) — costuma vir depois, mas se aparecer
+      - 1ª linha sem classificação → nome do cliente
+    Adequado ao fluxo do dono: nome + telefone + itens (endereço normalmente ausente).
+
+    Trata chars Unicode invisíveis que o WhatsApp injeta nos números copiados
+    (U+202A LEFT-TO-RIGHT EMBEDDING, U+202C POP DIRECTIONAL FORMATTING,
+     U+2011 NON-BREAKING HYPHEN, etc.), que antes faziam o telefone ir para o
+     campo de endereço e quebravam o execute-budget com AttributeError.
+    """
+    _INVIS = re.compile(r'[​-‏‪-‮⁠-⁯﻿]')
+
+    def _clean(s: str) -> str:
+        return _INVIS.sub('', s).strip()
+
+    lines = [_clean(l) for l in text.split('\n')]
+    lines = [l for l in lines if l]
+    res = AutoBudgetLine(raw_text=text)
+    items = []
+    for i, line in enumerate(lines):
+        low = line.lower()
+        if low.startswith('obs:'):
+            res.notes = line[4:].strip()
+            continue
+        digits = re.sub(r'\D', '', line)
+        non_phone = re.sub(r'[\d\s()+\-.]', '', line)
+        if not res.client_phone and 8 <= len(digits) <= 13 and len(non_phone) <= 2:
+            res.client_phone = line
+            continue
+        if i == 0 and not res.client_name:
+            res.client_name = line
+            continue
+        name = _item_name_only(line)
+        m = match_score_sync(name, services)          # (svc, score) ou None
+        sc = m[1] if m else -99
+        looks_addr = bool(_ADDR_KW.search(line))
+
+        def _mk_item():
+            it = {"service_name": name, "value": _extract_value(line)}
+            it.update(_parse_line_measures(line))   # anexa width/height/area/diameter se houver
+            return it
+
+        if sc >= 1.0 and not (looks_addr and sc < 1.3):
+            items.append(_mk_item())
+        elif looks_addr and not res.client_address:
+            res.client_address = line
+        elif sc >= 0:
+            items.append(_mk_item())
+        elif not res.client_address:
+            res.client_address = line
+        else:
+            items.append(_mk_item())
+    res.items = items
+    return res
+
+
+def match_score_sync(query: str, services: list):
+    """(serviço, score) do melhor match — versão síncrona para o classificador."""
+    if not (query or '').strip() or not services:
+        return None
+    best = max(services, key=lambda s: _svc_score(query, s))
+    return (best, _svc_score(query, best))
+
+
 def _parse_budget_text(text: str) -> AutoBudgetLine:
     """
-    Parser básico para automação de orçamento.
-    Formato esperado (definido pelo usuário — a ser refinado):
-      Linha 1: Nome do cliente
-      Linha 2: Telefone
-      Linha 3: Endereço
-      Linha 4+: Item - Valor (ex: "Lavagem Sofá 3L - 350")
-      Última linha com 'obs:': observações (opcional)
+    Parser para automação de orçamento — tolerante ao formato do WhatsApp.
+
+    Detecta dinamicamente (sem assumir posições fixas):
+      - Nome:     primeira linha que não seja telefone
+      - Telefone: linha com 8–13 dígitos e poucos caracteres não-numéricos
+      - Endereço: linha com palavras típicas de logradouro (opcional)
+      - Itens:    demais linhas
+      - obs:      linha iniciada com "obs:"
+
+    Trata chars Unicode invisíveis que o WhatsApp injeta nos números copiados
+    (U+202A LEFT-TO-RIGHT EMBEDDING, U+202C POP DIRECTIONAL FORMATTING,
+     U+2011 NON-BREAKING HYPHEN, etc.), que antes quebravam a detecção de telefone.
     """
-    lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
+    import re
+
+    # Remove caracteres Unicode invisíveis/direcionais (comuns em cópias do WhatsApp)
+    _INVIS = re.compile(r'[​-‏‪-‮⁠-⁯﻿]')
+
+    def _clean(s: str) -> str:
+        return _INVIS.sub('', s).strip()
+
+    def _is_phone(s: str) -> bool:
+        digits = re.sub(r'\D', '', s)
+        non_phone = re.sub(r'[\d\s()+\-.]', '', s)
+        return 8 <= len(digits) <= 13 and len(non_phone) <= 2
+
+    lines = [_clean(l) for l in text.split('\n')]
+    lines = [l for l in lines if l]           # remove linhas vazias após limpeza
     result = AutoBudgetLine(raw_text=text)
     if not lines:
         return result
 
-    result.client_name  = lines[0] if len(lines) > 0 else None
-    result.client_phone = lines[1] if len(lines) > 1 else None
-    result.client_address = lines[2] if len(lines) > 2 else None
+    # Primeira linha = nome do cliente
+    result.client_name = lines[0]
 
-    import re
-    for line in lines[3:]:
+    for line in lines[1:]:
         if line.lower().startswith('obs:'):
             result.notes = line[4:].strip()
             continue
+
+        # Telefone detectado por conteúdo, não por posição
+        if not result.client_phone and _is_phone(line):
+            result.client_phone = line
+            continue
+
         # Tenta separar "serviço - valor" ou "serviço: valor"
         match = re.split(r'\s[-:]\s|\s[-:]\s?|[-:]\s', line, maxsplit=1)
         if len(match) == 2:
@@ -2984,67 +3585,246 @@ def _parse_budget_text(text: str) -> AutoBudgetLine:
 
 def _parse_measures_text(text: str) -> AutoMeasureLine:
     """
-    Parser básico para automação de medidas.
-    Formato esperado (a ser refinado pelo usuário):
-      Cada linha: [cliente] - [serviço] [medida]
-      ex: "João Silva - Tapete Sala 2.0x3.0"
-      Parceiro: "[PARCEIRO: DryClean] João - Tapete 2x3 AZUL-224"
+    Parser de medidas de tapetes para mensagens do WhatsApp.
+
+    Parceiros cadastrados (nomes canônicos = nome exato no banco):
+      CLI-0006  Leonardo - Dry Clean USA  → cores+código numérico, ou sem identificação
+      CLI-0009  Forma Clean               → forma clean/clan, maika, renan
+      CLI-0010  Higia Service             → higia, vinicius (ambíguo), lucas
+      CLI-0011  Wesley Higienização       → parceiro wesley, wesley
+      CLI-0016  Felipe Gonçalves / João Farias → parceiro joao/felipe/domus, domus decor
+    Regras de medidas (sempre em metros):
+      - Formato NxM → largura x comprimento; vírgula ou ponto como decimal
+      - Valor único > 10 isolado → converte de cm para metros
+      - Se ambos > 10 → ambos em cm; se só um > 10 → só esse em cm
+      - "redondo" ou "Ø" → tapete circular, medida = diâmetro
+    Cabeçalhos WhatsApp ([DD/MM/AAAA, HH:MM:SS] Nome:) têm a data extraída como
+    reference_date (propagada aos itens das linhas seguintes) e depois são
+    removidos do texto da linha.
     """
-    import re
-    lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
+    # Nomes canônicos exatos conforme cadastro no banco
+    PARTNER_LEONARDO   = "Leonardo - Dry Clean USA"
+    PARTNER_FORMACLEAN = "Forma Clean"
+    PARTNER_HIGIA      = "Higia Service"
+    PARTNER_WESLEY     = "Wesley Higienização"
+    PARTNER_DOMUS      = "Felipe Gonçalves / João Farias"
+
+    def _to_float(s: str) -> float:
+        try:
+            return float(s.replace(',', '.'))
+        except (ValueError, AttributeError):
+            return 0.0
+
+    def _normalize_dims(w: float, h: float):
+        # Heurística: se o maior valor é > 10 mas o menor <= 10,
+        # só o maior está em cm (ex: 80x1.5 → 0.80x1.5).
+        # Se ambos > 10, ambos em cm (ex: 60x70 → 0.60x0.70).
+        if w > 10 and h > 10:
+            w, h = round(w / 100, 4), round(h / 100, 4)
+        elif w > 10:
+            w = round(w / 100, 4)
+        elif h > 10:
+            h = round(h / 100, 4)
+        return round(w, 4), round(h, 4)
+
+    def _classify_partner(identifier: str):
+        """
+        Retorna (client_name, partner_name, is_ambiguous, partner_label).
+        partner_name = None se for cliente comum.
+        """
+        idn = identifier.strip()
+        idn_lower = idn.lower()
+
+        # Sem identificação ou variantes → Leonardo
+        sem_nome_pattern = r'^(sem\s*nome|s/?n|sem\s*identifica[çc][aã]o|n[aã]o\s*identificado|desconhecido)$'
+        if not idn or re.match(sem_nome_pattern, idn_lower):
+            return None, PARTNER_LEONARDO, False, None
+
+        # Cor + código 2-3 dígitos → Leonardo Dry Clean
+        # Aceita com ou sem espaço entre cor e número (Rosa856 ou Rosa 856)
+        color_match = re.match(
+            r'^(azul|amarelo|cinza|laranja|roxo|rosa|verde)\s*(\d{2,3})$',
+            idn_lower
+        )
+        if color_match:
+            return None, PARTNER_LEONARDO, False, {
+                "type": "COLOR_NUM",
+                "color": color_match.group(1).upper(),
+                "number": color_match.group(2),
+            }
+
+        # Higia Service: higia, lucas
+        if idn_lower in ('higia', 'lucas'):
+            return None, PARTNER_HIGIA, False, None
+
+        # Vinicius: ambíguo (pode ser cliente comum ou parceiro Higia)
+        if re.fullmatch(r'vin[ií]cius', idn_lower):
+            return None, PARTNER_HIGIA, True, None
+
+        # Forma Clean: forma clean/clan, maika, renan
+        if re.search(r'forma\s*(clean|clan)|maika|renan', idn_lower):
+            return None, PARTNER_FORMACLEAN, False, None
+
+        # Wesley Higienização: "parceiro wesley" ou só "wesley"
+        if re.search(r'parceiro\s+wesley|^wesley$', idn_lower):
+            return None, PARTNER_WESLEY, False, None
+
+        # Felipe / João / Domus Decor
+        if re.search(r'parceiro\s+(felipe|jo[aã]o)|domus', idn_lower):
+            return None, PARTNER_DOMUS, False, None
+
+        # Normaliza o nome do cliente: Title Case para padronizar maiúsculas/minúsculas
+        normalized = ' '.join(w.capitalize() for w in idn.split())
+        return normalized, None, False, None  # cliente comum
+
+    lines = [l.strip() for l in text.strip().split('\n')]
     result = AutoMeasureLine(raw_text=text)
 
-    current_partner = None
+    # Data de referência corrente — extraída do último cabeçalho WhatsApp visto
+    # ([DD/MM/AAAA, HH:MM:SS] Nome:). Propagada para todos os itens das linhas
+    # seguintes até aparecer um novo cabeçalho. Usada como "data de recolhimento/
+    # medição" do tapete (quando o técnico envia a mensagem, o item já foi lavado).
+    current_ref_date = None
 
-    for line in lines:
-        # Detecta bloco de parceiro
-        partner_match = re.match(r'\[PARCEIRO:\s*(.+?)\]', line, re.IGNORECASE)
-        if partner_match:
-            current_partner = partner_match.group(1).strip()
-            line = re.sub(r'\[PARCEIRO:\s*.+?\]\s*', '', line, flags=re.IGNORECASE).strip()
-            if not line:
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        # Cabeçalho WhatsApp: [22/05/2026, 16:13:38] Nome:  → captura a data e
+        # segue processando o conteúdo após o ":" (não descarta mais a data).
+        header_match = re.match(r'^\[(\d{2})/(\d{2})/(\d{4}),\s*(\d{2}:\d{2}:\d{2})\]', line)
+        if header_match:
+            day, month, year, time_str = header_match.groups()
+            try:
+                current_ref_date = f"{year}-{month}-{day}T{time_str}"
+            except Exception:
+                pass
+            content_after = re.sub(r'^\[.+?\]\s*[^:]+:\s*', '', line).strip()
+            if not content_after:
                 continue
+            line = content_after
 
-        # Tenta extrair medidas: formatos 2.0x3.0 / Ø1.5 / 3m
-        item: Dict[str, Any] = {"raw": line, "partner": current_partner}
+        item: Dict[str, Any] = {"raw": raw_line}
 
-        dim_match = re.search(r'([\d.,]+)\s*[xX×]\s*([\d.,]+)', line)
-        diam_match = re.search(r'[ØDd]\s*([\d.,]+)', line)
-        lin_match  = re.search(r'([\d.,]+)\s*m(?:l|lin|linear)?(?:\s|$)', line)
+        # ── Detectar medidas ──────────────────────────────────────────────────
 
-        if dim_match:
-            item["width"]  = float(dim_match.group(1).replace(',', '.'))
-            item["height"] = float(dim_match.group(2).replace(',', '.'))
-            item["area_m2"]= round(item["width"] * item["height"], 4)
-        elif diam_match:
-            d = float(diam_match.group(1).replace(',', '.'))
-            item["diameter"] = d
-            item["area_m2"]  = round(3.14159 * (d/2)**2, 4)
-        elif lin_match:
-            item["linear_meters"] = float(lin_match.group(1).replace(',', '.'))
+        # Redondo / circular — dois formatos possíveis:
+        #   Formato A: "redondo 0,8"  → diâmetro vem DEPOIS de "redondo" (ex: "Azul 599 redondo 0,8")
+        #   Formato B: "1.60 redondo" → diâmetro vem ANTES  de "redondo" (ex: "Azul 495 1.60 redondo")
+        #   Formato C: "Ø1.5"         → símbolo de diâmetro
+        # Priorizamos Formato A para evitar que o código de etiqueta (ex: 599) seja confundido com diâmetro
+        circ_after  = re.search(r'redondo\s+([\d.,]+)', line, re.IGNORECASE)   # A: diâmetro após "redondo"
+        circ_before = re.search(r'([\d.,]+)\s+redondo', line, re.IGNORECASE)   # B: diâmetro antes de "redondo"
+        circ_sym    = re.search(r'[ØDd]\s*([\d.,]+)', line)                    # C: símbolo Ø
 
-        # Tenta extrair nome do cliente (antes do primeiro "-")
-        parts = re.split(r'\s[-–]\s', line, maxsplit=1)
-        if len(parts) >= 2:
-            item["client_name"]  = parts[0].strip()
-            item["service_name"] = re.sub(r'([\d.,]+\s*[xX×]\s*[\d.,]+|[ØDd]\s*[\d.,]+|[\d.,]+\s*ml?).*', '', parts[1]).strip()
+        if circ_after:
+            circ_match = circ_after
+            _circ_d_group = 1
+            _circ_measure_start = circ_after.start()   # tudo antes de "redondo" é o identificador
+        elif circ_before:
+            circ_match = circ_before
+            _circ_d_group = 1
+            _circ_measure_start = circ_before.start()
+        elif circ_sym:
+            circ_match = circ_sym
+            _circ_d_group = 1
+            _circ_measure_start = circ_sym.start()
         else:
-            item["service_name"] = line
+            circ_match = None
+            _circ_d_group = 1
+            _circ_measure_start = None
 
-        # Etiqueta de parceiro (ex: AZUL-224)
-        label_match = re.search(r'\b(AZUL|AMARELO|CINZA|LARANJA|ROXO|ROSA|VERDE)[- _](\d{1,3})\b', line, re.IGNORECASE)
-        if label_match:
-            item["partner_label"] = {
-                "type": "COLOR_NUM",
-                "color": label_match.group(1).upper(),
-                "number": label_match.group(2)
-            }
-        elif current_partner:
-            item["partner_label"] = {"type": "TEXT", "text": current_partner}
+        # Dimensões NxM
+        dim_match = re.search(
+            r'([\d.,]+)\s*[xX×]\s*([\d.,]+)', line
+        )
+
+        # Número único (possível diâmetro): ex "FormaClean Thais 2,4"
+        # Exige pelo menos um dígito antes e depois de eventual separador decimal
+        single_match = re.search(r'\b(\d+[.,]\d+|\d{1,3})\b(?!\s*[xX×])', line) if not dim_match and not circ_match else None
+
+        if circ_match:
+            d_str = circ_match.group(_circ_d_group)
+            d = _to_float(d_str)
+            if d > 10:
+                d = round(d / 100, 4)
+            item["diameter"] = d
+            item["area_m2"]  = round(3.14159 * (d / 2) ** 2, 4)
+        elif dim_match:
+            w = _to_float(dim_match.group(1))
+            h = _to_float(dim_match.group(2))
+            w, h = _normalize_dims(w, h)
+            item["width"]   = w
+            item["height"]  = h
+            item["area_m2"] = round(w * h, 4)
+        elif single_match:
+            # Número inteiro pequeno (1-9) sem decimal = contagem de tapetes prontos → ignora
+            raw_num = single_match.group(1)
+            if re.fullmatch(r'\d', raw_num) and int(raw_num) <= 9:
+                continue
+            # Número único com decimal → diâmetro
+            d = _to_float(raw_num)
+            if d > 10:
+                d = round(d / 100, 4)
+            item["diameter"] = d
+            item["area_m2"]  = round(3.14159 * (d / 2) ** 2, 4)
+        else:
+            # Linha sem medida reconhecível — ignora
+            continue
+
+        # ── Detectar identificador (tudo antes da medida) ────────────────────
+        if circ_match and _circ_measure_start is not None:
+            measure_start = _circ_measure_start
+        else:
+            measure_start = (dim_match or single_match).start()
+        identifier_raw = line[:measure_start].strip()
+
+        # Remove sufixos extras após a medida (ex: " redondo", texto residual)
+        # Limpa pontuação final do identificador
+        identifier_raw = re.sub(r'[\s,;:]+$', '', identifier_raw)
+
+        client_name, partner_name, is_ambiguous, label = _classify_partner(identifier_raw)
+
+        # Se o identificador ficou vazio (linha começa direto com medida) → Leonardo
+        if not identifier_raw and not partner_name:
+            partner_name = PARTNER_LEONARDO
+
+        item["service_name"] = "Tapete"
+        if current_ref_date:
+            item["reference_date"] = current_ref_date
+
+        if partner_name:
+            item["client_name"]   = partner_name
+            item["is_partner"]    = True
+            item["is_ambiguous"]  = is_ambiguous  # True apenas para "Vinicius"
+            if label:
+                item["partner_label"] = label
+            else:
+                item["partner_label"] = {"type": "TEXT", "text": partner_name}
+        else:
+            item["client_name"]  = client_name
+            item["is_partner"]   = False
+            item["is_ambiguous"] = False
 
         result.items.append(item)
 
     return result
+
+
+async def _next_id(collection, prefix: str, zfill: int) -> str:
+    """Gera o próximo ID sequencial baseado no maior ID existente na coleção."""
+    pattern = f"^{re.escape(prefix)}(\\d+)$"
+    pipeline = [
+        {"$match": {"id": {"$regex": pattern}}},
+        {"$project": {"num": {"$toInt": {"$arrayElemAt": [{"$split": ["$id", "-"]}, -1]}}}},
+        {"$sort": {"num": -1}},
+        {"$limit": 1},
+    ]
+    cursor = collection.aggregate(pipeline)
+    docs = await cursor.to_list(1)
+    next_num = (docs[0]["num"] + 1) if docs else 1
+    return f"{prefix}{str(next_num).zfill(zfill)}"
 
 
 @api_router.post("/automation/preview-budget")
@@ -3053,7 +3833,46 @@ async def preview_budget(payload: Dict[str, Any], current_user: UserPublic = Dep
     text = payload.get("text", "")
     if not text.strip():
         raise HTTPException(status_code=400, detail="Texto vazio.")
-    parsed = _parse_budget_text(text)
+    # Casa cada item com o catálogo → sugere serviço, preço e tipo de medida.
+    services = await db.services.find({"is_active": True}).to_list(length=1000)
+    parsed = _smart_parse_budget(text, services)
+    AREA_TYPES = {"AREA_DE_TAPETE", "AREA_PERSIANA", "CARPETE_TAPETE_LOCAL",
+                  "TAPETE_REDONDO_DIAMETRO"}
+    enriched = []
+    for it in parsed.items:
+        item = dict(it)
+        m = await match_service_in_catalog(it.get("service_name", ""), services)
+        explicit_value = float(it.get("value") or 0)
+        if m:
+            mtype = m["measure_type"]
+            price = float(m["sale_price"] or 0)
+            item["matched"] = m
+            item["measure_type"] = mtype
+            item["unit_price"] = price
+            area = float(it.get("area_m2") or 0)
+
+            if mtype in AREA_TYPES:
+                # Item por área: se as medidas vieram no texto, já calcula o valor
+                if explicit_value:
+                    item["value"] = explicit_value
+                    item["needs_measure"] = False
+                elif area > 0:
+                    item["value"] = round(area * price, 2)
+                    item["needs_measure"] = False
+                else:
+                    item["value"] = 0
+                    item["needs_measure"] = True      # falta medida → UI abre campos
+            else:
+                # UNITARIO: valor = preço × quantidade (qtd ajustável na UI, ex.: filetes)
+                qty = int(it.get("quantity") or 1)
+                item["quantity"] = qty
+                item["value"] = explicit_value or round(price * qty, 2)
+                item["needs_measure"] = False
+                item["needs_quantity"] = True         # UI mostra campo de quantidade
+        else:
+            item["needs_measure"] = False
+        enriched.append(item)
+
     # Verifica se cliente já existe
     existing_client = None
     if parsed.client_phone:
@@ -3063,7 +3882,7 @@ async def preview_budget(payload: Dict[str, Any], current_user: UserPublic = Dep
         "client_name":    parsed.client_name,
         "client_phone":   parsed.client_phone,
         "client_address": parsed.client_address,
-        "items":          parsed.items,
+        "items":          enriched,
         "notes":          parsed.notes,
         "client_exists":  bool(existing_client),
         "existing_client_id": existing_client.get("id") if existing_client else None,
@@ -3080,9 +3899,9 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
     """
     import re as re2
 
-    client_name    = payload.get("client_name", "").strip()
-    client_phone   = payload.get("client_phone", "").strip()
-    client_address = payload.get("client_address", "").strip()
+    client_name    = (payload.get("client_name") or "").strip()
+    client_phone   = (payload.get("client_phone") or "").strip()
+    client_address = (payload.get("client_address") or "").strip()
     client_address_obj = payload.get("client_address_obj")  # endereço com lat/lng da busca
     items          = payload.get("items", [])
     notes          = payload.get("notes", "")
@@ -3098,9 +3917,7 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
         client = await db.clients.find_one({"id": existing_id})
         client_id = existing_id
     else:
-        from uuid import uuid4
-        client_counter = await db.clients.count_documents({}) + 1
-        client_id = f"CLI-{str(client_counter).zfill(4)}"
+        client_id = await _next_id(db.clients, "CLI-", 4)
         # Usa endereço com coordenadas se disponível, senão usa texto simples
         if client_address_obj and client_address_obj.get("latitude"):
             addr_obj = client_address_obj
@@ -3113,6 +3930,10 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
                 "latitude": None,
                 "longitude": None,
             }
+        # Complemento (condomínio/quadra/lote/apto) — preservado mesmo após busca Google
+        complement = (payload.get("complement") or (client_address_obj or {}).get("complement") or "").strip()
+        if complement:
+            addr_obj["complement"] = complement
         new_client = {
             "id": client_id,
             "name": client_name,
@@ -3129,25 +3950,38 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
     sys_cfg = await db.system_config.find_one({}) or {}
     salesperson_val = salesperson or sys_cfg.get("salesperson_default", "Sistema")
 
-    bud_counter = await db.budgets.count_documents({}) + 1
-    budget_id = f"ORC-{str(bud_counter).zfill(7)}"
+    budget_id = await _next_id(db.budgets, "ORC-", 7)
 
     budget_items = []
     for raw_item in items:
         item_counter = len(budget_items) + 1
         item_id = f"ITM-AUTO-{budget_id}-{item_counter}"
+        m = raw_item.get("matched") or {}           # serviço casado no catálogo (Camada A)
+        val = float(raw_item.get("value") or 0)
+        qty = int(raw_item.get("quantity") or 1)
         budget_items.append({
             "id": item_id,
-            "service_id": None,
-            "service_name": raw_item.get("service_name", "Serviço"),
-            "service_code": "AUTO",
-            "quantity": 1,
-            "unit_price": float(raw_item.get("value", 0)),
-            "total_value": float(raw_item.get("value", 0)),
+            "budget_id": budget_id,
+            "client_id": client_id,
+            "client_name": client_name,        # essencial para o Financeiro agrupar por cliente
+            "service_id": m.get("service_id") or item_id,
+            "service_name": m.get("service_name") or raw_item.get("service_name", "Serviço"),
+            "service_code": m.get("service_code") or "AUTO",
+            "service_category": m.get("category"),
+            "measure_type": m.get("measure_type"),
+            "quantity": qty,
+            "unit_price": float(raw_item.get("unit_price") or val),
+            "total_value": val,
+            # medidas vindas do texto / preview (persianas, tapetes)
+            "width": raw_item.get("width"),
+            "height": raw_item.get("height"),
+            "diameter": raw_item.get("diameter"),
+            "area_m2": raw_item.get("area_m2"),
             "status": "RETIRAR",
             "payment_status": "PENDENTE",
             "paid_value": 0.0,
             "execution_mode": "RETIRAR_E_LEVAR",
+            "execution_location": "RETIRADA",
             "current_route_id": None,
         })
 
@@ -3178,6 +4012,81 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
     }
 
 
+ACTIVE_STATUSES = ["COLETADO", "EM_LAVAGEM", "EM_LAVAGEM_PARCEIRO", "CLIENTE_TROUXE"]
+
+
+async def _find_active_items(client_id: str) -> List[Dict[str, Any]]:
+    """Retorna itens em status ativo sem medidas confirmadas para um cliente."""
+    budgets = await db.budgets.find(
+        {"client_id": client_id, "items.status": {"$in": ACTIVE_STATUSES}}
+    ).to_list(None)
+    items = []
+    for bud in budgets:
+        for it in bud.get("items", []):
+            if it.get("status") in ACTIVE_STATUSES and not it.get("confirmed_measures"):
+                items.append({
+                    "item_id": it["id"],
+                    "budget_id": bud["id"],
+                    "service_name": it.get("service_name", "Tapete"),
+                    "status": it.get("status"),
+                    "width": it.get("width"),
+                    "height": it.get("height"),
+                    "diameter": it.get("diameter"),
+                })
+    return items
+
+
+# Mapeamento parceiro → (serviço_quadrado, serviço_redondo)
+# Chave = client_id canônico do banco
+_PARTNER_SERVICE_MAP: Dict[str, tuple] = {
+    "CLI-0006": ("SRV-0036", "SRV-0037"),  # Leonardo - Dry Clean USA
+    "CLI-0009": ("SRV-0040", "SRV-0041"),  # Forma Clean (Maika/Renan)
+    "CLI-0010": ("SRV-0038", "SRV-0039"),  # Higia Service (Vinícius/Lucas)
+    "CLI-0011": ("SRV-0042", "SRV-0043"),  # Wesley Higienização
+    "CLI-0016": ("SRV-0044", "SRV-0045"),  # Felipe Gonçalves / João Farias
+}
+# Serviços genéricos para clientes comuns (CLIENTE_TROUXE + lavagem na empresa)
+_GENERIC_SERVICE_MAP = ("SRV-0032", "SRV-0033")  # quadrado, redondo
+
+
+async def _resolve_service_for_item(client_id: str, is_round: bool) -> Optional[Dict[str, Any]]:
+    """Retorna o documento de serviço do catálogo adequado para o item."""
+    pair = _PARTNER_SERVICE_MAP.get(client_id, _GENERIC_SERVICE_MAP)
+    srv_id = pair[1] if is_round else pair[0]
+    return await db.services.find_one({"id": srv_id})
+
+
+async def _resolve_client_fuzzy(name: str) -> List[Dict[str, Any]]:
+    """Busca clientes com nome exato ou parcialmente similar. Retorna lista de candidatos."""
+    candidates = []
+    # 1. Exato
+    exact = await db.clients.find(
+        {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"id": 1, "name": 1}
+    ).to_list(None)
+    if exact:
+        return exact
+    # 2. Nome digitado é prefixo do cadastrado
+    prefix = await db.clients.find(
+        {"name": {"$regex": f"^{re.escape(name)}\\b", "$options": "i"}}, {"id": 1, "name": 1}
+    ).to_list(5)
+    candidates.extend(prefix)
+    # 3. Primeiro token do nome digitado (mín 4 chars)
+    if not candidates:
+        token = name.split()[0] if name.split() else ""
+        if len(token) >= 4:
+            token_matches = await db.clients.find(
+                {"name": {"$regex": f"^{re.escape(token)}", "$options": "i"}}, {"id": 1, "name": 1}
+            ).to_list(5)
+            candidates.extend(token_matches)
+    # Remove duplicatas preservando ordem
+    seen, unique = set(), []
+    for c in candidates:
+        if c["id"] not in seen:
+            seen.add(c["id"])
+            unique.append(c)
+    return unique
+
+
 @api_router.post("/automation/preview-measures")
 async def preview_measures(payload: Dict[str, Any], current_user: UserPublic = Depends(get_current_user)):
     """Preview do que será preenchido a partir do texto de medidas."""
@@ -3185,92 +4094,418 @@ async def preview_measures(payload: Dict[str, Any], current_user: UserPublic = D
     if not text.strip():
         raise HTTPException(status_code=400, detail="Texto vazio.")
     parsed = _parse_measures_text(text)
-    return {"items": parsed.items, "count": len(parsed.items)}
+
+    # Para cada cliente único: busca candidatos no banco + itens ativos sem medida
+    unique_names = {item.get("client_name", "") for item in parsed.items if item.get("client_name")}
+    client_info: Dict[str, Any] = {}
+    for name in unique_names:
+        candidates = await _resolve_client_fuzzy(name)
+        if not candidates:
+            client_info[name] = {"exists": False, "client_id": None, "canonical_name": None,
+                                 "active_items": [], "ambiguous": False, "candidates": []}
+            continue
+
+        ambiguous = len(candidates) > 1
+        # Para cada candidato, busca itens ativos
+        all_active = []
+        for c in candidates:
+            active = await _find_active_items(c["id"])
+            for ai in active:
+                ai["client_id"]   = c["id"]
+                ai["client_name"] = c["name"]
+            all_active.extend(active)
+
+        client_info[name] = {
+            "exists":         True,
+            "client_id":      candidates[0]["id"] if not ambiguous else None,
+            "canonical_name": candidates[0]["name"] if not ambiguous else None,
+            "active_items":   all_active,
+            "ambiguous":      ambiguous,
+            "candidates":     [{"id": c["id"], "name": c["name"]} for c in candidates],
+        }
+
+    # Anota cada item com info do cliente + auto-assign de item ativo
+    # Rastreia quantos itens ativos já foram atribuídos por cliente
+    assigned: Dict[str, int] = {}
+    annotated = []
+    for item in parsed.items:
+        cname = item.get("client_name", "")
+        info  = client_info.get(cname, {"exists": False, "client_id": None, "active_items": [],
+                                        "ambiguous": False, "candidates": [], "canonical_name": None})
+        active_items = info.get("active_items", [])
+        idx          = assigned.get(cname, 0)
+        # Auto-assign: se há item ativo disponível na posição correspondente → sugere atualizar
+        target = active_items[idx] if idx < len(active_items) else None
+        assigned[cname] = idx + 1
+
+        annotated.append({
+            **item,
+            "client_exists":      info["exists"],
+            "existing_client_id": info["client_id"],
+            "canonical_name":     info["canonical_name"],
+            "ambiguous":          info["ambiguous"],
+            "candidates":         info["candidates"],
+            "active_items":       active_items,
+            "target_item_id":     target["item_id"] if target else None,
+            "target_budget_id":   target["budget_id"] if target else None,
+            "action":             "update" if target else "create",
+        })
+
+    return {"items": annotated, "count": len(annotated), "clients_summary": client_info}
+
+
+def _dims_key(item: Dict[str, Any]) -> tuple:
+    """Chave de identidade de um tapete para deduplicação interna.
+    Para parceiros com etiqueta cor+número, inclui a etiqueta na chave
+    pois dois tapetes do mesmo tamanho com etiquetas diferentes são peças distintas.
+    """
+    pl = item.get("partner_label") or {}
+    label_key = (pl.get("color", ""), pl.get("number", "")) if pl.get("type") == "COLOR_NUM" else ("", "")
+    return (
+        (item.get("client_name") or "").strip().lower(),
+        round(item.get("width") or 0, 2),
+        round(item.get("height") or 0, 2),
+        round(item.get("diameter") or 0, 2),
+        label_key,
+    )
+
+
+def _dims_match(item_data: Dict[str, Any], db_item: Dict[str, Any], tol: float = 0.02) -> bool:
+    """Retorna True se as dimensões e etiqueta do item são iguais (tolerância de 2cm).
+    Para tapetes com etiqueta cor+número, a etiqueta também precisa bater."""
+    def close(a, b): return abs((a or 0) - (b or 0)) <= tol
+
+    # Se tem etiqueta cor+número, compara a etiqueta também
+    pl_new = (item_data.get("partner_label") or {})
+    pl_db  = (db_item.get("partner_label") or {})
+    if pl_new.get("type") == "COLOR_NUM" or pl_db.get("type") == "COLOR_NUM":
+        if pl_new.get("color") != pl_db.get("color") or pl_new.get("number") != pl_db.get("number"):
+            return False
+
+    if item_data.get("diameter") or db_item.get("diameter"):
+        return close(item_data.get("diameter"), db_item.get("diameter"))
+    return close(item_data.get("width"), db_item.get("width")) and \
+           close(item_data.get("height"), db_item.get("height"))
 
 
 @api_router.post("/automation/execute-measures")
 async def execute_measures_automation(payload: Dict[str, Any], current_user: UserPublic = Depends(get_current_user)):
     """
-    Para cada item de medida: busca orçamento existente ou cria um novo,
-    depois atualiza as medidas no item via updateMeasures.
+    Para cada item de medida:
+    1. Deduplicação interna — ignora linhas repetidas na mesma execução
+    2. Deduplicação no banco — ignora se já existe item com mesmas dimensões
+       e confirmed_measures=True nos últimos 60 dias para o mesmo cliente
+    3. Cria novo orçamento/item se não houver duplicata
     """
-    items = payload.get("items", [])
+    from datetime import timedelta
+    items          = payload.get("items", [])
+    client_extras  = payload.get("client_extras", {})  # { clientName: {name, phone, address, skip} }
     payment_method = payload.get("payment_method", "PIX_CNPJ_25995295000104")
     results = []
+    cutoff = datetime.utcnow() - timedelta(days=60)
 
+    # ── Nível 1: deduplicação interna (mesma colagem) ──────────────────────────
+    # Apenas para tapetes COM etiqueta cor+número (ex: Rosa-856).
+    # Tapetes de cliente sem etiqueta passam todos — dois tapetes do mesmo
+    # tamanho para o mesmo cliente podem ser peças distintas.
+    seen_labeled: set = set()
+    deduped_items = []
     for item_data in items:
+        pl = (item_data.get("partner_label") or {})
+        is_labeled = pl.get("type") == "COLOR_NUM"
+        if is_labeled:
+            key = _dims_key(item_data)
+            if key in seen_labeled:
+                results.append({
+                    "status": "duplicate",
+                    "reason": f"etiqueta repetida na mesma colagem ({pl.get('color')}-{pl.get('number')})",
+                })
+                continue
+            seen_labeled.add(key)
+        deduped_items.append(item_data)
+
+    # ── Nível 2: processa itens únicos ─────────────────────────────────────────
+    for item_data in deduped_items:
         client_name  = (item_data.get("client_name") or "").strip()
         service_name = (item_data.get("service_name") or "Tapete").strip()
         if not client_name:
             results.append({"status": "skipped", "reason": "sem nome"})
             continue
 
-        # Busca cliente existente
-        client = await db.clients.find_one({"name": {"$regex": f"^{re.escape(client_name)}$", "$options": "i"}})
+        # Resolve cliente — 3 tentativas em ordem de precisão:
+        # 1. Correspondência exata (case-insensitive)
+        # 2. Nome digitado é prefixo do nome cadastrado (ex: "Ronimar" → "Ronimar Cruz")
+        # 3. Nome cadastrado é prefixo do digitado (ex: "Ronimar Cruz" → "Ronimar")
+        client = await db.clients.find_one(
+            {"name": {"$regex": f"^{re.escape(client_name)}$", "$options": "i"}}
+        )
         if not client:
-            ctr = await db.clients.count_documents({}) + 1
-            cid = f"CLI-{str(ctr).zfill(4)}"
+            client = await db.clients.find_one(
+                {"name": {"$regex": f"^{re.escape(client_name)}\\b", "$options": "i"}}
+            )
+        if not client:
+            # Verifica se algum token do nome digitado bate com início do nome cadastrado
+            first_token = re.escape(client_name.split()[0]) if client_name.split() else None
+            if first_token and len(first_token) >= 4:  # mínimo 4 chars para evitar falsos positivos
+                client = await db.clients.find_one(
+                    {"name": {"$regex": f"^{first_token}", "$options": "i"}}
+                )
+
+        if not client:
+            # Usa dados extras fornecidos pelo frontend (nome, telefone, endereço)
+            extra = client_extras.get(client_name) or client_extras.get(
+                next((k for k in client_extras if k.lower() == client_name.lower()), None), {}
+            ) or {}
+            final_name  = (extra.get("name") or client_name).strip()
+            final_phone = (extra.get("phone") or "").strip()
+            addr_obj    = extra.get("address") or {}
+            complement  = (extra.get("complement") or "").strip()
+            final_addr  = {
+                "full_address": addr_obj.get("full_address", ""),
+                "complement":   complement,
+                "neighborhood": addr_obj.get("neighborhood", ""),
+                "city":         addr_obj.get("city", ""),
+                "state":        addr_obj.get("state", ""),
+                "latitude":     addr_obj.get("latitude"),
+                "longitude":    addr_obj.get("longitude"),
+            }
+            observations = (extra.get("observations") or "").strip()
+            cid = await _next_id(db.clients, "CLI-", 4)
             await db.clients.insert_one({
-                "id": cid, "name": client_name, "phone_primary": "",
-                "address": {"full_address":"","latitude":None,"longitude":None},
+                "id": cid, "name": final_name, "phone_primary": final_phone,
+                "address": final_addr,
+                "observations": observations or None,
                 "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(),
             })
+            client_name = final_name
             client_id = cid
         else:
             client_id = client["id"]
+            client_name = client["name"]  # usa o nome canônico do banco
 
-        # Busca orçamento existente com item EM_LAVAGEM para esse cliente
-        budget = await db.budgets.find_one({
-            "client_id": client_id,
-            "items.status": {"$in": ["EM_LAVAGEM","EM_LAVAGEM_PARCEIRO","CLIENTE_TROUXE","COLETADO"]}
-        })
-
-        if budget:
-            # Pega o primeiro item elegível
-            target_item = next((i for i in budget["items"]
-                if i.get("status") in ["EM_LAVAGEM","EM_LAVAGEM_PARCEIRO","CLIENTE_TROUXE","COLETADO"]), None)
-            if target_item:
-                measures = {k: item_data[k] for k in ["width","height","diameter","area_m2","linear_meters","partner_label"]
-                            if k in item_data and item_data[k] is not None}
-                measures["confirmed_measures"] = True
-                await _update_item_fields(target_item["id"], measures, current_user)
-                results.append({"status": "updated", "item_id": target_item["id"], "budget_id": budget["id"]})
+        # ── Deduplicação no banco (60 dias) — apenas para itens com etiqueta COLOR_NUM ──
+        # Para clientes sem etiqueta, dois tapetes do mesmo tamanho podem ser peças distintas.
+        # Para o Leonardo (e outros parceiros com etiqueta), a etiqueta garante unicidade.
+        pl_check = (item_data.get("partner_label") or {})
+        if pl_check.get("type") == "COLOR_NUM":
+            recent_budgets = await db.budgets.find(
+                {"client_id": client_id, "created_at": {"$gte": cutoff}}
+            ).to_list(None)
+            already_exists = False
+            for bud in recent_budgets:
+                for it in bud.get("items", []):
+                    if it.get("confirmed_measures") and _dims_match(item_data, it):
+                        results.append({
+                            "status": "duplicate",
+                            "reason": f"já lançado em {bud['id']} ({it['id']})",
+                            "budget_id": bud["id"], "item_id": it["id"],
+                        })
+                        already_exists = True
+                        break
+                if already_exists:
+                    break
+            if already_exists:
                 continue
 
-        # Cria novo orçamento
-        btr = await db.budgets.count_documents({}) + 1
-        bid = f"ORC-{str(btr).zfill(7)}"
+        measures = {k: item_data[k] for k in ["width", "height", "diameter", "area_m2", "linear_meters"]
+                    if k in item_data and item_data[k] is not None}
+        measures["confirmed_measures"] = True
+        if item_data.get("partner_label"):
+            measures["partner_label"] = item_data["partner_label"]
+        if item_data.get("reference_date"):
+            # Data extraída do cabeçalho da mensagem de WhatsApp — dia em que o
+            # tapete foi de fato recolhido/medido (usada no relatório de parceiros).
+            measures["reference_date"] = item_data["reference_date"]
+
+        # ── Atualiza item existente se o frontend indicou qual é ───────────────
+        target_item_id = item_data.get("target_item_id")
+        if target_item_id and item_data.get("action") == "update":
+            updated = await _update_item_fields(target_item_id, measures, current_user)
+            if updated:
+                bud = await db.budgets.find_one({"items.id": target_item_id}, {"id": 1})
+                results.append({
+                    "status": "updated",
+                    "item_id": target_item_id,
+                    "budget_id": bud["id"] if bud else "?",
+                    "client": client_name,
+                })
+                continue
+
+        # ── Tenta encontrar item ativo sem medida automaticamente ──────────────
+        active_items = await _find_active_items(client_id)
+        if len(active_items) == 1:
+            # Só um candidato → atualiza sem ambiguidade
+            ai = active_items[0]
+            await _update_item_fields(ai["item_id"], measures, current_user)
+            results.append({
+                "status": "updated", "item_id": ai["item_id"],
+                "budget_id": ai["budget_id"], "client": client_name,
+            })
+            continue
+
+        # ── Cria novo orçamento com o item ────────────────────────────────────
+        bid = await _next_id(db.budgets, "ORC-", 7)
         iid = f"ITM-{bid}-1"
-        measures = {k: item_data[k] for k in ["width","height","diameter","area_m2","linear_meters"] if k in item_data and item_data[k] is not None}
+        # Itens de parceiro (com etiqueta cor+número) chegam pela mensagem de medidas
+        # já LAVADOS e guardados, aguardando o parceiro buscar — não "CLIENTE_TROUXE"
+        # (que significa recém-chegado, ainda por lavar). Default por tipo:
+        is_partner_item = bool(pl_check.get("type"))
+        default_status = "AGUARDANDO_BUSCAR" if is_partner_item else "CLIENTE_TROUXE"
+        item_status = item_data.get("status") or default_status
+
+        # Resolve serviço do catálogo
+        is_round = bool(measures.get("diameter"))
+        svc = await _resolve_service_for_item(client_id, is_round)
+        if svc:
+            svc_id   = svc["id"]
+            svc_name = svc["name"]
+            svc_code = svc.get("service_code", svc["id"])
+            svc_cat  = svc.get("category", "TAPETES")
+            svc_mtype = svc.get("measure_type")          # ← tipo de medida do serviço
+            svc_exloc = svc.get("execution_location", "CLIENTE_TROUXE")
+            unit_price = float(svc.get("sale_price") or 0)
+            cost_price = float(svc.get("cost_price") or 0)
+            area = measures.get("area_m2") or 0
+            total_val = round(unit_price * area, 2) if area else 0.0
+        else:
+            svc_id = None; svc_name = service_name; svc_code = "AUTO-MEASURES"
+            svc_cat = "TAPETES"; svc_mtype = None; svc_exloc = "CLIENTE_TROUXE"
+            unit_price = 0.0; cost_price = 0.0; total_val = 0.0
+
         budget_item = {
-            "id": iid, "service_name": service_name, "service_code": "AUTO-MEASURES",
-            "quantity": 1, "unit_price": 0.0, "total_value": 0.0,
-            "status": "CLIENTE_TROUXE", "payment_status": "PENDENTE", "paid_value": 0.0,
-            "execution_mode": "RETIRAR_E_LEVAR", "confirmed_measures": True,
+            "id": iid,
+            "client_id": client_id,        # essencial para o Financeiro agrupar por cliente
+            "client_name": client_name,    # essencial para o Financeiro agrupar por cliente
+            "service_id": svc_id, "service_name": svc_name,
+            "service_code": svc_code, "service_category": svc_cat,
+            "measure_type": svc_mtype,     # essencial p/ editor mostrar medidas
+            "quantity": 1,
+            "unit_price": unit_price, "cost_price": cost_price, "total_value": total_val,
+            "status": item_status, "payment_status": "PENDENTE", "paid_value": 0.0,
+            "execution_mode": "RETIRAR_E_LEVAR",
+            "execution_location": svc_exloc,
+            # Histórico de status sintetizado — sem isso o item nasce "órfão" de
+            # histórico (este endpoint insere direto no Mongo, sem passar pelo
+            # normalizador que outros fluxos usam para inicializar status_history).
+            "status_history": [{
+                "status": item_status,
+                "at": (item_data.get("reference_date") or datetime.utcnow().isoformat()),
+                "by_user_id": current_user.id,
+                "by_user_name": current_user.display_name or current_user.name,
+                "notes": "Item criado via Automação de Medidas"
+                         + (" (parceiro — já lavado, aguardando retirada)" if is_partner_item else ""),
+            }],
             **measures,
-            "partner_label": item_data.get("partner_label"),
         }
         await db.budgets.insert_one({
             "id": bid, "client_id": client_id, "client_name": client_name,
-            "payment_method": payment_method, "salesperson": current_user.display_name or current_user.name,
+            "payment_method": payment_method,
+            "salesperson": current_user.display_name or current_user.name,
             "budget_observations": "", "internal_observations": "Criado via Automação de Medidas",
-            "items": [budget_item], "total_value": 0.0, "payment_status": "PENDENTE",
-            "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "source": "AUTOMATION_MEASURES",
+            "items": [budget_item], "total_value": total_val, "payment_status": "PENDENTE",
+            "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(),
+            "source": "AUTOMATION_MEASURES",
         })
         results.append({"status": "created", "budget_id": bid, "item_id": iid})
 
-    return {"success": True, "processed": len(results), "results": results}
+    created  = sum(1 for r in results if r["status"] == "created")
+    dupes    = sum(1 for r in results if r["status"] == "duplicate")
+    skipped  = sum(1 for r in results if r["status"] == "skipped")
+    return {"success": True, "processed": created, "duplicates": dupes, "skipped": skipped, "results": results}
+
+
+def _format_partner_tag(item: Dict[str, Any]) -> str:
+    """Formata a etiqueta do parceiro (cor+número ou texto livre) para exibição no relatório."""
+    label = item.get("partner_label") or {}
+    if label.get("type") == "COLOR_NUM":
+        return f"{label.get('color', '')} {label.get('number', '')}".strip()
+    if label.get("type") == "TEXT":
+        return label.get("text", "")
+    return ""
+
+
+@api_router.get("/reports/partner-items")
+async def partner_items_report(
+    partner_client_id: Optional[str] = None,
+    start_date: Optional[str] = None,   # YYYY-MM-DD
+    end_date: Optional[str] = None,     # YYYY-MM-DD
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """
+    Relatório de conferência/fechamento de tapetes de parceiros — substitui a
+    planilha externa (Google Sheets) usada hoje para faturar Leonardo, Higia,
+    Forma Clean, Wesley e João/Felipe. Campo genérico de parceiro (não fixo
+    em um único parceiro) para poder gerar a conferência de qualquer um deles.
+
+    Filtra por data de referência do item (data extraída do cabeçalho da
+    mensagem do WhatsApp em que o tapete foi recolhido/medido — quando ausente,
+    cai no fallback da data de criação do orçamento).
+    """
+    partner_ids = [partner_client_id] if partner_client_id else list(_PARTNER_SERVICE_MAP.keys())
+    cursor = db.budgets.find({"client_id": {"$in": partner_ids}})
+    budgets = await cursor.to_list(None)
+
+    def _row_date(item: Dict[str, Any], budget: Dict[str, Any]) -> str:
+        ref = item.get("reference_date")
+        if ref:
+            return ref[:10]
+        created = budget.get("created_at")
+        if isinstance(created, datetime):
+            return created.strftime("%Y-%m-%d")
+        return str(created or "")[:10]
+
+    rows: List[Dict[str, Any]] = []
+    totals_by_partner: Dict[str, Dict[str, float]] = {}
+
+    for bud in budgets:
+        partner_name = bud.get("client_name", "")
+        for it in bud.get("items", []):
+            row_date = _row_date(it, bud)
+            if start_date and row_date and row_date < start_date:
+                continue
+            if end_date and row_date and row_date > end_date:
+                continue
+            valor = float(it.get("total_value") or 0)
+            area = float(it.get("area_m2") or 0)
+            rows.append({
+                "parceiro": partner_name,
+                "objeto": it.get("service_name", "Tapete"),
+                "etiqueta": _format_partner_tag(it),
+                "largura": it.get("width"),
+                "comprimento": it.get("height"),
+                "diametro": it.get("diameter"),
+                "area_m2": round(area, 2) if area else None,
+                "valor": round(valor, 2),
+                "data_referencia": row_date,
+                "status": it.get("status"),
+                "budget_id": bud.get("id"),
+                "item_id": it.get("id"),
+            })
+            tot = totals_by_partner.setdefault(partner_name, {"area_m2": 0.0, "valor": 0.0, "qtd": 0})
+            tot["area_m2"] += area
+            tot["valor"] += valor
+            tot["qtd"] += 1
+
+    rows.sort(key=lambda r: (r["parceiro"], r["data_referencia"]))
+    for t in totals_by_partner.values():
+        t["area_m2"] = round(t["area_m2"], 2)
+        t["valor"] = round(t["valor"], 2)
+
+    return {"rows": rows, "totals_by_partner": totals_by_partner}
 
 
 @api_router.get("/payment-methods")
 async def get_payment_methods():
     """Retorna lista de formas de pagamento configuradas no sistema."""
     config = await db.system_config.find_one({})
-    if config and config.get("payment_methods"):
-        return {"payment_methods": config["payment_methods"]}
-    # fallback padrão
     default = SystemConfig()
-    return {"payment_methods": default.payment_methods}
+    if config and config.get("payment_methods"):
+        return {
+            "payment_methods": config["payment_methods"],
+            "payment_fees": config.get("payment_fees") or default.payment_fees,
+        }
+    # fallback padrão
+    return {"payment_methods": default.payment_methods, "payment_fees": default.payment_fees}
 
 @api_router.post("/system-config/logo")
 async def upload_company_logo(
@@ -3282,32 +4517,56 @@ async def upload_company_logo(
         raise HTTPException(status_code=403, detail="Apenas administradores podem alterar a logo.")
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Apenas imagens são aceitas.")
-    os.makedirs("/app/backend/uploads", exist_ok=True)
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
     contents = await file.read()
-    logo_path = "/app/backend/uploads/logo.png"
+    logo_path = str(UPLOADS_DIR / "logo.png")
+
+    # Redimensiona/recomprime a logo para não inflar o tamanho do PDF gerado.
+    # No PDF a logo é exibida a 1.5x1.2 polegadas — 600px no lado maior já é
+    # nitidez de sobra (>200dpi nesse tamanho de exibição) e mantém o arquivo leve.
+    try:
+        img = PILImage.open(BytesIO(contents))
+        img.load()
+        MAX_SIDE = 600
+        if max(img.size) > MAX_SIDE:
+            img.thumbnail((MAX_SIDE, MAX_SIDE), PILImage.LANCZOS)
+        # Preserva transparência se houver (RGBA/P), senão converte para RGB
+        if img.mode not in ("RGBA", "RGB", "P"):
+            img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
+        buf = BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        final_bytes = buf.getvalue()
+    except Exception as e:
+        logging.warning(f"Falha ao redimensionar logo, salvando original: {e}")
+        final_bytes = contents
+
     with open(logo_path, "wb") as f:
-        f.write(contents)
-    return {"message": "Logo atualizada com sucesso.", "path": logo_path}
+        f.write(final_bytes)
+    return {
+        "message": "Logo atualizada com sucesso.",
+        "path": logo_path,
+        "size_bytes": len(final_bytes),
+        "size_bytes_original": len(contents),
+    }
 
 
 @api_router.get("/system-config/logo")
 async def get_logo_status():
     """Verifica se existe logo personalizada."""
-    exists = os.path.exists("/app/backend/uploads/logo.png")
-    fallback = os.path.exists("/app/backend/logo-superdry.png")
+    found = _find_logo()
     return {
-        "has_custom_logo": exists,
-        "has_fallback_logo": fallback,
-        "logo_url": f"/api/system-config/logo/file" if exists else None
+        "has_custom_logo": bool(found),
+        "has_fallback_logo": bool(found),
+        "logo_url": "/api/system-config/logo/file" if found else None
     }
 
 
 @api_router.get("/system-config/logo/file")
 async def serve_logo():
     """Serve o arquivo de logo atual."""
-    for path in ["/app/backend/uploads/logo.png", "/app/backend/logo-superdry.png"]:
-        if os.path.exists(path):
-            return FileResponse(path, media_type="image/png")
+    path = _find_logo()
+    if path:
+        return FileResponse(path, media_type="image/png")
     raise HTTPException(status_code=404, detail="Logo não encontrada.")
 
 
@@ -3897,6 +5156,7 @@ async def update_route_stops(route_id: str, stops_data: List[dict]):
         )
 
         # Atualiza cada item para refletir current_route_id (ITEM como pilar)
+        new_item_ids = [s.budget_item_id for s in stops]
         for s in stops:
             try:
                 await db.budgets.update_one(
@@ -3910,6 +5170,29 @@ async def update_route_stops(route_id: str, stops_data: List[dict]):
                 )
             except Exception as ex:
                 print(f"[routes/stops] erro atualizando item {s.budget_item_id}: {ex}")
+
+        # Reconciliação: itens que estavam vinculados a ESTA rota mas saíram da
+        # nova lista de paradas (removidos/reordenados) precisam ter o vínculo
+        # limpo. Sem isso o item fica órfão — some de available-for-routes (pois
+        # ainda tem current_route_id) sem estar em rota nenhuma nem ser entregue.
+        try:
+            await db.budgets.update_many(
+                {"items": {"$elemMatch": {
+                    "current_route_id": route_id,
+                    "id": {"$nin": new_item_ids},
+                }}},
+                {"$set": {
+                    "items.$[elem].current_route_id": None,
+                    "items.$[elem].current_route_stop_id": None,
+                    "items.$[elem].updated_at": datetime.utcnow(),
+                }},
+                array_filters=[{
+                    "elem.current_route_id": route_id,
+                    "elem.id": {"$nin": new_item_ids},
+                }],
+            )
+        except Exception as ex:
+            print(f"[routes/stops] erro limpando itens removidos da rota {route_id}: {ex}")
 
         return {"message": "Route stops updated successfully", "stops_count": len(stops)}
         
@@ -4014,8 +5297,9 @@ async def optimize_route(route_id: str, route_type: str = "CURTA"):
 
 
 @api_router.post("/routes/{route_id}/optimize-geoapify")
-async def optimize_route_geoapify_endpoint(route_id: str):
-    """Optimize route using Geoapify Route Planner API"""
+async def optimize_route_geoapify_endpoint(route_id: str, traffic: bool = Query(default=False)):
+    """Optimize route using Geoapify Route Planner API.
+    traffic=true → considera o tráfego médio/típico da região (afeta ordem e tempo)."""
     try:
         route = await db.routes.find_one({"id": route_id})
         if not route:
@@ -4038,7 +5322,7 @@ async def optimize_route_geoapify_endpoint(route_id: str):
         vehicle_type = route.get("vehicle_type", "CARRO")
 
         optimized_stops, dist_km, travel_min, route_geometry = \
-            await optimize_route_with_priorities_geoapify(stops, company_coords, vehicle_type)
+            await optimize_route_with_priorities_geoapify(stops, company_coords, vehicle_type, use_traffic=traffic)
 
         # Merge stops at same address — preserva TODOS os budget_item_ids
         merged_stops    = []
@@ -4063,14 +5347,31 @@ async def optimize_route_geoapify_endpoint(route_id: str):
         else:
             total_min = sum(s.estimated_duration for s in merged_stops)
 
+        # Calcula AMBOS os tempos (livre e com trânsito) para a ordem final,
+        # permitindo mostrar "Sem trânsito: Xmin · Com trânsito: Ymin".
+        comp_lng, comp_lat = company_coords
+        ordered_ll = [(comp_lat, comp_lng)]
+        for s in merged_stops:
+            a = s.address or {}
+            if a.get("latitude") and a.get("longitude"):
+                ordered_ll.append((float(a["latitude"]), float(a["longitude"])))
+        ordered_ll.append((comp_lat, comp_lng))
+        _, _, time_free    = get_road_geometry_geoapify(ordered_ll, use_traffic=False)
+        _, _, time_traffic = get_road_geometry_geoapify(ordered_ll, use_traffic=True)
+        duration_free    = int(time_free)    if time_free    else total_min
+        duration_traffic = int(time_traffic) if time_traffic else total_min
+
         await db.routes.update_one(
             {"id": route_id},
             {"$set": {
                 "stops":          [s.dict() for s in merged_stops],
                 "total_duration": total_min,
+                "total_duration_free":    duration_free,
+                "total_duration_traffic": duration_traffic,
                 "total_distance": round(dist_km, 2),
                 "route_geometry": route_geometry,
                 "route_provider": "GEOAPIFY",
+                "considered_traffic": bool(traffic),
                 "updated_at":     datetime.utcnow(),
                 "last_edited_by": "Geoapify"
             }}
@@ -4079,7 +5380,10 @@ async def optimize_route_geoapify_endpoint(route_id: str):
             "message":                "Route optimized successfully with Geoapify",
             "total_stops":            len(merged_stops),
             "total_duration_minutes": total_min,
+            "total_duration_free":    duration_free,
+            "total_duration_traffic": duration_traffic,
             "total_distance_km":      round(dist_km, 2),
+            "considered_traffic":     bool(traffic),
             "geoapify_status":        "success" if dist_km > 0 else "fallback"
         }
     except HTTPException:
@@ -5148,6 +6452,313 @@ async def register_item_payment(
     return {"success": True, "record": record, "paid_value": paid_total, "payment_status": payment_status}
 
 
+# ── Cobrança Consolidada ──────────────────────────────────────────────────────
+#
+# Permite quitar vários itens (mesmo de clientes diferentes) num único pagamento,
+# com um RESPONSÁVEL FINANCEIRO (ex: mãe paga o serviço da filha).
+#
+# Design integration-ready: os campos provider / external_charge_id / payment_link /
+# txid / status permitem plugar InfinitePay, PIX dinâmico ou agregador Open Finance
+# (Pluggy/Belvo) depois, sem refatorar. Por ora provider=MANUAL (já marca como PAGO).
+#
+@api_router.post("/payments/consolidated")
+async def create_consolidated_payment(
+    payload: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    item_ids     = payload.get("item_ids", [])
+    method       = payload.get("method")
+    payer_name   = (payload.get("payer_name") or "").strip()
+    payer_phone  = (payload.get("payer_phone") or "").strip()
+    notes        = (payload.get("notes") or "").strip()
+    payment_link = (payload.get("payment_link") or "").strip()
+    received_in  = payload.get("value")  # opcional; default = soma do que falta
+
+    if not item_ids:
+        raise HTTPException(status_code=400, detail="Selecione ao menos um item.")
+    if not method:
+        raise HTTPException(status_code=400, detail="Método de pagamento obrigatório.")
+
+    # Carrega itens e calcula o que falta em cada um
+    targets = []
+    total_remaining = 0.0
+    for iid in item_ids:
+        budget, item = await _find_budget_and_item(iid)
+        if not item:
+            continue
+        remaining = float(item.get("total_value") or 0) - float(item.get("paid_value") or 0)
+        if remaining <= 0:
+            continue
+        targets.append({"item": item, "budget": budget, "remaining": round(remaining, 2)})
+        total_remaining += remaining
+    total_remaining = round(total_remaining, 2)
+
+    if not targets:
+        raise HTTPException(status_code=400, detail="Nenhum item com saldo a receber.")
+
+    total_received = round(float(received_in), 2) if received_in else total_remaining
+
+    cpid = await _next_id(db.consolidated_payments, "CPG-", 5)
+    paid_at = datetime.utcnow().isoformat()
+
+    # Provedor de pagamento ativo (MANUAL aplica na hora; gateway cria cobrança PENDENTE).
+    provider = payment_providers.get_provider()
+    gateway_mode = provider.name != "MANUAL"
+
+    # Plano de distribuição do valor recebido, proporcional ao que falta em cada item.
+    # Em MANUAL aplicamos já; em gateway guardamos o plano e só aplicamos no webhook.
+    distributed = 0.0
+    applied = []
+    for idx, t in enumerate(targets):
+        item = t["item"]
+        if idx == len(targets) - 1:
+            portion = round(total_received - distributed, 2)  # último absorve resíduo
+        else:
+            ratio = t["remaining"] / total_remaining if total_remaining else 1 / len(targets)
+            portion = round(total_received * ratio, 2)
+            distributed += portion
+        if portion <= 0:
+            continue
+
+        if not gateway_mode:
+            record = {
+                "id": f"PAY-{uuid.uuid4().hex[:10]}",
+                "method": method, "value": portion, "paid_at": paid_at,
+                "recorded_by": current_user.id, "recorded_by_name": current_user.name,
+                "notes": notes, "consolidated_payment_id": cpid,
+                "payer_name": payer_name or None,
+            }
+            paid_total = round(float(item.get("paid_value") or 0) + portion, 2)
+            total_value = float(item.get("total_value") or 0)
+            if total_value <= 0:
+                pstatus = "PAGO" if portion > 0 else "PENDENTE"
+            elif paid_total + 0.001 >= total_value:
+                pstatus = "PAGO"
+            elif paid_total > 0:
+                pstatus = "PARCIAL"
+            else:
+                pstatus = "PENDENTE"
+
+            await _append_to_item_array(item["id"], "payment_records", record)
+            await _update_item_fields(item["id"], {"paid_value": paid_total, "payment_status": pstatus}, current_user)
+        else:
+            pstatus = "PENDENTE"  # aguardando confirmação do webhook
+
+        applied.append({"item_id": item["id"], "client_name": item.get("client_name"),
+                        "service_name": item.get("service_name"), "value": portion, "new_status": pstatus})
+
+    # Modo gateway: cria a cobrança externa (link/PIX) e deixa tudo PENDENTE até o webhook.
+    external_charge_id = None
+    pix_qr = None
+    cp_status = "PAGO"
+    if gateway_mode:
+        try:
+            charge = await provider.create_charge(
+                amount=total_received,
+                description=f"{cpid} — {payer_name or 'Cobrança SuperDry'}",
+                txid=cpid,
+                payer={"name": payer_name, "phone": payer_phone},
+            )
+        except NotImplementedError:
+            raise HTTPException(status_code=501,
+                detail=f"Provedor {provider.name} ainda não implementado (create_charge).")
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Falha ao criar cobrança no provedor: {e}")
+        external_charge_id = charge.charge_id
+        pix_qr = charge.pix_qr
+        payment_link = charge.payment_link or payment_link
+        cp_status = "PENDENTE"
+
+    # Estimativa de taxa e valor líquido a receber pela forma de pagamento.
+    fees = await get_payment_fees()
+    net = compute_net(total_received, fees.get(method, 0))
+
+    doc = {
+        "id": cpid,
+        "payer_name": payer_name or None,
+        "payer_phone": payer_phone or None,
+        "item_ids": [t["item"]["id"] for t in targets],
+        "method": method,
+        "total_value": total_received,
+        # taxa/líquido estimados (confirmados pela integração no futuro)
+        "fee_pct": net["fee_pct"],
+        "fee_amount": net["fee_amount"],
+        "net_value": net["net_value"],
+        "notes": notes or None,
+        # integração de pagamento
+        "provider": provider.name,
+        "external_charge_id": external_charge_id,
+        "payment_link": payment_link or None,
+        "pix_qr": pix_qr,
+        "txid": cpid if gateway_mode else None,
+        "status": cp_status,         # MANUAL=PAGO; gateway=PENDENTE até webhook confirmar
+        "applied": applied,
+        "recorded_by": current_user.id,
+        "recorded_by_name": current_user.name,
+        "created_at": datetime.utcnow(),
+    }
+    await db.consolidated_payments.insert_one({k: v for k, v in doc.items()})
+    await log_audit("consolidated_payment", cpid, "CREATE", current_user,
+                    {"total": total_received, "items": len(applied),
+                     "payer": payer_name, "provider": provider.name, "status": cp_status})
+    doc.pop("_id", None)
+    return {"success": True, "consolidated_payment": doc}
+
+
+@api_router.get("/payments/consolidated/{cpid}/whatsapp")
+async def consolidated_payment_whatsapp(cpid: str, current_user: UserPublic = Depends(get_current_user)):
+    """Texto de recibo consolidado para enviar via WhatsApp."""
+    doc = await db.consolidated_payments.find_one({"id": cpid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Cobrança não encontrada.")
+    sys_cfg = await db.system_config.find_one({}) or {}
+    company = sys_cfg.get("company_name") or "SuperDry Lavanderia"
+    lines = [f"*{company}* — Recibo de Pagamento", ""]
+    if doc.get("payer_name"):
+        lines.append(f"Recebido de: *{doc['payer_name']}*")
+    lines.append(f"Comprovante: {doc['id']}")
+    lines.append("")
+    lines.append("Serviços pagos:")
+    for a in doc.get("applied", []):
+        lines.append(f"• {a['client_name']} — {a['service_name']}: R$ {a['value']:.2f}")
+    lines.append("")
+    lines.append(f"*Total: R$ {doc['total_value']:.2f}*")
+    lines.append(f"Forma: {doc['method'].replace('PIX_CNPJ_', 'PIX ').replace('_', ' ')}")
+    lines.append("")
+    lines.append("Obrigado pela preferência! 🧼")
+    text = "\n".join(lines)
+    from urllib.parse import quote
+    phone = re.sub(r"\D", "", doc.get("payer_phone") or "")
+    url = f"https://wa.me/{('55'+phone) if phone else ''}?text={quote(text)}"
+    return {"whatsapp_url": url, "text": text}
+
+
+async def _apply_cp_paid(cp, source="webhook"):
+    """Marca a cobrança consolidada como PAGA e aplica nos itens. Idempotente.
+    Usado tanto pelo webhook quanto pelo redirect de retorno."""
+    if cp.get("status") == "PAGO":
+        return
+    await db.consolidated_payments.update_one({"id": cp["id"]}, {"$set": {
+        "status": "PAGO", "paid_at": datetime.utcnow().isoformat(), "provider_event": source,
+    }})
+    # objeto leve só com .id/.name (UserPublic exigiria campos que não temos aqui)
+    system_user = type("SysUser", (), {"id": "SYSTEM", "name": source})()
+    for a in cp.get("applied", []):
+        iid = a.get("item_id")
+        budget, item = await _find_budget_and_item(iid)
+        if not item:
+            continue
+        paid_total = round(float(item.get("paid_value") or 0) + float(a.get("value") or 0), 2)
+        tv = float(item.get("total_value") or 0)
+        pstatus = "PAGO" if (tv <= 0 or paid_total + 0.001 >= tv) else ("PARCIAL" if paid_total > 0 else "PENDENTE")
+        await _append_to_item_array(iid, "payment_records", {
+            "id": f"PAY-{uuid.uuid4().hex[:10]}", "method": cp.get("method"),
+            "value": float(a.get("value") or 0), "paid_at": datetime.utcnow().isoformat(),
+            "recorded_by": "SYSTEM", "recorded_by_name": source,
+            "notes": f"Confirmado via {source}", "consolidated_payment_id": cp["id"],
+        })
+        await _update_item_fields(iid, {"paid_value": paid_total, "payment_status": pstatus}, system_user)
+
+
+@api_router.get("/payments/infinitepay/return")
+async def infinitepay_return(order_nsu: str = "", transaction_nsu: str = "",
+                             slug: str = "", receipt_url: str = "", capture_method: str = ""):
+    """
+    Redirect de retorno do Checkout InfinitePay — 2º canal de captura (no ato do
+    pagamento, lado do navegador do cliente). Confirma via payment_check e dá baixa.
+    """
+    try:
+        with open(str(ROOT_DIR / "webhook_recebidos.log"), "a", encoding="utf-8") as wf:
+            wf.write(f"\n[{datetime.utcnow().isoformat()}] REDIRECT order_nsu={order_nsu} "
+                     f"tx={transaction_nsu} slug={slug} method={capture_method}\n")
+    except Exception:
+        pass
+
+    provider = payment_providers.get_provider()
+    cp = None
+    if order_nsu:
+        cp = await db.consolidated_payments.find_one({"$or": [{"id": order_nsu}, {"txid": order_nsu}]})
+    if cp and cp.get("status") != "PAGO":
+        confirm = getattr(provider, "confirm_payment", None)
+        ok = True
+        if confirm:
+            ok = await confirm(order_nsu=order_nsu, transaction_nsu=transaction_nsu, slug=slug)
+        if ok:
+            await _apply_cp_paid(cp, "redirect")
+
+    # Página simples de agradecimento (redireciona ao site em 4s)
+    return HTMLResponse(
+        "<!doctype html><html lang='pt-br'><head><meta charset='utf-8'>"
+        "<meta http-equiv='refresh' content='4;url=https://lavesuperdry.com.br'>"
+        "<title>Pagamento recebido</title></head>"
+        "<body style='font-family:sans-serif;text-align:center;padding:48px;color:#1F4E8C'>"
+        "<h1>✅ Pagamento recebido!</h1>"
+        "<p>Obrigado pela preferência. Você será redirecionado em instantes…</p>"
+        "<p style='color:#8CC63F;font-weight:bold'>SuperDry Lavanderia</p></body></html>")
+
+
+@api_router.post("/webhooks/payment")
+async def payment_webhook(request: HttpRequest):
+    """
+    Webhook de confirmação de pagamento do provedor (InfinitePay, etc.).
+    INERTE por padrão (PAYMENT_PROVIDER=MANUAL) → retorna 503.
+    Ao ativar um provedor real, este endpoint:
+      1. valida a assinatura
+      2. identifica a cobrança (txid = nosso CPG-XXXX)
+      3. marca o consolidated_payment como PAGO e atualiza os itens
+    URL pública sugerida: https://sistema.lavesuperdry.com.br/api/webhooks/payment
+    """
+    provider = payment_providers.get_provider()
+    if provider.name == "MANUAL":
+        raise HTTPException(status_code=503, detail="Nenhum provedor de pagamento configurado (PAYMENT_PROVIDER=MANUAL).")
+
+    raw = await request.body()
+    headers = {k.lower(): v for k, v in request.headers.items()}
+
+    # Registra TODA chamada recebida (diagnóstico do webhook InfinitePay)
+    try:
+        with open(str(ROOT_DIR / "webhook_recebidos.log"), "a", encoding="utf-8") as _wf:
+            _wf.write(f"\n[{datetime.utcnow().isoformat()}] WEBHOOK RECEBIDO\n")
+            _wf.write(f"  headers: {dict(headers)}\n")
+            _wf.write(f"  body: {raw.decode('utf-8', 'ignore')}\n")
+    except Exception:
+        pass
+
+    if not provider.verify_webhook(headers, raw):
+        raise HTTPException(status_code=401, detail="Assinatura de webhook inválida.")
+
+    import json as _json
+    payload = _json.loads(raw or b"{}")
+    event = provider.parse_webhook(payload)
+
+    # Localiza a cobrança consolidada por txid (preferencial) ou charge_id
+    cp = None
+    if event.txid:
+        cp = await db.consolidated_payments.find_one({"$or": [{"id": event.txid}, {"txid": event.txid}]})
+    if not cp and event.charge_id:
+        cp = await db.consolidated_payments.find_one({"external_charge_id": event.charge_id})
+    if not cp:
+        return {"ok": True, "note": "cobrança não encontrada — ignorado"}
+
+    # Confirmação server-to-server (payment_check) — fonte da verdade quando o
+    # provedor a oferece (InfinitePay Checkout não assina o webhook com HMAC).
+    confirm = getattr(provider, "confirm_payment", None)
+    if confirm and event.status == "PAGO":
+        ok = await confirm(
+            order_nsu=event.txid,
+            transaction_nsu=payload.get("transaction_nsu"),
+            slug=payload.get("invoice_slug") or payload.get("slug"),
+        )
+        if not ok:
+            # Não confirmado pela API → não aplica. Retorna 200 para evitar retries infinitos.
+            return {"ok": True, "note": "pagamento não confirmado pelo payment_check — ignorado"}
+
+    if event.status == "PAGO":
+        await _apply_cp_paid(cp, "webhook")
+
+    return {"ok": True}
+
+
 @api_router.get("/items/{item_id}/receipt")
 async def generate_item_receipt(item_id: str):
     """Gerar recibo de pagamento em PDF para um item quitado ou com pagamentos."""
@@ -5714,3 +7325,21 @@ async def startup_bootstrap():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+
+# ── Servir frontend React (build estático) ───────────────────────────────────
+# O build é gerado em frontend/build/ via `npm run build`.
+# Esta seção deve ficar APÓS todos os endpoints de API para não interceptá-los.
+_FRONTEND_BUILD = Path(__file__).parent.parent / "frontend" / "build"
+
+if _FRONTEND_BUILD.exists():
+    # Arquivos estáticos do React (JS, CSS, media)
+    app.mount("/static", StaticFiles(directory=str(_FRONTEND_BUILD / "static")), name="react-static")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_react_spa(full_path: str):
+        """Catch-all: serve o index.html do React para qualquer rota não-API."""
+        candidate = _FRONTEND_BUILD / full_path
+        if candidate.exists() and candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(_FRONTEND_BUILD / "index.html"))
