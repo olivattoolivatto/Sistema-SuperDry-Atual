@@ -86,3 +86,17 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# SuperDry - dados sensíveis (clientes, dumps, logs, chaves)
+clientes.json
+orcamentos.json
+eventos_junho.json
+superdry_dump/
+backend/logs/
+backend/_sync_test.txt
+backend/*.bak_*
+ssh-key-*.pub
+reconciliacao_agenda_*.md
+Invoice-*.pdf
+~$*.xlsx
+.claude/
