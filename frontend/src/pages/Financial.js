@@ -376,7 +376,9 @@ function ClientListHeader({ clientName, docs, selectedIds, onSelectGroup }) {
 }
 
 // ── Modal de cobrança consolidada ─────────────────────────────────────────────
-function ConsolidatedPaymentModal({ docs, total, onClose, onDone }) {
+// manualMode=true → baixa direta de pagamento já recebido (fora do sistema/gateway),
+// sem gerar cobrança/link; aplica nos itens na hora, independente do provedor ativo.
+function ConsolidatedPaymentModal({ docs, total, onClose, onDone, manualMode = false }) {
   const [methods, setMethods] = useState([]);
   const [fees, setFees] = useState({});
   const [method, setMethod] = useState('PIX_CNPJ_25995295000104');
@@ -385,6 +387,7 @@ function ConsolidatedPaymentModal({ docs, total, onClose, onDone }) {
   const [value, setValue] = useState(total.toFixed(2));
   const [link, setLink] = useState('');
   const [notes, setNotes] = useState('');
+  const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -406,8 +409,9 @@ function ConsolidatedPaymentModal({ docs, total, onClose, onDone }) {
         payer_name: payerName,
         payer_phone: payerPhone,
         value: parseFloat(value) || total,
-        payment_link: link,
+        payment_link: manualMode ? '' : link,
         notes,
+        ...(manualMode ? { force_manual: true, paid_at: paidAt } : {}),
       });
       setResult(r.data.consolidated_payment);
       toast({ title: 'Cobrança registrada!', description: `${r.data.consolidated_payment.id} — ${fmtMoney(r.data.consolidated_payment.total_value)}` });
@@ -427,9 +431,16 @@ function ConsolidatedPaymentModal({ docs, total, onClose, onDone }) {
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900">Cobrança Consolidada</h3>
+          <h3 className="font-semibold text-gray-900">
+            {manualMode ? 'Baixa Manual (já recebido)' : 'Cobrança Consolidada'}
+          </h3>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
         </div>
+        {manualMode && (
+          <p className="text-[11px] text-gray-500 -mt-2">
+            Use quando o pagamento já foi recebido fora do sistema (dinheiro, PIX direto, etc.) e você só precisa dar baixa nos itens selecionados.
+          </p>
+        )}
 
         {!result ? (
           <>
@@ -501,13 +512,22 @@ function ConsolidatedPaymentModal({ docs, total, onClose, onDone }) {
               );
             })()}
 
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Link de pagamento / PIX (opcional)</label>
-              <input value={link} onChange={e => setLink(e.target.value)}
-                placeholder="Cole aqui o link gerado (InfinitePay, etc.)"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-              <p className="text-[10px] text-emerald-600 mt-0.5">✅ InfinitePay ativo: ao confirmar, o sistema gera o link automaticamente.</p>
-            </div>
+            {manualMode ? (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Data do Recebimento</label>
+                <input type="date" value={paidAt} max={new Date().toISOString().slice(0, 10)}
+                  onChange={e => setPaidAt(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Link de pagamento / PIX (opcional)</label>
+                <input value={link} onChange={e => setLink(e.target.value)}
+                  placeholder="Cole aqui o link gerado (InfinitePay, etc.)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                <p className="text-[10px] text-emerald-600 mt-0.5">✅ InfinitePay ativo: ao confirmar, o sistema gera o link automaticamente.</p>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Observação</label>
@@ -520,7 +540,7 @@ function ConsolidatedPaymentModal({ docs, total, onClose, onDone }) {
               <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-700">Cancelar</button>
               <button onClick={save} disabled={saving || !method}
                 className="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold disabled:opacity-50">
-                {saving ? 'Salvando…' : `Confirmar ${fmtMoney(parseFloat(value)||total)}`}
+                {saving ? 'Salvando…' : manualMode ? `Dar baixa ${fmtMoney(parseFloat(value)||total)}` : `Confirmar ${fmtMoney(parseFloat(value)||total)}`}
               </button>
             </div>
           </>
@@ -705,6 +725,7 @@ export function Financial() {
   const [payModal, setPayModal] = useState(null);
   const [selected, setSelected] = useState(new Map());
   const [consolidateOpen, setConsolidateOpen] = useState(false);
+  const [manualBaixaOpen, setManualBaixaOpen] = useState(false);
 
   // ── Filtro de período ──────────────────────────────────────────────────────
   const [periodPreset, setPeriodPreset] = useState('month'); // padrão: mês atual
@@ -993,6 +1014,10 @@ export function Financial() {
             </div>
           </div>
           <button onClick={clearSelection} className="text-xs text-gray-400 hover:text-gray-600">limpar</button>
+          <button onClick={() => setManualBaixaOpen(true)}
+            className="px-3 py-2 bg-white border border-emerald-300 text-emerald-700 text-sm font-semibold rounded-xl hover:bg-emerald-50">
+            Já recebi (baixa)
+          </button>
           <button onClick={() => setConsolidateOpen(true)}
             className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700">
             Cobrar selecionados
@@ -1006,6 +1031,16 @@ export function Financial() {
           total={selectedTotal}
           onClose={() => setConsolidateOpen(false)}
           onDone={() => { setConsolidateOpen(false); clearSelection(); load(); }}
+        />
+      )}
+
+      {manualBaixaOpen && (
+        <ConsolidatedPaymentModal
+          manualMode
+          docs={selectedDocs}
+          total={selectedTotal}
+          onClose={() => setManualBaixaOpen(false)}
+          onDone={() => { setManualBaixaOpen(false); clearSelection(); load(); }}
         />
       )}
 

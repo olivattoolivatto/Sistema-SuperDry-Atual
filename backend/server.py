@@ -6504,6 +6504,20 @@ async def create_consolidated_payment(
     notes        = (payload.get("notes") or "").strip()
     payment_link = (payload.get("payment_link") or "").strip()
     received_in  = payload.get("value")  # opcional; default = soma do que falta
+    force_manual = bool(payload.get("force_manual"))  # baixa direta, ignora o gateway ativo
+
+    # Data de recebimento: usa a informada pelo usuário (baixa manual de pagamento
+    # já recebido por fora do sistema), com fallback para o instante do lançamento.
+    paid_at_raw = payload.get("paid_at")
+    _now = datetime.utcnow()
+    paid_at_dt = _now
+    if paid_at_raw:
+        try:
+            paid_at_dt = datetime.fromisoformat(paid_at_raw)
+            if len(paid_at_raw) <= 10:  # só "YYYY-MM-DD", sem horário
+                paid_at_dt = paid_at_dt.replace(hour=_now.hour, minute=_now.minute, second=_now.second)
+        except ValueError:
+            paid_at_dt = _now
 
     if not item_ids:
         raise HTTPException(status_code=400, detail="Selecione ao menos um item.")
@@ -6530,11 +6544,13 @@ async def create_consolidated_payment(
     total_received = round(float(received_in), 2) if received_in else total_remaining
 
     cpid = await _next_id(db.consolidated_payments, "CPG-", 5)
-    paid_at = datetime.utcnow().isoformat()
+    paid_at = paid_at_dt.isoformat()
 
     # Provedor de pagamento ativo (MANUAL aplica na hora; gateway cria cobrança PENDENTE).
+    # force_manual permite dar baixa direta (pagamento já recebido por fora do sistema)
+    # mesmo com um gateway (ex.: InfinitePay) configurado como provedor ativo.
     provider = payment_providers.get_provider()
-    gateway_mode = provider.name != "MANUAL"
+    gateway_mode = (provider.name != "MANUAL") and not force_manual
 
     # Plano de distribuição do valor recebido, proporcional ao que falta em cada item.
     # Em MANUAL aplicamos já; em gateway guardamos o plano e só aplicamos no webhook.
@@ -6617,7 +6633,7 @@ async def create_consolidated_payment(
         "net_value": net["net_value"],
         "notes": notes or None,
         # integração de pagamento
-        "provider": provider.name,
+        "provider": "MANUAL" if force_manual else provider.name,
         "external_charge_id": external_charge_id,
         "payment_link": payment_link or None,
         "pix_qr": pix_qr,
@@ -6631,7 +6647,8 @@ async def create_consolidated_payment(
     await db.consolidated_payments.insert_one({k: v for k, v in doc.items()})
     await log_audit("consolidated_payment", cpid, "CREATE", current_user,
                     {"total": total_received, "items": len(applied),
-                     "payer": payer_name, "provider": provider.name, "status": cp_status})
+                     "payer": payer_name, "provider": "MANUAL" if force_manual else provider.name,
+                     "status": cp_status, "force_manual": force_manual})
     doc.pop("_id", None)
     return {"success": True, "consolidated_payment": doc}
 
@@ -7405,6 +7422,25 @@ async def startup_bootstrap():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    client.close()
+
+
+# ── Servir frontend React (build estático) ───────────────────────────────────
+# O build é gerado em frontend/build/ via `npm run build`.
+# Esta seção deve ficar APÓS todos os endpoints de API para não interceptá-los.
+_FRONTEND_BUILD = Path(__file__).parent.parent / "frontend" / "build"
+
+if _FRONTEND_BUILD.exists():
+    # Arquivos estáticos do React (JS, CSS, media)
+    app.mount("/static", StaticFiles(directory=str(_FRONTEND_BUILD / "static")), name="react-static")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_react_spa(full_path: str):
+        """Catch-all: serve o index.html do React para qualquer rota não-API."""
+        candidate = _FRONTEND_BUILD / full_path
+        if candidate.exists() and candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(_FRONTEND_BUILD / "index.html"))
     client.close()
 
 
