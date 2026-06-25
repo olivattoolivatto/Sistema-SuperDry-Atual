@@ -12,7 +12,9 @@ import {
   RotateCcw,
   FileText,
   Check,
-  Navigation
+  Navigation,
+  Search,
+  ArrowUpDown
 } from 'lucide-react';
 import { toast } from '../hooks/use-toast';
 import { routesApi, budgetItemsApi } from '../services/api';
@@ -41,8 +43,14 @@ export function RoutesGeoapify() {
   const [editingStatus, setEditingStatus]           = useState({});
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [currentVehicleType, setCurrentVehicleType] = useState('CARRO');
+  const [considerTraffic, setConsiderTraffic]       = useState(false);
   const [routeAlias, setRouteAlias]                 = useState('');
   const [stopPriorities, setStopPriorities]         = useState({});
+
+  // ── Rotas Salvas: filtro/ordenação ──────────────────────────────────────────
+  const [savedSearchText, setSavedSearchText]       = useState('');
+  const [savedVehicleFilter, setSavedVehicleFilter] = useState('TODOS'); // TODOS | CARRO | MOTO
+  const [savedSortOrder, setSavedSortOrder]         = useState('recente'); // 'recente' | 'antiga'
 
   const { suggestedDate, suggestedTime } = getSuggestedDateTime();
   const [routeDate, setRouteDate] = useState(suggestedDate);
@@ -126,15 +134,29 @@ export function RoutesGeoapify() {
       markers.push(marker);
     });
 
-    // Draw route line: company → stops (in order) → company
-    const lineCoords = [
-      [companyLat, companyLng],
-      ...sortedStops
-        .filter(s => s.address?.latitude && s.address?.longitude)
-        .map(s => [s.address.latitude, s.address.longitude]),
-      [companyLat, companyLng]
-    ];
-    L.polyline(lineCoords, { color: '#2563EB', weight: 4, opacity: 0.75, dashArray: '8,5' }).addTo(map);
+    // Traçado REAL por ruas (Geoapify route_geometry, GeoJSON [lng,lat] → Leaflet [lat,lng])
+    const geom = optimizedRoute.route_geometry;
+    let drewRealRoute = false;
+    if (geom && Array.isArray(geom.coordinates)) {
+      const segments = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
+      segments.forEach(seg => {
+        const latlngs = seg.map(([lng, lat]) => [lat, lng]);
+        if (latlngs.length > 1) {
+          L.polyline(latlngs, { color: '#2563EB', weight: 5, opacity: 0.8 }).addTo(map);
+          drewRealRoute = true;
+        }
+      });
+    }
+    // Fallback (só se não houver geometria real): linha reta tracejada
+    if (!drewRealRoute) {
+      const lineCoords = [
+        [companyLat, companyLng],
+        ...sortedStops.filter(s => s.address?.latitude && s.address?.longitude)
+          .map(s => [s.address.latitude, s.address.longitude]),
+        [companyLat, companyLng]
+      ];
+      L.polyline(lineCoords, { color: '#94A3B8', weight: 3, opacity: 0.6, dashArray: '8,5' }).addTo(map);
+    }
 
     // Fit bounds
     if (markers.length > 0) {
@@ -187,6 +209,36 @@ export function RoutesGeoapify() {
       })
       .filter((n, i, a) => n && a.indexOf(n) === i);
     return hoods.length ? hoods.join(', ') : 'Bairros não informados';
+  };
+
+  // Combina data + hora planejadas da rota num timestamp comparável; cai para updated_at se faltar algo
+  const getRouteTimestamp = (route) => {
+    if (route.planned_date) {
+      const t = `${route.planned_date}T${route.planned_start_time || '00:00'}:00`;
+      const ts = new Date(t).getTime();
+      if (!isNaN(ts)) return ts;
+    }
+    const ts2 = new Date(route.updated_at || route.created_at || 0).getTime();
+    return isNaN(ts2) ? 0 : ts2;
+  };
+
+  // Aplica filtro de texto (alias/id/bairros), filtro de veículo e ordenação por data sobre as rotas salvas
+  const getFilteredSortedRoutes = () => {
+    const text = savedSearchText.trim().toLowerCase();
+    let list = savedRoutes.filter((route) => {
+      if (savedVehicleFilter !== 'TODOS' && route.vehicle_type !== savedVehicleFilter) return false;
+      if (!text) return true;
+      const alias = (route.alias || generateRouteAlias(route.planned_date, route.planned_start_time, route.vehicle_type) || '').toLowerCase();
+      const hoods = getRouteNeighborhoods(route.stops).toLowerCase();
+      const id = (route.id || '').toLowerCase();
+      const editor = (route.last_edited_by || '').toLowerCase();
+      return alias.includes(text) || hoods.includes(text) || id.includes(text) || editor.includes(text);
+    });
+    list = [...list].sort((a, b) => {
+      const diff = getRouteTimestamp(b) - getRouteTimestamp(a); // mais recente primeiro
+      return savedSortOrder === 'recente' ? diff : -diff;
+    });
+    return list;
   };
 
   const getPriorityColor = (p) => {
@@ -373,8 +425,8 @@ export function RoutesGeoapify() {
       }));
       await routesApi.addStops(routeId, stopsData);
 
-      // Step 3 – optimize with Geoapify
-      await routesApi.optimizeGeoapify(routeId);
+      // Step 3 – optimize with Geoapify (com ou sem tráfego médio)
+      await routesApi.optimizeGeoapify(routeId, considerTraffic);
 
       // Step 4 – fetch optimized route details
       const details = await routesApi.get(routeId);
@@ -688,7 +740,18 @@ export function RoutesGeoapify() {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-center">
+            {/* Opção: considerar tráfego médio da região */}
+            <label className="mt-5 flex items-center justify-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={considerTraffic}
+                onChange={e => setConsiderTraffic(e.target.checked)}
+                className="h-4 w-4 text-blue-600 rounded border-gray-300" />
+              <span className="text-sm text-gray-700">
+                🚦 Considerar tráfego médio da região
+                <span className="text-xs text-gray-400 ml-1">(ajusta ordem e tempo conforme o trânsito típico)</span>
+              </span>
+            </label>
+
+            <div className="mt-4 flex justify-center">
               <button
                 data-testid="calculate-geoapify-route"
                 onClick={handleCalculateOptimizedRoute}
@@ -773,6 +836,13 @@ export function RoutesGeoapify() {
                     <div className="text-2xl font-bold text-green-900">
                       {Math.floor((optimizedRoute.total_duration || 0) / 60)}h {(optimizedRoute.total_duration || 0) % 60}min
                     </div>
+                    {/* Comparação trânsito vs livre */}
+                    {(optimizedRoute.total_duration_free != null && optimizedRoute.total_duration_traffic != null) && (
+                      <div className="text-[11px] text-gray-500 mt-1 leading-tight">
+                        <div>🟢 Sem trânsito: {Math.floor(optimizedRoute.total_duration_free / 60)}h {optimizedRoute.total_duration_free % 60}min</div>
+                        <div>🚦 Com trânsito: {Math.floor(optimizedRoute.total_duration_traffic / 60)}h {optimizedRoute.total_duration_traffic % 60}min</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -914,12 +984,47 @@ export function RoutesGeoapify() {
 
       {/* Section 6: Saved Routes */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center mb-6">
+        <div className="flex items-center mb-4">
           <RouteIcon className="w-5 h-5 text-orange-600 mr-2" />
           <h2 className="text-xl font-semibold text-gray-900">Rotas Salvas</h2>
         </div>
+
+        {/* Filtro e ordenação */}
+        <div className="flex flex-wrap items-center gap-3 mb-5 bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={savedSearchText}
+              onChange={(e) => setSavedSearchText(e.target.value)}
+              placeholder="Buscar por nome, bairro, ID ou editor..."
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <select
+            value={savedVehicleFilter}
+            onChange={(e) => setSavedVehicleFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="TODOS">Todos os veículos</option>
+            <option value="CARRO">Carro</option>
+            <option value="MOTO">Moto</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() => setSavedSortOrder(savedSortOrder === 'recente' ? 'antiga' : 'recente')}
+            className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100"
+            title="Alternar ordenação"
+          >
+            <ArrowUpDown className="w-4 h-4 text-gray-500" />
+            {savedSortOrder === 'recente' ? 'Mais recente primeiro' : 'Mais antiga primeiro'}
+          </button>
+        </div>
+
         <div className="space-y-3">
-          {savedRoutes.slice(0, 20).map((route, idx) => (
+          {getFilteredSortedRoutes().slice(0, 20).map((route, idx) => (
             <div key={`saved-${route.id}-${idx}`}
               className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center">
@@ -963,6 +1068,12 @@ export function RoutesGeoapify() {
           <div className="text-center py-8 text-gray-500">
             <RouteIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
             <p>Nenhuma rota salva</p>
+          </div>
+        )}
+        {savedRoutes.length > 0 && getFilteredSortedRoutes().length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <Search className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+            <p>Nenhuma rota encontrada com esse filtro</p>
           </div>
         )}
       </div>
