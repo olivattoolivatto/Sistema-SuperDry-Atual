@@ -7441,22 +7441,3 @@ if _FRONTEND_BUILD.exists():
         if candidate.exists() and candidate.is_file():
             return FileResponse(str(candidate))
         return FileResponse(str(_FRONTEND_BUILD / "index.html"))
-    client.close()
-
-
-# ── Servir frontend React (build estático) ───────────────────────────────────
-# O build é gerado em frontend/build/ via `npm run build`.
-# Esta seção deve ficar APÓS todos os endpoints de API para não interceptá-los.
-_FRONTEND_BUILD = Path(__file__).parent.parent / "frontend" / "build"
-
-if _FRONTEND_BUILD.exists():
-    # Arquivos estáticos do React (JS, CSS, media)
-    app.mount("/static", StaticFiles(directory=str(_FRONTEND_BUILD / "static")), name="react-static")
-
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_react_spa(full_path: str):
-        """Catch-all: serve o index.html do React para qualquer rota não-API."""
-        candidate = _FRONTEND_BUILD / full_path
-        if candidate.exists() and candidate.is_file():
-            return FileResponse(str(candidate))
-        return FileResponse(str(_FRONTEND_BUILD / "index.html"))
