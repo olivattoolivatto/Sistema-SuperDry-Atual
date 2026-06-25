@@ -93,6 +93,7 @@ function PaymentModal({ item, onClose, onSaved }) {
   const [method, setMethod] = useState('DINHEIRO');
   const [value, setValue] = useState('');
   const [notes, setNotes] = useState('');
+  const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -112,7 +113,7 @@ function PaymentModal({ item, onClose, onSaved }) {
       await fetch(`${BACKEND_URL}/api/items/${item.id}/payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ method, value: parseFloat(value), notes }),
+        body: JSON.stringify({ method, value: parseFloat(value), notes, paid_at: paidAt }),
       });
       toast({ title: 'Pagamento registrado!', description: `R$ ${parseFloat(value).toFixed(2)} em ${method}` });
       onSaved();
@@ -157,6 +158,12 @@ function PaymentModal({ item, onClose, onSaved }) {
               Total
             </button>
           </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Data do Recebimento</label>
+          <input type="date" value={paidAt} max={new Date().toISOString().slice(0, 10)}
+            onChange={e => setPaidAt(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Observação (opcional)</label>
@@ -597,6 +604,99 @@ function ConsolidatedPaymentModal({ docs, total, onClose, onDone }) {
 }
 
 // ── Tela principal ────────────────────────────────────────────────────────────
+// ── Painel de cobranças com link (InfinitePay) aguardando confirmação ───────
+// Dá visibilidade dentro do sistema enquanto a confirmação automática via
+// webhook não está validada em produção: lista os links gerados, permite
+// reenviar por WhatsApp e confirmar manualmente quando o pagamento for
+// verificado por outro meio (ex.: painel da InfinitePay).
+function PendingGatewayPayments() {
+  const [pending, setPending] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [confirmingId, setConfirmingId] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await consolidatedPaymentApi.pending();
+      setPending(r.data.pending || []);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (!loading && pending.length === 0) return null;
+
+  const markPaid = async (cpid) => {
+    if (!window.confirm(`Confirmar que ${cpid} foi realmente pago? Isso vai dar baixa nos itens.`)) return;
+    setConfirmingId(cpid);
+    try {
+      await consolidatedPaymentApi.confirmManual(cpid);
+      toast({ title: 'Confirmado!', description: `${cpid} marcado como pago.` });
+      load();
+    } catch (e) {
+      toast({ title: 'Erro', description: e.response?.data?.detail || e.message, variant: 'destructive' });
+    } finally { setConfirmingId(null); }
+  };
+
+  return (
+    <div className="bg-amber-50 rounded-xl border border-amber-200 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm">🔗</span>
+          <span className="text-xs font-semibold text-amber-800">
+            Cobranças com link aguardando pagamento ({pending.length})
+          </span>
+        </div>
+        <button onClick={load} disabled={loading} className="text-amber-600 hover:text-amber-800">
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+      <p className="text-[10px] text-amber-700">
+        Confirmação automática (webhook) ainda não validada em produção — confira no painel da
+        InfinitePay se o cliente pagou e use "Marcar como pago" para dar baixa aqui.
+      </p>
+      <div className="space-y-1.5">
+        {pending.map(p => (
+          <div key={p.id} className="bg-white rounded-lg border border-amber-100 p-2 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-gray-900 truncate">
+                {p.id} · {p.payer_name || '(sem nome)'} · {fmtMoney(p.total_value)}
+              </div>
+              <div className="text-[10px] text-gray-400">
+                {p.item_count} item{p.item_count !== 1 ? 's' : ''} ·{' '}
+                {p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => { navigator.clipboard.writeText(p.payment_link); toast({ title: 'Link copiado!' }); }}
+                className="px-2 py-1 text-[10px] bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200">
+                Copiar link
+              </button>
+              <button
+                onClick={() => {
+                  const phone = p.payer_phone ? p.payer_phone.replace(/\D/g, '') : '';
+                  const msg = encodeURIComponent(`Olá${p.payer_name ? ' ' + p.payer_name.split(' ')[0] : ''}! Segue o link para pagamento de ${fmtMoney(p.total_value)}:\n${p.payment_link}`);
+                  window.open(`https://wa.me/${phone ? '55' + phone : ''}?text=${msg}`, '_blank');
+                }}
+                className="px-2 py-1 text-[10px] bg-green-100 text-green-700 rounded-md hover:bg-green-200">
+                WhatsApp
+              </button>
+              <button
+                onClick={() => markPaid(p.id)}
+                disabled={confirmingId === p.id}
+                className="px-2 py-1 text-[10px] bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50">
+                {confirmingId === p.id ? '...' : 'Marcar pago'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Financial() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -775,6 +875,9 @@ export function Financial() {
           Referência: data do pagamento mais recente do item ou data de atualização do status.
         </p>
       </div>
+
+      {/* ── Cobranças InfinitePay com link pendente ── */}
+      <PendingGatewayPayments />
 
       {/* ── KPIs do período ── */}
       <div className="grid grid-cols-3 gap-3">

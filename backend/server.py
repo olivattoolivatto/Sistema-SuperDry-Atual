@@ -6437,11 +6437,24 @@ async def register_item_payment(
     if not item:
         raise HTTPException(status_code=404, detail="Item não encontrado")
 
+    # Data de recebimento: usa a informada pelo usuário (controle de quando o
+    # dinheiro entrou de fato), com fallback para o instante do lançamento.
+    paid_at_raw = payload.get("paid_at")
+    now = datetime.utcnow()
+    paid_at_dt = now
+    if paid_at_raw:
+        try:
+            paid_at_dt = datetime.fromisoformat(paid_at_raw)
+            if len(paid_at_raw) <= 10:  # só "YYYY-MM-DD", sem horário
+                paid_at_dt = paid_at_dt.replace(hour=now.hour, minute=now.minute, second=now.second)
+        except ValueError:
+            paid_at_dt = now
+
     record = {
         "id": f"PAY-{uuid.uuid4().hex[:10]}",
         "method": method,
         "value": value,
-        "paid_at": datetime.utcnow().isoformat(),
+        "paid_at": paid_at_dt.isoformat(),
         "recorded_by": current_user.id,
         "recorded_by_name": current_user.name,
         "notes": payload.get("notes") or "",
@@ -6621,6 +6634,56 @@ async def create_consolidated_payment(
                      "payer": payer_name, "provider": provider.name, "status": cp_status})
     doc.pop("_id", None)
     return {"success": True, "consolidated_payment": doc}
+
+
+@api_router.get("/payments/consolidated/pending")
+async def list_pending_gateway_payments(current_user: UserPublic = Depends(get_current_user)):
+    """
+    Cobranças com link de pagamento (InfinitePay, etc.) ainda aguardando
+    confirmação. Dá visibilidade dentro do sistema enquanto a confirmação
+    automática (webhook) não está validada — permite acompanhar e, se
+    necessário, confirmar manualmente após checar no painel do provedor.
+    """
+    cursor = db.consolidated_payments.find(
+        {"status": "PENDENTE", "payment_link": {"$ne": None}}
+    ).sort("created_at", -1)
+    out = []
+    async for d in cursor:
+        out.append({
+            "id": d.get("id"),
+            "payer_name": d.get("payer_name"),
+            "payer_phone": d.get("payer_phone"),
+            "total_value": d.get("total_value"),
+            "method": d.get("method"),
+            "provider": d.get("provider"),
+            "payment_link": d.get("payment_link"),
+            "item_count": len(d.get("applied", [])),
+            "created_at": d.get("created_at"),
+        })
+    return {"pending": out}
+
+
+@api_router.post("/payments/consolidated/{cpid}/confirm-manual")
+async def confirm_consolidated_payment_manual(
+    cpid: str,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """
+    Confirma manualmente uma cobrança em modo gateway (ex.: InfinitePay) como
+    PAGA, sem depender do webhook. Uso: operador conferiu o recebimento direto
+    no painel do provedor (ou recebeu por outro meio) e dá baixa no sistema.
+    Idempotente — chama o mesmo helper usado pelo webhook/redirect.
+    """
+    if current_user.role not in ("ADMIN", "FINANCEIRO"):
+        raise HTTPException(status_code=403, detail="Sem permissão para confirmar pagamentos.")
+    cp = await db.consolidated_payments.find_one({"id": cpid})
+    if not cp:
+        raise HTTPException(status_code=404, detail="Cobrança não encontrada.")
+    if cp.get("status") == "PAGO":
+        return {"success": True, "note": "Já estava paga."}
+    await _apply_cp_paid(cp, source=f"manual:{current_user.name}")
+    await log_audit("consolidated_payment", cpid, "CONFIRM_MANUAL", current_user, {})
+    return {"success": True}
 
 
 @api_router.get("/payments/consolidated/{cpid}/whatsapp")
