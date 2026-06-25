@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Save, MapPin, Building2, Shield, Users, ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, X, KeyRound } from 'lucide-react';
 import { systemConfigApi, placesApi, usersApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from '../hooks/use-toast';
 import MiniMap from '../components/MiniMap';
+import { Catalog } from './Catalog';
+import { BudgetConfig } from './BudgetConfig';
+import { BACKEND_URL } from '../lib/backendUrl';
 
 const formatCNPJ = (value) => {
   const numbers = value.replace(/\D/g, '');
@@ -82,6 +85,8 @@ export const SystemConfig = () => {
     logo: false,
     payment: false,
     users: false,
+    catalog: false,
+    budgetConfig: false,
   });
 
   useEffect(() => {
@@ -658,7 +663,7 @@ export const SystemConfig = () => {
                   max="10"
                   value={config?.retention_photos_years || 2}
                   onChange={(e) => handleChange('retention_photos_years', parseInt(e.target.value))}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  onFocus={(e) => e.target.select()} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
@@ -672,7 +677,7 @@ export const SystemConfig = () => {
                   max="10"
                   value={config?.retention_signatures_years || 2}
                   onChange={(e) => handleChange('retention_signatures_years', parseInt(e.target.value))}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  onFocus={(e) => e.target.select()} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
@@ -686,7 +691,7 @@ export const SystemConfig = () => {
                   max="10"
                   value={config?.retention_documents_years || 2}
                   onChange={(e) => handleChange('retention_documents_years', parseInt(e.target.value))}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  onFocus={(e) => e.target.select()} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -732,6 +737,20 @@ export const SystemConfig = () => {
           onToggle={() => toggleSection('users')}
         />
 
+        {/* Catálogo de Serviços */}
+        <CollapsibleSection
+          sectionKey="catalog" label="Catálogo de Serviços" icon="📦"
+          expanded={expandedSections.catalog} onToggle={() => toggleSection('catalog')}>
+          <Catalog embedded />
+        </CollapsibleSection>
+
+        {/* Config. de Orçamento */}
+        <CollapsibleSection
+          sectionKey="budgetConfig" label="Configurações de Orçamento" icon="📝"
+          expanded={expandedSections.budgetConfig} onToggle={() => toggleSection('budgetConfig')}>
+          <BudgetConfig embedded />
+        </CollapsibleSection>
+
         {/* Save Button */}
         <div className="flex justify-end pt-2">
           <button
@@ -752,7 +771,7 @@ export const SystemConfig = () => {
 // Logo Manager
 // ============================================================
 function LogoManager() {
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+  // BACKEND_URL importado globalmente
   const [status, setStatus] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [flash, setFlash] = useState('');
@@ -832,6 +851,15 @@ function PaymentMethodsManager({ config, setConfig, inline = false }) {
   const [editLabel, setEditLabel] = useState('');
 
   const methods = config?.payment_methods || [];
+  const fees = config?.payment_fees || {};
+
+  const setFee = (value, pct) => {
+    const n = pct === '' ? 0 : parseFloat(pct);
+    setConfig(prev => ({
+      ...prev,
+      payment_fees: { ...(prev.payment_fees || {}), [value]: Number.isNaN(n) ? 0 : n },
+    }));
+  };
 
   const slugify = (s) => s.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
 
@@ -858,7 +886,8 @@ function PaymentMethodsManager({ config, setConfig, inline = false }) {
 
   return (
     <div>
-      <p className="text-sm text-gray-500 mb-3">Gerencie as opções disponíveis em orçamentos e atendimentos.</p>
+      <p className="text-sm text-gray-500 mb-1">Gerencie as opções disponíveis em orçamentos e atendimentos.</p>
+      <p className="text-xs text-gray-400 mb-3">A <strong>taxa (%)</strong> de cada método é descontada para estimar o valor líquido a receber (ex.: taxas de crédito da InfinitePay). Deixe 0 para PIX/dinheiro.</p>
 
       <div className="space-y-2 mb-4">
         {methods.map((m, idx) => (
@@ -878,7 +907,17 @@ function PaymentMethodsManager({ config, setConfig, inline = false }) {
             ) : (
               <>
                 <span className="flex-1 text-sm font-medium text-gray-900">{m.label}</span>
-                <span className="text-xs text-gray-400 font-mono bg-gray-100 px-2 py-0.5 rounded">{m.value}</span>
+                <span className="text-xs text-gray-400 font-mono bg-gray-100 px-2 py-0.5 rounded hidden sm:inline">{m.value}</span>
+                <div className="flex items-center gap-1 shrink-0" title="Taxa cobrada pelo meio de pagamento (%)">
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={fees[m.value] ?? ''}
+                    onChange={e => setFee(m.value, e.target.value)}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()} className="w-16 px-1.5 py-1 border border-gray-300 rounded text-xs text-right focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-gray-400">%</span>
+                </div>
                 <button onClick={() => startEdit(idx)} className="p-1 text-gray-400 hover:text-blue-600"><Edit2 className="w-3.5 h-3.5" /></button>
                 <button onClick={() => remove(idx)} className="p-1 text-gray-400 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5" /></button>
               </>
@@ -1120,7 +1159,7 @@ function UsersManager({ expanded, onToggle }) {
                   value={form.commission_pct ?? ''}
                   onChange={e => setForm({ ...form, commission_pct: e.target.value ? parseFloat(e.target.value) : null })}
                   placeholder="0"
-                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  onFocus={(e) => e.target.select()} className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
                 />
                 <span className="text-sm text-gray-500">%</span>
               </div>
@@ -1180,3 +1219,4 @@ function UsersManager({ expanded, onToggle }) {
     </div>
   );
 }
+

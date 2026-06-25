@@ -61,11 +61,19 @@ function AddressAutocomplete({ value, onSelect, placeholder }) {
   const [loading, setLoading] = useState(false);
   const debRef = useRef(null);
   const boxRef = useRef(null);
+  const skipSearchRef = useRef(false);   // suprime busca após seleção/valor externo
 
-  useEffect(() => { setQuery(value || ''); }, [value]);
+  useEffect(() => { skipSearchRef.current = true; setQuery(value || ''); }, [value]);
 
   useEffect(() => {
     if (debRef.current) clearTimeout(debRef.current);
+    // Após escolher uma sugestão (ou valor vindo do pai), não dispara nova busca
+    if (skipSearchRef.current) {
+      skipSearchRef.current = false;
+      setResults([]);
+      setOpen(false);
+      return;
+    }
     if (!query || query.length < 3) {
       setResults([]);
       setOpen(false);
@@ -96,6 +104,7 @@ function AddressAutocomplete({ value, onSelect, placeholder }) {
 
   const handleChoose = async (p) => {
     setOpen(false);
+    skipSearchRef.current = true;   // não re-buscar ao preencher o campo
     setQuery(p.description || '');
     // Try to enrich with place details if no geometry yet
     let lat = p?.geometry?.location?.lat;
@@ -188,6 +197,60 @@ function AddressAutocomplete({ value, onSelect, placeholder }) {
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+// ===== Campo: colar localização do WhatsApp =====
+function WhatsAppLocationField({ onResolved }) {
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+
+  const resolve = async () => {
+    if (!text.trim()) return;
+    setLoading(true); setErr('');
+    try {
+      const r = await placesApi.resolveLocation(text.trim());
+      onResolved(r.data);
+      setText('');
+    } catch (e) {
+      setErr(e.response?.data?.detail || 'Não consegui ler a localização.');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+      <label className="block text-[11px] font-medium text-emerald-800 mb-1 flex items-center gap-1">
+        <MessageCircle className="w-3.5 h-3.5" /> Colar localização do WhatsApp
+      </label>
+      <div className="flex gap-2">
+        <input
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), resolve())}
+          placeholder="Cole o link de localização ou -15.59, -56.06"
+          className="flex-1 px-2.5 py-1.5 border border-emerald-300 rounded-lg text-xs bg-white"
+        />
+        <button type="button" onClick={resolve} disabled={loading || !text.trim()}
+          className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg disabled:opacity-50 flex items-center gap-1">
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+          Usar GPS
+        </button>
+      </div>
+      {err && <p className="text-[10px] text-red-600 mt-1">{err}</p>}
+      <details className="mt-1">
+        <summary className="text-[10px] text-emerald-700 cursor-pointer">📱 Como pegar a localização no iPhone</summary>
+        <ol className="text-[10px] text-emerald-700 mt-1 ml-3 list-decimal space-y-0.5">
+          <li>Toque na localização recebida no WhatsApp</li>
+          <li>Abra em <strong>Apple Mapas</strong> ou <strong>Google Maps</strong></li>
+          <li>Toque no botão <strong>Compartilhar</strong> → <strong>Copiar</strong> (link)</li>
+          <li>Cole o link aqui e toque em "Usar GPS"</li>
+        </ol>
+        <p className="text-[10px] text-emerald-600 mt-1">
+          Ou digite as coordenadas que o Maps mostra: <code>-15.591827, -56.052322</code>
+        </p>
+      </details>
     </div>
   );
 }
@@ -709,6 +772,21 @@ export function Clients() {
                 <Check className="w-3 h-3" /> Localização GPS capturada
               </div>
             )}
+            {/* Colar localização do WhatsApp → coordenadas exatas */}
+            <WhatsAppLocationField
+              onResolved={(loc) => setForm((f) => ({
+                ...f,
+                address: {
+                  ...f.address,
+                  full_address: loc.full_address || f.address.full_address,
+                  neighborhood: loc.neighborhood || f.address.neighborhood,
+                  city: loc.city || f.address.city,
+                  state: loc.state || f.address.state,
+                  latitude: loc.latitude,
+                  longitude: loc.longitude,
+                },
+              }))}
+            />
           </div>
 
           {/* Complemento */}
@@ -729,8 +807,8 @@ export function Clients() {
               <input
                 value={form.address.neighborhood}
                 onChange={(e) => setForm({ ...form, address: { ...form.address, neighborhood: e.target.value } })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-sm"
-                readOnly
+                placeholder="Preenchido automaticamente ou digite"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
             <div>
@@ -738,8 +816,8 @@ export function Clients() {
               <input
                 value={form.address.city}
                 onChange={(e) => setForm({ ...form, address: { ...form.address, city: e.target.value } })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-sm"
-                readOnly
+                placeholder="Preenchido automaticamente ou digite"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
             <div>
@@ -747,8 +825,8 @@ export function Clients() {
               <input
                 value={form.address.state}
                 onChange={(e) => setForm({ ...form, address: { ...form.address, state: e.target.value } })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-sm"
-                readOnly
+                placeholder="UF"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { 
   MapPin, 
   Truck, 
@@ -1553,7 +1553,7 @@ export function Routes() {
                           if (!window.confirm(`Marcar "${item.client_name}" como desistência?\nO orçamento será mantido no histórico mas sairá das rotas.`)) return;
                           try {
                             const token = localStorage.getItem('superdry_token');
-                            await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/items/${item.budget_item_id}/desist`, {
+                            await fetch(`${BACKEND_URL}/api/items/${item.budget_item_id}/desist`, {
                               method: 'PATCH', headers: { Authorization: `Bearer ${token}` }
                             });
                             setAvailableItems(prev => prev.filter(i => i.budget_item_id !== item.budget_item_id));

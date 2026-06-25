@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Truck, FileText, ClipboardCheck, Droplets, DollarSign,
-  Wallet, Wrench, Users, RefreshCcw, AlertCircle
+  Wallet, Wrench, Users, RefreshCcw, AlertCircle, Zap
 } from 'lucide-react';
 import { dashboardApi, clientsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -227,6 +227,35 @@ export function Dashboard() {
           );
         })}
       </div>
+
+      {/* Atalhos rápidos */}
+      {(!user || user.role === 'ADMIN' || user.role === 'ATENDENTE') && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+          <div className="text-xs font-semibold text-gray-500 uppercase mb-3">Atalhos</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button onClick={() => navigate('/automations')}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors">
+              <Zap className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium">Automações</span>
+            </button>
+            <button onClick={() => navigate('/budgets')}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 transition-colors">
+              <FileText className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium">Novo Orçamento</span>
+            </button>
+            <button onClick={() => navigate('/financial')}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 transition-colors">
+              <DollarSign className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium">Financeiro</span>
+            </button>
+            <button onClick={() => navigate('/routes-geo')}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 transition-colors">
+              <Truck className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium">Rotas</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Footer info */}
       <div className="text-xs text-gray-400 text-center pt-2">

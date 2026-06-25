@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, Loader2, Sparkles } from 'lucide-react';
+import { Lock, Mail, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+
+const BACKEND_URL = (() => {
+  const h = window.location.hostname;
+  return (h === 'localhost' || h === '127.0.0.1')
+    ? (process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001')
+    : `${window.location.protocol}//${h}:8001`;
+})();
 
 export function Login() {
   const navigate = useNavigate();
@@ -30,11 +37,19 @@ export function Login() {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <div className="flex flex-col items-center mb-6">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-lg">
-              <Sparkles className="w-8 h-8" />
+            <img
+              src={`${BACKEND_URL}/api/system-config/logo/file`}
+              alt="SuperDry"
+              className="h-24 w-auto object-contain"
+              onError={e => {
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            <div className="hidden w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 items-center justify-center text-white shadow-lg text-2xl font-bold">
+              S
             </div>
-            <h1 className="mt-4 text-2xl font-bold text-gray-900">SuperDry</h1>
-            <p className="text-sm text-gray-500">Sistema de Gestão</p>
+            <p className="mt-3 text-sm text-gray-500">Sistema de Gestão</p>
           </div>
 
           <form onSubmit={onSubmit} className="space-y-4">

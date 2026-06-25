@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Car, Building, Calendar, MapPin, Camera, FileText, CreditCard, Phone,
   Settings, Navigation, CheckCircle, Package, Truck, User, Trash2,
@@ -6,8 +6,7 @@ import {
   Edit3, RefreshCw, Tag
 } from 'lucide-react';
 import { routesApi, budgetItemsApi, technicianApi, itemsApi } from '../services/api';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+import { BACKEND_URL } from '../lib/backendUrl';
 
 // Função para extrair endereço legível do objeto cliente (COPIADA DA AGENDA)
 const getClientAddress = (client) => {
@@ -190,7 +189,14 @@ const getBudgetAndClientData = async (budgetItemId) => {
 
 // Componente principal do Modo Técnico
 export function TechnicianMode() {
-  const [currentMode, setCurrentMode] = useState('selection'); // selection | street | company
+  // Modo persistido — um refresh mantém o técnico no mesmo modo (rua/empresa)
+  const [currentMode, setCurrentModeState] = useState(
+    () => localStorage.getItem('tech_mode') || 'selection'
+  ); // selection | street | company
+  const setCurrentMode = (m) => {
+    setCurrentModeState(m);
+    localStorage.setItem('tech_mode', m);
+  };
   const [technicianData, setTechnicianData] = useState(null);
 
   // Carregar dados do técnico logado
@@ -295,10 +301,14 @@ function ModeSelection({ onModeSelect }) {
 
 // Componente Modo Rua
 // ── Utilitário: status visual do atendimento ──────────────────────────────────
+// DONE = estados realmente finalizados pelo técnico (ou já no pipeline da empresa).
+// AGUARDANDO_ENTREGA / AGUARDANDO_BUSCAR são TAREFAS PENDENTES de entrega numa rota —
+// não são "concluído"; o técnico ainda precisa entregar/o cliente buscar.
 const DONE_STATUSES = new Set(['EXECUTADO','ENTREGUE','BUSCOU','COLETADO','EM_LAVAGEM',
-  'EM_LAVAGEM_PARCEIRO','AGUARDANDO_ENTREGA','AGUARDANDO_BUSCAR']);
+  'EM_LAVAGEM_PARCEIRO']);
 const CANCEL_STATUSES = new Set(['CANCELADO_PELO_CLIENTE']);
-const RESCHEDULE_STATUSES = new Set(['RETIRAR','EXECUTAR_NO_LOCAL','ENTREGAR','AGENDADO']);
+const RESCHEDULE_STATUSES = new Set(['RETIRAR','EXECUTAR_NO_LOCAL','ENTREGAR','AGENDADO',
+  'AGUARDANDO_ENTREGA','AGUARDANDO_BUSCAR']);
 
 function getCardExecutionStatus(items) {
   if (!items || items.length === 0) return 'pending';
@@ -334,10 +344,10 @@ function StreetMode({ onBack }) {
     loadDailyAgenda();
   }, []);
 
-  const loadDailyAgenda = async () => {
+  const loadDailyAgenda = async (silent = false) => {
     try {
-      setLoading(true);
-      
+      if (!silent) setLoading(true);   // reload silencioso (ex.: ao voltar de um cliente) não pisca spinner
+
       // Buscar tarefas híbridas do técnico para múltiplas datas se necessário
       const today = new Date().toISOString().split('T')[0];
       console.log(`📅 TechnicianMode: Buscando tarefas para a data: ${today}`);
@@ -396,86 +406,72 @@ function StreetMode({ onBack }) {
       // 2. Processar status_items (ITENS DESENCAPSULADOS DOS ASSIGNMENTS)
       console.log(`🔍 Processando ${status_items.length} status items para unificação`);
       
+      let _routeSeq = 0;  // ordem de chegada = ordem da rota (event_ids vêm ordenados por order_sequence)
       for (const item of status_items) {
         const clientId = item.client_id;
-        
-        console.log(`📋 Processando item: ${item.id} - ${item.service_name} para cliente: ${clientId}`);
-        
-        if (!unifiedClients[clientId]) {
-          // Processar endereço completo da mesma forma que os assignments
+        // Chave composta: cada ROTA (assignment) do cliente vira um card próprio.
+        // 2 itens na mesma rota/parada → 1 card. Mesmo cliente em rotas diferentes → cards separados.
+        const groupKey = `${item.assignment_id || 'noassign'}__${clientId}`;
+
+        if (!unifiedClients[groupKey]) {
           const fullAddress = getClientAddress(item.client_address);
           const complement = getClientComplement(item.client_address);
-          
-          unifiedClients[clientId] = {
+
+          unifiedClients[groupKey] = {
             id: clientId,
+            cardKey: groupKey,                 // chave única do card (cliente + rota)
+            routeSeq: _routeSeq++,             // ordem da rota (Geoapify) — preserva sequência
             name: item.client_name,
             address: item.client_address,
             phone: item.client_phone,
-            scheduledTime: '08:00', // TODO: Definir lógica de horário
+            scheduledTime: '08:00',
             items: [],
             internalObservations: item.internal_observations,
-            budgetObservations: item.budget_observations,  // CORREÇÃO: Agora disponível nos status_items
+            budgetObservations: item.budget_observations,
             assigned_date: item.assigned_date || new Date().toISOString().split('T')[0],
-            source: 'AGENDA_ASSIGNMENT', // CORRIGIDO: Agora são assignments desencapsulados
+            source: 'AGENDA_ASSIGNMENT',
             status: item.assignment_status || 'ASSIGNED',
-            original_assignment_id: item.assignment_id, // Para poder excluir
+            original_assignment_id: item.assignment_id,
             route_id: item.route_id,
             full_address: fullAddress,
             complement: complement
           };
-          
-          console.log(`✅ Novo cliente criado: ${clientId}`);
-          
-          // Buscar observações do orçamento
+
           if (item.budget_id) {
             try {
-              const budgetResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budgets/${item.budget_id}`);
+              const budgetResponse = await fetch(`${BACKEND_URL}/api/budgets/${item.budget_id}`);
               if (budgetResponse.ok) {
                 const budgetData = await budgetResponse.json();
-                unifiedClients[clientId].budgetObservations = budgetData.budget_observations;
-                console.log(`✅ Observações do orçamento ${item.budget_id}: ${budgetData.budget_observations}`);
+                unifiedClients[groupKey].budgetObservations = budgetData.budget_observations;
               }
             } catch (budgetError) {
               console.warn(`⚠️ Erro ao buscar orçamento ${item.budget_id}:`, budgetError);
             }
           }
         }
-        
-        // CORREÇÃO: Verificar se o item já foi adicionado para evitar duplicação
-        const existingItem = unifiedClients[clientId].items.find(existingItem => existingItem.id === item.id);
+
+        const existingItem = unifiedClients[groupKey].items.find(ex => ex.id === item.id);
         if (!existingItem) {
-          unifiedClients[clientId].items.push({
+          unifiedClients[groupKey].items.push({
             id: item.id,
             name: item.service_name,
             status: item.status,
             value: parseFloat(item.service_value),
             observations: item.observations
           });
-          console.log(`✅ Item adicionado: ${item.id} - ${item.service_name}`);
-        } else {
-          console.warn(`⚠️ Item duplicado ignorado: ${item.id} - ${item.service_name}`);
         }
       }
       
       // Converter para array e ordenar por data
       const clientsArray = Object.values(unifiedClients);
       
-      // Ordenar por data e tipo de fonte (assignments da agenda primeiro, depois status items)
+      // Ordenar por DATA e depois pela SEQUÊNCIA DA ROTA (ordem otimizada Geoapify)
       clientsArray.sort((a, b) => {
-        // Priorizar assignments da agenda
-        if (a.source === 'AGENDA_ASSIGNMENT' && b.source !== 'AGENDA_ASSIGNMENT') return -1;
-        if (b.source === 'AGENDA_ASSIGNMENT' && a.source !== 'AGENDA_ASSIGNMENT') return 1;
-        
-        // Ordenar por data (assignments têm assigned_date, status items usam data atual)
         const dateA = a.assigned_date || new Date().toISOString().split('T')[0];
         const dateB = b.assigned_date || new Date().toISOString().split('T')[0];
-        
-        if (dateA !== dateB) {
-          return dateA.localeCompare(dateB);
-        }
-        
-        // Se mesma data, ordenar por horário agendado
-        return a.scheduledTime.localeCompare(b.scheduledTime);
+        if (dateA !== dateB) return dateA.localeCompare(dateB);
+        // Mesma data → respeita a ordem da rota calculada
+        return (a.routeSeq ?? 999) - (b.routeSeq ?? 999);
       });
       
       console.log('👥 Clientes unificados (ordenados por data e tipo):', clientsArray);
@@ -538,12 +534,28 @@ function StreetMode({ onBack }) {
         </div>
         <button
           onClick={async () => {
-            if (!window.confirm('Finalizar agenda de hoje?\n\nServiços não executados serão reagendados automaticamente e liberados para nova rota.')) return;
+            const today = new Date().toISOString().split('T')[0];
+            // Pergunta a data a finalizar (default = hoje), aceita lançamentos retroativos
+            const date = window.prompt('Finalizar agenda de qual data? (AAAA-MM-DD)', today);
+            if (!date) return;
+
+            // Conta itens que SERIAM reagendados (pendentes de execução) dessa data
+            const RESCHED = new Set(['RETIRAR','EXECUTAR_NO_LOCAL','ENTREGAR','AGENDADO']);
+            const toReschedule = (dailyClients || [])
+              .filter(c => (c.assigned_date || today) === date)
+              .flatMap(c => c.items || [])
+              .filter(it => RESCHED.has(it.status)).length;
+
+            const msg = toReschedule > 0
+              ? `Finalizar agenda de ${date}?\n\n${toReschedule} serviço(s) NÃO executado(s) serão liberados para nova rota.\nOs já concluídos seguem para o financeiro normalmente.`
+              : `Finalizar agenda de ${date}?\n\nTodos os serviços desta data já foram tratados — nada será reagendado.`;
+            if (!window.confirm(msg)) return;
+
             setFinalizing(true);
             try {
-              const r = await technicianApi.finalizeToday();
+              const r = await technicianApi.finalizeToday(date);
               const res = r.data.results;
-              alert(`Agenda finalizada!\n✅ Finalizados: ${res.finalized}\n🔄 Reagendados: ${res.rescheduled}\n📦 Empresa: ${res.empresa}\n✕ Cancelados: ${res.cancelled}`);
+              alert(`Agenda de ${date} finalizada!\n✅ Finalizados: ${res.finalized}\n🔄 Reagendados: ${res.rescheduled}\n📦 Empresa: ${res.empresa}\n✕ Cancelados: ${res.cancelled}`);
               loadDailyAgenda();
             } catch(e) { alert('Erro: ' + (e.response?.data?.detail || e.message)); }
             finally { setFinalizing(false); }
@@ -551,7 +563,7 @@ function StreetMode({ onBack }) {
           disabled={finalizing}
           className="text-xs bg-white text-blue-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-50"
         >
-          {finalizing ? '...' : '✓ Finalizar Hoje'}
+          {finalizing ? '...' : '✓ Finalizar Agenda'}
         </button>
       </div>
 
@@ -588,7 +600,7 @@ function StreetMode({ onBack }) {
       {/* Conteúdo das tabs */}
       <div className="p-4">
         {activeTab === 'agenda' && (
-          <AgendaTab clients={dailyClients} loading={loading} generateNavigationLink={generateNavigationLink} />
+          <AgendaTab clients={dailyClients} loading={loading} generateNavigationLink={generateNavigationLink} reload={loadDailyAgenda} />
         )}
         {activeTab === 'payments' && <PaymentsTab />}
         {activeTab === 'tickets' && <TicketsTab />}
@@ -599,9 +611,17 @@ function StreetMode({ onBack }) {
 }
 
 // Componente da Tab Agenda
-function AgendaTab({ clients, loading, generateNavigationLink }) {
+function AgendaTab({ clients, loading, generateNavigationLink, reload }) {
   const [selectedClient, setSelectedClient] = useState(null);
-  const [showOnlyToday, setShowOnlyToday] = useState(true);
+  // "Apenas hoje" persistido — sobrevive a refresh (importante p/ lançamentos retroativos)
+  const [showOnlyToday, setShowOnlyTodayState] = useState(() => {
+    const saved = localStorage.getItem('tech_only_today');
+    return saved === null ? true : saved === '1';
+  });
+  const setShowOnlyToday = (v) => {
+    setShowOnlyTodayState(v);
+    localStorage.setItem('tech_only_today', v ? '1' : '0');
+  };
   
   // Filtrar clientes por data - APENAS ASSIGNMENTS DA AGENDA
   const filteredClients = clients.filter(client => {
@@ -624,13 +644,26 @@ function AgendaTab({ clients, loading, generateNavigationLink }) {
 
   if (selectedClient) {
     return (
-      <ClientDetails 
-        client={selectedClient} 
-        onBack={() => setSelectedClient(null)}
+      <ClientDetails
+        client={selectedClient}
+        onBack={() => { setSelectedClient(null); if (reload) reload(true); }}
         generateNavigationLink={generateNavigationLink}
       />
     );
   }
+
+  // Ordena: concluídos por último; dentro de cada grupo, respeita a sequência da rota
+  const orderedClients = [...filteredClients].sort((a, b) => {
+    const rank = (c) => {
+      const s = getCardExecutionStatus(c.items);
+      return s === 'completed' ? 2 : s === 'cancelled' ? 1 : 0;
+    };
+    const r = rank(a) - rank(b);
+    if (r !== 0) return r;
+    return (a.routeSeq ?? 999) - (b.routeSeq ?? 999);
+  });
+  const pendingCount = orderedClients.filter(c => getCardExecutionStatus(c.items) !== 'completed').length;
+  const doneCount = orderedClients.length - pendingCount;
 
   return (
     <div className="space-y-4">
@@ -638,9 +671,10 @@ function AgendaTab({ clients, loading, generateNavigationLink }) {
       <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-800">
-            Agenda do Dia - {filteredClients.length} cliente(s)
+            Agenda — {pendingCount} pendente(s)
+            {doneCount > 0 && <span className="text-sm font-normal text-gray-400"> · {doneCount} concluído(s)</span>}
           </h3>
-          
+
           <div className="flex items-center space-x-4">
             <label className="flex items-center space-x-2">
               <input
@@ -651,21 +685,21 @@ function AgendaTab({ clients, loading, generateNavigationLink }) {
               />
               <span className="text-sm text-gray-700">Apenas hoje</span>
             </label>
-            
+
             <div className="text-sm text-gray-500">
-              {showOnlyToday 
-                ? `Hoje (${new Date().toLocaleDateString('pt-BR')})` 
+              {showOnlyToday
+                ? `Hoje (${new Date().toLocaleDateString('pt-BR')})`
                 : 'Todos os pendentes'
               }
             </div>
           </div>
         </div>
       </div>
-      
-      {filteredClients.map(client => (
-        <ClientCard 
-          key={client.id} 
-          client={client} 
+
+      {orderedClients.map(client => (
+        <ClientCard
+          key={client.cardKey || client.id}
+          client={client}
           onClick={() => setSelectedClient(client)}
           generateNavigationLink={generateNavigationLink}
         />
@@ -677,10 +711,12 @@ function AgendaTab({ clients, loading, generateNavigationLink }) {
 // Card do Cliente
 function ClientCard({ client, onClick, generateNavigationLink }) {
   const { wazeUrl, mapsUrl } = generateNavigationLink(getClientAddress(client));
-  
+
   const totalValue = client.items.reduce((sum, item) => sum + item.value, 0);
   const execStatus = getCardExecutionStatus(client.items);
   const cardStyle  = CARD_STYLES[execStatus];
+  const isDone = execStatus === 'completed' || execStatus === 'cancelled';
+  const [collapsed, setCollapsed] = useState(isDone);  // concluídos começam retraídos
 
   const handleRemoveAssignment = async (assignmentId) => {
     try {
@@ -697,8 +733,34 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
     }
   };
   
+  // Card concluído/cancelado retraído — versão compacta e discreta
+  if (isDone && collapsed) {
+    return (
+      <div className={`rounded-lg border ${cardStyle.border} bg-white/60 opacity-70 hover:opacity-100 transition`}>
+        <button
+          onClick={() => setCollapsed(false)}
+          className="w-full flex items-center justify-between px-4 py-2.5 text-left"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-base">{execStatus === 'completed' ? '✅' : '✕'}</span>
+            <span className="font-medium text-gray-500 text-sm truncate line-through">{client.name}</span>
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${cardStyle.labelCls}`}>{cardStyle.label}</span>
+            <span className="text-[10px] text-gray-400">{client.items.length} item(s)</span>
+          </div>
+          <span className="text-xs text-gray-400 shrink-0">R$ {totalValue.toFixed(2)} ▾</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className={`rounded-lg shadow-md border-2 ${cardStyle.border} ${cardStyle.bg}`}>
+    <div className={`rounded-lg shadow-md border-2 ${cardStyle.border} ${cardStyle.bg} ${isDone ? 'opacity-75' : ''}`}>
+      {isDone && (
+        <button onClick={() => setCollapsed(true)}
+          className="w-full text-[10px] text-gray-400 hover:text-gray-600 py-1 border-b border-gray-100">
+          ▴ recolher (já concluído)
+        </button>
+      )}
       {/* Header do card */}
       <div className="p-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
@@ -866,6 +928,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
     { value: 'CREDITO_1X', label: 'Crédito 1x' },
     { value: 'LINK_PAGAMENTO', label: 'Link de Pagamento' },
   ]);
+  const [showDoneItems, setShowDoneItems] = useState(false);
 
   useEffect(() => {
     fetch(`${BACKEND_URL}/api/payment-methods`)
@@ -893,6 +956,29 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   const getSelectedItemObjects = () =>
     client.items.filter(i => selectedItems.has(i.id));
 
+  // Cada ação só vale para itens no status compatível — evita marcar, ex.,
+  // um item "executar no local" como "entrega efetuada".
+  const ACTION_STATUSES = {
+    CONCLUIDO: ['EXECUTAR_NO_LOCAL'],                    // Serviço Concluído
+    RETIRADA:  ['RETIRAR'],                              // Retirada Efetuada
+    ENTREGA:   ['ENTREGAR', 'AGUARDANDO_ENTREGA'],       // Entrega Efetuada
+    BUSCOU:    ['AGUARDANDO_BUSCAR', 'AGUARDANDO_ENTREGA'], // Cliente Buscou (na loja)
+  };
+  // Ação válida só se TODOS os itens selecionados estiverem em status compatível
+  const actionAllowed = (key) => {
+    const sel = getSelectedItemObjects();
+    return sel.length > 0 && sel.every(i => ACTION_STATUSES[key].includes(i.status));
+  };
+  // Status dos itens selecionados (para mensagem de ajuda quando nada se aplica)
+  const STREET_STATUS_LABELS = {
+    RETIRAR: 'Retirar', EXECUTAR_NO_LOCAL: 'Executar no local',
+    ENTREGAR: 'Entregar', AGUARDANDO_ENTREGA: 'Aguardando entrega',
+    AGUARDANDO_BUSCAR: 'Aguardando cliente buscar', COLETADO: 'Coletado',
+    EM_LAVAGEM: 'Em lavagem', CLIENTE_TROUXE: 'Cliente trouxe',
+  };
+  const selectedStatuses = [...new Set(getSelectedItemObjects().map(i => i.status))];
+  const anyPrimaryAction = ['CONCLUIDO', 'RETIRADA', 'ENTREGA', 'BUSCOU'].some(actionAllowed);
+
   const changeStatus = async (itemId, status, notes = '') => {
     const token = localStorage.getItem('superdry_token');
     return fetch(`${BACKEND_URL}/api/items/${itemId}/status`, {
@@ -902,12 +988,12 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
     });
   };
 
-  const registerPayment = async (itemId, method, value) => {
+  const registerPayment = async (itemId, method, value, notes) => {
     const token = localStorage.getItem('superdry_token');
     return fetch(`${BACKEND_URL}/api/items/${itemId}/payment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ method, value }),
+      body: JSON.stringify({ method, value, notes: notes || '' }),
     });
   };
 
@@ -1020,7 +1106,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   };
 
   // ─── confirmar pagamento (modal) ─────────────────────────────────────────────
-  const handlePaymentConfirm = async (method, collectNow) => {
+  const handlePaymentConfirm = async (method, collectNow, receivedValue, payNotes) => {
     setShowPaymentModal(false);
     setProcessing(true);
     try {
@@ -1029,18 +1115,35 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
         : type === 'ENTREGUE' ? 'ENTREGUE'
         : 'BUSCOU';
 
-      for (const id of itemIds) {
+      // Valor total dos itens selecionados (para distribuição proporcional do recebido)
+      const selObjs = itemIds.map(id => client.items.find(i => i.id === id)).filter(Boolean);
+      const totalValue = selObjs.reduce((s, i) => s + (i.value || 0), 0);
+      // Se o usuário não informou valor, usa o total do serviço
+      const totalReceived = (receivedValue != null && receivedValue > 0) ? receivedValue : totalValue;
+
+      let distributed = 0;
+      for (let idx = 0; idx < itemIds.length; idx++) {
+        const id = itemIds[idx];
         const item = client.items.find(i => i.id === id);
         await changeStatus(id, finalStatus, technicianNotes || `${type} — atendimento em campo.`);
         if (collectNow && item) {
-          await registerPayment(id, method, item.value);
+          // Distribui o valor recebido proporcionalmente; último item leva o resíduo
+          let portion;
+          if (idx === itemIds.length - 1) {
+            portion = Math.round((totalReceived - distributed) * 100) / 100;
+          } else {
+            const ratio = totalValue > 0 ? (item.value || 0) / totalValue : 1 / itemIds.length;
+            portion = Math.round(totalReceived * ratio * 100) / 100;
+            distributed += portion;
+          }
+          if (portion > 0) await registerPayment(id, method, portion, payNotes);
         }
       }
 
       const label = type === 'CONCLUIDO' ? 'Serviço concluído'
         : type === 'ENTREGUE' ? 'Entrega efetuada'
         : 'Cliente buscou';
-      alert(`${label}: ${itemIds.length} item(s) atualizado(s).${collectNow ? ' Pagamento registrado.' : ' Pagamento pendente.'}`);
+      alert(`${label}: ${itemIds.length} item(s) atualizado(s).${collectNow ? ` Pagamento de R$ ${totalReceived.toFixed(2)} registrado.` : ' Pagamento pendente.'}`);
       setSelectedItems(new Set());
       setTechnicianNotes('');
       setPendingAction(null);
@@ -1117,33 +1220,86 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
       </div>
 
       {/* Items List */}
-      <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-        <h4 className="font-medium text-gray-800 mb-3">Itens/Serviços</h4>
-        <div className="space-y-3">
-          {client.items.map(item => (
-            <div key={item.id} className="border border-gray-200 rounded-md p-3">
+      {(() => {
+        const FINISHED = new Set(['EXECUTADO','ENTREGUE','BUSCOU','CANCELADO']);
+        const pending  = client.items.filter(i => !FINISHED.has(i.status));
+        const done     = client.items.filter(i =>  FINISHED.has(i.status));
+
+        const ItemRow = (item) => {
+          const isDone = FINISHED.has(item.status);
+          return (
+            <div key={item.id} className={`border rounded-md p-3 transition ${
+              isDone ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200 bg-white'
+            }`}>
               <div className="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  checked={selectedItems.has(item.id)}
-                  onChange={(e) => handleItemSelect(item.id, e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
+                {!isDone
+                  ? <input type="checkbox" checked={selectedItems.has(item.id)}
+                      onChange={(e) => handleItemSelect(item.id, e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                  : <span className="text-green-500 text-lg w-4 text-center">✓</span>
+                }
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-800">{item.name}</span>
-                    <span className="font-medium text-green-600">R$ {item.value.toFixed(2)}</span>
+                    <span className={`font-medium ${isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                      {item.name}
+                    </span>
+                    <span className={`font-medium text-sm ${isDone ? 'text-gray-400' : 'text-green-600'}`}>
+                      R$ {item.value.toFixed(2)}
+                    </span>
                   </div>
-                  <p className="text-sm text-gray-600">Status: {item.status}</p>
-                  {item.observations && (
-                    <p className="text-sm text-gray-500 italic">Obs: {item.observations}</p>
+                  <p className={`text-xs mt-0.5 ${isDone ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {item.status}
+                    {item.payment_status && item.payment_status !== 'PENDENTE' && (
+                      <span className="ml-2 text-emerald-600">· {item.payment_status}</span>
+                    )}
+                  </p>
+                  {item.observations && !isDone && (
+                    <p className="text-xs text-gray-400 italic mt-0.5">Obs: {item.observations}</p>
                   )}
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+          );
+        };
+
+        return (
+          <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-medium text-gray-800">
+                Itens/Serviços
+                {pending.length > 0 && (
+                  <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
+                    {pending.length} pendente{pending.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </h4>
+              {done.length > 0 && (
+                <button onClick={() => setShowDoneItems(v => !v)}
+                  className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                  {showDoneItems ? '▲' : '▼'} {done.length} concluído{done.length > 1 ? 's' : ''}
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {pending.map(item => ItemRow(item))}
+            </div>
+
+            {done.length > 0 && showDoneItems && (
+              <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                {done.map(item => ItemRow(item))}
+              </div>
+            )}
+
+            {done.length > 0 && !showDoneItems && (
+              <button onClick={() => setShowDoneItems(true)}
+                className="mt-3 w-full text-xs text-gray-400 hover:text-gray-500 py-1.5 border border-dashed border-gray-200 rounded-md">
+                ▼ Ver {done.length} item{done.length > 1 ? 's' : ''} já concluído{done.length > 1 ? 's' : ''}
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Technician Notes */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-4">
@@ -1161,7 +1317,15 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
       {selectedItems.size > 0 && (
         <div className="bg-white rounded-lg shadow-md p-4">
           <h4 className="font-medium text-gray-800 mb-3">Ações para {selectedItems.size} item(s)</h4>
+          {!anyPrimaryAction && (
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2 mb-2">
+              ⚠ Nenhuma ação de conclusão se aplica à seleção atual
+              ({selectedStatuses.map(s => STREET_STATUS_LABELS[s] || s).join(', ')}).
+              Selecione itens do mesmo tipo (ex.: só itens a entregar, ou só a executar no local).
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
+            {actionAllowed('CONCLUIDO') && (
             <button
               disabled={processing}
               onClick={handleServiceCompleted}
@@ -1169,6 +1333,8 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
               <CheckCircle className="w-4 h-4" />
               <span>Serviço Concluído</span>
             </button>
+            )}
+            {actionAllowed('RETIRADA') && (
             <button
               disabled={processing}
               onClick={handlePickupDone}
@@ -1176,6 +1342,8 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
               <Package className="w-4 h-4" />
               <span>Retirada Efetuada</span>
             </button>
+            )}
+            {actionAllowed('ENTREGA') && (
             <button
               disabled={processing}
               onClick={handleDeliveryDone}
@@ -1183,6 +1351,8 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
               <Truck className="w-4 h-4" />
               <span>Entrega Efetuada</span>
             </button>
+            )}
+            {actionAllowed('BUSCOU') && (
             <button
               disabled={processing}
               onClick={handleClientPickedUp}
@@ -1190,6 +1360,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
               <User className="w-4 h-4" />
               <span>Cliente Buscou</span>
             </button>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2 mt-2">
             <button
@@ -1213,7 +1384,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
       {showPaymentModal && <PaymentModal
         items={getSelectedItemObjects()}
         onConfirm={handlePaymentConfirm}
-        onSkip={() => handlePaymentConfirm(null, false)}
+        onSkip={() => handlePaymentConfirm(null, false, 0, '')}
         onCancel={() => { setShowPaymentModal(false); setPendingAction(null); }}
         paymentMethods={paymentMethods}
       />}
@@ -1225,13 +1396,20 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
 function PaymentModal({ items, onConfirm, onSkip, onCancel, paymentMethods }) {
   const [method, setMethod] = useState('DINHEIRO');
   const total = items.reduce((s, i) => s + (i.value || 0), 0);
+  const [receivedValue, setReceivedValue] = useState(total.toFixed(2));
+  const [notes, setNotes] = useState('');
+
+  const received = parseFloat(receivedValue) || 0;
+  const diff = received - total;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end justify-center z-50 p-4">
       <div className="bg-white rounded-t-2xl w-full max-w-md p-5 space-y-4">
         <h3 className="text-lg font-bold text-gray-900">Registrar Pagamento</h3>
         <p className="text-sm text-gray-600">
-          {items.length} item(s) · Total: <strong>R$ {total.toFixed(2)}</strong>
+          {items.length} item(s) · Valor do serviço: <strong>R$ {total.toFixed(2)}</strong>
         </p>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento</label>
           <select
@@ -1244,12 +1422,45 @@ function PaymentModal({ items, onConfirm, onSkip, onCancel, paymentMethods }) {
             ))}
           </select>
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Valor Recebido</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
+            <input
+              type="number"
+              step="0.01"
+              value={receivedValue}
+              onChange={e => setReceivedValue(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+          {Math.abs(diff) >= 0.01 && (
+            <p className={`text-xs mt-1 ${diff < 0 ? 'text-amber-600' : 'text-blue-600'}`}>
+              {diff < 0
+                ? `Desconto / saldo pendente: R$ ${Math.abs(diff).toFixed(2)}`
+                : `Valor a mais (troco / adicional): R$ ${diff.toFixed(2)}`}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Observação do pagamento</label>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Ex: desconto de última hora, pagou parcial, combinou restante..."
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 resize-none"
+          />
+        </div>
+
         <div className="grid grid-cols-2 gap-2 pt-1">
           <button
-            onClick={() => onConfirm(method, true)}
+            onClick={() => onConfirm(method, true, received, notes)}
             className="bg-green-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-green-700"
           >
-            Cobrar Agora
+            Pagou Agora
           </button>
           <button
             onClick={onSkip}
@@ -1344,11 +1555,11 @@ function PartnerLabelBadge({ label }) {
 
 // ── ItemTable: reusable selectable + sortable table ─────────────────────────
 
-function ItemTable({ items: raw, selected, setSelected, columns, extraColumns }) {
+function ItemTable({ items: raw, selected, setSelected, columns, extraColumns, selectable = true }) {
   const { processed, filter, setFilter, sort, toggle } = useSortFilter(raw);
-  const allSelected = processed.length > 0 && processed.every(i => selected.has(i.id));
+  const allSelected = selectable && processed.length > 0 && processed.every(i => selected.has(i.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(processed.map(i => i.id)));
-  const toggle1 = (id) => setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  const toggle1 = (id) => { if (!selectable) return; setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; }); };
 
   return (
     <div>
@@ -1363,7 +1574,7 @@ function ItemTable({ items: raw, selected, setSelected, columns, extraColumns })
           <thead className="bg-gray-50">
             <tr>
               <SortHeader label="Cliente" field="client_name" sort={sort} toggle={toggle}
-                onSelectAll={toggleAll} allSelected={allSelected} />
+                onSelectAll={selectable ? toggleAll : undefined} allSelected={allSelected} />
               <SortHeader label="Bairro" field="neighborhood" sort={sort} toggle={toggle} />
               <SortHeader label="Orçamento" field="budget_id" sort={sort} toggle={toggle} />
               <SortHeader label="Serviço" field="service_name" sort={sort} toggle={toggle} />
@@ -1375,10 +1586,10 @@ function ItemTable({ items: raw, selected, setSelected, columns, extraColumns })
           <tbody className="divide-y divide-gray-100">
             {processed.map(item => (
               <tr key={item.id} onClick={() => toggle1(item.id)}
-                className={`cursor-pointer hover:bg-blue-50 transition-colors ${selected.has(item.id) ? 'bg-blue-50' : ''}`}>
+                className={`transition-colors ${selectable ? 'cursor-pointer hover:bg-blue-50' : ''} ${selectable && selected.has(item.id) ? 'bg-blue-50' : ''}`}>
                 <td className="px-2 py-2">
                   <div className="flex items-center gap-1.5">
-                    <input type="checkbox" checked={selected.has(item.id)} readOnly className="h-3.5 w-3.5" />
+                    {selectable && <input type="checkbox" checked={selected.has(item.id)} readOnly className="h-3.5 w-3.5" />}
                     <span className="font-medium text-gray-900">{item.client_name}</span>
                   </div>
                 </td>
@@ -1407,14 +1618,22 @@ function ItemTable({ items: raw, selected, setSelected, columns, extraColumns })
 
 // ── Panel wrapper ─────────────────────────────────────────────────────────────
 
-function Panel({ title, onClose, children }) {
+const PANEL_THEMES = {
+  blue:   { header: 'bg-blue-600',   body: 'bg-blue-50' },
+  purple: { header: 'bg-purple-600', body: 'bg-purple-50' },
+  green:  { header: 'bg-green-600',  body: 'bg-green-50' },
+  teal:   { header: 'bg-teal-600',   body: 'bg-teal-50' },
+};
+
+function Panel({ title, onClose, children, color = 'blue' }) {
+  const t = PANEL_THEMES[color] || PANEL_THEMES.blue;
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex flex-col">
-      <div className="bg-white flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
-        <h3 className="font-semibold text-gray-900">{title}</h3>
-        <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
+      <div className={`${t.header} text-white flex items-center justify-between px-4 py-3 shrink-0`}>
+        <h3 className="font-semibold">{title}</h3>
+        <button onClick={onClose}><X className="w-5 h-5 text-white/90" /></button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 bg-white">{children}</div>
+      <div className={`flex-1 overflow-y-auto p-4 ${t.body}`}>{children}</div>
     </div>
   );
 }
@@ -1441,7 +1660,7 @@ function LawagemPanel({ items, onClose, onDone }) {
   };
 
   return (
-    <Panel title="Lavagem — Enviar Itens" onClose={onClose}>
+    <Panel title="Lavagem — Enviar Itens" onClose={onClose} color="blue">
       {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
       <div className="mb-3 flex items-center gap-3">
         <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
@@ -1520,7 +1739,7 @@ function MeasuresPanel({ items, onClose, onDone }) {
   );
 
   return (
-    <Panel title="Identificação e Medidas" onClose={onClose}>
+    <Panel title="Identificação e Medidas" onClose={onClose} color="purple">
       {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
 
       {/* ── Tabela compacta ── */}
@@ -1730,7 +1949,7 @@ function RecolherPanel({ items, onClose, onDone }) {
   };
 
   return (
-    <Panel title="Recolher Tapetes / Itens" onClose={onClose}>
+    <Panel title="Recolher Tapetes / Itens" onClose={onClose} color="green">
       {flash && <div className="mb-3 text-sm bg-green-100 text-green-800 px-3 py-2 rounded">{flash}</div>}
       <p className="text-xs text-gray-500 mb-3">
         Próprios → AGUARDANDO_ENTREGA · Parceiros → AGUARDANDO_BUSCAR
@@ -1743,7 +1962,7 @@ function RecolherPanel({ items, onClose, onDone }) {
       <div className="mt-4 flex justify-end gap-2">
         <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700">Cancelar</button>
         <button onClick={confirm} disabled={!selected.size || saving}
-          className="px-5 py-2 rounded-lg bg-purple-600 text-white text-sm font-semibold disabled:opacity-50">
+          className="px-5 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold disabled:opacity-50">
           {saving ? 'Salvando…' : `Confirmar Recolhimento (${selected.size})`}
         </button>
       </div>
@@ -1755,16 +1974,11 @@ function RecolherPanel({ items, onClose, onDone }) {
 
 function ProntosPanel({ items, onClose }) {
   const eligible = items.filter(i => ['AGUARDANDO_ENTREGA','AGUARDANDO_BUSCAR','ENTREGAR'].includes(i.status));
-
-  const STATUS_LABEL = {
-    AGUARDANDO_ENTREGA: { label: 'Aguardando Entrega', bg: 'bg-green-100 text-green-800' },
-    AGUARDANDO_BUSCAR:  { label: 'Cliente Busca',       bg: 'bg-purple-100 text-purple-800' },
-    ENTREGAR:           { label: 'Em Rota',              bg: 'bg-blue-100 text-blue-800' },
-  };
+  const total = eligible.reduce((s, i) => s + (i.total_value || 0), 0);
 
   return (
-    <Panel title="Tapetes Prontos / Aguardando Entrega" onClose={onClose}>
-      <p className="text-xs text-gray-500 mb-4">
+    <Panel title="Tapetes Prontos / Aguardando Entrega" onClose={onClose} color="teal">
+      <p className="text-xs text-gray-500 mb-3">
         Itens que já saíram da lavagem e estão disponíveis para entrega ou retirada pelo cliente.
       </p>
       {eligible.length === 0 ? (
@@ -1773,28 +1987,19 @@ function ProntosPanel({ items, onClose }) {
           <p className="text-sm">Nenhum item pronto no momento.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {eligible.map(item => {
-            const s = STATUS_LABEL[item.status] || { label: item.status, bg: 'bg-gray-100 text-gray-700' };
-            return (
-              <div key={item.id} className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl">
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-gray-900 text-sm truncate">{item.client_name}</div>
-                  <div className="text-xs text-gray-500">{item.service_name} · {item.neighborhood || '—'}</div>
-                  {item.partner_label && (
-                    <div className="mt-0.5"><PartnerLabelBadge label={item.partner_label} /></div>
-                  )}
-                </div>
-                <div className="text-right shrink-0 space-y-1">
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.bg}`}>{s.label}</span>
-                  <div className="text-xs font-bold text-gray-700">R${(item.total_value||0).toFixed(2)}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <ItemTable items={eligible} selectable={false}
+          extraColumns={['Etiqueta', 'Valor']}
+          columns={item => (
+            <>
+              <td className="px-2 py-2"><PartnerLabelBadge label={item.partner_label} /></td>
+              <td className="px-2 py-2 font-bold text-gray-700 whitespace-nowrap">R${(item.total_value||0).toFixed(2)}</td>
+            </>
+          )} />
       )}
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex items-center justify-between">
+        <span className="text-xs text-gray-500">
+          {eligible.length} item(s) · Total <strong className="text-gray-800">R${total.toFixed(2)}</strong>
+        </span>
         <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700">Fechar</button>
       </div>
     </Panel>
@@ -2009,8 +2214,6 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
   const [damageInfo, setDamageInfo] = useState({});
   const [currentPhotoForObservation, setCurrentPhotoForObservation] = useState(null);
   const [flash, setFlash] = useState('');
-  
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
   const showFlash = (msg) => {
     setFlash(msg);

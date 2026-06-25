@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
-  Plus, Search, FileText, Loader2, Edit2, Trash2, Eye,
-  Download, MessageCircle, AlertTriangle, ChevronRight, Layers,
-  User, Phone, X,
+  Plus, Search, FileText, Loader2, Edit2, Trash2,
+  Download, MessageCircle, AlertTriangle, ChevronDown, ChevronUp,
+  User, X, ArrowUpDown, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { budgetsApi, clientsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,97 +12,102 @@ import {
   STATUS_COLOR, PAYMENT_STATUS_COLOR, fmtMoney, normalize,
 } from './budgets/_constants';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+import { BACKEND_URL } from '../lib/backendUrl';
 
-function BudgetCard({ budget, onEdit, onDelete, onItemClick, onPDF, onWhats }) {
+// ── Linha da tabela ───────────────────────────────────────────────────────────
+function BudgetRow({ budget, onEdit, onDelete, onItemClick, onPDF, onWhats }) {
   const [expanded, setExpanded] = useState(false);
   const items = budget.items || [];
-  const paid = items.reduce((a, i) => a + Number(i.paid_value || 0), 0);
-  const total = Number(budget.total_value || 0);
-  const allPaid = items.length > 0 && items.every(i => i.payment_status === 'PAGO' || i.payment_status === 'CORTESIA');
+  const paid   = items.reduce((a, i) => a + Number(i.paid_value || 0), 0);
+  const total  = Number(budget.total_value || 0);
+  const allPaid = items.length > 0 && items.every(i => ['PAGO','CORTESIA'].includes(i.payment_status));
   const anyPaid = paid > 0;
+  const anyPending = items.some(i => i.payment_status === 'PENDENTE');
+
+  const payBadge = allPaid
+    ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-semibold">PAGO</span>
+    : anyPaid
+      ? <span className="text-[10px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-full font-semibold">PARCIAL</span>
+      : <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">PENDENTE</span>;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="p-3 sm:p-4">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[11px] font-mono font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">{budget.id}</span>
-              {allPaid && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">PAGO</span>}
-              {!allPaid && anyPaid && <span className="text-[10px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded font-semibold">PARCIAL</span>}
-            </div>
-            <h3 className="font-semibold text-gray-900 truncate">{budget.client_name}</h3>
-            <p className="text-xs text-gray-500">
-              {items.length} item(ns) • {budget.salesperson} • {new Date(budget.created_at).toLocaleDateString('pt-BR')}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-lg sm:text-xl font-bold text-emerald-700">{fmtMoney(total)}</div>
-            {anyPaid && (
-              <div className="text-[11px] text-gray-500">
-                Pago: <span className="text-emerald-700 font-semibold">{fmtMoney(paid)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Mini status dos itens */}
-        {items.length > 0 && (
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="w-full mt-1 flex items-center justify-between text-xs text-blue-700 font-medium py-1"
-          >
-            <span className="flex items-center gap-1">
-              <Layers className="w-3.5 h-3.5" />
-              {expanded ? 'Recolher itens' : 'Ver itens'}
-            </span>
-            <ChevronRight className={`w-4 h-4 transition ${expanded ? 'rotate-90' : ''}`} />
+    <>
+      <tr className="border-b border-gray-100 hover:bg-gray-50 transition group">
+        {/* ID */}
+        <td className="px-3 py-2.5 whitespace-nowrap">
+          <span className="text-[11px] font-mono font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">{budget.id}</span>
+        </td>
+        {/* Cliente */}
+        <td className="px-3 py-2.5">
+          <div className="font-medium text-gray-900 text-sm truncate max-w-[180px]">{budget.client_name}</div>
+          <div className="text-[10px] text-gray-400">{budget.salesperson}</div>
+        </td>
+        {/* Itens */}
+        <td className="px-3 py-2.5">
+          <button onClick={() => setExpanded(v => !v)}
+            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
+            {items.length} item{items.length !== 1 ? 's' : ''}
+            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
-        )}
-
-        {expanded && (
-          <div className="mt-2 space-y-1">
-            {items.map(it => (
-              <button
-                key={it.id}
-                onClick={() => onItemClick(it.id)}
-                className="w-full flex items-center gap-2 bg-gray-50 hover:bg-blue-50 rounded-lg px-2 py-1.5 text-left text-xs transition"
-              >
-                <span className="font-mono text-[10px] text-gray-500">{it.id}</span>
-                <span className="flex-1 truncate font-medium text-gray-900">{it.service_name}</span>
-                <span className={`px-1.5 py-0.5 rounded text-[10px] ${STATUS_COLOR[it.status] || 'bg-gray-100 text-gray-700'}`}>
-                  {it.status}
-                </span>
-                <span className={`px-1.5 py-0.5 rounded text-[10px] ${PAYMENT_STATUS_COLOR[it.payment_status] || 'bg-gray-100 text-gray-700'}`}>
-                  {it.payment_status || 'PENDENTE'}
-                </span>
-                <span className="font-semibold text-gray-900 whitespace-nowrap">{fmtMoney(it.total_value)}</span>
-              </button>
-            ))}
+        </td>
+        {/* Valor */}
+        <td className="px-3 py-2.5 whitespace-nowrap text-right">
+          <div className="font-bold text-emerald-700 text-sm">{fmtMoney(total)}</div>
+          {anyPaid && <div className="text-[10px] text-gray-400">pago {fmtMoney(paid)}</div>}
+        </td>
+        {/* Status pgto */}
+        <td className="px-3 py-2.5 whitespace-nowrap">{payBadge}</td>
+        {/* Data */}
+        <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-500">
+          {new Date(budget.created_at).toLocaleDateString('pt-BR')}
+        </td>
+        {/* Ações */}
+        <td className="px-3 py-2.5 whitespace-nowrap">
+          <div className="flex items-center gap-1">
+            <button onClick={() => onEdit(budget)} title="Editar"
+              className="p-1.5 rounded hover:bg-amber-50 text-amber-600 hover:text-amber-700">
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => onPDF(budget)} title="PDF"
+              className="p-1.5 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-700">
+              <Download className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => onWhats(budget)} title="WhatsApp"
+              className="p-1.5 rounded hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700">
+              <MessageCircle className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => onDelete(budget)} title="Excluir"
+              className="p-1.5 rounded hover:bg-rose-50 text-rose-500 hover:text-rose-700">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-4 border-t border-gray-100">
-        <button onClick={() => onEdit(budget)}
-          className="py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 flex items-center justify-center gap-1">
-          <Edit2 className="w-3.5 h-3.5" /> Editar
-        </button>
-        <button onClick={() => onPDF(budget)}
-          className="py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 flex items-center justify-center gap-1 border-l border-gray-100">
-          <Download className="w-3.5 h-3.5" /> PDF
-        </button>
-        <button onClick={() => onWhats(budget)}
-          className="py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 flex items-center justify-center gap-1 border-l border-gray-100">
-          <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
-        </button>
-        <button onClick={() => onDelete(budget)}
-          className="py-2 text-xs font-medium text-rose-700 hover:bg-rose-50 flex items-center justify-center gap-1 border-l border-gray-100">
-          <Trash2 className="w-3.5 h-3.5" /> Excluir
-        </button>
-      </div>
-    </div>
+        </td>
+      </tr>
+      {/* Itens expandidos */}
+      {expanded && (
+        <tr className="bg-blue-50/40 border-b border-gray-100">
+          <td colSpan={7} className="px-6 py-2">
+            <div className="space-y-1">
+              {items.map(it => (
+                <button key={it.id} onClick={() => onItemClick(it.id)}
+                  className="w-full flex items-center gap-2 bg-white hover:bg-blue-50 rounded-lg px-3 py-1.5 text-left text-xs border border-gray-100 transition">
+                  <span className="font-mono text-[10px] text-gray-400 w-36 shrink-0">{it.id}</span>
+                  <span className="flex-1 truncate font-medium text-gray-800">{it.service_name}</span>
+                  {it.area_m2 && <span className="text-[10px] text-gray-400 shrink-0">{it.area_m2}m²</span>}
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${STATUS_COLOR[it.status] || 'bg-gray-100 text-gray-700'}`}>
+                    {it.status}
+                  </span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${PAYMENT_STATUS_COLOR[it.payment_status] || 'bg-gray-100 text-gray-700'}`}>
+                    {it.payment_status || 'PENDENTE'}
+                  </span>
+                  <span className="font-semibold text-gray-900 whitespace-nowrap shrink-0">{fmtMoney(it.total_value)}</span>
+                </button>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -282,17 +287,55 @@ function SmartSearchBar({ budgets, search, setSearch, onOpenBudget, onQuickCreat
   );
 }
 
+const SORT_COLS = {
+  id:           (a, b) => a.id.localeCompare(b.id),
+  client_name:  (a, b) => (a.client_name||'').localeCompare(b.client_name||''),
+  items:        (a, b) => (a.items?.length||0) - (b.items?.length||0),
+  total_value:  (a, b) => (a.total_value||0) - (b.total_value||0),
+  payment:      (a, b) => {
+    const rank = s => s === 'PAGO' ? 0 : s === 'PARCIAL' ? 1 : 2;
+    const ps = b => {
+      const items = b.items || [];
+      if (items.every(i => ['PAGO','CORTESIA'].includes(i.payment_status))) return 'PAGO';
+      if (items.some(i => (i.paid_value||0) > 0)) return 'PARCIAL';
+      return 'PENDENTE';
+    };
+    return rank(ps(a)) - rank(ps(b));
+  },
+  created_at:   (a, b) => new Date(a.created_at) - new Date(b.created_at),
+};
+
+function SortHeader({ col, label, sort, onSort }) {
+  const active = sort.col === col;
+  return (
+    <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide cursor-pointer select-none hover:text-gray-800 whitespace-nowrap"
+      onClick={() => onSort(col)}>
+      <span className="flex items-center gap-1">
+        {label}
+        {active
+          ? sort.dir === 'asc' ? <ArrowUp className="w-3 h-3 text-blue-600" /> : <ArrowDown className="w-3 h-3 text-blue-600" />
+          : <ArrowUpDown className="w-3 h-3 text-gray-300" />}
+      </span>
+    </th>
+  );
+}
+
 export function Budgets() {
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState({ col: 'created_at', dir: 'desc' });
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [itemDetailId, setItemDetailId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [quickRegisterName, setQuickRegisterName] = useState(null); // null=closed, string=open
+  const [quickRegisterName, setQuickRegisterName] = useState(null);
   const [preselectedClient, setPreselectedClient] = useState(null);
   const { user } = useAuth();
+
+  const handleSort = (col) => setSort(s =>
+    s.col === col ? { col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' }
+  );
 
   const load = async () => {
     try {
@@ -308,13 +351,15 @@ export function Budgets() {
 
   const filtered = useMemo(() => {
     const q = normalize(search);
-    if (!q) return budgets;
-    return budgets.filter(b =>
+    let list = !q ? [...budgets] : budgets.filter(b =>
       normalize(b.id).includes(q) ||
       normalize(b.client_name || '').includes(q) ||
       (b.items || []).some(it => normalize(it.id).includes(q) || normalize(it.service_name || '').includes(q))
     );
-  }, [budgets, search]);
+    const fn = SORT_COLS[sort.col];
+    if (fn) list.sort((a, b) => sort.dir === 'asc' ? fn(a, b) : fn(b, a));
+    return list;
+  }, [budgets, search, sort]);
 
   const openNew = () => { setPreselectedClient(null); setEditing(null); setEditorOpen(true); };
   const openEdit = (b) => { setPreselectedClient(null); setEditing(b); setEditorOpen(true); };
@@ -411,18 +456,35 @@ export function Budgets() {
           {budgets.length === 0 ? 'Nenhum orçamento cadastrado ainda.' : 'Nenhum orçamento encontrado.'}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {filtered.map(b => (
-            <BudgetCard
-              key={b.id}
-              budget={b}
-              onEdit={openEdit}
-              onDelete={(b) => setDeleteTarget(b)}
-              onItemClick={setItemDetailId}
-              onPDF={handlePDF}
-              onWhats={handleWhats}
-            />
-          ))}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <SortHeader col="id"          label="Orçamento" sort={sort} onSort={handleSort} />
+                  <SortHeader col="client_name" label="Cliente"   sort={sort} onSort={handleSort} />
+                  <SortHeader col="items"       label="Itens"     sort={sort} onSort={handleSort} />
+                  <SortHeader col="total_value" label="Valor"     sort={sort} onSort={handleSort} />
+                  <SortHeader col="payment"     label="Pagamento" sort={sort} onSort={handleSort} />
+                  <SortHeader col="created_at"  label="Data"      sort={sort} onSort={handleSort} />
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(b => (
+                  <BudgetRow
+                    key={b.id}
+                    budget={b}
+                    onEdit={openEdit}
+                    onDelete={(b) => setDeleteTarget(b)}
+                    onItemClick={setItemDetailId}
+                    onPDF={handlePDF}
+                    onWhats={handleWhats}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

@@ -124,7 +124,7 @@ const EditableField = ({ label, description, value, onSave, placeholder }) => {
   );
 };
 
-export const BudgetConfig = () => {
+export const BudgetConfig = ({ embedded = false }) => {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -173,13 +173,15 @@ export const BudgetConfig = () => {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Configurações do Orçamento</h1>
-        <p className="text-gray-600 mt-2">
-          Configure os textos de riscos, advertências e condições gerais que aparecerão nos orçamentos PDF
-        </p>
-      </div>
+    <div className={embedded ? '' : 'p-6 max-w-6xl mx-auto'}>
+      {!embedded && (
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">Configurações do Orçamento</h1>
+          <p className="text-gray-600 mt-2">
+            Configure os textos de riscos, advertências e condições gerais que aparecerão nos orçamentos PDF
+          </p>
+        </div>
+      )}
 
       {/* Risk Texts Section */}
       <div className="mb-12">

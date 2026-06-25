@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   X, Save, Plus, Trash2, ChevronDown, ChevronUp, Loader2, MapPin,
-  Calendar, User as UserIcon, CreditCard, FileText, Search, AlertCircle,
+  Calendar, User as UserIcon, CreditCard, FileText, Search, AlertCircle, Copy,
 } from 'lucide-react';
 import { clientsApi, servicesApi, placesApi, budgetsApi, usersApi } from '../../services/api';
+import { BACKEND_URL } from '../../lib/backendUrl';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   EXECUTION_MODES, EXEC_MODE_TO_STATUS, PAYMENT_METHODS,
@@ -105,8 +106,10 @@ function AddressAutocomplete({ value, onSelect, placeholder, compact = false }) 
 }
 
 // Sub-form para um item individual
-function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods = PAYMENT_METHODS, salespersons = [] }) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
+function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, paymentMethods = PAYMENT_METHODS, salespersons = [] }) {
+  const [showAdvanced, setShowAdvanced] = useState(
+    !!(item.pickup_address || item.execution_address || item.delivery_address)
+  );
   const [serviceSearch, setServiceSearch] = useState('');
   const [showServicePicker, setShowServicePicker] = useState(false);
 
@@ -119,6 +122,12 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
   }, [services, serviceSearch]);
 
   const selectService = (s) => {
+    // Serviços de parceiro → CLIENTE_TROUXE automaticamente
+    const isParceiro = /parceiro/i.test(s.name);
+    const execMode = isParceiro ? 'CLIENTE_TROUXE'
+      : s.execution_location === 'NO_LOCAL' ? 'EXECUTAR_NO_LOCAL'
+      : s.execution_location === 'CLIENTE_TROUXE' ? 'CLIENTE_TROUXE'
+      : 'RETIRAR_E_LEVAR';
     onChange({
       ...item,
       service_id: s.id,
@@ -128,10 +137,8 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
       measure_type: s.measure_type,
       execution_location: s.execution_location,
       unit_price: s.sale_price || 0,
-      status: s.default_service_status || 'RETIRAR',
-      execution_mode: s.execution_location === 'NO_LOCAL' ? 'EXECUTAR_NO_LOCAL'
-        : s.execution_location === 'CLIENTE_TROUXE' ? 'CLIENTE_TROUXE'
-        : 'RETIRAR_E_LEVAR',
+      status: isParceiro ? 'CLIENTE_TROUXE' : (s.default_service_status || 'RETIRAR'),
+      execution_mode: execMode,
     });
     setShowServicePicker(false);
     setServiceSearch('');
@@ -168,10 +175,24 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
   return (
     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
       <div className="bg-blue-600 text-white px-3 py-2 flex items-center justify-between">
-        <div className="text-sm font-semibold">Item #{idx + 1}{item.service_name ? ` — ${item.service_name}` : ''}</div>
-        <button onClick={onRemove} className="p-1 hover:bg-white/20 rounded">
-          <Trash2 className="w-4 h-4" />
-        </button>
+        <div className="text-sm font-semibold flex items-center gap-2">
+          Item #{idx + 1}{item.service_name ? ` — ${item.service_name}` : ''}
+          {(item.pickup_address || item.execution_address || item.delivery_address) && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-normal">
+              <MapPin className="w-3 h-3" /> endereço próprio
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {onDuplicate && (
+            <button onClick={onDuplicate} className="p-1 hover:bg-white/20 rounded" title="Duplicar para outro endereço">
+              <Copy className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={onRemove} className="p-1 hover:bg-white/20 rounded" title="Remover item">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div className="p-3 space-y-3">
@@ -237,7 +258,7 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
               value={item.quantity || ''}
               onChange={(e) => onChange({ ...item, quantity: Number(e.target.value) || 1 })}
               disabled={needsArea || needsLinear || needsDiameter}
-              className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100"
+              onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100"
             />
           </div>
           <div>
@@ -246,7 +267,7 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
               type="number" step="0.01"
               value={item.unit_price || ''}
               onChange={(e) => onChange({ ...item, unit_price: Number(e.target.value) })}
-              className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"
+              onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"
             />
           </div>
           <div>
@@ -264,13 +285,13 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
               <label className="block text-xs font-medium text-gray-600 mb-1">Largura (m)</label>
               <input type="number" step="0.01" value={item.width || ''}
                 onChange={(e) => onChange({ ...item, width: Number(e.target.value) })}
-                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
+                onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Altura (m)</label>
               <input type="number" step="0.01" value={item.height || ''}
                 onChange={(e) => onChange({ ...item, height: Number(e.target.value) })}
-                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
+                onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
           </div>
         )}
@@ -280,13 +301,13 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
               <label className="block text-xs font-medium text-gray-600 mb-1">Varões</label>
               <input type="number" value={item.fabric_folds || ''}
                 onChange={(e) => onChange({ ...item, fabric_folds: Number(e.target.value) })}
-                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
+                onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Tecido/varão (m)</label>
               <input type="number" step="0.01" value={item.fabric_per_fold ?? 18}
                 onChange={(e) => onChange({ ...item, fabric_per_fold: Number(e.target.value) })}
-                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
+                onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
           </div>
         )}
@@ -295,7 +316,7 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
             <label className="block text-xs font-medium text-gray-600 mb-1">Diâmetro (m)</label>
             <input type="number" step="0.01" value={item.diameter || ''}
               onChange={(e) => onChange({ ...item, diameter: Number(e.target.value) })}
-              className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
+              onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
         )}
 
@@ -353,33 +374,49 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
             </label>
 
             {/* Endereços específicos por etapa */}
-            {['RETIRAR_E_LEVAR', 'EXECUTAR_NO_LOCAL'].includes(item.execution_mode || 'RETIRAR_E_LEVAR') && (
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  {item.execution_mode === 'EXECUTAR_NO_LOCAL' ? 'Endereço de execução' : 'Endereço de retirada'} (override)
-                </label>
-                <AddressAutocomplete
-                  compact
-                  value={(item.execution_mode === 'EXECUTAR_NO_LOCAL' ? item.execution_address : item.pickup_address)?.full_address || ''}
-                  onSelect={(addr) => onChange({
-                    ...item,
-                    ...(item.execution_mode === 'EXECUTAR_NO_LOCAL'
-                      ? { execution_address: addr }
-                      : { pickup_address: addr }),
-                  })}
-                  placeholder="Padrão = endereço do cliente"
-                />
-              </div>
-            )}
+            {['RETIRAR_E_LEVAR', 'EXECUTAR_NO_LOCAL'].includes(item.execution_mode || 'RETIRAR_E_LEVAR') && (() => {
+              const isExec = item.execution_mode === 'EXECUTAR_NO_LOCAL';
+              const field = isExec ? 'execution_address' : 'pickup_address';
+              const addr = item[field];
+              return (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {isExec ? 'Endereço de execução' : 'Endereço de retirada'} (override)
+                  </label>
+                  <AddressAutocomplete
+                    compact
+                    value={addr?.full_address || ''}
+                    onSelect={(a) => onChange({ ...item, [field]: { ...a, complement: addr?.complement || '' } })}
+                    placeholder="Padrão = endereço do cliente"
+                  />
+                  {addr?.full_address && (
+                    <input
+                      value={addr.complement || ''}
+                      onChange={(e) => onChange({ ...item, [field]: { ...addr, complement: e.target.value } })}
+                      placeholder="Complemento (apto, bloco, quadra, lote…)"
+                      className="w-full mt-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs"
+                    />
+                  )}
+                </div>
+              );
+            })()}
             {['RETIRAR_E_LEVAR', 'CLIENTE_TROUXE'].includes(item.execution_mode || 'RETIRAR_E_LEVAR') && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Endereço de entrega (override)</label>
                 <AddressAutocomplete
                   compact
                   value={item.delivery_address?.full_address || ''}
-                  onSelect={(addr) => onChange({ ...item, delivery_address: addr })}
+                  onSelect={(a) => onChange({ ...item, delivery_address: { ...a, complement: item.delivery_address?.complement || '' } })}
                   placeholder="Padrão = endereço do cliente"
                 />
+                {item.delivery_address?.full_address && (
+                  <input
+                    value={item.delivery_address.complement || ''}
+                    onChange={(e) => onChange({ ...item, delivery_address: { ...item.delivery_address, complement: e.target.value } })}
+                    placeholder="Complemento (apto, bloco, quadra, lote…)"
+                    className="w-full mt-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs"
+                  />
+                )}
               </div>
             )}
 
@@ -498,7 +535,7 @@ function ItemSubForm({ item, services, onChange, onRemove, idx, paymentMethods =
                     value={item.commission_pct ?? ''}
                     onChange={e => onChange({ ...item, commission_pct: e.target.value ? parseFloat(e.target.value) : null })}
                     placeholder="0"
-                    className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+                    onFocus={(e) => e.target.select()} className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
                   />
                   <span className="text-xs text-gray-500 shrink-0">%</span>
                 </div>
@@ -549,6 +586,12 @@ function BatchModal({ services, onClose, onAdd }) {
   const [observations, setObservations] = useState('');
   const [useGenericName, setUseGenericName] = useState(false);
   const [genericName, setGenericName] = useState('Tapete');
+
+  // Regra: nome genérico = parceiro → modo de execução CLIENTE_TROUXE automaticamente
+  const handleGenericToggle = (checked) => {
+    setUseGenericName(checked);
+    if (checked) setExecMode('CLIENTE_TROUXE');
+  };
   const [serviceSearch, setServiceSearch] = useState('');
   const [showServicePicker, setShowServicePicker] = useState(false);
 
@@ -566,7 +609,17 @@ function BatchModal({ services, onClose, onAdd }) {
     setServiceId(svc.id);
     setServiceName(svc.name);
     setUnitPrice(svc.sale_price || 0);
-    setExecMode(svc.execution_location === 'NO_LOCAL' ? 'EXECUTAR_NO_LOCAL' : 'RETIRAR_E_LEVAR');
+    // Serviços de parceiro (nome contém "parceiro") → CLIENTE_TROUXE automaticamente
+    const isParceiro = /parceiro/i.test(svc.name);
+    if (isParceiro) {
+      setExecMode('CLIENTE_TROUXE');
+    } else if (svc.execution_location === 'NO_LOCAL') {
+      setExecMode('EXECUTAR_NO_LOCAL');
+    } else if (svc.execution_location === 'CLIENTE_TROUXE') {
+      setExecMode('CLIENTE_TROUXE');
+    } else {
+      setExecMode('RETIRAR_E_LEVAR');
+    }
     setShowServicePicker(false);
     setServiceSearch('');
   };
@@ -604,16 +657,18 @@ function BatchModal({ services, onClose, onAdd }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4"
+      style={{ alignItems: 'flex-end' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md"
+        style={{ maxHeight: 'min(70dvh, 70vh)', overflowY: 'auto' }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 sticky top-0 bg-white z-10">
           <h3 className="font-semibold text-gray-900">Lançamento em Lote</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
         <div className="px-5 py-4 space-y-4">
           {/* Modo genérico para parceiros */}
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={useGenericName} onChange={e => setUseGenericName(e.target.checked)} />
+            <input type="checkbox" checked={useGenericName} onChange={e => handleGenericToggle(e.target.checked)} />
             <span>Usar nome genérico (registro de parceiro)</span>
           </label>
 
@@ -639,7 +694,7 @@ function BatchModal({ services, onClose, onAdd }) {
                   <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
                 </button>
                 {showServicePicker && (
-                  <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col">
+                  <div className="absolute z-20 bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-hidden flex flex-col">
                     <div className="p-2 border-b border-gray-100">
                       <div className="relative">
                         <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -682,13 +737,13 @@ function BatchModal({ services, onClose, onAdd }) {
               <label className="block text-xs font-medium text-gray-600 mb-1">Quantidade</label>
               <input type="number" min={1} max={100} value={qty}
                 onChange={e => setQty(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                onFocus={(e) => e.target.select()} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Valor unitário (R$)</label>
               <input type="number" min={0} step="0.01" value={unitPrice}
                 onChange={e => setUnitPrice(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                onFocus={(e) => e.target.select()} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
           </div>
 
@@ -740,6 +795,13 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
   const [error, setError] = useState('');
   const [clientSearch, setClientSearch] = useState('');
   const [batchOpen, setBatchOpen] = useState(false);
+  // Cadastro rápido de cliente (inline na tela de orçamento)
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [qcName, setQcName] = useState('');
+  const [qcPhone, setQcPhone] = useState('');
+  const [qcAddr, setQcAddr] = useState(null);       // objeto do AddressAutocomplete
+  const [qcComplement, setQcComplement] = useState('');
+  const [qcSaving, setQcSaving] = useState(false);
   const [form, setForm] = useState({
     client_id: budget?.client_id || preselectedClient?.id || '',
     client_name: budget?.client_name || preselectedClient?.name || '',
@@ -751,6 +813,8 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
   });
   // If preselectedClient provided, skip to step 2 directly
   const [step, setStep] = useState(preselectedClient ? 2 : 1);
+  // Quando o usuário escolhe o método manualmente, paramos de sugerir automaticamente.
+  const [paymentTouched, setPaymentTouched] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -758,7 +822,7 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
         const [c, s, pm, sp] = await Promise.all([
           clientsApi.getAll({ limit: 1000 }),
           servicesApi.getAll({ active_only: true }),
-          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/payment-methods`).then(r => r.json()),
+          fetch(`${BACKEND_URL}/api/payment-methods`).then(r => r.json()),
           usersApi.salespersons(),
         ]);
         setClients(c.data || []);
@@ -766,9 +830,6 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
         const methods = pm.payment_methods || PAYMENT_METHODS;
         setPaymentMethods(methods);
         setSalespersons(sp.data || []);
-        if (!budget?.payment_method && methods.length > 0) {
-          setForm(prev => ({ ...prev, payment_method: methods[0].value }));
-        }
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();
@@ -793,10 +854,75 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
     linear: (form.items || []).reduce((acc, i) => acc + Number(i.linear_meters || 0), 0),
   }), [form.items]);
 
+  // Condição de pagamento padrão = Cartão de Crédito, com parcelas pelo valor do
+  // orçamento (até 200→2x, 300→3x, 400→4x, 500→5x, 600+→6x). Apenas sugestão:
+  // some assim que o usuário escolhe outro método. O pagamento real é no Financeiro.
+  useEffect(() => {
+    if (budget?.payment_method) return;   // edição: respeita o método já salvo
+    if (paymentTouched) return;           // usuário definiu manualmente
+    if (!paymentMethods.length) return;
+    const t = Math.round((totals.value || 0) * 100) / 100;
+    const n = t <= 0 ? 1 : Math.min(6, Math.max(2, Math.ceil(t / 100)));
+    const target = paymentMethods.find(m => m.value === `CREDITO_${n}X`)
+                || paymentMethods.find(m => /credit|cr[eé]dito/i.test(`${m.value} ${m.label}`));
+    if (target) {
+      setForm(prev => prev.payment_method === target.value ? prev : { ...prev, payment_method: target.value });
+    }
+  }, [totals.value, paymentMethods, paymentTouched, budget]);
+
   const selectClient = (c) => {
     setForm(f => ({ ...f, client_id: c.id, client_name: c.name }));
     setClientSearch('');
     setStep(2);
+  };
+
+  // Cola texto do WhatsApp e extrai nome + telefone.
+  // Remove chars Unicode invisíveis que o WhatsApp injeta (U+202A, U+202C, U+2011, etc.)
+  // antes de checar o padrão de telefone — sem isso nonPhone.length fica > 2 e o número
+  // é ignorado.
+  const quickParsePaste = (text) => {
+    const INVIS = /[​-‏‪-‮⁠-⁯﻿]/g;
+    const lines = text.split('\n')
+      .map(l => l.replace(INVIS, '').trim())
+      .filter(Boolean);
+    for (const line of lines) {
+      const digits = line.replace(/\D/g, '');
+      const nonPhone = line.replace(/[\d\s()+\-.]/g, '');
+      if (!qcPhone && digits.length >= 8 && digits.length <= 13 && nonPhone.length <= 2) {
+        setQcPhone(line);
+      } else if (!qcName) {
+        setQcName(line);
+      }
+    }
+  };
+
+  // Cria o cliente e já seleciona no orçamento
+  const quickCreateClient = async () => {
+    if (!qcName.trim()) { setError('Informe o nome do cliente.'); return; }
+    if (!qcPhone.trim()) { setError('Informe o telefone do cliente.'); return; }
+    setQcSaving(true);
+    setError('');
+    try {
+      const address = {
+        full_address: qcAddr?.full_address || '',
+        neighborhood: qcAddr?.neighborhood || '',
+        city: qcAddr?.city || '',
+        state: qcAddr?.state || '',
+        latitude: qcAddr?.latitude || null,
+        longitude: qcAddr?.longitude || null,
+        complement: qcComplement || '',
+      };
+      const r = await clientsApi.create({
+        name: qcName.trim(), phone_primary: qcPhone.trim(), address,
+      });
+      const novo = r.data;
+      setClients(prev => [novo, ...prev]);          // entra na lista local
+      // limpa o form rápido
+      setQuickOpen(false); setQcName(''); setQcPhone(''); setQcAddr(null); setQcComplement('');
+      selectClient(novo);                            // já seleciona e avança para itens
+    } catch (e) {
+      setError(e.response?.data?.detail || 'Erro ao cadastrar cliente.');
+    } finally { setQcSaving(false); }
   };
 
   const addItem = () => setForm(f => ({ ...f, items: [...(f.items || []), newEmptyItem()] }));
@@ -805,6 +931,27 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
     items: f.items.map((it, i) => i === idx ? newItem : it),
   }));
   const removeItem = (idx) => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
+  // Duplica um item para outro endereço (mesmo serviço/medidas, endereços limpos)
+  const duplicateItem = (idx) => setForm(f => {
+    const orig = f.items[idx];
+    const clone = {
+      ...orig,
+      id: undefined,                    // novo item — backend gera ID
+      pickup_address: null,             // limpa endereços para forçar o novo
+      execution_address: null,
+      delivery_address: null,
+      paid_value: 0,
+      payment_status: 'PENDENTE',
+      payment_records: [],
+      status_history: [],
+      execution_sessions: [],
+      current_route_id: null,
+      observations: orig.observations ? `${orig.observations} (2º endereço)` : '2º endereço',
+    };
+    const items = [...f.items];
+    items.splice(idx + 1, 0, clone);
+    return { ...f, items };
+  });
 
   const save = async () => {
     setError('');
@@ -891,6 +1038,61 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
           {/* STEP 1: CLIENTE */}
           {step === 1 && (
             <div className="space-y-3">
+              {/* Cadastro rápido de cliente */}
+              <div className="border border-emerald-200 bg-emerald-50/50 rounded-lg">
+                <button
+                  onClick={() => setQuickOpen(v => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-emerald-700"
+                >
+                  <span className="flex items-center gap-1.5"><Plus className="w-4 h-4" /> Cadastrar novo cliente</span>
+                  {quickOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+                {quickOpen && (
+                  <div className="px-3 pb-3 space-y-2">
+                    <div>
+                      <label className="block text-[11px] text-gray-500 mb-0.5">Colar do WhatsApp (opcional)</label>
+                      <textarea
+                        rows={2}
+                        onChange={(e) => quickParsePaste(e.target.value)}
+                        placeholder="Cole nome + telefone e o sistema preenche abaixo…"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        value={qcName} onChange={(e) => setQcName(e.target.value)}
+                        placeholder="Nome *"
+                        className="px-2 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <input
+                        value={qcPhone} onChange={(e) => setQcPhone(e.target.value)}
+                        placeholder="Telefone *"
+                        className="px-2 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                    <AddressAutocomplete
+                      value={qcAddr?.full_address || ''}
+                      onSelect={setQcAddr}
+                      placeholder="Endereço (opcional — pode adicionar depois)"
+                      compact
+                    />
+                    <input
+                      value={qcComplement} onChange={(e) => setQcComplement(e.target.value)}
+                      placeholder="Complemento (condomínio, qd, lt, apto…)"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+                    />
+                    <button
+                      onClick={quickCreateClient}
+                      disabled={qcSaving}
+                      className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {qcSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Cadastrar e usar no orçamento
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Buscar cliente</label>
                 <div className="relative">
@@ -931,7 +1133,14 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
                 })}
                 {filteredClients.length === 0 && (
                   <div className="p-4 text-center text-sm text-gray-500 bg-gray-50 rounded-lg">
-                    Nenhum cliente encontrado. Cadastre primeiro em "Clientes".
+                    Nenhum cliente encontrado.{' '}
+                    <button
+                      onClick={() => setQuickOpen(true)}
+                      className="text-emerald-600 font-medium hover:underline"
+                    >
+                      Cadastrar novo cliente
+                    </button>{' '}
+                    usando o painel acima.
                   </div>
                 )}
               </div>
@@ -941,6 +1150,33 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
           {/* STEP 2: ITENS */}
           {step === 2 && (
             <div className="space-y-3">
+              {/* Botões no TOPO — sempre visíveis sem precisar rolar */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="flex-1 py-2.5 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-medium flex items-center justify-center gap-1"
+                >
+                  <Plus className="w-4 h-4" /> Adicionar Item
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchOpen(true)}
+                  className="flex-1 py-2.5 rounded-xl border-2 border-dashed border-orange-300 text-orange-600 hover:bg-orange-50 text-sm font-medium flex items-center justify-center gap-1"
+                >
+                  <Plus className="w-4 h-4" /> Lançar em Lote
+                </button>
+              </div>
+              {batchOpen && (
+                <BatchModal
+                  services={services}
+                  onClose={() => setBatchOpen(false)}
+                  onAdd={(newItems) => {
+                    setForm(f => ({ ...f, items: [...(f.items || []), ...newItems] }));
+                    setBatchOpen(false);
+                  }}
+                />
+              )}
               {form.items.length === 0 && (
                 <div className="p-6 text-center text-sm text-gray-500 bg-gray-50 rounded-xl">
                   <FileText className="w-10 h-10 mx-auto text-gray-300 mb-2" />
@@ -957,34 +1193,9 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
                   salespersons={salespersons}
                   onChange={(it) => updateItem(idx, it)}
                   onRemove={() => removeItem(idx)}
+                  onDuplicate={() => duplicateItem(idx)}
                 />
               ))}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={addItem}
-                  className="flex-1 py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-medium flex items-center justify-center gap-1"
-                >
-                  <Plus className="w-4 h-4" /> Adicionar Item
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBatchOpen(true)}
-                  className="flex-1 py-3 rounded-xl border-2 border-dashed border-orange-300 text-orange-600 hover:bg-orange-50 text-sm font-medium flex items-center justify-center gap-1"
-                >
-                  <Plus className="w-4 h-4" /> Lançar em Lote
-                </button>
-              </div>
-              {batchOpen && (
-                <BatchModal
-                  services={services}
-                  onClose={() => setBatchOpen(false)}
-                  onAdd={(newItems) => {
-                    setForm(f => ({ ...f, items: [...(f.items || []), ...newItems] }));
-                    setBatchOpen(false);
-                  }}
-                />
-              )}
             </div>
           )}
 
@@ -1010,7 +1221,7 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
                 <label className="block text-xs font-medium text-gray-600 mb-1">Método de pagamento padrão</label>
                 <select
                   value={form.payment_method}
-                  onChange={(e) => setForm({ ...form, payment_method: e.target.value })}
+                  onChange={(e) => { setPaymentTouched(true); setForm({ ...form, payment_method: e.target.value }); }}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white"
                 >
                   {paymentMethods.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
@@ -1018,6 +1229,16 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
                 <div className="text-[11px] text-gray-500 mt-1">
                   Cada item pode sobrescrever este método em "Opções avançadas".
                 </div>
+                {totals.value > 0 && /^CREDITO_(\d+)X$/.test(form.payment_method || '') && (() => {
+                  const n = parseInt(form.payment_method.match(/^CREDITO_(\d+)X$/)[1], 10);
+                  const t = Math.round(totals.value * 100) / 100;
+                  return (
+                    <div className="mt-1.5 text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded-md px-2 py-1.5">
+                      💳 <b>Crédito em {n}x</b> de {fmtMoney(t / n)} cada — sugerido pelo valor do orçamento.
+                      <span className="text-blue-500"> Pagamento real é definido no Financeiro.</span>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
@@ -1101,3 +1322,5 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
     </div>
   );
 }
+
+

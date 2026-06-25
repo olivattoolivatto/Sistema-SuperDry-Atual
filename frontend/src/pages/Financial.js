@@ -205,7 +205,7 @@ function ItemListRow({ doc, onRegisterPayment, selected, onToggleSelect }) {
 
   return (
     <>
-      <div className={`flex items-center gap-2 px-4 py-2.5 border-b border-gray-50 transition-colors ${
+      <div className={`flex items-center gap-2 px-4 py-1.5 border-b border-gray-100 transition-colors ${
         selected ? 'bg-emerald-50/50' : 'hover:bg-gray-50/60'
       }`}>
         {/* Checkbox */}
@@ -224,15 +224,15 @@ function ItemListRow({ doc, onRegisterPayment, selected, onToggleSelect }) {
             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${ps.color}`}>{ps.icon} {ps.label}</span>
           </div>
           {item.total_value > 0 && (
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div className="flex items-center gap-1.5 mt-1">
+              <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
                 <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
               </div>
               <span className="text-[10px] text-gray-400 shrink-0 tabular-nums">{Math.round(pct)}%</span>
             </div>
           )}
           {/* Mobile: data + método abaixo da barra */}
-          <div className="flex items-center gap-2 mt-1 sm:hidden">
+          <div className="flex items-center gap-2 mt-0.5 sm:hidden">
             <span className="text-[10px] text-gray-400">{refDate}</span>
             {lastPayment?.method && (
               <span className="text-[10px] text-gray-400 truncate">· {lastPayment.method}</span>
@@ -329,9 +329,9 @@ function ClientListHeader({ clientName, docs, selectedIds, onSelectGroup }) {
   const pct          = totalValue > 0 ? Math.min(100, (totalPaid / totalValue) * 100) : 0;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2 bg-blue-50/70 border-b border-blue-100">
-      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-        <User className="w-3.5 h-3.5 text-blue-600" />
+    <div className="flex items-center gap-3 px-4 py-2 bg-blue-300/70 border-b-2 border-blue-600 shadow-sm">
+      <div className="w-6 h-6 rounded-full bg-blue-800 flex items-center justify-center shrink-0">
+        <User className="w-3.5 h-3.5 text-white" />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -979,8 +979,8 @@ export function Financial() {
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-20">
-          {grouped.map(({ name, docs }) => (
-            <div key={name}>
+          {grouped.map(({ name, docs }, gi) => (
+            <div key={name} className={gi > 0 ? 'border-t-[6px] border-gray-300' : ''}>
               <ClientListHeader
                 clientName={name}
                 docs={docs}

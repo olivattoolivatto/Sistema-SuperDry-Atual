@@ -123,6 +123,8 @@ export const itemsApi = {
 export const consolidatedPaymentApi = {
   create: (payload) => api.post('/payments/consolidated', payload),
   whatsapp: (cpid) => api.get(`/payments/consolidated/${cpid}/whatsapp`),
+  pending: () => api.get('/payments/consolidated/pending'),
+  confirmManual: (cpid) => api.post(`/payments/consolidated/${cpid}/confirm-manual`),
 };
 
 // Enums / opções

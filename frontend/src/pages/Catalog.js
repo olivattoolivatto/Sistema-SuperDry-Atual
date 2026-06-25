@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
@@ -408,7 +408,7 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
                 min="0"
                 step="0.01"
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                onFocus={(e) => e.target.select()} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -424,7 +424,7 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
                 min="0"
                 step="0.01"
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                onFocus={(e) => e.target.select()} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
@@ -451,7 +451,7 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
   );
 };
 
-export function Catalog() {
+export function Catalog({ embedded = false }) {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -642,10 +642,12 @@ export function Catalog() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Catálogo de Serviços</h1>
-          <p className="text-gray-600">Gerencie os serviços oferecidos pela lavanderia</p>
-        </div>
+        {!embedded && (
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Catálogo de Serviços</h1>
+            <p className="text-gray-600">Gerencie os serviços oferecidos pela lavanderia</p>
+          </div>
+        )}
         <button
           onClick={() => setShowForm(true)}
           className="flex items-center px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"

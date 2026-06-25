@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -19,12 +19,13 @@ import {
   Smartphone,
   Edit3,
   Save,
+  Check,
   X
 } from 'lucide-react';
 import { routesApi, placesApi, clientsApi, budgetsApi, agendaApi, technicianApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+import { BACKEND_URL } from '../lib/backendUrl';
 
 export function Agenda() {
   const [savedRoutes, setSavedRoutes] = useState([]);
@@ -788,7 +789,7 @@ export function Agenda() {
         
         if (!budgets) {
           // Se não foram passados orçamentos, buscar
-          const budgetsResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budgets`);
+          const budgetsResponse = await fetch(`${BACKEND_URL}/api/budgets`);
           if (budgetsResponse.ok) {
             budgets = await budgetsResponse.json();
           }
@@ -946,6 +947,10 @@ export function Agenda() {
   };
 
 
+  const selectAllStops = () => {
+    setSelectedStops(new Set(routeEvents.map(e => e.id)));
+  };
+
   const clearAllSelections = () => {
     console.log('🧹 Limpando todas as seleções');
     setSelectedStops(new Set());
@@ -1057,7 +1062,7 @@ export function Agenda() {
       
       // Para status items, atualizar via API de budget items
       if (editingService.type === 'STATUS_ITEM' && editingService.budget_item_id) {
-        const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/${editingService.budget_item_id}/status?status=${editServiceData.status}`, {
+        const response = await fetch(`${BACKEND_URL}/api/budget-items/${editingService.budget_item_id}/status?status=${editServiceData.status}`, {
           method: 'PUT'
         });
         
@@ -1111,7 +1116,7 @@ export function Agenda() {
           
         } else if (service.type === 'STATUS_ITEM' && service.budget_item_id) {
           // Para status items, atualizar status para CANCELADO_PELO_CLIENTE
-          const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/budget-items/${service.budget_item_id}/status?status=CANCELADO_PELO_CLIENTE`, {
+          const response = await fetch(`${BACKEND_URL}/api/budget-items/${service.budget_item_id}/status?status=CANCELADO_PELO_CLIENTE`, {
             method: 'PUT'
           });
           
@@ -2207,6 +2212,13 @@ export function Agenda() {
                 title="Resetar horários"
               >
                 <RefreshCw className="w-3.5 h-3.5 mr-1" /> Reset Horários
+              </button>
+              <button
+                onClick={selectAllStops}
+                disabled={routeEvents.length === 0 || selectedStops.size === routeEvents.length}
+                className="flex items-center px-3 py-1.5 bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 rounded-lg text-xs"
+              >
+                <Check className="w-3.5 h-3.5 mr-1" /> Selecionar Todas
               </button>
               <button
                 onClick={clearAllSelections}
