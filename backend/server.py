@@ -6594,6 +6594,19 @@ async def create_consolidated_payment(
         applied.append({"item_id": item["id"], "client_name": item.get("client_name"),
                         "service_name": item.get("service_name"), "value": portion, "new_status": pstatus})
 
+    # Link do PDF do orçamento para a mensagem de cobrança (template aprovado em
+    # 25/06/2026 — ver memory/INTEGRACOES_PAGAMENTO.md §8). Quando os itens vêm de
+    # mais de um orçamento, usa o primeiro (mensagem cita "o último serviço prestado"
+    # de forma genérica, então um único link de referência é suficiente).
+    budget_ids = [t["budget"]["id"] for t in targets if t.get("budget") and t["budget"].get("id")]
+    budget_id_ref = budget_ids[0] if budget_ids else None
+    public_url = (
+        os.environ.get("PUBLIC_WEBHOOK_URL", "")
+        .replace("/api/webhooks/payment", "")
+        .strip("/")
+    )
+    pdf_link = f"{public_url}/api/budgets/{budget_id_ref}/pdf" if (public_url and budget_id_ref) else None
+
     # Detalhamento por serviço — um item por ITM, com o nome do serviço (e do
     # cliente, quando a cobrança junta itens de clientes diferentes) para que
     # o pagador veja exatamente o que está pagando dentro do checkout.
@@ -6643,6 +6656,8 @@ async def create_consolidated_payment(
         "payer_name": payer_name or None,
         "payer_phone": payer_phone or None,
         "item_ids": [t["item"]["id"] for t in targets],
+        "budget_id": budget_id_ref,
+        "pdf_link": pdf_link,
         "method": method,
         "total_value": total_received,
         # taxa/líquido estimados (confirmados pela integração no futuro)
@@ -6692,6 +6707,8 @@ async def list_pending_gateway_payments(current_user: UserPublic = Depends(get_c
             "method": d.get("method"),
             "provider": d.get("provider"),
             "payment_link": d.get("payment_link"),
+            "budget_id": d.get("budget_id"),
+            "pdf_link": d.get("pdf_link"),
             "item_count": len(d.get("applied", [])),
             "created_at": d.get("created_at"),
         })

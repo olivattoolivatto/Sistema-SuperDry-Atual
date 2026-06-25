@@ -580,7 +580,10 @@ function ConsolidatedPaymentModal({ docs, total, onClose, onDone, manualMode = f
                   <button
                     onClick={() => {
                       const phone = result.payer_phone ? result.payer_phone.replace(/\D/g, '') : '';
-                      const msg = encodeURIComponent(`Olá${result.payer_name ? ' ' + result.payer_name.split(' ')[0] : ''}! Segue o link para pagamento de ${fmtMoney(result.total_value)}:\n${result.payment_link}`);
+                      const firstName = result.payer_name ? ' ' + result.payer_name.split(' ')[0] : '';
+                      const pdfLine = result.pdf_link ? `\nDetalhes do serviço podem ser vistos em: ${result.pdf_link}\n` : '';
+                      const text = `Olá${firstName}! Segue o link para pagamento de ${fmtMoney(result.total_value)} referentes ao último serviço prestado.${pdfLine}\n${result.payment_link}`;
+                      const msg = encodeURIComponent(text);
                       window.open(`https://wa.me/${phone ? '55' + phone : ''}?text=${msg}`, '_blank');
                     }}
                     className="flex-1 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold flex items-center justify-center gap-1">
@@ -697,7 +700,10 @@ function PendingGatewayPayments() {
               <button
                 onClick={() => {
                   const phone = p.payer_phone ? p.payer_phone.replace(/\D/g, '') : '';
-                  const msg = encodeURIComponent(`Olá${p.payer_name ? ' ' + p.payer_name.split(' ')[0] : ''}! Segue o link para pagamento de ${fmtMoney(p.total_value)}:\n${p.payment_link}`);
+                  const firstName = p.payer_name ? ' ' + p.payer_name.split(' ')[0] : '';
+                  const pdfLine = p.pdf_link ? `\nDetalhes do serviço podem ser vistos em: ${p.pdf_link}\n` : '';
+                  const text = `Olá${firstName}! Segue o link para pagamento de ${fmtMoney(p.total_value)} referentes ao último serviço prestado.${pdfLine}\n${p.payment_link}`;
+                  const msg = encodeURIComponent(text);
                   window.open(`https://wa.me/${phone ? '55' + phone : ''}?text=${msg}`, '_blank');
                 }}
                 className="px-2 py-1 text-[10px] bg-green-100 text-green-700 rounded-md hover:bg-green-200">
