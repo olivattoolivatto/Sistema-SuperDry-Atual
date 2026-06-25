@@ -6594,6 +6594,23 @@ async def create_consolidated_payment(
         applied.append({"item_id": item["id"], "client_name": item.get("client_name"),
                         "service_name": item.get("service_name"), "value": portion, "new_status": pstatus})
 
+    # Detalhamento por serviço — um item por ITM, com o nome do serviço (e do
+    # cliente, quando a cobrança junta itens de clientes diferentes) para que
+    # o pagador veja exatamente o que está pagando dentro do checkout.
+    distinct_clients = {a.get("client_name") for a in applied if a.get("client_name")}
+    line_items_payload = []
+    for a in applied:
+        svc = a.get("service_name") or "Serviço"
+        if len(distinct_clients) > 1 and a.get("client_name"):
+            desc = f"{svc} — {a['client_name']}"
+        else:
+            desc = svc
+        line_items_payload.append({
+            "description": f"{desc} ({a['item_id']})",
+            "quantity": 1,
+            "value": a["value"],
+        })
+
     # Modo gateway: cria a cobrança externa (link/PIX) e deixa tudo PENDENTE até o webhook.
     external_charge_id = None
     pix_qr = None
@@ -6605,6 +6622,7 @@ async def create_consolidated_payment(
                 description=f"{cpid} — {payer_name or 'Cobrança SuperDry'}",
                 txid=cpid,
                 payer={"name": payer_name, "phone": payer_phone},
+                items=line_items_payload,
             )
         except NotImplementedError:
             raise HTTPException(status_code=501,
