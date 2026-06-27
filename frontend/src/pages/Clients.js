@@ -493,14 +493,17 @@ export function Clients() {
   const [error, setError] = useState('');
   const [historyClient, setHistoryClient] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
   const loadClients = async () => {
     try {
       setLoading(true);
+      setLoadError('');
       const r = await clientsApi.getAll({ limit: 1000 });
       setClients(r.data || []);
     } catch (e) {
       console.error(e);
+      setLoadError('Não foi possível carregar os clientes. Verifique sua conexão e tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -647,6 +650,18 @@ export function Clients() {
           {searchTerm ? `${filtered.length} de ${clients.length} clientes` : `${clients.length} cliente(s) cadastrado(s)`}
         </div>
       </div>
+
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex items-center justify-between gap-3">
+          <span>{loadError}</span>
+          <button
+            onClick={loadClients}
+            className="shrink-0 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       {/* Form */}
       <div id="client-form-anchor" />

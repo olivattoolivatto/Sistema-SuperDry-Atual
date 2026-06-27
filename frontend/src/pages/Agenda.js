@@ -77,6 +77,7 @@ export function Agenda() {
   const [sentServicesPage, setSentServicesPage] = useState(1);
   const [sentServicesHasMore, setSentServicesHasMore] = useState(true);
   const [sentServicesTotal, setSentServicesTotal] = useState(0);
+  const [calendarLoadError, setCalendarLoadError] = useState('');
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -669,14 +670,15 @@ export function Agenda() {
 
   const loadCalendarEvents = async (startDate = null, endDate = null) => {
     if (!isGoogleAuthenticated) return;
-    
+
     try {
       // Calculate date range if not provided
       const start = startDate || getCurrentDateRange().start;
       const end = endDate || getCurrentDateRange().end;
-      
+
       console.log('🔄 Carregando eventos do Google Calendar:', start, 'até', end);
-      
+      setCalendarLoadError('');
+
       const response = await fetch(`${BACKEND_URL}/api/calendar/events?start_date=${start}&end_date=${end}`);
       if (response.ok) {
         const data = await response.json();
@@ -684,9 +686,11 @@ export function Agenda() {
         setCalendarEvents(data.events || []);
       } else {
         console.error('Erro na resposta da API:', response.status);
+        setCalendarLoadError('Não foi possível carregar os eventos da agenda. Verifique sua conexão e tente novamente.');
       }
     } catch (error) {
       console.error('Erro ao carregar eventos do calendário:', error);
+      setCalendarLoadError('Não foi possível carregar os eventos da agenda. Verifique sua conexão e tente novamente.');
     }
   };
 
@@ -766,11 +770,16 @@ export function Agenda() {
       setSentServicesTotal(0);
       setSentServicesHasMore(false);
       setSentServicesPage(1);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os serviços enviados. Verifique sua conexão e tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setLoadingSentServices(false);
     }
   };
-  
+
   // Função auxiliar para processar assignments
   const processAssignment = async (assignment, budgets = null) => {
     console.log(`🔍 Processando assignment: ${assignment.id} com ${assignment.event_ids?.length || 0} eventos`);
@@ -941,6 +950,11 @@ export function Agenda() {
     } catch (error) {
       console.error('❌ Erro ao carregar serviços enviados:', error);
       setSentServices([]);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os serviços enviados. Verifique sua conexão e tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setLoadingSentServices(false);
     }
@@ -2599,6 +2613,17 @@ export function Agenda() {
       {/* Visualização do Calendário */}
       {isGoogleAuthenticated && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          {calendarLoadError && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex items-center justify-between gap-3">
+              <span>{calendarLoadError}</span>
+              <button
+                onClick={() => loadCalendarEvents()}
+                className="shrink-0 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900">Visualização da Agenda</h2>
             

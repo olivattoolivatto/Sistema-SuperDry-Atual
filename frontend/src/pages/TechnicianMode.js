@@ -339,6 +339,7 @@ function StreetMode({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [showOnlyToday, setShowOnlyToday] = useState(true);
   const [finalizing, setFinalizing] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     loadDailyAgenda();
@@ -347,6 +348,7 @@ function StreetMode({ onBack }) {
   const loadDailyAgenda = async (silent = false) => {
     try {
       if (!silent) setLoading(true);   // reload silencioso (ex.: ao voltar de um cliente) não pisca spinner
+      setLoadError('');
 
       // Buscar tarefas híbridas do técnico para múltiplas datas se necessário
       const today = new Date().toISOString().split('T')[0];
@@ -481,37 +483,10 @@ function StreetMode({ onBack }) {
       
     } catch (error) {
       console.error('Erro ao carregar agenda híbrida:', error);
-      
-      // Fallback para dados mock em caso de erro
-      const mockClients = [
-        {
-          id: 'CLI-001',
-          name: 'João Silva',
-          address: 'Rua das Flores, 123 - Centro',
-          phone: '(11) 99999-9999',
-          scheduledTime: '08:30',
-          items: [
-            { id: 'ITM-001', name: 'Sofá 3 Lugares', status: 'EXECUTAR_NO_LOCAL', value: 320.00, observations: 'Mancha no braço direito' },
-            { id: 'ITM-002', name: 'Cadeira Presidencial', status: 'EXECUTAR_NO_LOCAL', value: 80.00, observations: '' }
-          ],
-          internalObservations: 'Cliente preferencial. Cuidado com pets.',
-          source: 'MOCK'
-        },
-        {
-          id: 'CLI-002', 
-          name: 'Maria Santos',
-          address: 'Av. Principal, 456 - Jardins',
-          phone: '(11) 88888-8888',
-          scheduledTime: '10:00',
-          items: [
-            { id: 'ITM-003', name: 'Tapete Persa 2x3m', status: 'RETIRAR', value: 150.00, observations: 'Cuidado com as franjas' }
-          ],
-          internalObservations: 'Portão azul, tocar interfone.',
-          source: 'MOCK'
-        }
-      ];
-      
-      setDailyClients(mockClients);
+      // Antes caía num fallback de clientes fictícios ("João Silva"/"Maria Santos") —
+      // risco real do técnico confundir dados mock com tarefas de verdade em campo.
+      // Agora mostra erro explícito + permite tentar de novo.
+      setLoadError('Não foi possível carregar a agenda do dia. Verifique sua conexão e tente novamente.');
       setLoading(false);
     }
   };
@@ -532,6 +507,14 @@ function StreetMode({ onBack }) {
           </button>
           <h2 className="text-lg font-semibold">Modo Rua</h2>
         </div>
+        {loadError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-2">
+            <span>{loadError}</span>
+            <button onClick={() => loadDailyAgenda()} className="shrink-0 px-2 py-1 bg-red-600 text-white rounded-md text-[10px] font-medium hover:bg-red-700">
+              Tentar novamente
+            </button>
+          </div>
+        )}
         <button
           onClick={async () => {
             const today = new Date().toISOString().split('T')[0];
@@ -2013,13 +1996,18 @@ function CompanyMode({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState(null); // 'lavagem'|'measures'|'recolher'|'recolhimento'
   const [expanded, setExpanded] = useState({});
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      setLoadError('');
       const res = await itemsApi.companyMode();
       setItems(res.data || []);
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      console.error(e);
+      setLoadError('Não foi possível carregar os itens. Verifique sua conexão e tente novamente.');
+    }
     setLoading(false);
   }, []);
 
@@ -2055,6 +2043,15 @@ function CompanyMode({ onBack }) {
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
+
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg mx-4 mt-3 px-3 py-2 text-xs flex items-center justify-between gap-2">
+          <span>{loadError}</span>
+          <button onClick={load} className="shrink-0 px-2 py-1 bg-red-600 text-white rounded-md text-[10px] font-medium hover:bg-red-700">
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-20">

@@ -16,6 +16,7 @@ import { SystemConfig } from "./pages/SystemConfig";
 import { Agenda } from "./pages/Agenda";
 import { Reports } from "./pages/Reports";
 import TechnicianMode from "./pages/TechnicianMode";
+import { FinanceManager } from "./pages/finance/FinanceManager";
 import { Toaster } from "./components/ui/sonner";
 import "./App.css";
 
@@ -55,7 +56,7 @@ function ProtectedShell() {
           <Route path="/whatsapp" element={<Placeholder title="WhatsApp" />} />
           <Route path="/financial" element={<Financial />} />
           <Route path="/automations" element={<Automations />} />
-          <Route path="/finance-manager" element={<Placeholder title="Gerenciador Financeiro" />} />
+          <Route path="/finance-manager" element={<FinanceManager />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/tickets" element={<Placeholder title="Chamados e Manutenção" />} />
           <Route path="*" element={<Navigate to="/" replace />} />

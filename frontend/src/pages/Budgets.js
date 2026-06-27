@@ -331,6 +331,7 @@ export function Budgets() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [quickRegisterName, setQuickRegisterName] = useState(null);
   const [preselectedClient, setPreselectedClient] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const { user } = useAuth();
 
   const handleSort = (col) => setSort(s =>
@@ -340,10 +341,12 @@ export function Budgets() {
   const load = async () => {
     try {
       setLoading(true);
+      setLoadError('');
       const r = await budgetsApi.getAll({ limit: 500 });
       setBudgets(r.data || []);
     } catch (e) {
       console.error(e);
+      setLoadError('Não foi possível carregar os orçamentos. Verifique sua conexão e tente novamente.');
     } finally { setLoading(false); }
   };
 
@@ -444,6 +447,18 @@ export function Budgets() {
           {search ? `${filtered.length} de ${budgets.length} orçamento(s)` : `${budgets.length} orçamento(s)`}
         </div>
       </div>
+
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex items-center justify-between gap-3">
+          <span>{loadError}</span>
+          <button
+            onClick={load}
+            className="shrink-0 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       {/* Lista */}
       {loading ? (

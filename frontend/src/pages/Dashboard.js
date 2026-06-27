@@ -151,14 +151,17 @@ export function Dashboard() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const load = async () => {
     try {
       setLoading(true);
+      setLoadError('');
       const r = await dashboardApi.getSummary();
       setData(r.data);
     } catch (e) {
       console.error(e);
+      setLoadError('Não foi possível carregar o painel. Verifique sua conexão e tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -204,6 +207,18 @@ export function Dashboard() {
           </span>
         </div>
       </div>
+
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex items-center justify-between gap-3">
+          <span>{loadError}</span>
+          <button
+            onClick={load}
+            className="shrink-0 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       {/* Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">

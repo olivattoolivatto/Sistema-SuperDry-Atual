@@ -273,6 +273,7 @@ export function RoutesGeoapify() {
       setSavedRoutes(res.data || []);
     } catch (err) {
       console.error(err);
+      toast({ title: 'Erro', description: 'Erro ao carregar rotas salvas. Verifique sua conexão e tente novamente.', variant: 'destructive' });
     }
   };
 
@@ -282,6 +283,7 @@ export function RoutesGeoapify() {
       setStatusOptions(res.data.status_options);
     } catch (err) {
       console.error(err);
+      toast({ title: 'Erro', description: 'Erro ao carregar opções de status.', variant: 'destructive' });
     }
   };
 

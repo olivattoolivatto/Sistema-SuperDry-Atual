@@ -219,4 +219,45 @@ export const reportsApi = {
   partnerItems: (params = {}) => api.get('/reports/partner-items', { params }),
 };
 
+// Gestor Financeiro (Fase 0) — contas, categorias e lançamentos (agregador)
+export const financeAccountsApi = {
+  list: (params = {}) => api.get('/finance/accounts', { params }),
+  create: (data) => api.post('/finance/accounts', data),
+  update: (id, data) => api.put(`/finance/accounts/${id}`, data),
+  delete: (id) => api.delete(`/finance/accounts/${id}`),
+  balance: (id) => api.get(`/finance/accounts/${id}/balance`),
+};
+
+export const financeSummaryApi = {
+  get: (params = {}) => api.get('/finance/summary', { params }),
+};
+
+export const financeCategoriesApi = {
+  list: (params = {}) => api.get('/finance/categories', { params }),
+  create: (data) => api.post('/finance/categories', data),
+  update: (id, data) => api.put(`/finance/categories/${id}`, data),
+  delete: (id) => api.delete(`/finance/categories/${id}`),
+  seed: () => api.post('/finance/categories/seed'),
+  resetImport: () => api.post('/finance/categories/reset-import'),
+};
+
+export const financeEntriesApi = {
+  list: (params = {}) => api.get('/finance/entries', { params }),
+  get: (id) => api.get(`/finance/entries/${id}`),
+  create: (data) => api.post('/finance/entries', data),
+  update: (id, data) => api.put(`/finance/entries/${id}`, data),
+  updateSplits: (id, splits) => api.put(`/finance/entries/${id}/splits`, { splits }),
+  delete: (id) => api.delete(`/finance/entries/${id}`),
+  confirmTransfer: (id) => api.post(`/finance/entries/${id}/confirm-transfer`),
+  rejectTransfer: (id) => api.post(`/finance/entries/${id}/reject-transfer`),
+  importStatement: (accountId, file) => {
+    const form = new FormData();
+    form.append('account_id', accountId);
+    form.append('file', file);
+    return api.post('/finance/entries/import-statement', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
 export default api;

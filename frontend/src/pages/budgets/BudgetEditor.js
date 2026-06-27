@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   X, Save, Plus, Trash2, ChevronDown, ChevronUp, Loader2, MapPin,
   Calendar, User as UserIcon, CreditCard, FileText, Search, AlertCircle, Copy,
@@ -815,25 +815,34 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
   const [step, setStep] = useState(preselectedClient ? 2 : 1);
   // Quando o usuário escolhe o método manualmente, paramos de sugerir automaticamente.
   const [paymentTouched, setPaymentTouched] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [c, s, pm, sp] = await Promise.all([
-          clientsApi.getAll({ limit: 1000 }),
-          servicesApi.getAll({ active_only: true }),
-          fetch(`${BACKEND_URL}/api/payment-methods`).then(r => r.json()),
-          usersApi.salespersons(),
-        ]);
-        setClients(c.data || []);
-        setServices(s.data || []);
-        const methods = pm.payment_methods || PAYMENT_METHODS;
-        setPaymentMethods(methods);
-        setSalespersons(sp.data || []);
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-    })();
+  const loadInitialData = useCallback(async () => {
+    setLoading(true);
+    try {
+      setLoadError('');
+      const [c, s, pm, sp] = await Promise.all([
+        clientsApi.getAll({ limit: 1000 }),
+        servicesApi.getAll({ active_only: true }),
+        fetch(`${BACKEND_URL}/api/payment-methods`).then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        }),
+        usersApi.salespersons(),
+      ]);
+      setClients(c.data || []);
+      setServices(s.data || []);
+      const methods = pm.payment_methods || PAYMENT_METHODS;
+      setPaymentMethods(methods);
+      setSalespersons(sp.data || []);
+    } catch (e) {
+      console.error(e);
+      setLoadError('Não foi possível carregar os dados do orçamento (clientes, serviços, vendedores). Verifique sua conexão e tente novamente.');
+    }
+    finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { loadInitialData(); }, [loadInitialData]);
 
   const filteredClients = useMemo(() => {
     const q = normalize(clientSearch);
@@ -1035,6 +1044,18 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
+          {loadError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex items-center justify-between gap-3">
+              <span>{loadError}</span>
+              <button
+                onClick={loadInitialData}
+                className="shrink-0 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+
           {/* STEP 1: CLIENTE */}
           {step === 1 && (
             <div className="space-y-3">
@@ -1272,6 +1293,24 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
 
         {/* Footer com totais e ações */}
         <div className="border-t border-gray-200 p-3 sm:p-4 bg-gray-50 space-y-2">
+          {step === 2 && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={addItem}
+                className="flex-1 py-2.5 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-medium flex items-center justify-center gap-1"
+              >
+                <Plus className="w-4 h-4" /> Adicionar Item
+              </button>
+              <button
+                type="button"
+                onClick={() => setBatchOpen(true)}
+                className="flex-1 py-2.5 rounded-xl border-2 border-dashed border-orange-300 text-orange-600 hover:bg-orange-50 text-sm font-medium flex items-center justify-center gap-1"
+              >
+                <Plus className="w-4 h-4" /> Lançar em Lote
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-white border border-gray-200 rounded-lg py-1.5">
               <div className="text-[10px] text-gray-500 uppercase">Itens</div>

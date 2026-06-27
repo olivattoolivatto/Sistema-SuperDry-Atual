@@ -636,19 +636,35 @@ function PendingGatewayPayments() {
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmingId, setConfirmingId] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      setLoadError('');
       const r = await consolidatedPaymentApi.pending();
       setPending(r.data.pending || []);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setLoadError('Não foi possível carregar as cobranças pendentes.');
+    }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  if (!loading && pending.length === 0) return null;
+  if (!loading && pending.length === 0 && !loadError) return null;
+
+  if (loadError) {
+    return (
+      <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex items-center justify-between gap-3">
+        <span>{loadError}</span>
+        <button onClick={load} className="shrink-0 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700">
+          Tentar novamente
+        </button>
+      </div>
+    );
+  }
 
   const markPaid = async (cpid) => {
     if (!window.confirm(`Confirmar que ${cpid} foi realmente pago? Isso vai dar baixa nos itens.`)) return;
@@ -732,6 +748,7 @@ export function Financial() {
   const [selected, setSelected] = useState(new Map());
   const [consolidateOpen, setConsolidateOpen] = useState(false);
   const [manualBaixaOpen, setManualBaixaOpen] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   // ── Filtro de período ──────────────────────────────────────────────────────
   const [periodPreset, setPeriodPreset] = useState('month'); // padrão: mês atual
@@ -768,18 +785,25 @@ export function Financial() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      setLoadError('');
       const token = localStorage.getItem('superdry_token');
       const statuses = ['ENTREGUE', 'EXECUTADO', 'BUSCOU'];
       const results = await Promise.all(
         statuses.map(s =>
           fetch(`${BACKEND_URL}/api/items?status=${s}&limit=500`, {
             headers: { Authorization: `Bearer ${token}` }
-          }).then(r => r.json())
+          }).then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+          })
         )
       );
       const all = results.flatMap(r => r.items || []);
       setItems(all);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setLoadError('Não foi possível carregar os itens do Financeiro. Verifique sua conexão e tente novamente.');
+    }
     finally { setLoading(false); }
   }, []);
 
@@ -854,6 +878,15 @@ export function Financial() {
 
   return (
     <div className="space-y-4">
+
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex items-center justify-between gap-3">
+          <span>{loadError}</span>
+          <button onClick={load} className="shrink-0 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700">
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       {/* ── Seletor de período ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-2">

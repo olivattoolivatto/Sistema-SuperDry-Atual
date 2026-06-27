@@ -395,6 +395,11 @@ export function Routes() {
       setSavedRoutes(response.data || []);
     } catch (error) {
       console.error('Erro ao carregar rotas salvas:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar rotas salvas. Verifique sua conexão e tente novamente.",
+        variant: "destructive"
+      });
     }
   };
 

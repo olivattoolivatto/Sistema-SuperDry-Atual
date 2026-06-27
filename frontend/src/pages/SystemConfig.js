@@ -971,6 +971,7 @@ function UsersManager({ expanded, onToggle }) {
   const [error, setError] = useState('');
   const [useCustomModules, setUseCustomModules] = useState(false);
   const [selectedModules, setSelectedModules] = useState([]);
+  const [loadError, setLoadError] = useState('');
 
   const isAdmin = currentUser?.role === 'ADMIN';
 
@@ -978,9 +979,13 @@ function UsersManager({ expanded, onToggle }) {
     if (!isAdmin) return;
     try {
       setLoading(true);
+      setLoadError('');
       const r = await usersApi.list();
       setUsers(r.data || []);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setLoadError('Não foi possível carregar os usuários. Verifique sua conexão e tente novamente.');
+    }
     finally { setLoading(false); }
   };
 
@@ -1065,6 +1070,15 @@ function UsersManager({ expanded, onToggle }) {
               <Plus className="w-3.5 h-3.5" /> Novo Usuário
             </button>
           </div>
+
+          {loadError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2.5 text-xs flex items-center justify-between gap-2">
+              <span>{loadError}</span>
+              <button onClick={load} className="shrink-0 px-2 py-1 bg-red-600 text-white rounded-md text-[10px] font-medium hover:bg-red-700">
+                Tentar novamente
+              </button>
+            </div>
+          )}
 
           {loading ? (
             <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-indigo-600" /></div>

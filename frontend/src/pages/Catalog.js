@@ -463,6 +463,7 @@ export function Catalog({ embedded = false }) {
   // Estados para ordenação
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     loadServices();
@@ -471,6 +472,7 @@ export function Catalog({ embedded = false }) {
   const loadServices = async () => {
     try {
       setLoading(true);
+      setLoadError('');
       const params = {
         search: searchTerm,
         include_inactive: showInactive
@@ -478,11 +480,12 @@ export function Catalog({ embedded = false }) {
       if (selectedCategory) {
         params.category = selectedCategory;
       }
-      
+
       const response = await servicesApi.getAll(params);
       setServices(response.data);
     } catch (error) {
       console.error('Erro ao carregar serviços:', error);
+      setLoadError('Não foi possível carregar o catálogo. Verifique sua conexão e tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -656,6 +659,18 @@ export function Catalog({ embedded = false }) {
           Novo Serviço
         </button>
       </div>
+
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex items-center justify-between gap-3">
+          <span>{loadError}</span>
+          <button
+            onClick={loadServices}
+            className="shrink-0 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">

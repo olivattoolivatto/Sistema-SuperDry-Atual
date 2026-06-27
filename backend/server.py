@@ -47,6 +47,7 @@ from googleapiclient.discovery import build
 from fastapi import Depends
 from fastapi import Request as HttpRequest
 import payment_providers
+from finance_manager import DEFAULT_CATEGORIES
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -7433,6 +7434,12 @@ async def list_items(
 # Include the router in the main app
 app.include_router(api_router)
 
+# Gestor Financeiro (Fase 0) — router separado, import tardio proposital
+# (ver docstring de finance_routes.py: depende de db/get_current_user/_next_id
+# já definidos neste módulo no momento em que é importado).
+import finance_routes  # noqa: E402
+app.include_router(finance_routes.finance_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -7453,6 +7460,30 @@ async def startup_bootstrap():
     except Exception as e:
         print(f"[startup] erro criando índices: {e}")
     await ensure_default_admin(db)
+
+    # Gestor Financeiro (Fase 0) — seed de categorias padrão PF/PJ, idempotente
+    try:
+        if await db.financial_categories.count_documents({}) == 0:
+            for c in DEFAULT_CATEGORIES:
+                cat_id = await _next_id(db.financial_categories, "CAT-", 4)
+                await db.financial_categories.insert_one({
+                    "id": cat_id, "name": c["name"], "kind": c["kind"], "parent_id": None,
+                    "scope": c["scope"], "color": None, "icon": None, "archived": False,
+                })
+    except Exception as e:
+        print(f"[startup] erro seed categorias financeiras: {e}")
+
+    # Poller de extrato bancário por e-mail (alternativa gratuita ao Open Finance
+    # pago — ver memory/GESTOR_FINANCEIRO.md §18). Só inicia se configurado no .env.
+    try:
+        import email_statement_poller
+        if email_statement_poller.is_configured():
+            asyncio.create_task(email_statement_poller.poller_loop())
+            print("[startup] poller de extrato por e-mail ativado.")
+        else:
+            print("[startup] poller de extrato por e-mail desativado (STATEMENT_EMAIL_USER não definido).")
+    except Exception as e:
+        print(f"[startup] erro iniciando poller de extrato: {e}")
 
 
 @app.on_event("shutdown")
