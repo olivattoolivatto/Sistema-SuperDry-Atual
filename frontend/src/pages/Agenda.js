@@ -22,7 +22,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { routesApi, placesApi, clientsApi, budgetsApi, agendaApi, technicianApi } from '../services/api';
+import { routesApi, placesApi, clientsApi, budgetsApi, agendaApi, technicianApi, itemsApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
 
 import { BACKEND_URL } from '../lib/backendUrl';
@@ -43,14 +43,19 @@ export function Agenda() {
     start_time: '',
     end_date: '',
     end_time: '',
-    duration: 60
+    duration: 60,
+    color_id: '5',   // Amarelo banana = padrão (reservado/não confirmado)
+    item_id: ''      // Vínculo opcional com um ITM-XXXXXXX-N, sem precisar de Rota
   });
+  const [linkedItemPreview, setLinkedItemPreview] = useState(null); // {ok, client_name, service_name} | null
+  const [checkingItem, setCheckingItem] = useState(false);
   const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [calendarView, setCalendarView] = useState('week'); // 'week', '3days', 'day'
   const [currentDate, setCurrentDate] = useState(new Date());
   const [editingEvent, setEditingEvent] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [acknowledgingColor, setAcknowledgingColor] = useState(false);
   const [eventFormData, setEventFormData] = useState({
     summary: '',
     description: '',
@@ -1376,12 +1381,19 @@ export function Agenda() {
       }
       
       const eventDetails = await response.json();
-      
+
       // Parse datetime for form
       const startDate = new Date(eventDetails.start_datetime);
       const endDate = new Date(eventDetails.end_datetime);
-      
-      setEditingEvent(eventDetails);
+
+      // O detail endpoint não devolve color_diverged/stored_color_id (só a lista
+      // devolve, é onde o "polling leve" acontece) — carrega isso do evento que
+      // já estava na grade, se disponível.
+      setEditingEvent({
+        ...eventDetails,
+        color_diverged: event.color_diverged,
+        stored_color_id: event.stored_color_id,
+      });
       setEventFormData({
         summary: eventDetails.summary || '',
         description: eventDetails.description || '',
@@ -1400,6 +1412,30 @@ export function Agenda() {
         description: "Erro ao carregar detalhes do evento.",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleAcknowledgeColorChange = async () => {
+    if (!editingEvent?.id) return;
+    setAcknowledgingColor(true);
+    try {
+      await agendaApi.acknowledgeColor(editingEvent.id);
+      setEditingEvent(prev => prev ? { ...prev, color_diverged: false } : prev);
+      toast({
+        title: "Confirmado",
+        description: "O sistema atualizou o que sabia sobre a cor deste evento.",
+        variant: "default",
+      });
+      await loadCalendarEvents();
+    } catch (error) {
+      console.error('Erro ao confirmar mudança de cor:', error);
+      toast({
+        title: "Erro!",
+        description: "Não foi possível confirmar a mudança de cor.",
+        variant: "destructive",
+      });
+    } finally {
+      setAcknowledgingColor(false);
     }
   };
 
@@ -2033,10 +2069,34 @@ export function Agenda() {
       start_time: defaultTime,
       end_date: defaultDate,
       end_time: endTime,
-      duration: 120 // 2 horas = 120 minutos
+      duration: 120, // 2 horas = 120 minutos
+      color_id: '5',
+      item_id: ''
     });
+    setLinkedItemPreview(null);
 
     setShowCreateEventModal(true);
+  };
+
+  const handleCheckItemId = async () => {
+    const iid = newEvent.item_id.trim();
+    if (!iid) {
+      setLinkedItemPreview(null);
+      return;
+    }
+    setCheckingItem(true);
+    try {
+      const { data } = await itemsApi.get(iid);
+      setLinkedItemPreview({
+        ok: true,
+        client_name: data?.item?.client_name || '(sem nome)',
+        service_name: data?.item?.service_name || '(sem serviço)',
+      });
+    } catch (error) {
+      setLinkedItemPreview({ ok: false });
+    } finally {
+      setCheckingItem(false);
+    }
   };
 
   const handleConfirmCreateEvent = async () => {
@@ -2053,17 +2113,20 @@ export function Agenda() {
 
     try {
       console.log('📅 Criando evento direto no Google Calendar...');
-      
+
       // Format datetime strings for the API
       const startDateTime = `${newEvent.start_date}T${newEvent.start_time}:00`;
       const endDateTime = `${newEvent.end_date}T${newEvent.end_time}:00`;
 
+      const itemId = newEvent.item_id.trim();
       const eventData = {
         summary: newEvent.title,
         description: newEvent.description,
         location: newEvent.location,
         start_datetime: startDateTime,
-        end_datetime: endDateTime
+        end_datetime: endDateTime,
+        color_id: newEvent.color_id,
+        ...(itemId ? { budget_item_ids: [itemId] } : {})
       };
 
       console.log('📤 Dados do evento:', eventData);
@@ -2082,7 +2145,7 @@ export function Agenda() {
       }
 
       const data = await response.json();
-      
+
       toast({
         title: "Sucesso!",
         description: "Evento criado no Google Calendar com sucesso!",
@@ -2091,10 +2154,11 @@ export function Agenda() {
 
       // Close modal and refresh calendar
       setShowCreateEventModal(false);
-      
+      setLinkedItemPreview(null);
+
       // Refresh calendar events
       await loadCalendarEvents();
-      
+
     } catch (error) {
       console.error('Erro ao criar evento:', error);
       toast({
@@ -2811,6 +2875,12 @@ export function Agenda() {
                             title={`${event.summary}${event.location ? ' - ' + event.location : ''}\n${eventStart.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})} - ${eventEnd.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})} (Clique duplo para editar)`}
                             onDoubleClick={() => handleEventDoubleClick(event)}
                           >
+                            {event.color_diverged && (
+                              <span
+                                className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-500 border border-white"
+                                title="A cor mudou no Google — clique duas vezes pra ver"
+                              />
+                            )}
                             <div className="font-medium text-xs leading-tight truncate">{event.summary}</div>
                             {height > 30 && event.location && (
                               <div className="text-xs opacity-80 truncate">{event.location}</div>
@@ -3054,6 +3124,72 @@ export function Agenda() {
               <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded">
                 💡 Dica: O horário de fim é ajustado automaticamente para 2 horas após o início
               </div>
+
+              {/* Cor do evento */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Cor na Agenda
+                </label>
+                <div className="flex gap-2">
+                  {[
+                    { id: '9', label: 'Cobalto', hex: '#5484ed' },
+                    { id: '3', label: 'Uva', hex: '#9c27b0' },
+                    { id: '5', label: 'Banana', hex: '#ff9800' },
+                    { id: '11', label: 'Tomate', hex: '#dc2127' },
+                  ].map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setNewEvent(prev => ({ ...prev, color_id: c.id }))}
+                      className={`flex-1 flex flex-col items-center py-2 rounded-lg border-2 transition-colors ${
+                        newEvent.color_id === c.id ? 'border-gray-800' : 'border-transparent hover:border-gray-200'
+                      }`}
+                      title={c.label}
+                    >
+                      <span className="w-6 h-6 rounded-full block" style={{ backgroundColor: c.hex }} />
+                      <span className="text-xs text-gray-600 mt-1">{c.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Vincular a um item (opcional) — evita ter que montar uma Rota */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Vincular a um item (opcional)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newEvent.item_id}
+                    onChange={(e) => {
+                      setNewEvent(prev => ({ ...prev, item_id: e.target.value }));
+                      setLinkedItemPreview(null);
+                    }}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Ex: ITM-0000001-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCheckItemId}
+                    disabled={!newEvent.item_id.trim() || checkingItem}
+                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {checkingItem ? '...' : 'Verificar'}
+                  </button>
+                </div>
+                {linkedItemPreview?.ok && (
+                  <p className="text-xs text-green-700 mt-1">
+                    ✓ {linkedItemPreview.client_name} — {linkedItemPreview.service_name}
+                  </p>
+                )}
+                {linkedItemPreview?.ok === false && (
+                  <p className="text-xs text-red-600 mt-1">Item não encontrado. Confira o ID.</p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Liga o evento direto ao item — sem precisar montar uma Rota.
+                </p>
+              </div>
             </div>
 
             <div className="flex justify-end px-6 py-4 border-t border-gray-200 space-x-3">
@@ -3062,6 +3198,7 @@ export function Agenda() {
                 onClick={() => {
                   setShowCreateEventModal(false);
                   setLocationSuggestions([]); // Limpar sugestões de local
+                  setLinkedItemPreview(null);
                   setNewEvent({
                     title: '',
                     description: '',
@@ -3070,7 +3207,9 @@ export function Agenda() {
                     start_time: '',
                     end_date: '',
                     end_time: '',
-                    duration: 120
+                    duration: 120,
+                    color_id: '5',
+                    item_id: ''
                   });
                 }}
                 className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
@@ -3110,6 +3249,28 @@ export function Agenda() {
             </div>
 
             <div className="p-6 space-y-4">
+              {/* Aviso de divergência de cor — cor mudou no Google desde a última
+                  vez que o sistema leu, e o evento está vinculado a um item. */}
+              {editingEvent?.color_diverged && (
+                <div className="flex items-start justify-between gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="text-sm text-amber-800">
+                    <span className="font-medium">⚠️ A cor deste evento mudou no Google</span>
+                    <p className="text-xs mt-1">
+                      O sistema ainda não sabia dessa mudança. Isso não altera pagamento
+                      nem status do item — só confirma que você viu.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAcknowledgeColorChange}
+                    disabled={acknowledgingColor}
+                    className="shrink-0 px-3 py-1.5 text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 rounded-lg disabled:opacity-50"
+                  >
+                    {acknowledgingColor ? '...' : 'Confirmar'}
+                  </button>
+                </div>
+              )}
+
               {/* Título */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -895,6 +895,8 @@ class CalendarEvent(BaseModel):
     id: Optional[str] = None
     route_id: Optional[str] = None  # Optional for direct events
     stop_id: Optional[str] = None   # Optional for direct events
+    budget_item_ids: List[str] = []  # Vínculo direto com item(ns), sem precisar de Rota
+    color_id: Optional[str] = None   # Cor gravada no Google no momento da criação/edição
     summary: str
     description: Optional[str] = None
     location: Optional[str] = None
@@ -928,6 +930,8 @@ class DirectEventCreate(BaseModel):
     location: Optional[str] = None
     start_datetime: str  # ISO format datetime string
     end_datetime: str    # ISO format datetime string
+    budget_item_ids: Optional[List[str]] = None  # Vincula direto ao(s) item(ns), sem exigir Rota
+    color_id: Optional[str] = None  # '9' cobalto, '3' uva, '5' banana, '11' tomate — default banana se omitido
 
 # SystemConfig class definition starts here
 class SystemConfig(BaseModel):
@@ -2130,22 +2134,48 @@ async def create_test_assignments_for_tech001():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao criar assignments de teste: {str(e)}")
 
+VALID_CALENDAR_COLOR_IDS = {'1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'}
+
 @api_router.post("/calendar/events/direct")
 async def create_direct_calendar_event(event_request: DirectEventCreate):
-    """Create a direct calendar event (not from route)"""
+    """Create a direct calendar event (not from route).
+
+    Suporta vínculo direto com budget_item_ids, sem exigir Rota — evita a
+    burocracia de montar uma Rota só pra colocar um compromisso avulso na Agenda
+    (caso comum: estofado de 1 deslocamento, azul/cobalto).
+    """
     try:
         # Get credentials from database
         creds_doc = await db.calendar_credentials.find_one({})
         if not creds_doc:
             raise HTTPException(status_code=400, detail="Google Calendar not authenticated")
-        
+
+        # Valida os itens informados (se houver) — evita vínculo com ITM inexistente/typo
+        budget_item_ids = event_request.budget_item_ids or []
+        if budget_item_ids:
+            found_ids = set()
+            for iid in budget_item_ids:
+                bud = await db.budgets.find_one({"items.id": iid}, {"items.$": 1})
+                if bud and bud.get("items"):
+                    found_ids.add(iid)
+            missing = [iid for iid in budget_item_ids if iid not in found_ids]
+            if missing:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"budget_item_id(s) não encontrado(s): {', '.join(missing)}"
+                )
+
+        color_id = event_request.color_id or '5'  # Amarelo banana é o default (reservado/não confirmado)
+        if color_id not in VALID_CALENDAR_COLOR_IDS:
+            raise HTTPException(status_code=400, detail=f"color_id inválido: {color_id}")
+
         # Create calendar service
         service = get_calendar_service(creds_doc["credentials"])
-        
+
         # Parse datetime strings
         start_datetime = datetime.fromisoformat(event_request.start_datetime.replace('Z', '+00:00'))
         end_datetime = datetime.fromisoformat(event_request.end_datetime.replace('Z', '+00:00'))
-        
+
         # Create Google Calendar event
         event = {
             'summary': event_request.summary,
@@ -2159,17 +2189,19 @@ async def create_direct_calendar_event(event_request: DirectEventCreate):
                 'dateTime': end_datetime.isoformat(),
                 'timeZone': 'America/Cuiaba',
             },
-            'colorId': '5'  # Amarelo banana para eventos criados manualmente
+            'colorId': color_id
         }
-        
+
         # Create event in Google Calendar
         google_event = service.events().insert(calendarId='primary', body=event).execute()
-        
+
         # Store event in database
         calendar_event = CalendarEvent(
             id=f"CAL-{str(uuid.uuid4().int)[:7].zfill(7)}",
             route_id=None,  # Não associado a uma rota
             stop_id=None,   # Não associado a um stop
+            budget_item_ids=budget_item_ids,
+            color_id=color_id,
             summary=event['summary'],
             description=event.get('description'),
             location=event.get('location'),
@@ -2177,15 +2209,22 @@ async def create_direct_calendar_event(event_request: DirectEventCreate):
             end_datetime=end_datetime,
             google_event_id=google_event['id']
         )
-        
+
         await db.calendar_events.insert_one(calendar_event.dict())
-        
+
+        # Vínculo reverso: cada item passa a saber que tem esse evento na Agenda
+        # (campo agenda_event_ids já existia no modelo BudgetItem, nunca era preenchido).
+        for iid in budget_item_ids:
+            await _append_to_item_array(iid, "agenda_event_ids", calendar_event.id)
+
         return {
             "message": "Direct calendar event created successfully",
             "event": calendar_event.dict(),
             "google_event_id": google_event['id']
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating direct calendar event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2226,13 +2265,23 @@ async def get_all_calendar_events(start_date: str, end_date: str):
         ).execute()
         
         google_events = events_result.get('items', [])
-        
+
+        # Busca vínculos locais (budget_item_ids + color_id salvo) pra enriquecer
+        # a resposta — uma única query em lote, não uma por evento. Esse é também
+        # o ponto de "polling leve" da sincronia mão-dupla cor↔status: acontece
+        # sempre que a Agenda é aberta/atualizada, sem cron nem infra extra.
+        google_ids = [e.get('id') for e in google_events if e.get('id')]
+        linked_docs = await db.calendar_events.find(
+            {"google_event_id": {"$in": google_ids}}
+        ).to_list(None) if google_ids else []
+        linked_map = {d["google_event_id"]: d for d in linked_docs}
+
         # Format events for frontend
         formatted_events = []
         for event in google_events:
             start = event['start'].get('dateTime', event['start'].get('date'))
             end = event['end'].get('dateTime', event['end'].get('date'))
-            
+
             # Parse datetime strings
             if 'T' in start:  # DateTime format
                 start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
@@ -2240,7 +2289,18 @@ async def get_all_calendar_events(start_date: str, end_date: str):
             else:  # Date format (all-day event)
                 start_dt = datetime.strptime(start, '%Y-%m-%d')
                 end_dt = datetime.strptime(end, '%Y-%m-%d')
-            
+
+            live_color = event.get('colorId')
+            local_doc = linked_map.get(event.get('id'))
+            budget_item_ids = local_doc.get("budget_item_ids", []) if local_doc else []
+            stored_color = local_doc.get("color_id") if local_doc else None
+            # Diverge = você mudou a cor manualmente no Google desde a última vez
+            # que o sistema gravou/leu. Só sinaliza pra evento vinculado a item —
+            # evento solto/manual não tem baseline pra comparar, então não se aplica.
+            color_diverged = bool(
+                budget_item_ids and stored_color and live_color and stored_color != live_color
+            )
+
             formatted_events.append({
                 'id': event.get('id'),
                 'summary': event.get('summary', 'Sem título'),
@@ -2248,16 +2308,54 @@ async def get_all_calendar_events(start_date: str, end_date: str):
                 'location': event.get('location', ''),
                 'start_datetime': start_dt.isoformat(),
                 'end_datetime': end_dt.isoformat(),
-                'color_id': event.get('colorId'),  # Cor do evento no Google Calendar
+                'color_id': live_color,  # Cor do evento no Google Calendar (ao vivo)
+                'budget_item_ids': budget_item_ids,  # Vínculo local, se houver
+                'stored_color_id': stored_color,  # Última cor que o sistema conhecia
+                'color_diverged': color_diverged,  # True = mudou no Google, sistema ainda não sabe
                 'is_system_event': False,  # Evento externo (não criado pelo sistema)
                 'google_event_id': event.get('id')
             })
-        
+
         return {"events": formatted_events}
-        
+
     except Exception as e:
         logger.error(f"Error fetching Google Calendar events: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/calendar/events/{event_id}/acknowledge-color")
+async def acknowledge_calendar_event_color(event_id: str, current_user: UserPublic = Depends(get_current_user)):
+    """Confirma uma mudança de cor feita manualmente no Google Calendar.
+
+    `event_id` aqui é o ID do evento no GOOGLE (mesmo padrão do PUT/DELETE de
+    `/calendar/events/{event_id}` já existentes), não o CAL-XXXXXXX interno —
+    o frontend só tem o id do Google disponível na tela de edição do evento.
+
+    Só atualiza a baseline local (`color_id` salvo) pra parar de sinalizar
+    divergência — NÃO grava pagamento nem muda status do item. A regra
+    combinada é: o sistema sinaliza, você decide e lança o pagamento de
+    verdade no Financeiro (a cor sozinha não é confiável o bastante pra isso,
+    por sua própria observação de que a regra do vermelho às vezes falha).
+    """
+    cal_doc = await db.calendar_events.find_one({"google_event_id": event_id})
+    if not cal_doc:
+        raise HTTPException(status_code=404, detail="Evento não encontrado (sem vínculo local)")
+
+    creds_doc = await db.calendar_credentials.find_one({})
+    if not creds_doc:
+        raise HTTPException(status_code=400, detail="Google Calendar not authenticated")
+    service = get_calendar_service(creds_doc["credentials"])
+
+    google_event = service.events().get(calendarId='primary', eventId=event_id).execute()
+    live_color = google_event.get('colorId', '1')
+
+    await db.calendar_events.update_one(
+        {"google_event_id": event_id},
+        {"$set": {"color_id": live_color, "updated_at": datetime.utcnow()}}
+    )
+    await log_audit("calendar_event", cal_doc["id"], "COLOR_ACKNOWLEDGED", current_user, {
+        "color_id": live_color, "budget_item_ids": cal_doc.get("budget_item_ids", []),
+    })
+    return {"success": True, "color_id": live_color}
 
 @api_router.get("/calendar/status")
 async def check_calendar_auth_status():
@@ -2296,10 +2394,10 @@ async def get_calendar_event_detail(event_id: str):
         
         # Get event from Google Calendar
         event = service.events().get(calendarId='primary', eventId=event_id).execute()
-        
+
         start = event['start'].get('dateTime', event['start'].get('date'))
         end = event['end'].get('dateTime', event['end'].get('date'))
-        
+
         # Parse datetime strings
         if 'T' in start:  # DateTime format
             start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
@@ -2307,7 +2405,9 @@ async def get_calendar_event_detail(event_id: str):
         else:  # Date format (all-day event)
             start_dt = datetime.strptime(start, '%Y-%m-%d')
             end_dt = datetime.strptime(end, '%Y-%m-%d')
-        
+
+        linked_doc = await db.calendar_events.find_one({"google_event_id": event.get('id')})
+
         return {
             "id": event.get('id'),
             "summary": event.get('summary', ''),
@@ -2316,6 +2416,7 @@ async def get_calendar_event_detail(event_id: str):
             "start_datetime": start_dt.isoformat(),
             "end_datetime": end_dt.isoformat(),
             "color_id": event.get('colorId'),  # Cor do evento no Google Calendar
+            "budget_item_ids": (linked_doc or {}).get("budget_item_ids", []),  # Vínculo local, se houver
             "google_event_id": event.get('id')
         }
         
@@ -3628,6 +3729,19 @@ def _parse_measures_text(text: str) -> AutoMeasureLine:
             h = round(h / 100, 4)
         return round(w, 4), round(h, 4)
 
+    # Emoji usados por alguns técnicos (ex: Marcos) no lugar da palavra da cor,
+    # sempre coladas ou seguidas do código numérico (ex: "💛059", "🩶 870").
+    EMOJI_COLOR_MAP = {
+        '💛': 'AMARELO', '🟡': 'AMARELO',
+        '🩷': 'ROSA', '💗': 'ROSA', '💖': 'ROSA',
+        '🩶': 'CINZA', '⚪': 'CINZA', '🤍': 'CINZA',
+        '🧡': 'LARANJA', '🟠': 'LARANJA',
+        '💙': 'AZUL', '🔵': 'AZUL',
+        '💜': 'ROXO', '🟣': 'ROXO',
+        '💚': 'VERDE', '🟢': 'VERDE',
+    }
+    EMOJI_CODE_RE = re.compile(r'^([\U0001F300-\U0001FAFF☀-➿])\s*(\d{2,3})$')
+
     def _classify_partner(identifier: str):
         """
         Retorna (client_name, partner_name, is_ambiguous, partner_label).
@@ -3636,10 +3750,22 @@ def _parse_measures_text(text: str) -> AutoMeasureLine:
         idn = identifier.strip()
         idn_lower = idn.lower()
 
-        # Sem identificação ou variantes → Leonardo
+        # Sem identificação, variantes, ou tag "dry"/"dry2" (bag/lote sem etiqueta
+        # individual do Leonardo) → Leonardo, sem etiqueta cor+número.
         sem_nome_pattern = r'^(sem\s*nome|s/?n|sem\s*identifica[çc][aã]o|n[aã]o\s*identificado|desconhecido)$'
-        if not idn or re.match(sem_nome_pattern, idn_lower):
+        dry_pattern = r'\bdry\s*\d*\b'
+        if not idn or re.match(sem_nome_pattern, idn_lower) or re.search(dry_pattern, idn_lower):
             return None, PARTNER_LEONARDO, False, None
+
+        # Emoji de cor + código 2-3 dígitos (ex: "💛059", "🩶870") → mesma regra
+        # do texto, traduzindo o emoji pra cor equivalente.
+        emoji_match = EMOJI_CODE_RE.match(idn)
+        if emoji_match and emoji_match.group(1) in EMOJI_COLOR_MAP:
+            return None, PARTNER_LEONARDO, False, {
+                "type": "COLOR_NUM",
+                "color": EMOJI_COLOR_MAP[emoji_match.group(1)],
+                "number": emoji_match.group(2),
+            }
 
         # Cor + código 2-3 dígitos → Leonardo Dry Clean
         # Aceita com ou sem espaço entre cor e número (Rosa856 ou Rosa 856)
@@ -5612,6 +5738,7 @@ async def update_budget_item_status(
             )
             await log_audit("item", item_id, "STATUS_CHANGE", current_user,
                             {"from": old_status, "to": status, "via": "legacy"})
+            await _sync_linked_events_color(item_id)
 
         return {"success": True, "item_id": item_id, "new_status": status}
     except HTTPException:
@@ -6173,6 +6300,79 @@ async def _append_to_item_array(item_id: str, array_field: str, value: Any):
     return res.modified_count > 0
 
 
+# ── Sincronia de cor Agenda↔status (mão única: sistema→Google) ─────────────────
+#
+# Regra confirmada com o dono: vermelho (tomate) = item finalizado sem pagamento
+# completo; ao ficar PAGO, volta pra cor "base" do tipo de serviço (azul cobalto
+# = 1 deslocamento; roxo uva = múltiplos deslocamentos — tapetes/cortinas/
+# impermeabilização). Só mexe em eventos que o item JÁ tem vinculados
+# (`agenda_event_ids`) — nunca cria evento, nunca mexe em evento solto/manual.
+# A cor amarela (reservado/não confirmado) continua sendo escolha manual na
+# criação do evento — não há sinal confiável no BudgetItem pra inferir isso.
+#
+FINISHED_ITEM_STATUSES = {
+    ServiceStatus.ENTREGUE.value, ServiceStatus.EXECUTADO.value, ServiceStatus.BUSCOU.value,
+}
+MULTI_STOP_SERVICE_CATEGORIES = {"TAPETES", "CORTINAS", "IMPERMEABILIZACAO"}
+
+
+def _base_color_id_for_item(item: Dict[str, Any]) -> str:
+    """Azul cobalto por padrão (1 deslocamento); roxo uva se a categoria do
+    serviço tipicamente envolve múltiplos deslocamentos."""
+    category = (item.get("service_category") or "").upper()
+    return "3" if category in MULTI_STOP_SERVICE_CATEGORIES else "9"
+
+
+def _expected_color_id_for_item(item: Dict[str, Any]) -> str:
+    """Cor que o(s) evento(s) vinculados a este item deveriam ter agora."""
+    is_finished = item.get("status") in FINISHED_ITEM_STATUSES
+    payment_status = item.get("payment_status", "PENDENTE")
+    if is_finished and payment_status != PaymentStatusItem.PAGO.value:
+        return "11"  # vermelho tomate — finalizado, ainda não pago
+    return _base_color_id_for_item(item)
+
+
+async def _sync_linked_events_color(item_id: str):
+    """Atualiza a cor dos eventos do Google já vinculados a este item, conforme
+    a regra acima. Silencioso em qualquer falha (Calendar não autenticado, item
+    sem evento, erro de rede) — nunca deve quebrar o fluxo principal de
+    status/pagamento por causa de um problema no Calendar."""
+    try:
+        _, item = await _find_budget_and_item(item_id)
+        if not item:
+            return
+        event_ids = item.get("agenda_event_ids") or []
+        if not event_ids:
+            return
+
+        creds_doc = await db.calendar_credentials.find_one({})
+        if not creds_doc:
+            return
+        service = get_calendar_service(creds_doc["credentials"])
+        new_color = _expected_color_id_for_item(item)
+
+        for eid in event_ids:
+            cal_doc = await db.calendar_events.find_one({"id": eid})
+            if not cal_doc or not cal_doc.get("google_event_id"):
+                continue
+            if cal_doc.get("color_id") == new_color:
+                continue  # já está na cor certa, evita chamada desnecessária ao Google
+            try:
+                service.events().patch(
+                    calendarId='primary',
+                    eventId=cal_doc["google_event_id"],
+                    body={"colorId": new_color},
+                ).execute()
+                await db.calendar_events.update_one(
+                    {"id": eid},
+                    {"$set": {"color_id": new_color, "updated_at": datetime.utcnow()}},
+                )
+            except Exception as e:
+                logger.error(f"Erro ao sincronizar cor do evento {eid} (item {item_id}): {e}")
+    except Exception as e:
+        logger.error(f"Erro geral em _sync_linked_events_color({item_id}): {e}")
+
+
 @api_router.get("/items/{item_id}")
 async def get_item(item_id: str, current_user: UserPublic = Depends(get_current_user)):
     """Buscar um item específico (rico)."""
@@ -6280,6 +6480,7 @@ async def change_item_status(
         "from": item.get("status"), "to": new_status, "notes": entry["notes"],
         "route_cleared": new_status in CLEAR_ROUTE_ON,
     })
+    await _sync_linked_events_color(item_id)
     return {"success": True, "status": new_status}
 
 
@@ -6409,6 +6610,8 @@ async def finish_execution_session(
     await log_audit("item", item_id, "EXEC_SESSION_FINISH", current_user, {
         "session_id": session_id, "outcome": outcome, "reason": payload.get("reason"),
     })
+    if new_status and new_status != item.get("status"):
+        await _sync_linked_events_color(item_id)
     return {"success": True, "session": sessions[target_idx], "new_status": new_status}
 
 
@@ -6481,6 +6684,7 @@ async def register_item_payment(
     await log_audit("item", item_id, "PAYMENT", current_user, {
         "method": method, "value": value, "paid_total": paid_total, "new_status": payment_status,
     })
+    await _sync_linked_events_color(item_id)
     return {"success": True, "record": record, "paid_value": paid_total, "payment_status": payment_status}
 
 

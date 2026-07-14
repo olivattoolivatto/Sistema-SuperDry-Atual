@@ -27,6 +27,20 @@ O **BudgetItem (ITM-XXXX)** é o pilar do sistema. Tudo orbita em torno do seu c
 > que gera os orçamentos/itens de parceiro a partir do log de medições e o fechamento
 > mensal de cobrança dentro do sistema.
 
+> **Integração Agenda (cores) ↔ Sistema — diagnóstico e design:** ver
+> [`memory/INTEGRACAO_AGENDA_CORES.md`](memory/INTEGRACAO_AGENDA_CORES.md). Resumo: o
+> uso real do dono é Agenda-primeiro (cola texto solto do WhatsApp direto num evento do
+> Google Calendar), enquanto o sistema pressupõe cadastro estruturado antes. `colorId`
+> hoje é sempre fixo em amarelo na criação (`server.py:1770`/`2162`), sem nenhuma
+> leitura/gravação da cor real (azul/roxo/amarelo/vermelho) de volta pro Mongo — não
+> existe webhook nem polling do Google Calendar. `POST /calendar/events/direct` já
+> permite evento sem orçamento/rota, e o parser de medidas de parceiro
+> (`_parse_measures_text`) já processa a lista de recolhimento do grupo do WhatsApp sem
+> precisar de código novo. Design faseado: cor automática na criação → evento direto
+> como caminho de primeira classe com sugestão silenciosa de estruturação → sincronia
+> mão-dupla cor↔status via polling (sinalizando divergência, não gravando pagamento
+> sozinha) → painel "resolver hoje".
+
 ---
 
 ## Stack técnica

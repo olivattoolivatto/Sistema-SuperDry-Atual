@@ -189,7 +189,8 @@ export const agendaApi = {
   }),
   getEventDetail: (eventId) => api.get(`/calendar/events/detail/${eventId}`),
   updateEvent: (eventId, eventData) => api.put(`/calendar/events/${eventId}`, eventData),
-  deleteEvent: (eventId) => api.delete(`/calendar/events/${eventId}`)
+  deleteEvent: (eventId) => api.delete(`/calendar/events/${eventId}`),
+  acknowledgeColor: (eventId) => api.post(`/calendar/events/${eventId}/acknowledge-color`)
 };
 
 // Budget Items API
