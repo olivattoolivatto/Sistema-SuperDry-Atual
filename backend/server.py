@@ -4333,7 +4333,8 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
     Executa a automação de orçamento:
     1. Cria ou usa cliente existente
     2. Cria orçamento com os itens fornecidos
-    3. Retorna IDs criados
+    3. Opcionalmente lança na Agenda (launch_agenda=true)
+    4. Retorna IDs criados
     """
     import re as re2
 
@@ -4341,11 +4342,19 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
     client_phone   = (payload.get("client_phone") or "").strip()
     client_address = (payload.get("client_address") or "").strip()
     client_address_obj = payload.get("client_address_obj")  # endereço com lat/lng da busca
+    # Endereço de execução (diferente do cliente — ex: escritório, condomínio diferente)
+    exec_address_obj = payload.get("execution_address_obj")
+    exec_address_text = (payload.get("execution_address") or "").strip()
+    exec_complement  = (payload.get("execution_complement") or "").strip()
+    has_exec_addr    = bool(exec_address_obj or exec_address_text)
     items          = payload.get("items", [])
     notes          = payload.get("notes", "")
     existing_id    = payload.get("existing_client_id")
     payment_method = payload.get("payment_method", "PIX_CNPJ_25995295000104")
     salesperson    = payload.get("salesperson", current_user.display_name or current_user.name)
+    launch_agenda  = bool(payload.get("launch_agenda", False))
+    scheduled_date = payload.get("scheduled_date") or ""   # "YYYY-MM-DD"
+    scheduled_time = payload.get("scheduled_time") or ""   # "HH:MM"
 
     if not client_name:
         raise HTTPException(status_code=400, detail="Nome do cliente obrigatório.")
@@ -4390,6 +4399,24 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
 
     budget_id = await _next_id(db.budgets, "ORC-", 7)
 
+    # Endereço de execução resolvido para usar nos itens
+    if has_exec_addr:
+        resolved_exec_addr = exec_address_obj or {
+            "full_address": exec_address_text,
+            "neighborhood": "", "city": "", "state": "",
+            "latitude": None, "longitude": None,
+        }
+        if exec_complement:
+            resolved_exec_addr["complement"] = exec_complement
+        exec_mode      = "EXECUTAR_NO_LOCAL"
+        exec_location  = "NO_LOCAL"
+        item_status    = "EXECUTAR_NO_LOCAL"
+    else:
+        resolved_exec_addr = None
+        exec_mode      = "RETIRAR_E_LEVAR"
+        exec_location  = "RETIRADA"
+        item_status    = "RETIRAR"
+
     budget_items = []
     for raw_item in items:
         item_counter = len(budget_items) + 1
@@ -4397,7 +4424,7 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
         m = raw_item.get("matched") or {}           # serviço casado no catálogo (Camada A)
         val = float(raw_item.get("value") or 0)
         qty = int(raw_item.get("quantity") or 1)
-        budget_items.append({
+        item_doc = {
             "id": item_id,
             "budget_id": budget_id,
             "client_id": client_id,
@@ -4415,13 +4442,16 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
             "height": raw_item.get("height"),
             "diameter": raw_item.get("diameter"),
             "area_m2": raw_item.get("area_m2"),
-            "status": "RETIRAR",
+            "status": item_status,
             "payment_status": "PENDENTE",
             "paid_value": 0.0,
-            "execution_mode": "RETIRAR_E_LEVAR",
-            "execution_location": "RETIRADA",
+            "execution_mode": exec_mode,
+            "execution_location": exec_location,
             "current_route_id": None,
-        })
+        }
+        if resolved_exec_addr:
+            item_doc["execution_address"] = resolved_exec_addr
+        budget_items.append(item_doc)
 
     budget_doc = {
         "id": budget_id,
@@ -4430,7 +4460,7 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
         "payment_method": payment_method,
         "salesperson": salesperson_val,
         "budget_observations": notes or "",
-        "internal_observations": "Criado via Automação",
+        "internal_observations": "Criado via Automação" + (" + Agenda" if launch_agenda else ""),
         "items": budget_items,
         "total_value": sum(float(i.get("value", 0)) for i in items),
         "payment_status": "PENDENTE",
@@ -4441,12 +4471,114 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
     await db.budgets.insert_one(budget_doc)
     await log_audit("budget", budget_id, "AUTO_CREATE", current_user, {"source": "automation"})
 
+    # 3. Lançar na Agenda (opcional)
+    calendar_event_id = None
+    google_event_id   = None
+    agenda_error      = None
+    if launch_agenda:
+        try:
+            creds_doc = await db.calendar_credentials.find_one({})
+            if not creds_doc:
+                agenda_error = "Google Calendar não autenticado"
+            else:
+                service = get_calendar_service(creds_doc["credentials"])
+                # Data/hora do evento
+                if scheduled_date:
+                    start_str = scheduled_date
+                    time_part = scheduled_time or "09:00"
+                    # Duração estimada: 2h
+                    try:
+                        from datetime import datetime as dt2, timedelta
+                        start_dt = dt2.fromisoformat(f"{start_str}T{time_part}:00")
+                        end_dt   = start_dt + timedelta(hours=2)
+                        tz = "America/Cuiaba"
+                        start_iso = start_dt.isoformat()
+                        end_iso   = end_dt.isoformat()
+                    except Exception:
+                        start_iso = f"{start_str}T{time_part}:00"
+                        end_iso   = f"{start_str}T{(int(time_part[:2])+2):02d}:{time_part[3:]}:00"
+                        tz = "America/Cuiaba"
+                else:
+                    # Sem data: evento de hoje às 09:00
+                    today = datetime.utcnow().strftime("%Y-%m-%d")
+                    start_iso = f"{today}T09:00:00"
+                    end_iso   = f"{today}T11:00:00"
+                    tz = "America/Cuiaba"
+
+                # Local: endereço de execução se houver, senão endereço do cliente
+                location_text = ""
+                if resolved_exec_addr:
+                    location_text = resolved_exec_addr.get("full_address", "")
+                    if exec_complement:
+                        location_text += f" - {exec_complement}"
+                elif client_address:
+                    location_text = client_address
+                    comp = (payload.get("complement") or "").strip()
+                    if comp:
+                        location_text += f" - {comp}"
+
+                # Descrição com itens
+                items_desc = "\n".join(
+                    f"• {it.get('service_name','Serviço')} — R$ {float(it.get('value',0)):.2f}"
+                    for it in items
+                )
+                total_val = sum(float(i.get("value", 0)) for i in items)
+                description = (
+                    f"Orçamento: {budget_id}\n"
+                    f"Cliente: {client_name}"
+                    + (f" | {client_phone}" if client_phone else "")
+                    + f"\n\n{items_desc}\n\nTotal: R$ {total_val:.2f}"
+                    + (f"\n\nObs: {notes}" if notes else "")
+                )
+
+                summary = f"SuperDry – {client_name}"
+
+                google_ev = {
+                    "summary": summary,
+                    "description": description,
+                    "location": location_text,
+                    "start": {"dateTime": start_iso, "timeZone": tz},
+                    "end":   {"dateTime": end_iso,   "timeZone": tz},
+                    "colorId": "5",  # amarelo = agendado/não confirmado
+                }
+                created_ev = service.events().insert(calendarId="primary", body=google_ev).execute()
+                google_event_id = created_ev.get("id")
+
+                # Salva no MongoDB
+                item_ids = [it["id"] for it in budget_items]
+                cal_doc = {
+                    "id": f"CAL-{str(uuid.uuid4().int)[:7].zfill(7)}",
+                    "route_id": None,
+                    "stop_id": None,
+                    "budget_item_ids": item_ids,
+                    "color_id": "5",
+                    "summary": summary,
+                    "description": description,
+                    "location": location_text,
+                    "start_datetime": start_iso,
+                    "end_datetime": end_iso,
+                    "google_event_id": google_event_id,
+                    "created_at": datetime.utcnow(),
+                }
+                await db.calendar_events.insert_one(cal_doc)
+                calendar_event_id = cal_doc["id"]
+
+                # Vínculo reverso nos itens
+                for iid in item_ids:
+                    await _append_to_item_array(iid, "agenda_event_ids", calendar_event_id)
+
+        except Exception as ex:
+            agenda_error = str(ex)
+
     return {
         "success": True,
         "client_id": client_id,
         "budget_id": budget_id,
         "items_created": len(budget_items),
         "client_created": not bool(existing_id),
+        "calendar_event_id": calendar_event_id,
+        "google_event_id": google_event_id,
+        "agenda_error": agenda_error,
     }
 
 
