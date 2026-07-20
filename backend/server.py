@@ -4209,14 +4209,13 @@ async def preview_budget(payload: Dict[str, Any], current_user: UserPublic = Dep
 @api_router.post("/automation/interpret-message")
 async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = Depends(get_current_user)):
     """
-    Interpretação inteligente de mensagem WhatsApp colada pelo atendente.
+    Interpreta mensagem WhatsApp colada pelo atendente.
 
     Fluxo:
-      1. Roda _smart_parse_budget (parser Python com todos os fixes)
-      2. Se Ollama disponível em localhost:11434 → enriquece extração com LLM
-      3. Retorna JSON normalizado pronto para o formulário da AutomationPage
-
-    Sempre retorna resultado mesmo sem Ollama (parser Python já cobre a maioria dos casos).
+      1. Tenta Claude API (ANTHROPIC_API_KEY no .env) — extração inteligente
+      2. Se indisponível, cai no parser Python como fallback
+      3. Faz matching de catálogo nos itens extraídos
+      4. Verifica se cliente já existe pelo telefone
     """
     import httpx as _httpx
     import json as _json
@@ -4226,15 +4225,109 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
         raise HTTPException(status_code=400, detail="Texto vazio.")
 
     services = await db.services.find({"is_active": True}).to_list(length=1000)
-    parsed = _smart_parse_budget(text, services)
 
+    # ── Catálogo resumido para o prompt ──────────────────────────────────────
+    catalog_lines = "\n".join(
+        f"- {s.get('name')} ({s.get('category', '')}, R${float(s.get('sale_price') or 0):.0f})"
+        for s in services[:80]
+    ) if services else "(catálogo vazio)"
+
+    # ── 1. Tentar Claude API ──────────────────────────────────────────────────
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    raw_parsed = None
+    source = "python_parser"
+
+    if anthropic_key:
+        try:
+            prompt = (
+                "Você é o assistente da SuperDry Lavanderia em Cuiabá-MT.\n"
+                "Analise a conversa/mensagem de WhatsApp abaixo e extraia os dados estruturados.\n\n"
+                f"CATÁLOGO DE SERVIÇOS:\n{catalog_lines}\n\n"
+                f"MENSAGEM:\n{text[:4000]}\n\n"
+                "Retorne SOMENTE um JSON válido (sem markdown, sem explicação) com este schema:\n"
+                "{\n"
+                '  "client_name": "nome real do cliente (sem timestamps, sem prefixos de grupo)",\n'
+                '  "phone": "telefone com DDD, ex: +55 65 99973-1235",\n'
+                '  "address": "endereço completo com nome do edifício/condomínio e bairro se mencionados",\n'
+                '  "complement": "apto, bloco, sala etc",\n'
+                '  "scheduled_date": "YYYY-MM-DD ou null",\n'
+                '  "scheduled_time": "HH:MM ou null",\n'
+                '  "total_pix": numero ou null,\n'
+                '  "total_cash": numero ou null,\n'
+                '  "notes": "observações ou null",\n'
+                '  "items": [\n'
+                '    {\n'
+                '      "service_name": "descrição completa do item (ex: Sofá 2 lugares, Cadeira Tipo Poltrona)",\n'
+                '      "quantity": 1,\n'
+                '      "unit_price": 0.0,\n'
+                '      "value": 0.0\n'
+                '    }\n'
+                '  ]\n'
+                "}\n\n"
+                "REGRAS:\n"
+                "- O CLIENTE é quem enviou a primeira mensagem (não a SuperDry/Daiana)\n"
+                "- Extraia apenas o nome real do cliente, sem timestamp do WhatsApp nem nome do grupo\n"
+                "- Para cada item, use o nome descritivo do produto (ex: 'Sofá 2 lugares'), não o tipo do serviço\n"
+                "- Itens com quantidade >1 listados juntos (ex: '2un = R$100'): crie um único item com qty=2\n"
+                "- Se a mensagem contém um orçamento formatado, extraia os itens com preços\n"
+                "- Ignore parágrafos de condições, riscos e rodapé — só extraia serviços com preços\n"
+                "- total_pix = valor à vista (pix/dinheiro mais barato) ou o total principal\n"
+                "- total_cash = valor em dinheiro se diferente do PIX, ou null\n"
+            )
+            async with _httpx.AsyncClient(timeout=25.0) as hc:
+                r = await hc.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": anthropic_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": "claude-haiku-4-5-20251001",
+                        "max_tokens": 1500,
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                )
+            if r.status_code == 200:
+                content = r.json().get("content", [{}])[0].get("text", "")
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                if json_match:
+                    raw_parsed = _json.loads(json_match.group())
+                    source = "claude"
+        except Exception as _ex:
+            logging.warning(f"Claude API falhou no interpret-message: {_ex}")
+
+    # ── 2. Fallback: parser Python ────────────────────────────────────────────
+    if raw_parsed is None:
+        parsed = _smart_parse_budget(text, services)
+        raw_parsed = {
+            "client_name":    parsed.client_name,
+            "phone":          parsed.client_phone,
+            "address":        parsed.client_address,
+            "complement":     parsed.client_complement,
+            "scheduled_date": parsed.scheduled_date,
+            "scheduled_time": parsed.scheduled_time,
+            "total_pix":      parsed.total_pix,
+            "total_cash":     parsed.total_cash,
+            "notes":          parsed.notes,
+            "items":          [dict(it) for it in (parsed.items or [])],
+        }
+
+    # ── 3. Enriquecer itens com matching de catálogo ──────────────────────────
     AREA_TYPES = {"AREA_DE_TAPETE", "AREA_PERSIANA", "CARPETE_TAPETE_LOCAL", "TAPETE_REDONDO_DIAMETRO"}
-
     enriched_items = []
-    for it in parsed.items:
+    for it in (raw_parsed.get("items") or []):
         item = dict(it)
-        m = await match_service_in_catalog(it.get("service_name", ""), services)
-        explicit_value = float(it.get("value") or 0)
+        # Normaliza campos (LLM às vezes usa qty/total em vez de quantity/value)
+        if "qty" in item and "quantity" not in item:
+            item["quantity"] = item.pop("qty")
+        if "total" in item and "value" not in item:
+            item["value"] = item.pop("total")
+        if "unit_value" in item and "unit_price" not in item:
+            item["unit_price"] = item.pop("unit_value")
+
+        m = await match_service_in_catalog(item.get("service_name", ""), services)
+        explicit_value = float(item.get("value") or 0)
         if m:
             mtype = m.get("measure_type", "UNITARIO")
             price = float(m.get("sale_price") or 0)
@@ -4243,88 +4336,44 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                 "measure_type": mtype, "sale_price": price,
                 "match_score": m.get("match_score"),
             }
-            area = float(it.get("area_m2") or 0)
+            area = float(item.get("area_m2") or 0)
             if mtype in AREA_TYPES:
                 item["unit_price"] = price
                 item["value"] = explicit_value or (round(area * price, 2) if area > 0 else 0)
                 item["needs_measure"] = area == 0 and explicit_value == 0
             else:
-                qty = int(it.get("quantity") or 1)
+                qty = int(item.get("quantity") or 1)
                 item["quantity"] = qty
-                item["unit_price"] = float(it.get("unit_price") or price)
+                item["unit_price"] = float(item.get("unit_price") or price)
                 item["value"] = explicit_value or round(price * qty, 2)
                 item["needs_measure"] = False
         enriched_items.append(item)
 
-    # Verificar se cliente já existe pelo telefone
+    # ── 4. Verificar cliente existente pelo telefone ──────────────────────────
     existing_client = None
-    if parsed.client_phone:
-        phone_digits = re.sub(r'\D', '', parsed.client_phone)
+    phone_raw = raw_parsed.get("phone") or ""
+    if phone_raw:
+        phone_digits = re.sub(r'\D', '', phone_raw)
         if phone_digits:
             existing_client = await db.clients.find_one(
                 {"phone_primary": {"$regex": phone_digits[-8:]}})
 
-    base_result = {
-        "client_name":       parsed.client_name,
-        "phone":             parsed.client_phone,
-        "address":           parsed.client_address,
-        "complement":        parsed.client_complement,
-        "scheduled_date":    parsed.scheduled_date,
-        "scheduled_time":    parsed.scheduled_time,
-        "items":             enriched_items,
-        "total_pix":         parsed.total_pix,
-        "total_cash":        parsed.total_cash,
-        "notes":             parsed.notes,
-        "client_exists":     bool(existing_client),
+    return {
+        "client_name":        raw_parsed.get("client_name"),
+        "phone":              phone_raw,
+        "address":            raw_parsed.get("address"),
+        "complement":         raw_parsed.get("complement"),
+        "scheduled_date":     raw_parsed.get("scheduled_date"),
+        "scheduled_time":     raw_parsed.get("scheduled_time"),
+        "items":              enriched_items,
+        "total_pix":          raw_parsed.get("total_pix"),
+        "total_cash":         raw_parsed.get("total_cash"),
+        "notes":              raw_parsed.get("notes"),
+        "client_exists":      bool(existing_client),
         "existing_client_id": existing_client.get("id") if existing_client else None,
-        "source":            "python_parser",
+        "source":             source,
         "raw_text_truncated": text[:500] if len(text) > 500 else text,
     }
-
-    # Tentar enriquecer com Ollama (opcional — falha silenciosa)
-    try:
-        async with _httpx.AsyncClient(timeout=2.0) as hc:
-            r = await hc.get("http://localhost:11434/api/tags")
-        if r.status_code == 200:
-            # Ollama disponível — montar prompt e enriquecer
-            catalog_summary = "; ".join(
-                f"{s.get('name')}" for s in services[:40]) if services else ""
-            prompt = (
-                "Você é o parser de mensagens WhatsApp da SuperDry Lavanderia.\n"
-                "Extraia os dados estruturados da mensagem abaixo.\n"
-                f"Catálogo (resumo): {catalog_summary}\n\n"
-                f"MENSAGEM:\n{text[:2000]}\n\n"
-                "Responda SOMENTE com JSON (sem markdown) no formato:\n"
-                '{"client_name":"...","phone":"...","address":"...","complement":"...",'
-                '"scheduled_date":"YYYY-MM-DD ou null","scheduled_time":"HH:MM ou null",'
-                '"total_pix":0.0,"total_cash":0.0,'
-                '"items":[{"service_name":"...","qty":1,"unit_value":0.0,"total":0.0}]}'
-            )
-            async with _httpx.AsyncClient(timeout=30.0) as hc2:
-                llm_r = await hc2.post("http://localhost:11434/api/generate", json={
-                    "model": "llama3.2:3b",
-                    "prompt": prompt,
-                    "stream": False,
-                })
-            if llm_r.status_code == 200:
-                llm_text = llm_r.json().get("response", "")
-                # extrair JSON da resposta
-                json_match = re.search(r'\{.*\}', llm_text, re.DOTALL)
-                if json_match:
-                    llm_data = _json.loads(json_match.group())
-                    # Mesclar resultado LLM sobre base (LLM preenche lacunas)
-                    for key in ("client_name", "phone", "address", "complement",
-                                "scheduled_date", "scheduled_time", "total_pix", "total_cash"):
-                        if llm_data.get(key) and not base_result.get(key):
-                            base_result[key] = llm_data[key]
-                    # Para itens: se LLM encontrou mais itens que o parser, usar os do LLM
-                    if llm_data.get("items") and len(llm_data["items"]) > len(enriched_items):
-                        base_result["items_llm"] = llm_data["items"]
-                    base_result["source"] = "python_parser+ollama"
-    except Exception:
-        pass  # Ollama indisponível — continua só com parser Python
-
-    return base_result
 
 
 @api_router.post("/automation/execute-budget")
