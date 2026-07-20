@@ -4311,17 +4311,17 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                     f"MENSAGEM:\n{text[:2500]}\n\n"
                     "REGRAS OBRIGATÓRIAS:\n"
                     "1. client_name = nome do CLIENTE (quem pediu), sem timestamps do WhatsApp (ex: '20/07 10:30 -')\n"
-                    "2. address = rua, número da rua, nome do edifício/condomínio e bairro — SEM número de apartamento\n"
-                    "3. complement = SOMENTE número de apartamento/sala/bloco (ex: 'Apto 2402', 'Sala 3'). Se não houver, use null\n"
-                    "4. ITENS: cada tipo de serviço com preço diferente = item SEPARADO. Exemplos:\n"
-                    "   '2 cadeiras R$50 cada + 2 poltronas R$60 cada' → DOIS itens separados:\n"
+                    "2. address = nome do edifício/condomínio, referência e bairro extraídos da mensagem. Não escreva instruções, escreva o endereço real\n"
+                    "3. complement = SOMENTE o número do apto/sala/bloco (ex: 'Apto 2402'). Se não houver, null\n"
+                    "4. ITENS: cada tipo de serviço com preço diferente = item SEPARADO na lista. Exemplos:\n"
+                    "   Texto: 'Cadeira R$50,00un (2un=R$100) / Poltrona R$60,00un (2un=R$120)' → DOIS itens:\n"
                     '   [{"service_name":"Cadeira","quantity":2,"unit_price":50.0,"value":100.0},\n'
                     '    {"service_name":"Poltrona","quantity":2,"unit_price":60.0,"value":120.0}]\n'
-                    "   'sofá 3 lugares R$200' → UM item: [{\"service_name\":\"Sofá 3 lugares\",\"quantity\":1,\"unit_price\":200.0,\"value\":200.0}]\n"
-                    "5. quantity = unidades daquele tipo específico; unit_price = preço por unidade; value = unit_price × quantity\n"
-                    "6. scheduled_date = YYYY-MM-DD ou null; scheduled_time = HH:MM ou null\n"
-                    "7. total_pix = valor total à vista/PIX mencionado; total_cash = valor em dinheiro se diferente\n\n"
-                    "Responda SOMENTE com JSON válido, sem markdown, sem texto adicional:\n"
+                    "5. Padrão 'R$XX,00un (NuN = R$YY)': quantity=N, unit_price=XX, value=YY\n"
+                    "6. quantity = unidades; unit_price = preço por unidade; value = unit_price × quantity\n"
+                    "7. scheduled_date = YYYY-MM-DD ou null; scheduled_time = HH:MM ou null\n"
+                    "8. total_pix = valor total à vista/PIX; total_cash = valor em dinheiro se diferente\n\n"
+                    "Responda SOMENTE com JSON válido, sem markdown:\n"
                     '{"client_name":"","phone":"","address":"","complement":null,'
                     '"scheduled_date":null,"scheduled_time":null,'
                     '"total_pix":null,"total_cash":null,"notes":null,'
@@ -4332,8 +4332,8 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                         "model": "llama3.2:3b",
                         "prompt": ollama_prompt,
                         "stream": False,
-                        "keep_alive": "10m",
-                        "options": {"temperature": 0.1, "num_ctx": 4096},
+                        "keep_alive": "-1",
+                        "options": {"temperature": 0.1},
                     })
                 if ollama_r.status_code == 200:
                     ollama_text = ollama_r.json().get("response", "")
@@ -4359,6 +4359,23 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
             "notes":          parsed.notes,
             "items":          [dict(it) for it in (parsed.items or [])],
         }
+
+    # ── Pós-processo: corrige qtd/valor de itens via padrão "(Nun = R$YY)" ──
+    try:
+        _qty_re = re.compile(r'R\$\s*([\d,.]+)\s*un\s*\((\d+)\s*un\s*=\s*R\$\s*([\d,.]+)\)', re.IGNORECASE)
+        for _m in _qty_re.finditer(text):
+            _unit = float(_m.group(1).replace(',', '.'))
+            _qty  = int(_m.group(2))
+            _tot  = float(_m.group(3).replace(',', '.'))
+            for _it in (raw_parsed.get("items") or []):
+                _iu = float(_it.get("unit_price") or 0)
+                _iv = float(_it.get("value") or 0)
+                if abs(_iu - _unit) < 0.5 and abs(_iv - _tot) > 0.5:
+                    _it["quantity"] = _qty
+                    _it["value"]    = _tot
+                    break
+    except Exception:
+        pass
 
     # ── 3. Enriquecer itens com matching de catálogo ──────────────────────────
     AREA_TYPES = {"AREA_DE_TAPETE", "AREA_PERSIANA", "CARPETE_TAPETE_LOCAL", "TAPETE_REDONDO_DIAMETRO"}
@@ -4398,7 +4415,12 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
 
     # ── 4. Verificar cliente existente pelo telefone ──────────────────────────
     existing_client = None
-    phone_raw = raw_parsed.get("phone") or ""
+    phone_raw = (raw_parsed.get("phone") or "").strip()
+    # Remove prefixo +55 — sistema usa DDD + número (ex: 65 99973-1235)
+    if phone_raw.startswith("+55 "):
+        phone_raw = phone_raw[4:]
+    elif phone_raw.startswith("+55"):
+        phone_raw = phone_raw[3:].lstrip()
     if phone_raw:
         phone_digits = re.sub(r'\D', '', phone_raw)
         if phone_digits:
