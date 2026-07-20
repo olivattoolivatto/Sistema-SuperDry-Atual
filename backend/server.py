@@ -4335,12 +4335,20 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                         "keep_alive": "-1",
                         "options": {"temperature": 0.1},
                     })
+                logging.info(f"[OLLAMA] generate status: {ollama_r.status_code}")
                 if ollama_r.status_code == 200:
                     ollama_text = ollama_r.json().get("response", "")
+                    logging.info(f"[OLLAMA] response preview: {repr(ollama_text[:300])}")
                     jm = re.search(r'\{.*\}', ollama_text, re.DOTALL)
                     if jm:
-                        raw_parsed = _json.loads(jm.group())
-                        source = "ollama"
+                        try:
+                            raw_parsed = _json.loads(jm.group())
+                            source = "ollama"
+                            logging.info("[OLLAMA] JSON parsed OK")
+                        except Exception as _je:
+                            logging.warning(f"[OLLAMA] JSON parse error: {_je} — text: {repr(jm.group()[:200])}")
+                    else:
+                        logging.warning(f"[OLLAMA] No JSON found in response: {repr(ollama_text[:300])}")
         except Exception as _ox:
             logging.warning(f"Ollama falhou no interpret-message: {_ox}")
 
