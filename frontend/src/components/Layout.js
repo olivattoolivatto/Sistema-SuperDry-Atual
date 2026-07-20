@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, Users, FileText, Settings, Cog, Route as RouteIcon, Smartphone,
   MessageSquare, Wallet, BarChart3, Wrench, CalendarDays, Menu, X, LogOut,
-  ShieldCheck, UserCircle, ChevronDown, Droplets, Navigation, Zap
+  ShieldCheck, UserCircle, ChevronDown, Droplets, Navigation, Zap, Wand2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { BACKEND_URL } from '../lib/backendUrl';
@@ -44,6 +44,7 @@ const ALL_ITEMS = [
   { path: '/technician',     label: 'Execução e Lavagem',   short: 'Execução', icon: Smartphone,   roles: ['ADMIN','TECNICO'] },
   { path: '/financial',      label: 'Financeiro',           short: 'Finan.',   icon: Wallet,       roles: ['ADMIN','FINANCEIRO'] },
   { path: '/automations',    label: 'Automações',           short: 'Auto',     icon: Zap,          roles: ['ADMIN','ATENDENTE'] },
+  { path: '/automation-ai', label: 'Automação com IA',     short: 'Auto IA',  icon: Wand2,        roles: ['ADMIN','ATENDENTE'] },
   { path: '/whatsapp',       label: 'WhatsApp',             short: 'WhatsApp', icon: MessageSquare,roles: ['ADMIN','ATENDENTE'] },
   { path: '/tickets',        label: 'Chamados e Manutenção',short: 'Chamados', icon: Wrench,       roles: ['ADMIN','MANUTENCAO'] },
   { path: '/reports',        label: 'Relatórios',           short: 'Relat.',   icon: BarChart3,    roles: ['ADMIN','FINANCEIRO'] },

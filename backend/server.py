@@ -3399,11 +3399,16 @@ async def update_budget_config(config: BudgetConfig):
 class AutoBudgetLine(BaseModel):
     raw_text: str          # texto bruto (uma linha por dado)
     # campos interpretados pelo parser (preenchidos pelo backend)
-    client_name:   Optional[str] = None
-    client_phone:  Optional[str] = None
-    client_address:Optional[str] = None
-    items:         List[Dict[str, Any]] = []
-    notes:         Optional[str] = None
+    client_name:      Optional[str] = None
+    client_phone:     Optional[str] = None
+    client_address:   Optional[str] = None
+    client_complement:Optional[str] = None  # Apto, bloco, etc.
+    scheduled_date:   Optional[str] = None  # "YYYY-MM-DD"
+    scheduled_time:   Optional[str] = None  # "HH:MM"
+    total_pix:        Optional[float] = None
+    total_cash:       Optional[float] = None
+    items:            List[Dict[str, Any]] = []
+    notes:            Optional[str] = None
 
 class AutoMeasureLine(BaseModel):
     raw_text: str
@@ -3497,7 +3502,38 @@ async def match_service_in_catalog(query: str, services=None):
 _ADDR_KW = re.compile(
     r'\b(rua|r\.|av\.?|avenida|alameda|al\.|travessa|tv\.|rodovia|estrada|'
     r'pra[çc]a|bairro|quadra|lote|condom[ií]nio|cep|apto|apartamento|bloco|'
-    r'casa\s*\d|n[º°]|setor|jardim|jd\.|res\.|residencial)\b', re.IGNORECASE)
+    r'casa\s*\d|n[º°]|setor|jardim|jd\.|res\.|residencial|edif[ií]cio)\b', re.IGNORECASE)
+
+# Palavras que indicam complemento de endereço (tratado separado do logradouro)
+_COMPLEMENT_KW = re.compile(
+    r'^\s*(apartamento|apto|apt\.?|bloco\s+\w|andar|sala\s+\d)', re.IGNORECASE)
+
+# Padrão de agendamento embutido: "Horário 20/7 9:00" ou "Horario 20/7/2026 09:00"
+_SCHEDULE_RE = re.compile(
+    r'^[Hh]or[aá]rio\s+(\d{1,2}/\d{1,2})(?:/\d{2,4})?\s+(\d{1,2}:\d{2})')
+
+# Marcadores de fim do bloco de orçamento (termos e condições)
+_TERMS_BLOCK_RE = re.compile(
+    r'^[▪•–]\s*|📍\s*🛋|📍\s*🪟|'
+    r'\b(atendimento\s+[eé]\s+em\s+domicílio|responsabilidade|'
+    r'garantimos|garantia\s+de|termos\s+e\s+condi[çc][oõ]es|'
+    r'n[aã]o\s+nos\s+responsabilizamos)\b',
+    re.IGNORECASE)
+
+# Linhas de total / pagamento (não devem virar itens)
+_PAYMENT_LINE_RE = re.compile(
+    r'total\s+dos\s+servi[çc]os|'
+    r'fechando\s+(todos|o\s+or[çc]amento)|'
+    r'pagamento\s+em\s+dinheiro|'
+    r'[àa]\s+vista\s+em\s+dinheiro|'
+    r'total\s+pix|'
+    r'em\s+até\s+\d+x\s+sem\s+juros',
+    re.IGNORECASE)
+
+# Regex para extrair valor total (pix/cartão) e dinheiro
+_TOTAL_PIX_RE = re.compile(r'R\$\s*([\d.,]+)', re.IGNORECASE)
+_CASH_LINE_RE = re.compile(
+    r'(?:dinheiro|à\s+vista)[^R]*R\$\s*([\d.,]+)', re.IGNORECASE)
 
 
 def _extract_value(line: str) -> float:
@@ -3510,6 +3546,75 @@ def _extract_value(line: str) -> float:
         except Exception:
             return 0.0
     return 0.0
+
+
+def _smart_extract_value(line: str) -> float:
+    """
+    Extração de valor melhorada para linhas de orçamento WhatsApp (Bug 2, 3, 4).
+
+    Prioridades:
+      1. Padrão R$X.XXX,XX ou R$X,XX (valor monetário explícito)
+      2. Padrão 'R$X,XXun (Nun = R$Y,YY)' → total Y
+      3. Padrão '= R$X,XX' ao final da linha
+      4. Fallback para _extract_value legado (linhas simples 'serviço - valor')
+    """
+    # 1. Procura todos os padrões R$ na linha
+    money_re = re.compile(r'R\$\s*([\d.,]+)', re.IGNORECASE)
+    # 2. Padrão de preço por unidade: R$X,XXun (Nun = R$Y,YY) ou (Nun R$Y,YY)
+    unit_total_re = re.compile(
+        r'R\$\s*[\d.,]+\s*un.*?\(\s*\d+\s*un[^)]*R\$\s*([\d.,]+)',
+        re.IGNORECASE | re.DOTALL)
+
+    def br_float(s: str) -> float:
+        s = s.strip().rstrip('.')
+        if not s:
+            return 0.0
+        try:
+            if ',' in s and '.' in s:
+                return float(s.replace('.', '').replace(',', '.'))
+            elif ',' in s:
+                return float(s.replace(',', '.'))
+            else:
+                return float(s)
+        except ValueError:
+            return 0.0
+
+    # Prioridade 2: padrão unitário → pega o total entre parênteses
+    um = unit_total_re.search(line)
+    if um:
+        return br_float(um.group(1))
+
+    # Prioridade 1: último R$ na linha (evita sangrar dígitos da descrição)
+    all_money = money_re.findall(line)
+    if all_money:
+        return br_float(all_money[-1])
+
+    # Fallback legado para linhas simples
+    return _extract_value(line)
+
+
+def _smart_extract_unit_qty(line: str) -> tuple:
+    """
+    Para linhas com 'R$X,XXun (Nun = R$Y,YY)' extrai (unit_price, quantity, total).
+    Retorna (None, None, None) se padrão não encontrado.
+    """
+    pat = re.compile(
+        r'R\$\s*([\d.,]+)\s*un.*?\(\s*(\d+)\s*un[^)]*R\$\s*([\d.,]+)',
+        re.IGNORECASE | re.DOTALL)
+    m = pat.search(line)
+    if not m:
+        return None, None, None
+
+    def bf(s):
+        s = s.strip()
+        try:
+            if ',' in s and '.' in s:
+                return float(s.replace('.', '').replace(',', '.'))
+            return float(s.replace(',', '.'))
+        except ValueError:
+            return 0.0
+
+    return bf(m.group(1)), int(m.group(2)), bf(m.group(3))
 
 
 def _item_name_only(line: str) -> str:
@@ -3559,46 +3664,122 @@ def _smart_parse_budget(text: str, services: list) -> AutoBudgetLine:
     Parser por CONTEÚDO (não posicional). Classifica cada linha:
       - 'obs:' → observações
       - telefone (8–13 dígitos, quase só dígitos)
+      - agendamento ("Horário DD/M HH:MM") → scheduled_date / scheduled_time (Bug 10)
       - item (casa com o catálogo) — caso da maioria das linhas do dono
       - endereço (palavras-chave de logradouro) — costuma vir depois, mas se aparecer
+      - complemento ("Apartamento", "Apto", etc.) → client_complement (Bug 12)
       - 1ª linha sem classificação → nome do cliente
+      - fim do bloco (▪, •, "atendimento é em domicílio", ...) → para (Bug 11)
+      - linha de total/pagamento → extrai total_pix / total_cash (Bug 5)
     Adequado ao fluxo do dono: nome + telefone + itens (endereço normalmente ausente).
 
-    Trata chars Unicode invisíveis que o WhatsApp injeta nos números copiados
-    (U+202A LEFT-TO-RIGHT EMBEDDING, U+202C POP DIRECTIONAL FORMATTING,
-     U+2011 NON-BREAKING HYPHEN, etc.), que antes faziam o telefone ir para o
-     campo de endereço e quebravam o execute-budget com AttributeError.
+    Trata chars Unicode invisíveis que o WhatsApp injeta nos números copiados.
     """
-    _INVIS = re.compile(r'[​-‏‪-‮⁠-⁯﻿]')
+    import re as _re
+    _INVIS = _re.compile(r'[​-‏‪-‮⁠-⁯﻿]')
+    _EMOJI_STRIP = _re.compile(r'[\U0001F300-\U0001FAFF\U00002600-\U000027FF\U0001FA00-\U0001FA6F]')
 
     def _clean(s: str) -> str:
         return _INVIS.sub('', s).strip()
+
+    def _br_float(s: str) -> float:
+        """Converte string brasileira de valor (1.234,56 ou 1234.56) para float."""
+        s = _re.sub(r'[^\d.,]', '', s)
+        if not s:
+            return 0.0
+        try:
+            if ',' in s and '.' in s:
+                # formato 1.234,56
+                return float(s.replace('.', '').replace(',', '.'))
+            elif ',' in s:
+                return float(s.replace(',', '.'))
+            else:
+                return float(s)
+        except ValueError:
+            return 0.0
 
     lines = [_clean(l) for l in text.split('\n')]
     lines = [l for l in lines if l]
     res = AutoBudgetLine(raw_text=text)
     items = []
+    payment_block_seen = False  # já vimos linha de total/pagamento?
+
     for i, line in enumerate(lines):
         low = line.lower()
+
+        # Bug 11: cortar ao encontrar marcador de termos e condições
+        if _TERMS_BLOCK_RE.search(line):
+            break
+
+        # obs:
         if low.startswith('obs:'):
             res.notes = line[4:].strip()
             continue
-        digits = re.sub(r'\D', '', line)
-        non_phone = re.sub(r'[\d\s()+\-.]', '', line)
+
+        # telefone
+        digits = _re.sub(r'\D', '', line)
+        non_phone = _re.sub(r'[\d\s()+\-.]', '', line)
         if not res.client_phone and 8 <= len(digits) <= 13 and len(non_phone) <= 2:
             res.client_phone = line
             continue
+
+        # Bug 10: agendamento "Horário DD/M HH:MM"
+        sched = _SCHEDULE_RE.match(line)
+        if sched:
+            from datetime import date as _date
+            date_part = sched.group(1)   # "20/7"
+            time_part = sched.group(2)   # "9:00"
+            dd, mm = date_part.split('/')
+            year = _date.today().year
+            res.scheduled_date = f"{year}-{int(mm):02d}-{int(dd):02d}"
+            h, mn = time_part.split(':')
+            res.scheduled_time = f"{int(h):02d}:{mn}"
+            continue
+
+        # cabeçalho decorativo do orçamento (🔶 Orçamento - ... 🔶)
+        if _re.search(r'[🔶]\s*[Oo]r[çc]amento', line):
+            continue
+
+        # Bug 5: linha de total / pagamento → extrair valores, não virar item
+        if _PAYMENT_LINE_RE.search(line):
+            payment_block_seen = True
+            # tentar extrair total_pix (primeira ocorrência de R$)
+            vals = _TOTAL_PIX_RE.findall(line)
+            if vals and res.total_pix is None and not _CASH_LINE_RE.search(line):
+                res.total_pix = _br_float(vals[0])
+            # linha de dinheiro
+            cash_m = _CASH_LINE_RE.search(line)
+            if cash_m:
+                res.total_cash = _br_float(cash_m.group(1))
+            continue
+
+        # nome do cliente (sempre 1ª linha classificável)
         if i == 0 and not res.client_name:
             res.client_name = line
             continue
-        name = _item_name_only(line)
-        m = match_score_sync(name, services)          # (svc, score) ou None
+
+        # Bug 12: complemento de endereço — linha que começa com Apartamento/Apto/apt
+        if _COMPLEMENT_KW.match(line):
+            if not res.client_complement:
+                res.client_complement = line
+            elif res.client_complement:
+                res.client_complement += ', ' + line
+            continue
+
+        # classificação normal: endereço vs. item
+        clean_name = _EMOJI_STRIP.sub('', line).strip()
+        name = _item_name_only(clean_name)
+        m = match_score_sync(name, services)
         sc = m[1] if m else -99
         looks_addr = bool(_ADDR_KW.search(line))
 
-        def _mk_item():
-            it = {"service_name": name, "value": _extract_value(line)}
-            it.update(_parse_line_measures(line))   # anexa width/height/area/diameter se houver
+        def _mk_item(n=name, ln=line):
+            unit_p, qty, total = _smart_extract_unit_qty(ln)
+            if unit_p is not None:
+                it = {"service_name": n, "value": total, "unit_price": unit_p, "quantity": qty}
+            else:
+                it = {"service_name": n, "value": _smart_extract_value(ln)}
+            it.update(_parse_line_measures(ln))
             return it
 
         if sc >= 1.0 and not (looks_addr and sc < 1.3):
@@ -3611,6 +3792,7 @@ def _smart_parse_budget(text: str, services: list) -> AutoBudgetLine:
             res.client_address = line
         else:
             items.append(_mk_item())
+
     res.items = items
     return res
 
@@ -3750,11 +3932,19 @@ def _parse_measures_text(text: str) -> AutoMeasureLine:
         idn = identifier.strip()
         idn_lower = idn.lower()
 
-        # Sem identificação, variantes, ou tag "dry"/"dry2" (bag/lote sem etiqueta
-        # individual do Leonardo) → Leonardo, sem etiqueta cor+número.
+        # Sem identificação, variantes, ou tag "dry"/"dry2"/"dry clean" (bag/lote sem
+        # etiqueta individual do Leonardo) → Leonardo, sem etiqueta cor+número.
         sem_nome_pattern = r'^(sem\s*nome|s/?n|sem\s*identifica[çc][aã]o|n[aã]o\s*identificado|desconhecido)$'
         dry_pattern = r'\bdry\s*\d*\b'
         if not idn or re.match(sem_nome_pattern, idn_lower) or re.search(dry_pattern, idn_lower):
+            return None, PARTNER_LEONARDO, False, None
+
+        # Dhiego (motorista da empresa Leonardo Dry Clean USA) e variantes.
+        # No contexto de mensagens de medida de tapetes, toda referência a
+        # "Dhiego", "Parceiro Diego" ou "Diego" identifica o motorista do Leonardo —
+        # NÃO o dono da SuperDry (Diego Olivatto) nem um parceiro separado.
+        # Regra confirmada pelo dono em 19/07/2026.
+        if re.search(r'\bdhiego\b|parceiro\s+diego|\bdiego\b', idn_lower):
             return None, PARTNER_LEONARDO, False, None
 
         # Emoji de cor + código 2-3 dígitos (ex: "💛059", "🩶870") → mesma regra
@@ -4014,6 +4204,127 @@ async def preview_budget(payload: Dict[str, Any], current_user: UserPublic = Dep
         "client_exists":  bool(existing_client),
         "existing_client_id": existing_client.get("id") if existing_client else None,
     }
+
+
+@api_router.post("/automation/interpret-message")
+async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = Depends(get_current_user)):
+    """
+    Interpretação inteligente de mensagem WhatsApp colada pelo atendente.
+
+    Fluxo:
+      1. Roda _smart_parse_budget (parser Python com todos os fixes)
+      2. Se Ollama disponível em localhost:11434 → enriquece extração com LLM
+      3. Retorna JSON normalizado pronto para o formulário da AutomationPage
+
+    Sempre retorna resultado mesmo sem Ollama (parser Python já cobre a maioria dos casos).
+    """
+    import httpx as _httpx
+    import json as _json
+
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Texto vazio.")
+
+    services = await db.services.find({"is_active": True}).to_list(length=1000)
+    parsed = _smart_parse_budget(text, services)
+
+    AREA_TYPES = {"AREA_DE_TAPETE", "AREA_PERSIANA", "CARPETE_TAPETE_LOCAL", "TAPETE_REDONDO_DIAMETRO"}
+
+    enriched_items = []
+    for it in parsed.items:
+        item = dict(it)
+        m = await match_service_in_catalog(it.get("service_name", ""), services)
+        explicit_value = float(it.get("value") or 0)
+        if m:
+            mtype = m.get("measure_type", "UNITARIO")
+            price = float(m.get("sale_price") or 0)
+            item["matched_service"] = {
+                "id": m.get("id"), "name": m.get("name"),
+                "measure_type": mtype, "sale_price": price,
+                "match_score": m.get("match_score"),
+            }
+            area = float(it.get("area_m2") or 0)
+            if mtype in AREA_TYPES:
+                item["unit_price"] = price
+                item["value"] = explicit_value or (round(area * price, 2) if area > 0 else 0)
+                item["needs_measure"] = area == 0 and explicit_value == 0
+            else:
+                qty = int(it.get("quantity") or 1)
+                item["quantity"] = qty
+                item["unit_price"] = float(it.get("unit_price") or price)
+                item["value"] = explicit_value or round(price * qty, 2)
+                item["needs_measure"] = False
+        enriched_items.append(item)
+
+    # Verificar se cliente já existe pelo telefone
+    existing_client = None
+    if parsed.client_phone:
+        phone_digits = re.sub(r'\D', '', parsed.client_phone)
+        if phone_digits:
+            existing_client = await db.clients.find_one(
+                {"phone_primary": {"$regex": phone_digits[-8:]}})
+
+    base_result = {
+        "client_name":       parsed.client_name,
+        "phone":             parsed.client_phone,
+        "address":           parsed.client_address,
+        "complement":        parsed.client_complement,
+        "scheduled_date":    parsed.scheduled_date,
+        "scheduled_time":    parsed.scheduled_time,
+        "items":             enriched_items,
+        "total_pix":         parsed.total_pix,
+        "total_cash":        parsed.total_cash,
+        "notes":             parsed.notes,
+        "client_exists":     bool(existing_client),
+        "existing_client_id": existing_client.get("id") if existing_client else None,
+        "source":            "python_parser",
+        "raw_text_truncated": text[:500] if len(text) > 500 else text,
+    }
+
+    # Tentar enriquecer com Ollama (opcional — falha silenciosa)
+    try:
+        async with _httpx.AsyncClient(timeout=2.0) as hc:
+            r = await hc.get("http://localhost:11434/api/tags")
+        if r.status_code == 200:
+            # Ollama disponível — montar prompt e enriquecer
+            catalog_summary = "; ".join(
+                f"{s.get('name')}" for s in services[:40]) if services else ""
+            prompt = (
+                "Você é o parser de mensagens WhatsApp da SuperDry Lavanderia.\n"
+                "Extraia os dados estruturados da mensagem abaixo.\n"
+                f"Catálogo (resumo): {catalog_summary}\n\n"
+                f"MENSAGEM:\n{text[:2000]}\n\n"
+                "Responda SOMENTE com JSON (sem markdown) no formato:\n"
+                '{"client_name":"...","phone":"...","address":"...","complement":"...",'
+                '"scheduled_date":"YYYY-MM-DD ou null","scheduled_time":"HH:MM ou null",'
+                '"total_pix":0.0,"total_cash":0.0,'
+                '"items":[{"service_name":"...","qty":1,"unit_value":0.0,"total":0.0}]}'
+            )
+            async with _httpx.AsyncClient(timeout=30.0) as hc2:
+                llm_r = await hc2.post("http://localhost:11434/api/generate", json={
+                    "model": "llama3.2:3b",
+                    "prompt": prompt,
+                    "stream": False,
+                })
+            if llm_r.status_code == 200:
+                llm_text = llm_r.json().get("response", "")
+                # extrair JSON da resposta
+                json_match = re.search(r'\{.*\}', llm_text, re.DOTALL)
+                if json_match:
+                    llm_data = _json.loads(json_match.group())
+                    # Mesclar resultado LLM sobre base (LLM preenche lacunas)
+                    for key in ("client_name", "phone", "address", "complement",
+                                "scheduled_date", "scheduled_time", "total_pix", "total_cash"):
+                        if llm_data.get(key) and not base_result.get(key):
+                            base_result[key] = llm_data[key]
+                    # Para itens: se LLM encontrou mais itens que o parser, usar os do LLM
+                    if llm_data.get("items") and len(llm_data["items"]) > len(enriched_items):
+                        base_result["items_llm"] = llm_data["items"]
+                    base_result["source"] = "python_parser+ollama"
+    except Exception:
+        pass  # Ollama indisponível — continua só com parser Python
+
+    return base_result
 
 
 @api_router.post("/automation/execute-budget")
@@ -6681,6 +6992,15 @@ async def register_item_payment(
         "payment_status": payment_status,
     }, current_user)
 
+    # Fix 2: propagar payment_received para o budget pai
+    if budget:
+        budget_id = budget.get("id")
+        if budget_id:
+            await db.budgets.update_one(
+                {"id": budget_id},
+                {"$set": {"payment_received": True, "payment_status": payment_status}},
+            )
+
     await log_audit("item", item_id, "PAYMENT", current_user, {
         "method": method, "value": value, "paid_total": paid_total, "new_status": payment_status,
     })
@@ -6981,6 +7301,7 @@ async def _apply_cp_paid(cp, source="webhook"):
     }})
     # objeto leve só com .id/.name (UserPublic exigiria campos que não temos aqui)
     system_user = type("SysUser", (), {"id": "SYSTEM", "name": source})()
+    budget_ids_updated: set = set()
     for a in cp.get("applied", []):
         iid = a.get("item_id")
         budget, item = await _find_budget_and_item(iid)
@@ -6996,6 +7317,13 @@ async def _apply_cp_paid(cp, source="webhook"):
             "notes": f"Confirmado via {source}", "consolidated_payment_id": cp["id"],
         })
         await _update_item_fields(iid, {"paid_value": paid_total, "payment_status": pstatus}, system_user)
+        # Fix 2: propagar payment_received para o budget pai (uma vez por budget)
+        if budget and budget.get("id") and budget["id"] not in budget_ids_updated:
+            await db.budgets.update_one(
+                {"id": budget["id"]},
+                {"$set": {"payment_received": True, "payment_status": pstatus}},
+            )
+            budget_ids_updated.add(budget["id"])
 
 
 @api_router.get("/payments/infinitepay/return")
