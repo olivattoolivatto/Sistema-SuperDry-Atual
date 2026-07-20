@@ -4211,11 +4211,11 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
     """
     Interpreta mensagem WhatsApp colada pelo atendente.
 
-    Fluxo:
-      1. Tenta Claude API (ANTHROPIC_API_KEY no .env) — extração inteligente
-      2. Se indisponível, cai no parser Python como fallback
-      3. Faz matching de catálogo nos itens extraídos
-      4. Verifica se cliente já existe pelo telefone
+    Fluxo (três camadas de retaguarda):
+      1. Claude API (ANTHROPIC_API_KEY no .env) — melhor qualidade
+      2. Ollama local (llama3.2:3b em localhost:11434) — sem custo, sem internet
+      3. Parser Python — fallback sempre disponível
+    Após extração: matching de catálogo + verificação de cliente existente.
     """
     import httpx as _httpx
     import json as _json
@@ -4297,7 +4297,39 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
         except Exception as _ex:
             logging.warning(f"Claude API falhou no interpret-message: {_ex}")
 
-    # ── 2. Fallback: parser Python ────────────────────────────────────────────
+    # ── 2. Fallback: Ollama local (llama3.2:3b) ──────────────────────────────
+    if raw_parsed is None:
+        try:
+            async with _httpx.AsyncClient(timeout=3.0) as hc:
+                hcheck = await hc.get("http://localhost:11434/api/tags")
+            if hcheck.status_code == 200:
+                ollama_prompt = (
+                    "Você é o assistente da SuperDry Lavanderia.\n"
+                    "Analise a mensagem de WhatsApp abaixo e extraia os dados.\n\n"
+                    f"CATÁLOGO: {'; '.join(s.get('name','') for s in services[:40])}\n\n"
+                    f"MENSAGEM:\n{text[:2500]}\n\n"
+                    "Responda SOMENTE com JSON válido (sem markdown):\n"
+                    '{"client_name":"nome real sem timestamp","phone":"telefone","address":"endereço completo",'
+                    '"complement":"apto/bloco","scheduled_date":null,"scheduled_time":null,'
+                    '"total_pix":null,"total_cash":null,"notes":null,'
+                    '"items":[{"service_name":"descrição do produto","quantity":1,"unit_price":0,"value":0}]}'
+                )
+                async with _httpx.AsyncClient(timeout=60.0) as hc2:
+                    ollama_r = await hc2.post("http://localhost:11434/api/generate", json={
+                        "model": "llama3.2:3b",
+                        "prompt": ollama_prompt,
+                        "stream": False,
+                    })
+                if ollama_r.status_code == 200:
+                    ollama_text = ollama_r.json().get("response", "")
+                    jm = re.search(r'\{.*\}', ollama_text, re.DOTALL)
+                    if jm:
+                        raw_parsed = _json.loads(jm.group())
+                        source = "ollama"
+        except Exception as _ox:
+            logging.warning(f"Ollama falhou no interpret-message: {_ox}")
+
+    # ── 3. Fallback final: parser Python ─────────────────────────────────────
     if raw_parsed is None:
         parsed = _smart_parse_budget(text, services)
         raw_parsed = {
