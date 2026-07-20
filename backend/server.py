@@ -4336,6 +4336,8 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                         "options": {"temperature": 0.1},
                     })
                 logging.info(f"[OLLAMA] generate status: {ollama_r.status_code}")
+                if ollama_r.status_code != 200:
+                    logging.warning(f"[OLLAMA] error body: {ollama_r.text[:500]}")
                 if ollama_r.status_code == 200:
                     ollama_text = ollama_r.json().get("response", "")
                     logging.info(f"[OLLAMA] response preview: {repr(ollama_text[:300])}")
