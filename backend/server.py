@@ -4300,25 +4300,40 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
     # ── 2. Fallback: Ollama local (llama3.2:3b) ──────────────────────────────
     if raw_parsed is None:
         try:
-            async with _httpx.AsyncClient(timeout=3.0) as hc:
+            async with _httpx.AsyncClient(timeout=10.0) as hc:
                 hcheck = await hc.get("http://localhost:11434/api/tags")
             if hcheck.status_code == 200:
+                catalog_short = "; ".join(s.get("name", "") for s in services[:40])
                 ollama_prompt = (
-                    "Você é o assistente da SuperDry Lavanderia.\n"
-                    "Analise a mensagem de WhatsApp abaixo e extraia os dados.\n\n"
-                    f"CATÁLOGO: {'; '.join(s.get('name','') for s in services[:40])}\n\n"
+                    "Você é assistente da SuperDry Lavanderia (Cuiabá-MT).\n"
+                    "Analise a mensagem de WhatsApp abaixo e extraia APENAS os dados solicitados.\n\n"
+                    f"CATÁLOGO DE SERVIÇOS: {catalog_short}\n\n"
                     f"MENSAGEM:\n{text[:2500]}\n\n"
-                    "Responda SOMENTE com JSON válido (sem markdown):\n"
-                    '{"client_name":"nome real sem timestamp","phone":"telefone","address":"endereço completo",'
-                    '"complement":"apto/bloco","scheduled_date":null,"scheduled_time":null,'
+                    "REGRAS OBRIGATÓRIAS:\n"
+                    "1. client_name = nome do CLIENTE (quem pediu), sem timestamps do WhatsApp (ex: '20/07 10:30 -')\n"
+                    "2. address = rua, número da rua, nome do edifício/condomínio e bairro — SEM número de apartamento\n"
+                    "3. complement = SOMENTE número de apartamento/sala/bloco (ex: 'Apto 2402', 'Sala 3'). Se não houver, use null\n"
+                    "4. ITENS: cada tipo de serviço com preço diferente = item SEPARADO. Exemplos:\n"
+                    "   '2 cadeiras R$50 cada + 2 poltronas R$60 cada' → DOIS itens separados:\n"
+                    '   [{"service_name":"Cadeira","quantity":2,"unit_price":50.0,"value":100.0},\n'
+                    '    {"service_name":"Poltrona","quantity":2,"unit_price":60.0,"value":120.0}]\n'
+                    "   'sofá 3 lugares R$200' → UM item: [{\"service_name\":\"Sofá 3 lugares\",\"quantity\":1,\"unit_price\":200.0,\"value\":200.0}]\n"
+                    "5. quantity = unidades daquele tipo específico; unit_price = preço por unidade; value = unit_price × quantity\n"
+                    "6. scheduled_date = YYYY-MM-DD ou null; scheduled_time = HH:MM ou null\n"
+                    "7. total_pix = valor total à vista/PIX mencionado; total_cash = valor em dinheiro se diferente\n\n"
+                    "Responda SOMENTE com JSON válido, sem markdown, sem texto adicional:\n"
+                    '{"client_name":"","phone":"","address":"","complement":null,'
+                    '"scheduled_date":null,"scheduled_time":null,'
                     '"total_pix":null,"total_cash":null,"notes":null,'
-                    '"items":[{"service_name":"descrição do produto","quantity":1,"unit_price":0,"value":0}]}'
+                    '"items":[{"service_name":"","quantity":1,"unit_price":0.0,"value":0.0}]}'
                 )
-                async with _httpx.AsyncClient(timeout=60.0) as hc2:
+                async with _httpx.AsyncClient(timeout=90.0) as hc2:
                     ollama_r = await hc2.post("http://localhost:11434/api/generate", json={
                         "model": "llama3.2:3b",
                         "prompt": ollama_prompt,
                         "stream": False,
+                        "keep_alive": "10m",
+                        "options": {"temperature": 0.1, "num_ctx": 4096},
                     })
                 if ollama_r.status_code == 200:
                     ollama_text = ollama_r.json().get("response", "")
