@@ -4370,6 +4370,25 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
             "items":          [dict(it) for it in (parsed.items or [])],
         }
 
+    # ── Pós-processo: extrai complemento do address se complement estiver vazio ──
+    if not (raw_parsed.get("complement") or "").strip():
+        _addr_for_comp = (raw_parsed.get("address") or "").strip()
+        _comp_extract = [
+            (r'\b(apart(?:amento)?|apto?|ap)\s*\.?\s*(\d+\w*)', 'Apto'),
+            (r'\b(bloco|bl)\s*\.?\s*([A-Za-z0-9]+)', 'Bloco'),
+            (r'\b(sala|sl)\s*\.?\s*([A-Za-z0-9]+)', 'Sala'),
+            (r'\b(quadra|qd)\s*\.?\s*([A-Za-z0-9]+)', 'Quadra'),
+            (r'\b(lote|lt)\s*\.?\s*([A-Za-z0-9]+)', 'Lote'),
+            (r'\b(casa)\s+([A-Za-z0-9]+)', 'Casa'),
+            (r'\b(torre)\s+([A-Za-z0-9]+)', 'Torre'),
+        ]
+        for _cp, _pfx in _comp_extract:
+            _cm = re.search(_cp, _addr_for_comp, re.IGNORECASE)
+            if _cm:
+                raw_parsed["complement"] = f'{_pfx} {_cm.group(2)}'
+                raw_parsed["address"] = re.sub(_cp, '', _addr_for_comp, flags=re.IGNORECASE).strip().strip(',- ').strip()
+                break
+
     # ── Pós-processo: normaliza complemento (adiciona prefixo se ausente) ────
     _comp = (raw_parsed.get("complement") or "").strip()
     if _comp and not re.match(
@@ -4570,7 +4589,9 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
     for raw_item in items:
         item_counter = len(budget_items) + 1
         item_id = f"ITM-AUTO-{budget_id}-{item_counter}"
-        m = raw_item.get("matched") or {}           # serviço casado no catálogo (Camada A)
+        # Busca serviço do catálogo pelo ID enviado pelo frontend (matched_service_id)
+        _msvc_id = raw_item.get("matched_service_id")
+        _svc = (await db.services.find_one({"id": _msvc_id})) if _msvc_id else None
         val = float(raw_item.get("value") or 0)
         qty = int(raw_item.get("quantity") or 1)
         item_doc = {
@@ -4578,11 +4599,11 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
             "budget_id": budget_id,
             "client_id": client_id,
             "client_name": client_name,        # essencial para o Financeiro agrupar por cliente
-            "service_id": m.get("service_id") or item_id,
-            "service_name": m.get("service_name") or raw_item.get("service_name", "Serviço"),
-            "service_code": m.get("service_code") or "AUTO",
-            "service_category": m.get("category"),
-            "measure_type": m.get("measure_type"),
+            "service_id": (_svc or {}).get("id") or item_id,
+            "service_name": (_svc or {}).get("name") or raw_item.get("service_name", "Serviço"),
+            "service_code": (_svc or {}).get("code") or "AUTO",
+            "service_category": (_svc or {}).get("category"),
+            "measure_type": (_svc or {}).get("measure_type"),
             "quantity": qty,
             "unit_price": float(raw_item.get("unit_price") or val),
             "total_value": val,
@@ -4666,19 +4687,38 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
                     if comp:
                         location_text += f" - {comp}"
 
-                # Descrição com itens
-                items_desc = "\n".join(
-                    f"• {it.get('service_name','Serviço')} — R$ {float(it.get('value',0)):.2f}"
+                # Descrição detalhada do evento (formato padrão SuperDry)
+                total_val = sum(float(i.get("value", 0)) for i in items)
+                _desc_complement = (payload.get("complement") or "").strip()
+                _sched_fmt = ""
+                if scheduled_date:
+                    try:
+                        from datetime import datetime as _dt2
+                        _sched_fmt = _dt2.strptime(scheduled_date, "%Y-%m-%d").strftime("%d/%m/%Y")
+                    except Exception:
+                        _sched_fmt = scheduled_date
+                _items_lines = "\n".join(
+                    f"- {it.get('service_name','Serviço')} - {int(it.get('quantity',1))} unid."
+                    f" - R$ {float(it.get('value',0)):.2f}"
                     for it in items
                 )
-                total_val = sum(float(i.get("value", 0)) for i in items)
-                description = (
-                    f"Orçamento: {budget_id}\n"
-                    f"Cliente: {client_name}"
-                    + (f" | {client_phone}" if client_phone else "")
-                    + f"\n\n{items_desc}\n\nTotal: R$ {total_val:.2f}"
-                    + (f"\n\nObs: {notes}" if notes else "")
-                )
+                _desc_parts = [
+                    f"Código do Orçamento: {budget_id}",
+                    f"Cliente: {client_name}" + (f" | {client_phone}" if client_phone else ""),
+                    f"Atendente: {salesperson_val}",
+                ]
+                if location_text:
+                    _desc_parts.append(f"Endereço: {location_text}")
+                if _desc_complement:
+                    _desc_parts.append(f"Complemento: {_desc_complement}")
+                if _sched_fmt:
+                    _desc_parts.append(f"Data do Orçamento: {_sched_fmt}")
+                _desc_parts.append(f"Forma de Pagamento: {payment_method}")
+                _desc_parts.append(f"Observações Internas: {notes or 'Nenhuma observação'}")
+                _desc_parts.append(f"\nQuantidade de Itens: {len(items)}")
+                _desc_parts.append(_items_lines)
+                _desc_parts.append(f"\nVALOR TOTAL: R$ {total_val:.2f}")
+                description = "\n".join(_desc_parts)
 
                 summary = f"SuperDry – {client_name}"
 
