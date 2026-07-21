@@ -4312,7 +4312,7 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                     "REGRAS OBRIGATÓRIAS:\n"
                     "1. client_name = nome do CLIENTE (quem pediu), sem timestamps do WhatsApp (ex: '20/07 10:30 -')\n"
                     "2. address = nome do edifício/condomínio, referência e bairro extraídos da mensagem. Não escreva instruções, escreva o endereço real\n"
-                    "3. complement = SOMENTE o número do apto/sala/bloco (ex: 'Apto 2402'). Se não houver, null\n"
+                    "3. complement = tipo + identificador da unidade. Inclua SEMPRE o tipo antes do número (ex: 'Apto 2402', 'Bloco B', 'Sala 3', 'Casa 7', 'Lote 15', 'Torre A', 'Qd 5 Lt 12'). Se não houver, null\n"
                     "4. ITENS: cada tipo de serviço com preço diferente = item SEPARADO na lista. Exemplos:\n"
                     "   Texto: 'Cadeira R$50,00un (2un=R$100) / Poltrona R$60,00un (2un=R$120)' → DOIS itens:\n"
                     '   [{"service_name":"Cadeira","quantity":2,"unit_price":50.0,"value":100.0},\n'
@@ -4369,6 +4369,27 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
             "notes":          parsed.notes,
             "items":          [dict(it) for it in (parsed.items or [])],
         }
+
+    # ── Pós-processo: normaliza complemento (adiciona prefixo se ausente) ────
+    _comp = (raw_parsed.get("complement") or "").strip()
+    if _comp and not re.match(
+        r'^(apto?|apartamento|bloco|bl|sala|sl|quadra|qd|lote|lt|casa|torre|andar)\b',
+        _comp, re.IGNORECASE
+    ):
+        _pfx_map = [
+            (r'(?:apartamento|apto?)\s*\.?\s*' + re.escape(_comp), 'Apto'),
+            (r'(?:bloco|bl)\s*\.?\s*' + re.escape(_comp), 'Bloco'),
+            (r'(?:sala|sl)\s*\.?\s*' + re.escape(_comp), 'Sala'),
+            (r'(?:quadra|qd)\s*\.?\s*' + re.escape(_comp), 'Quadra'),
+            (r'(?:lote|lt)\s*\.?\s*' + re.escape(_comp), 'Lote'),
+            (r'(?:casa)\s+' + re.escape(_comp), 'Casa'),
+            (r'(?:torre)\s+' + re.escape(_comp), 'Torre'),
+            (r'(?:andar)\s+' + re.escape(_comp), 'Andar'),
+        ]
+        for _pat, _pfx in _pfx_map:
+            if re.search(_pat, text, re.IGNORECASE):
+                raw_parsed["complement"] = f'{_pfx} {_comp}'
+                break
 
     # ── Pós-processo: corrige qtd/valor de itens via padrão "(Nun = R$YY)" ──
     try:
