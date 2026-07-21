@@ -4332,7 +4332,7 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                         "model": "llama3.2:3b",
                         "prompt": ollama_prompt,
                         "stream": False,
-                        "keep_alive": "-1",
+                        "keep_alive": -1,
                         "options": {"temperature": 0.1},
                     })
                 logging.info(f"[OLLAMA] generate status: {ollama_r.status_code}")
