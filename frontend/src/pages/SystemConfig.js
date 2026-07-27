@@ -49,6 +49,8 @@ const ALL_MODULES = [
   { path: '/',               label: 'Painel' },
   { path: '/clients',        label: 'Clientes' },
   { path: '/budgets',        label: 'Orçamentos' },
+  { path: '/automations',    label: 'Automações' },
+  { path: '/automation-ai',  label: 'Automação com IA' },
   { path: '/routes',         label: 'Rotas' },
   { path: '/routes-geo',     label: 'Rotas Geoapify' },
   { path: '/agenda',         label: 'Agenda' },
@@ -65,7 +67,7 @@ const ALL_MODULES = [
 
 const ROLE_DEFAULT_MODULES = {
   ADMIN:      ALL_MODULES.map(m => m.path),
-  ATENDENTE:  ['/', '/clients', '/budgets', '/routes', '/routes-geo', '/agenda', '/whatsapp'],
+  ATENDENTE:  ['/', '/clients', '/budgets', '/automations', '/automation-ai', '/routes', '/routes-geo', '/agenda', '/whatsapp'],
   TECNICO:    ['/', '/agenda', '/technician'],
   FINANCEIRO: ['/', '/financial', '/finance-manager', '/reports'],
   MANUTENCAO: ['/', '/tickets'],

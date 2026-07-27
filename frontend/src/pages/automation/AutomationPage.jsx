@@ -348,7 +348,7 @@ export function AutomationPage() {
         </div>
         <div>
           <h1 className="text-base font-semibold text-gray-900">Automação com IA</h1>
-          <p className="text-xs text-gray-500">Cole a mensagem do WhatsApp — o sistema extrai e preenche o formulário</p>
+          <p className="text-xs text-gray-500">Cole uma mensagem do WhatsApp <strong>ou</strong> descreva o pedido em texto livre — a IA preenche o formulário</p>
         </div>
       </div>
 
@@ -390,7 +390,7 @@ export function AutomationPage() {
         <div className="lg:w-[42%] flex flex-col border-r border-gray-200 bg-white">
           <div className="px-4 pt-4 pb-2 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-yellow-500" /> Colar Mensagem WhatsApp
+              <Zap className="w-4 h-4 text-yellow-500" /> Mensagem ou Pedido Rápido
             </h2>
           </div>
           <div className="flex-1 flex flex-col p-4 gap-3 overflow-y-auto">
@@ -398,7 +398,7 @@ export function AutomationPage() {
               value={text}
               onChange={e => setText(e.target.value)}
               rows={14}
-              placeholder={`Cole aqui a mensagem do WhatsApp.\n\nExemplo:\nMariane de Oliveira\n+55 65 99973-1235\nEdifício Amadeo Modigliani Cuiabá\nApartamento 2402\nHorário 20/7 9:00\n\n🔶 Orçamento - Estofado e Tapete 🔶\n\n💧Lavagem a seco - Sofá 2 lugares - R$290,00\n...`}
+              placeholder={`Pedido rápido (atendente):\nJoão Silva, 65 99999-0000\nsofá 2 lugares + 1 poltrona\n20/07 às 09:00\n\n── ou cole a mensagem do WhatsApp ──\n\nMariane de Oliveira\n+55 65 99973-1235\nEdifício Amadeo Modigliani, Apto 2402\n\n🔶 Orçamento - Estofado e Tapete 🔶\n💧Sofá 2 lugares - R$290,00\n...`}
               className="flex-1 w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm font-mono resize-none focus:ring-2 focus:ring-purple-400 focus:border-purple-400 placeholder-gray-400"
             />
 

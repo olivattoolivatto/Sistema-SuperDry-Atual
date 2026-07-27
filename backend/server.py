@@ -4305,24 +4305,29 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
             if hcheck.status_code == 200:
                 catalog_short = "; ".join(s.get("name", "") for s in services[:40])
                 ollama_prompt = (
-                    "Você é assistente da SuperDry Lavanderia (Cuiabá-MT).\n"
-                    "Analise a mensagem de WhatsApp abaixo e extraia APENAS os dados solicitados.\n\n"
-                    f"CATÁLOGO DE SERVIÇOS: {catalog_short}\n\n"
-                    f"MENSAGEM:\n{text[:2500]}\n\n"
-                    "REGRAS OBRIGATÓRIAS:\n"
-                    "1. client_name = nome do CLIENTE (quem pediu), sem timestamps do WhatsApp (ex: '20/07 10:30 -')\n"
-                    "2. address = nome do edifício/condomínio, referência e bairro extraídos da mensagem. Não escreva instruções, escreva o endereço real\n"
-                    "3. complement = tipo + identificador da unidade. Inclua SEMPRE o tipo antes do número (ex: 'Apto 2402', 'Bloco B', 'Sala 3', 'Casa 7', 'Lote 15', 'Torre A', 'Qd 5 Lt 12'). Se não houver, null\n"
-                    "4. ITENS: cada tipo de serviço com preço diferente = item SEPARADO na lista. Exemplos:\n"
-                    "   Texto: 'Cadeira R$50,00un (2un=R$100) / Poltrona R$60,00un (2un=R$120)' → DOIS itens:\n"
-                    '   [{"service_name":"Cadeira","quantity":2,"unit_price":50.0,"value":100.0},\n'
-                    '    {"service_name":"Poltrona","quantity":2,"unit_price":60.0,"value":120.0}]\n'
-                    "5. Padrão 'R$XX,00un (NuN = R$YY)': quantity=N, unit_price=XX, value=YY\n"
-                    "6. quantity = unidades; unit_price = preço por unidade; value = unit_price × quantity\n"
-                    "7. scheduled_date = YYYY-MM-DD ou null; scheduled_time = HH:MM ou null\n"
-                    "8. total_pix = valor total à vista/PIX; total_cash = valor em dinheiro se diferente\n\n"
-                    "Responda SOMENTE com JSON válido, sem markdown:\n"
-                    '{"client_name":"","phone":"","address":"","complement":null,'
+                    "Você é assistente de atendimento da SuperDry Lavanderia (Cuiabá-MT).\n"
+                    "Analise o texto abaixo — pode ser uma mensagem do WhatsApp OU um pedido rápido digitado pela atendente — e extraia os dados para criar um orçamento.\n\n"
+                    f"CATÁLOGO DE SERVIÇOS DISPONÍVEIS: {catalog_short}\n\n"
+                    f"TEXTO:\n{text[:2500]}\n\n"
+                    "REGRAS:\n"
+                    "1. client_name = nome do cliente (sem timestamps, sem prefixos como '20/07 10:30 -')\n"
+                    "2. phone = telefone, apenas DDD+número sem +55 (ex: '65 99973-1235')\n"
+                    "3. address = endereço real: rua, edifício/condomínio, bairro. Nunca copie instruções como texto do endereço. Se não houver, null\n"
+                    "4. complement = unidade com tipo obrigatório: 'Apto 2402', 'Bloco B', 'Casa 3', 'Sala 5', 'Lote 12', 'Torre A'. Se não houver, null\n"
+                    "5. items = lista de serviços. CADA serviço diferente = item SEPARADO:\n"
+                    "   - service_name = nome mais próximo do catálogo disponível\n"
+                    "   - quantity = quantidade de peças/unidades (ex: '2 sofás' → quantity:2)\n"
+                    "   - SE o texto tiver preço (R$XX): unit_price=XX, value=unit_price×quantity\n"
+                    "   - SE não tiver preço (pedido rápido): unit_price=0, value=0 (o sistema busca no catálogo)\n"
+                    "   Exemplos:\n"
+                    "   'sofá 2 lugares' → [{\"service_name\":\"Lavagem Sofá 2 Lugares\",\"quantity\":1,\"unit_price\":0,\"value\":0}]\n"
+                    "   'sofá R$290,00 e 2 poltronas R$60un' → [{\"service_name\":\"Sofá\",\"quantity\":1,\"unit_price\":290,\"value\":290},{\"service_name\":\"Poltrona\",\"quantity\":2,\"unit_price\":60,\"value\":120}]\n"
+                    "   'Cadeira R$50un (2un=R$100)' → [{\"service_name\":\"Cadeira\",\"quantity\":2,\"unit_price\":50,\"value\":100}]\n"
+                    "6. scheduled_date = YYYY-MM-DD ou null; scheduled_time = HH:MM ou null\n"
+                    "7. total_pix = valor total PIX/à vista se mencionado, senão null\n"
+                    "8. notes = observações úteis ou null\n\n"
+                    "Responda SOMENTE com JSON válido, sem markdown, sem explicações:\n"
+                    '{"client_name":"","phone":"","address":null,"complement":null,'
                     '"scheduled_date":null,"scheduled_time":null,'
                     '"total_pix":null,"total_cash":null,"notes":null,'
                     '"items":[{"service_name":"","quantity":1,"unit_price":0.0,"value":0.0}]}'
