@@ -4206,6 +4206,9 @@ async def preview_budget(payload: Dict[str, Any], current_user: UserPublic = Dep
     }
 
 
+_CLAUDE_API_SKIP = False  # True após receber 400/401/403 — evita chamadas desnecessárias na sessão
+
+
 @api_router.post("/automation/interpret-message")
 async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = Depends(get_current_user)):
     """
@@ -4233,11 +4236,12 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
     ) if services else "(catálogo vazio)"
 
     # ── 1. Tentar Claude API ──────────────────────────────────────────────────
+    global _CLAUDE_API_SKIP
     anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
     raw_parsed = None
     source = "python_parser"
 
-    if anthropic_key:
+    if anthropic_key and not _CLAUDE_API_SKIP:
         try:
             prompt = (
                 "Você é o assistente da SuperDry Lavanderia em Cuiabá-MT.\n"
@@ -4274,7 +4278,7 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                 "- total_pix = valor à vista (pix/dinheiro mais barato) ou o total principal\n"
                 "- total_cash = valor em dinheiro se diferente do PIX, ou null\n"
             )
-            async with _httpx.AsyncClient(timeout=25.0) as hc:
+            async with _httpx.AsyncClient(timeout=8.0) as hc:
                 r = await hc.post(
                     "https://api.anthropic.com/v1/messages",
                     headers={
@@ -4294,6 +4298,9 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                 if json_match:
                     raw_parsed = _json.loads(json_match.group())
                     source = "claude"
+            elif r.status_code in (400, 401, 403):
+                _CLAUDE_API_SKIP = True
+                logging.info(f"Claude API retornou {r.status_code} — desabilitando para esta sessão do servidor.")
         except Exception as _ex:
             logging.warning(f"Claude API falhou no interpret-message: {_ex}")
 
@@ -4332,7 +4339,7 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                     '"total_pix":null,"total_cash":null,"notes":null,'
                     '"items":[{"service_name":"","quantity":1,"unit_price":0.0,"value":0.0}]}'
                 )
-                async with _httpx.AsyncClient(timeout=90.0) as hc2:
+                async with _httpx.AsyncClient(timeout=150.0) as hc2:
                     ollama_r = await hc2.post("http://localhost:11434/api/generate", json={
                         "model": "llama3.2:3b",
                         "prompt": ollama_prompt,
@@ -8307,6 +8314,34 @@ app.add_middleware(
 )
 
 
+async def _warmup_ollama():
+    """Pré-carrega llama3.2:3b na RAM do Ollama após o boot do serviço.
+    Evita cold-start de 90s na primeira chamada de Automação com IA."""
+    import httpx as _httpx2
+    await asyncio.sleep(8)  # aguarda o servidor concluir o boot
+    try:
+        async with _httpx2.AsyncClient(timeout=10.0) as hc:
+            hcheck = await hc.get("http://localhost:11434/api/tags")
+        if hcheck.status_code != 200:
+            print("[warmup-ollama] Ollama não está disponível — skip.")
+            return
+        print("[warmup-ollama] Carregando llama3.2:3b na RAM...")
+        async with _httpx2.AsyncClient(timeout=150.0) as hc:
+            r = await hc.post("http://localhost:11434/api/generate", json={
+                "model": "llama3.2:3b",
+                "prompt": "olá",
+                "stream": False,
+                "keep_alive": -1,
+                "options": {"temperature": 0.1, "num_predict": 5},
+            })
+        if r.status_code == 200:
+            print("[warmup-ollama] llama3.2:3b carregado na RAM com sucesso.")
+        else:
+            print(f"[warmup-ollama] Ollama respondeu com status {r.status_code}.")
+    except Exception as _we:
+        print(f"[warmup-ollama] Erro no warmup (não crítico): {_we}")
+
+
 @app.on_event("startup")
 async def startup_bootstrap():
     """Cria índices e usuário admin padrão se necessário."""
@@ -8330,6 +8365,9 @@ async def startup_bootstrap():
                 })
     except Exception as e:
         print(f"[startup] erro seed categorias financeiras: {e}")
+
+    # Pré-aquecimento do Ollama (carrega llama3.2:3b na RAM logo após o boot)
+    asyncio.create_task(_warmup_ollama())
 
     # Poller de extrato bancário por e-mail (alternativa gratuita ao Open Finance
     # pago — ver memory/GESTOR_FINANCEIRO.md §18). Só inicia se configurado no .env.
