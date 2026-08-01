@@ -148,8 +148,13 @@ def _format_payment_wa(total: float) -> str:
     """Formata sugestão de pagamento para WhatsApp."""
     installments = _suggest_installments(total)
     return (
-        f"R$ {total:.2f} à vista no PIX ou em até {installments}x sem juros no cartão de crédito"
+        f"R$ {total:.2f} _à vista no PIX_ ou _em até {installments}x sem juros no cartão de crédito._"
     )
+
+
+def _make_short_id(length: int = 7) -> str:
+    import random, string
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
 
 # Utility functions for text formatting
@@ -3118,7 +3123,7 @@ async def generate_whatsapp_message(budget_id: str):
 
         # ── Itens ──────────────────────────────────────────────────────────────
         for item in items:
-            item_line = f"- {item.get('service_name', 'N/A')}"
+            item_line = f"💧 {item.get('service_name', 'N/A')}"
             area_m2       = float(item.get('area_m2')       or 0)
             linear_meters = float(item.get('linear_meters') or 0)
             if area_m2 > 0:
@@ -3184,23 +3189,33 @@ async def generate_whatsapp_message(budget_id: str):
                 client_phone=budget.get("client_phone"),
             )
             await db.service_acceptances.insert_one(new_acc.dict())
+            acceptance_short = new_acc.short_id
             acceptance_token = new_acc.token
         elif acceptance:
+            # garante short_id para aceites antigos
+            if not acceptance.get("short_id"):
+                sid = _make_short_id()
+                await db.service_acceptances.update_one(
+                    {"budget_id": budget_id}, {"$set": {"short_id": sid}}
+                )
+                acceptance_short = sid
+            else:
+                acceptance_short = acceptance["short_id"]
             acceptance_token = acceptance.get("token")
         else:
+            acceptance_short = None
             acceptance_token = None
 
-        if public_url and acceptance_token:
+        if public_url and acceptance_short:
             message += (
                 f"\n\n✅ *Para autorizar a execução leia e confirme os termos do serviço:*\n"
-                f"{public_url}/aceite/{acceptance_token}"
+                f"{public_url}/api/s/{acceptance_short}"
             )
 
         # ── Rodapé ─────────────────────────────────────────────────────────────
         message += (
-            "\n_Caso tenha dúvidas, estou à disposição!_"
-            "\n_Agradecemos a confiança. Orçamento válido por 30 dias._"
-            "\n\nSuperDry Lavanderia | instagram.com/lavesuperdry"
+            "\n\n😁_Caso tenha dúvidas, estou à disposição!_"
+            "\n💡_Orçamento válido por *30 dias*._"
         )
 
         # ── URL WhatsApp ───────────────────────────────────────────────────────
@@ -6916,6 +6931,7 @@ async def delete_technician_photo(photo_id: str):
 class ServiceAcceptance(BaseModel):
     id: str = Field(default_factory=lambda: f"ACE-{str(uuid.uuid4().int)[:7].zfill(7)}")
     token: str = Field(default_factory=lambda: uuid.uuid4().hex + uuid.uuid4().hex)
+    short_id: str = Field(default_factory=_make_short_id)
     budget_id: str
     client_id: Optional[str] = None
     client_name_on_budget: Optional[str] = None
@@ -7081,6 +7097,58 @@ async def list_acceptances(
             "gallery_link": f"{public_url}/galeria/{gallery_token}" if gallery_token else None,
         })
     return {"acceptances": result, "total": len(result)}
+
+
+@api_router.get("/s/{short_id}")
+async def short_link_redirect(short_id: str):
+    """URL curta para o termo de aceite — serve OG tags para preview no WhatsApp."""
+    from fastapi.responses import HTMLResponse
+    doc = await db.service_acceptances.find_one({"short_id": short_id})
+    if not doc:
+        return HTMLResponse("<html><body>Link inválido.</body></html>", status_code=404)
+
+    token = doc.get("token", "")
+    budget_id = doc.get("budget_id", "")
+    client_name = doc.get("client_name_on_budget", "Cliente")
+
+    budget = await db.budgets.find_one({"id": budget_id}) if budget_id else None
+    total = f"R$ {float(budget.get('total_value', 0)):.2f}" if budget else ""
+
+    sys_cfg = await db.system_config.find_one({}) or {}
+    company_name = sys_cfg.get("company_name", "SuperDry Lavanderia")
+
+    public_url = (
+        os.environ.get("PUBLIC_WEBHOOK_URL", "")
+        .replace("/api/webhooks/payment", "")
+        .strip("/")
+    )
+
+    logo_url = f"{public_url}/api/system-config/logo/file" if public_url else ""
+    acceptance_url = f"/aceite/{token}"
+    title = f"Orçamento {budget_id} — {company_name}"
+    description = f"Olá {client_name}! Seu orçamento {total} está pronto. Clique para visualizar e assinar o termo de serviço."
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{title}</title>
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="{title}" />
+  <meta property="og:description" content="{description}" />
+  <meta property="og:image" content="{logo_url}" />
+  <meta property="og:image:width" content="500" />
+  <meta property="og:image:height" content="500" />
+  <meta property="og:url" content="{public_url}/api/s/{short_id}" />
+  <meta name="twitter:card" content="summary" />
+  <meta http-equiv="refresh" content="0;url={acceptance_url}" />
+</head>
+<body>
+  <script>window.location.replace('{acceptance_url}');</script>
+  <p>Redirecionando... <a href="{acceptance_url}">Clique aqui</a></p>
+</body>
+</html>"""
+    return HTMLResponse(html)
 
 
 @api_router.get("/acceptance/{token}")
