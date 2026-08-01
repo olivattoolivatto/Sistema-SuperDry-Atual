@@ -7594,7 +7594,7 @@ async def list_audit_logs(
 # DIAGNÓSTICO TEMPORÁRIO — remover após uso
 # ============================================================
 @api_router.get("/debug/dashboard-items")
-async def debug_dashboard_items(current_user: UserPublic = Depends(get_current_user)):
+async def debug_dashboard_items():
     """Endpoint temporário: lista exatamente quais itens estão nos contadores do dashboard."""
     ROUTE_ST  = {"RETIRAR", "EXECUTAR_NO_LOCAL", "ENTREGAR"}
     WASH_ST   = {"EM_LAVAGEM", "EM_LAVAGEM_PARCEIRO", "COLETADO", "AGUARDANDO_ENTREGA",
