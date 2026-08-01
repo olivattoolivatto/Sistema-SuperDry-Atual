@@ -1,0 +1,55 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+=== SERVICO ===
+● superdry.service - SuperDry ERP Backend
+     Loaded: loaded (/etc/systemd/system/superdry.service; enabled; preset: disabled)
+     Active: activating (auto-restart) (Result: exit-code) since Wed 2026-07-29 15:58:33 GMT; 3s ago
+    Process: 2400637 ExecStart=/usr/bin/python3.11 -m uvicorn server:app --host 0.0.0.0 --port 8001 (code=exited, status=1/FAILURE)
+   Main PID: 2400637 (code=exited, status=1/FAILURE)
+        CPU: 132ms
+MISSING
+=== ULTIMAS LINHAS DO BUILD LOG ===
+sem log
+=== JOURNAL ===
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "/home/opc/.local/lib/python3.11/site-packages/uvicorn/importer.py", line 21, in import_from_string
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:     module = importlib.import_module(module_str)
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "/usr/lib64/python3.11/importlib/__init__.py", line 126, in import_module
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:     return _bootstrap._gcd_import(name[level:], package, level)
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "<frozen importlib._bootstrap_external>", line 936, in exec_module
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "<frozen importlib._bootstrap_external>", line 1074, in get_code
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "<frozen importlib._bootstrap_external>", line 1004, in source_to_code
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:   File "/home/opc/superdry/backend/server.py", line 1
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:     impot sys as _sys
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]:           ^^^
+Jul 29 15:58:33 instance-20260611-1911 python3.11[2400637]: SyntaxError: invalid syntax
+Jul 29 15:58:33 instance-20260611-1911 systemd[1]: superdry.service: Main process exited, code=exited, status=1/FAILURE
+Jul 29 15:58:33 instance-20260611-1911 systemd[1]: superdry.service: Failed with result 'exit-code'.
+=== NGINX ERRORS ===
+2026/07/29 15:23:23 [error] 414621#414621: *30739 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 45.198.224.26, server: sistema.lavesuperdry.com.br, request: "GET /login HTTP/1.1", host: "148.116.108.43:80"
+2026/07/29 15:25:03 [error] 414621#414621: *30741 directory index of "/home/opc/superdry/frontend/build/" is forbidden, client: 3.129.187.38, server: sistema.lavesuperdry.com.br, request: "GET / HTTP/1.1", host: "148.116.108.43"
+2026/07/29 15:25:06 [error] 414621#414621: *30742 directory index of "/home/opc/superdry/frontend/build/" is forbidden, client: 94.154.43.233, server: sistema.lavesuperdry.com.br, request: "GET / HTTP/1.0", host: "148.116.108.43"
+2026/07/29 15:26:20 [error] 414621#414621: *30743 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 172.69.201.160, server: sistema.lavesuperdry.com.br, request: "GET /favicon.ico HTTP/1.1", host: "sistema.lavesuperdry.com.br"
+2026/07/29 15:26:20 [error] 414621#414621: *30744 connect() failed (111: Connection refused) while connecting to upstream, client: 172.69.201.154, server: sistema.lavesuperdry.com.br, request: "GET /api/auth/me HTTP/1.1", upstream: "http://127.0.0.1:8001/api/auth/me", host: "sistema.lavesuperdry.com.br", referrer: "http://sistema.lavesuperdry.com.br/budgets"
+2026/07/29 15:26:20 [error] 414621#414621: *30744 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 172.69.201.154, server: sistema.lavesuperdry.com.br, request: "GET /login HTTP/1.1", host: "sistema.lavesuperdry.com.br", referrer: "http://sistema.lavesuperdry.com.br/budgets"
+2026/07/29 15:26:20 [error] 414621#414621: *30746 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 172.69.201.160, server: sistema.lavesuperdry.com.br, request: "GET /favicon.ico HTTP/1.1", host: "sistema.lavesuperdry.com.br"
+2026/07/29 15:26:22 [error] 414621#414621: *30747 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 172.69.201.154, server: sistema.lavesuperdry.com.br, request: "GET /login HTTP/1.1", host: "sistema.lavesuperdry.com.br", referrer: "http://sistema.lavesuperdry.com.br/budgets"
+2026/07/29 15:26:22 [error] 414621#414621: *30748 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 172.69.201.160, server: sistema.lavesuperdry.com.br, request: "GET /favicon.ico HTTP/1.1", host: "sistema.lavesuperdry.com.br"
+2026/07/29 15:26:24 [error] 414621#414621: *30749 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 172.69.201.154, server: sistema.lavesuperdry.com.br, request: "GET /login HTTP/1.1", host: "sistema.lavesuperdry.com.br", referrer: "http://sistema.lavesuperdry.com.br/budgets"
+2026/07/29 15:26:24 [error] 414621#414621: *30750 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 172.69.201.160, server: sistema.lavesuperdry.com.br, request: "GET /favicon.ico HTTP/1.1", host: "sistema.lavesuperdry.com.br"
+2026/07/29 15:26:30 [error] 414621#414621: *30751 directory index of "/home/opc/superdry/frontend/build/" is forbidden, client: 172.69.201.154, server: sistema.lavesuperdry.com.br, request: "GET / HTTP/1.1", host: "sistema.lavesuperdry.com.br"
+2026/07/29 15:26:30 [error] 414621#414621: *30752 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 172.69.201.160, server: sistema.lavesuperdry.com.br, request: "GET /favicon.ico HTTP/1.1", host: "sistema.lavesuperdry.com.br"
+2026/07/29 15:27:55 [error] 414621#414621: *30755 directory index of "/home/opc/superdry/frontend/build/" is forbidden, client: 172.69.201.154, server: sistema.lavesuperdry.com.br, request: "GET / HTTP/1.1", host: "sistema.lavesuperdry.com.br"
+2026/07/29 15:27:57 [error] 414621#414621: *30756 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 172.69.201.160, server: sistema.lavesuperdry.com.br, request: "GET /favicon.ico HTTP/1.1", host: "sistema.lavesuperdry.com.br", referrer: "https://sistema.lavesuperdry.com.br/"
+2026/07/29 15:36:35 [error] 414621#414621: *30758 directory index of "/home/opc/superdry/frontend/build/" is forbidden, client: 194.195.210.47, server: sistema.lavesuperdry.com.br, request: "GET / HTTP/1.1", host: "148.116.108.43"
+2026/07/29 15:38:50 [error] 414621#414621: *30759 directory index of "/home/opc/superdry/frontend/build/" is forbidden, client: 172.236.228.193, server: sistema.lavesuperdry.com.br, request: "GET / HTTP/1.1", host: "148.116.108.43"
+2026/07/29 15:41:42 [error] 414621#414621: *30760 directory index of "/home/opc/superdry/frontend/build/" is forbidden, client: 162.62.213.187, server: sistema.lavesuperdry.com.br, request: "GET / HTTP/1.1", host: "148.116.108.43:80"
+2026/07/29 15:55:18 [error] 414621#414621: *30762 directory index of "/home/opc/superdry/frontend/build/" is forbidden, client: 198.235.24.201, server: sistema.lavesuperdry.com.br, request: "GET / HTTP/1.1", host: "148.116.108.43:80"
+2026/07/29 15:55:20 [error] 414621#414621: *30763 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 5.61.209.44, server: sistema.lavesuperdry.com.br, request: "GET /SDK/webLanguage HTTP/1.1", host: "148.116.108.43:80"

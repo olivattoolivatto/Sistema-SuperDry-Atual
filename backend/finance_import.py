@@ -24,7 +24,7 @@ import unicodedata
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from finance_manager import EntryKind, EntrySource, EntryStatus
+from finance_manager import EntryKind, EntrySource, EntryStatus, derive_status
 
 # ofxparse é opcional — só é necessário se algum extrato OFX for importado.
 try:
@@ -791,6 +791,184 @@ async def import_transactions(
     return {
         "account_id": account_id,
         "total_parsed": len(transactions),
+        "imported": imported,
+        "duplicated": duplicated,
+        "skipped": skipped,
+        "transfers_detected": transfers,
+        "transfers_suggested": suggestions,
+    }
+
+
+# ── Preview + commit (upload manual com confirmação na tela) ──────────────────
+# Pedido do dono (23/06/26): o upload manual auto-importava tudo direto no banco,
+# obrigando a editar lançamento-a-lançamento depois ("cansativo e demorado").
+# Agora o upload manual passa por duas etapas: 1) preview_transactions() só lê o
+# arquivo e devolve as linhas detectadas (sem gravar nada), com todos os campos
+# editáveis; 2) commit_transactions() recebe de volta essas linhas (já revisadas/
+# editadas pelo usuário) e grava. O fluxo automático por e-mail (email_statement_
+# poller.py) continua usando import_transactions() direto, sem etapa de revisão,
+# porque não há humano olhando em tempo real.
+async def preview_transactions(account_id: str, transactions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Monta a pré-visualização do extrato sem gravar nada no banco. Calcula o
+    mesmo dedupe_key e a mesma detecção de transferência que import_transactions()
+    usaria, pra já vir sinalizado na tela (duplicado / sugestão de transferência)."""
+    import server  # import tardio — mesmo padrão do resto do módulo
+
+    account = await server.db.financial_accounts.find_one({"id": account_id})
+    if not account:
+        raise ValueError(f"Conta não encontrada: {account_id}")
+
+    rows: List[Dict[str, Any]] = []
+    skipped = 0
+    for tx in transactions:
+        if tx.get("amount") in (None, 0) or not tx.get("date"):
+            skipped += 1
+            continue
+
+        key = _dedupe_key(account_id, tx)
+        existing = await server.db.financial_entries.find_one({"openfinance_tx_id": key})
+        amount = float(tx["amount"])
+        description = tx.get("description") or ""
+        kind = EntryKind.RECEITA.value if amount > 0 else EntryKind.DESPESA.value
+        transfer_name, transfer_acc_id, confidence = await _detect_transfer(description, account_id)
+        is_dup = bool(existing)
+
+        rows.append({
+            "dedupe_key": key,
+            "duplicate": is_dup,
+            "date": tx["date"],
+            "establishment": description or None,
+            "kind": kind,
+            "total_value": round(abs(amount), 2),
+            "payment_method": None,
+            "category_id": None,
+            "notes": None,
+            "transfer_name": transfer_name,
+            "transfer_account_id": transfer_acc_id,
+            "transfer_confidence": confidence,
+            "suggested_status": (EntryStatus.PAGO.value if transfer_name else EntryStatus.A_CATEGORIZAR.value),
+            # Por padrão já marca pra importar, exceto duplicados (usuário pode
+            # religar manualmente se quiser forçar mesmo assim).
+            "import": not is_dup,
+        })
+
+    return {
+        "account_id": account_id,
+        "total_parsed": len(transactions),
+        "skipped_unparseable": skipped,
+        "rows": rows,
+    }
+
+
+async def commit_transactions(account_id: str, rows: List[Dict[str, Any]], source_filename: str = "") -> Dict[str, Any]:
+    """Grava no banco as linhas que vieram da tela de preview (já revisadas/
+    editadas pelo usuário). Revalida o dedupe_key contra o banco no momento do
+    commit — protege contra reimportação do mesmo extrato em duas abas/sessões."""
+    import server  # import tardio — mesmo padrão do resto do módulo
+
+    account = await server.db.financial_accounts.find_one({"id": account_id})
+    if not account:
+        raise ValueError(f"Conta não encontrada: {account_id}")
+
+    imported, duplicated, skipped, transfers = 0, 0, 0, 0
+    for row in rows:
+        if not row.get("import", True):
+            skipped += 1
+            continue
+
+        key = row.get("dedupe_key")
+        if not key:
+            skipped += 1
+            continue
+        existing = await server.db.financial_entries.find_one({"openfinance_tx_id": key})
+        if existing:
+            duplicated += 1
+            continue
+
+        total_value = round(abs(float(row.get("total_value") or 0)), 2)
+        if total_value == 0 or not row.get("date"):
+            skipped += 1
+            continue
+
+        kind = row.get("kind") or EntryKind.DESPESA.value
+        transfer_name = row.get("transfer_name")
+        notes = row.get("notes") or (f"Importado de {source_filename}" if source_filename else "Importado de extrato")
+
+        # Categoria escolhida na tela de importação. Dois modos:
+        #  1) categoria única (category_id) -> uma split só, que fecha o valor total;
+        #  2) "Fracionado" marcado na tela -> várias splits (row["splits"], já editadas
+        #     no SplitsEditor do frontend), igual ao lançamento manual com múltiplas
+        #     categorias. Sem nenhuma das duas, fica como antes: splits=[] e status
+        #     A_CATEGORIZAR (exceto transferência detectada, que já é PAGO/resolvida
+        #     e não precisa de categoria).
+        category_id = row.get("category_id")
+        if row.get("fractioned") and row.get("splits"):
+            # Antes, uma split sem category_id (ex.: usuário digitou um nome novo
+            # como "Lanchinho"/"Gasosa" que ainda não existia como categoria e não
+            # havia como criá-lo na hora) era SILENCIOSAMENTE descartada aqui —
+            # o valor e a descrição se perdiam sem nenhum aviso, e o lançamento
+            # ficava com menos splits (ou nenhuma) do que o usuário pensava ter
+            # gravado. Agora mantemos toda linha com algum conteúdo (categoria,
+            # descrição ou valor); o que falta categoria fica com category_id=None
+            # e o status vai pra A_CATEGORIZAR (ver splits_categorized), deixando
+            # claro na tela que falta resolver — em vez de desaparecer.
+            splits = [
+                {
+                    "category_id": s.get("category_id") or None,
+                    "description": s.get("description"),
+                    "value": round(float(s.get("value") or 0), 2),
+                }
+                for s in row["splits"]
+                if s.get("category_id") or s.get("description") or s.get("value")
+            ]
+        elif category_id:
+            splits = [{"category_id": category_id, "description": row.get("establishment"), "value": total_value}]
+        else:
+            splits = []
+        if transfer_name:
+            status = EntryStatus.PAGO.value
+        elif row.get("status"):
+            status = row.get("status")
+        else:
+            status = derive_status(total_value, splits, current=EntryStatus.PENDENTE.value)
+
+        entry_id = await server._next_id(server.db.financial_entries, "LCT-", 4)
+        doc = {
+            "id": entry_id,
+            "kind": kind,
+            "scope": row.get("scope") or account.get("scope", "EMPRESA"),
+            "account_id": account_id,
+            "date": row.get("date"),
+            "paid_date": row.get("paid_date") or row.get("date"),
+            "establishment": row.get("establishment"),
+            "total_value": total_value,
+            "payment_method": row.get("payment_method"),
+            "installments": {"n": 1, "total": 1},
+            "status": status,
+            "splits": splits,
+            "is_internal_transfer": bool(transfer_name),
+            "transfer_match_confidence": row.get("transfer_confidence"),
+            "transfer_with_account_id": row.get("transfer_account_id"),
+            "transfer_with_entry_id": None,
+            "transfer_suggested": False,
+            "source": EntrySource.EXTRATO_IMPORT.value,
+            "openfinance_tx_id": key,
+            "reconciled": False,
+            "invoice_id": None,
+            "attachments": [source_filename] if source_filename else [],
+            "recurring_id": None,
+            "notes": notes,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        await server.db.financial_entries.insert_one(doc)
+        imported += 1
+        if transfer_name:
+            transfers += 1
+
+    suggestions = await _suggest_value_date_transfers(account_id)
+
+    return {
+        "account_id": account_id,
         "imported": imported,
         "duplicated": duplicated,
         "skipped": skipped,

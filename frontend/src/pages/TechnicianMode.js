@@ -3,10 +3,11 @@ import {
   Car, Building, Calendar, MapPin, Camera, FileText, CreditCard, Phone,
   Settings, Navigation, CheckCircle, Package, Truck, User, Trash2,
   ChevronDown, ChevronUp, ChevronRight, ArrowUpDown, Search, X, Check,
-  Edit3, RefreshCw, Tag
+  Edit3, RefreshCw, Tag, ShieldAlert
 } from 'lucide-react';
 import { routesApi, budgetItemsApi, technicianApi, itemsApi } from '../services/api';
 import { BACKEND_URL } from '../lib/backendUrl';
+import { useAuth } from '../contexts/AuthContext';
 
 // Função para extrair endereço legível do objeto cliente (COPIADA DA AGENDA)
 const getClientAddress = (client) => {
@@ -197,17 +198,10 @@ export function TechnicianMode() {
     setCurrentModeState(m);
     localStorage.setItem('tech_mode', m);
   };
-  const [technicianData, setTechnicianData] = useState(null);
-
-  // Carregar dados do técnico logado
-  useEffect(() => {
-    // TODO: Implementar autenticação do técnico
-    setTechnicianData({
-      id: 'TECH-001',
-      name: 'João Silva',
-      role: 'Técnico de Campo'
-    });
-  }, []);
+  const { user: authUser } = useAuth();
+  const technicianData = authUser
+    ? { id: authUser.id || authUser._id || authUser.username, name: authUser.name || authUser.username || 'Usuário', role: authUser.role || 'Técnico' }
+    : null;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-16">
@@ -517,28 +511,38 @@ function StreetMode({ onBack }) {
         )}
         <button
           onClick={async () => {
-            const today = new Date().toISOString().split('T')[0];
-            // Pergunta a data a finalizar (default = hoje), aceita lançamentos retroativos
-            const date = window.prompt('Finalizar agenda de qual data? (AAAA-MM-DD)', today);
-            if (!date) return;
+            const todayIso = new Date().toISOString().split('T')[0]; // YYYY-MM-DD para API
+            const fmtDate  = iso => iso.split('-').reverse().join('/'); // DD/MM/YYYY para exibição
+            const parseDate = input => {
+              // Aceita DD/MM/YYYY ou DD-MM-YYYY → devolve YYYY-MM-DD
+              const p = input.trim().split(/[\/\-]/);
+              if (p.length === 3 && p[0].length <= 2) return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+              return input; // já estava em YYYY-MM-DD
+            };
+
+            // Pergunta a data no formato brasileiro
+            const dateInput = window.prompt('Finalizar agenda de qual data? (DD/MM/AAAA)', fmtDate(todayIso));
+            if (!dateInput) return;
+            const date = parseDate(dateInput);
+            const dateDisplay = fmtDate(date);
 
             // Conta itens que SERIAM reagendados (pendentes de execução) dessa data
             const RESCHED = new Set(['RETIRAR','EXECUTAR_NO_LOCAL','ENTREGAR','AGENDADO']);
             const toReschedule = (dailyClients || [])
-              .filter(c => (c.assigned_date || today) === date)
+              .filter(c => (c.assigned_date || todayIso) === date)
               .flatMap(c => c.items || [])
               .filter(it => RESCHED.has(it.status)).length;
 
             const msg = toReschedule > 0
-              ? `Finalizar agenda de ${date}?\n\n${toReschedule} serviço(s) NÃO executado(s) serão liberados para nova rota.\nOs já concluídos seguem para o financeiro normalmente.`
-              : `Finalizar agenda de ${date}?\n\nTodos os serviços desta data já foram tratados — nada será reagendado.`;
+              ? `Finalizar agenda de ${dateDisplay}?\n\n${toReschedule} serviço(s) NÃO executado(s) serão liberados para nova rota.\nOs já concluídos seguem para o financeiro normalmente.`
+              : `Finalizar agenda de ${dateDisplay}?\n\nTodos os serviços desta data já foram tratados — nada será reagendado.`;
             if (!window.confirm(msg)) return;
 
             setFinalizing(true);
             try {
               const r = await technicianApi.finalizeToday(date);
               const res = r.data.results;
-              alert(`Agenda de ${date} finalizada!\n✅ Finalizados: ${res.finalized}\n🔄 Reagendados: ${res.rescheduled}\n📦 Empresa: ${res.empresa}\n✕ Cancelados: ${res.cancelled}`);
+              alert(`Agenda de ${dateDisplay} finalizada!\n✅ Finalizados: ${res.finalized}\n🔄 Reagendados: ${res.rescheduled}\n📦 Empresa: ${res.empresa}\n✕ Cancelados: ${res.cancelled}`);
               loadDailyAgenda();
             } catch(e) { alert('Erro: ' + (e.response?.data?.detail || e.message)); }
             finally { setFinalizing(false); }
@@ -895,12 +899,20 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
 
 // Detalhes do Cliente
 function ClientDetails({ client, onBack, generateNavigationLink }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [technicianNotes, setTechnicianNotes] = useState('');
   const [showPhotoCapture, setShowPhotoCapture] = useState(true);
   const [itemPhotos, setItemPhotos] = useState({});
+  const [cameraProblems, setCameraProblems] = useState({}); // itemId → boolean
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [processing, setProcessing] = useState(false);
+  // Modal AFTER photo — aparece antes de mudar status para EXECUTADO/ENTREGUE
+  const [afterPhotoModal, setAfterPhotoModal] = useState(null); // null | { itemIds, finalStatus, label }
+  const [afterItemPhotos, setAfterItemPhotos] = useState({}); // itemId → [photoObj]
+  const [afterCameraProblems, setAfterCameraProblems] = useState({}); // itemId → boolean
+  const [uploadingAfterPhotos, setUploadingAfterPhotos] = useState({});
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
   const [paymentMethods, setPaymentMethods] = useState([
@@ -927,11 +939,53 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
     setSelectedItems(newSelected);
   };
 
+  // Itens que estão na empresa em processamento — não são acionáveis em campo
+  // AGUARDANDO_ENTREGA foi removido daqui: quando está numa rota, o técnico precisa entregar
+  const IN_COMPANY = new Set(['COLETADO', 'EM_LAVAGEM']);
+  const FIELD_DONE = new Set(['EXECUTADO', 'ENTREGUE', 'BUSCOU', 'CANCELADO']);
+
+  // Cada item ATIVO NO CAMPO precisa de foto BEFORE OU ter "problema com câmera" marcado
   const allItemsHavePhotos = () =>
-    client.items.every(item => (itemPhotos[item.id] || []).length > 0);
+    client.items
+      .filter(item => !IN_COMPANY.has(item.status) && !FIELD_DONE.has(item.status))
+      .every(item =>
+        (itemPhotos[item.id] || []).length > 0 || cameraProblems[item.id]
+      );
 
   const proceedToService = () => {
+    if (!allItemsHavePhotos()) return; // segurança extra
     setShowPhotoCapture(false);
+  };
+
+  // Upload de foto AFTER
+  const uploadAfterPhoto = async (itemId, files) => {
+    setUploadingAfterPhotos(prev => ({ ...prev, [itemId]: true }));
+    try {
+      const formData = new FormData();
+      formData.append('item_id', itemId);
+      formData.append('technician_id', 'TECH-001');
+      formData.append('photo_type', 'AFTER');
+      for (let file of files) formData.append('files', file);
+      const response = await fetch(`${BACKEND_URL}/api/technician/upload-photos`, { method: 'POST', body: formData });
+      if (!response.ok) throw new Error(`${response.status}`);
+      const photos = Array.from(files).map(file => ({
+        id: Date.now() + Math.random(),
+        file, url: URL.createObjectURL(file), name: file.name, photoType: 'AFTER',
+      }));
+      setAfterItemPhotos(prev => ({ ...prev, [itemId]: [...(prev[itemId] || []), ...photos] }));
+    } catch (e) {
+      alert(`Erro ao enviar foto DEPOIS: ${e.message}`);
+    } finally {
+      setUploadingAfterPhotos(prev => ({ ...prev, [itemId]: false }));
+    }
+  };
+
+  // Verifica se todos os itens do afterPhotoModal têm foto AFTER ou camera problem
+  const allAfterItemsReady = () => {
+    if (!afterPhotoModal) return false;
+    return afterPhotoModal.itemIds.every(id =>
+      (afterItemPhotos[id] || []).length > 0 || afterCameraProblems[id]
+    );
   };
 
   // ─── helpers ────────────────────────────────────────────────────────────────
@@ -983,8 +1037,8 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   // ─── action: Serviço Concluído ───────────────────────────────────────────────
   const handleServiceCompleted = () => {
     if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
-    setPendingAction({ type: 'CONCLUIDO', itemIds: [...selectedItems] });
-    setShowPaymentModal(true);
+    // Pede foto AFTER antes do modal de pagamento
+    setAfterPhotoModal({ type: 'CONCLUIDO', itemIds: [...selectedItems], label: 'Serviço Concluído' });
   };
 
   // ─── action: Retirada Efetuada ───────────────────────────────────────────────
@@ -1026,8 +1080,8 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   // ─── action: Entrega Efetuada ────────────────────────────────────────────────
   const handleDeliveryDone = () => {
     if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
-    setPendingAction({ type: 'ENTREGUE', itemIds: [...selectedItems] });
-    setShowPaymentModal(true);
+    // Pede foto AFTER antes do modal de pagamento
+    setAfterPhotoModal({ type: 'ENTREGUE', itemIds: [...selectedItems], label: 'Entrega Efetuada' });
   };
 
   // ─── action: Cliente Buscou ──────────────────────────────────────────────────
@@ -1088,6 +1142,17 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
     }
   };
 
+  // ─── confirmar fotos AFTER e prosseguir para pagamento ──────────────────────
+  const handleAfterPhotosConfirmed = () => {
+    if (!allAfterItemsReady()) return;
+    const { type, itemIds } = afterPhotoModal;
+    setAfterPhotoModal(null);
+    setAfterItemPhotos({});
+    setAfterCameraProblems({});
+    setPendingAction({ type, itemIds });
+    setShowPaymentModal(true);
+  };
+
   // ─── confirmar pagamento (modal) ─────────────────────────────────────────────
   const handlePaymentConfirm = async (method, collectNow, receivedValue, payNotes) => {
     setShowPaymentModal(false);
@@ -1144,11 +1209,17 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
         client={client}
         onBack={onBack}
         itemPhotos={itemPhotos}
+        cameraProblems={cameraProblems}
+        setCameraProblems={setCameraProblems}
         setItemPhotos={setItemPhotos}
         uploadingPhotos={uploadingPhotos}
         setUploadingPhotos={setUploadingPhotos}
         onProceed={proceedToService}
         allItemsHavePhotos={allItemsHavePhotos}
+        isAdmin={isAdmin}
+        inCompanyStatuses={IN_COMPANY}
+        fieldDoneStatuses={FIELD_DONE}
+        onRefreshClient={onBack}
       />
     );
   }
@@ -1204,39 +1275,50 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
 
       {/* Items List */}
       {(() => {
-        const FINISHED = new Set(['EXECUTADO','ENTREGUE','BUSCOU','CANCELADO']);
-        const pending  = client.items.filter(i => !FINISHED.has(i.status));
-        const done     = client.items.filter(i =>  FINISHED.has(i.status));
+        const FINISHED    = new Set(['EXECUTADO','ENTREGUE','BUSCOU','CANCELADO']);
+        const AT_COMPANY  = new Set(['COLETADO','EM_LAVAGEM']);
+        const AT_COMPANY_LABELS = {
+          COLETADO:   'Coletado — na empresa',
+          EM_LAVAGEM: 'Em lavagem',
+        };
+        const pending    = client.items.filter(i => !FINISHED.has(i.status) && !AT_COMPANY.has(i.status));
+        const atCompany  = client.items.filter(i => AT_COMPANY.has(i.status));
+        const done       = client.items.filter(i => FINISHED.has(i.status));
 
         const ItemRow = (item) => {
-          const isDone = FINISHED.has(item.status);
+          const isDone      = FINISHED.has(item.status);
+          const isAtCompany = AT_COMPANY.has(item.status);
           return (
             <div key={item.id} className={`border rounded-md p-3 transition ${
-              isDone ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200 bg-white'
+              isDone      ? 'border-gray-100 bg-gray-50 opacity-60' :
+              isAtCompany ? 'border-blue-100 bg-blue-50' :
+                            'border-gray-200 bg-white'
             }`}>
               <div className="flex items-center space-x-3">
-                {!isDone
-                  ? <input type="checkbox" checked={selectedItems.has(item.id)}
-                      onChange={(e) => handleItemSelect(item.id, e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                  : <span className="text-green-500 text-lg w-4 text-center">✓</span>
+                {isDone
+                  ? <span className="text-green-500 text-lg w-4 text-center">✓</span>
+                  : isAtCompany
+                    ? <span className="text-blue-400 text-lg w-4 text-center">🏢</span>
+                    : <input type="checkbox" checked={selectedItems.has(item.id)}
+                        onChange={(e) => handleItemSelect(item.id, e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
                 }
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
-                    <span className={`font-medium ${isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                    <span className={`font-medium ${isDone ? 'text-gray-400 line-through' : isAtCompany ? 'text-blue-700' : 'text-gray-800'}`}>
                       {item.name}
                     </span>
-                    <span className={`font-medium text-sm ${isDone ? 'text-gray-400' : 'text-green-600'}`}>
+                    <span className={`font-medium text-sm ${isDone || isAtCompany ? 'text-gray-400' : 'text-green-600'}`}>
                       R$ {item.value.toFixed(2)}
                     </span>
                   </div>
-                  <p className={`text-xs mt-0.5 ${isDone ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {item.status}
+                  <p className={`text-xs mt-0.5 ${isDone ? 'text-gray-400' : isAtCompany ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
+                    {isAtCompany ? AT_COMPANY_LABELS[item.status] : item.status}
                     {item.payment_status && item.payment_status !== 'PENDENTE' && (
                       <span className="ml-2 text-emerald-600">· {item.payment_status}</span>
                     )}
                   </p>
-                  {item.observations && !isDone && (
+                  {item.observations && !isDone && !isAtCompany && (
                     <p className="text-xs text-gray-400 italic mt-0.5">Obs: {item.observations}</p>
                   )}
                 </div>
@@ -1267,6 +1349,14 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
             <div className="space-y-2">
               {pending.map(item => ItemRow(item))}
             </div>
+
+            {/* Itens na empresa — sempre visíveis mas não acionáveis */}
+            {atCompany.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-blue-100 space-y-2">
+                <p className="text-xs text-blue-500 font-medium mb-1">🏢 Na empresa ({atCompany.length})</p>
+                {atCompany.map(item => ItemRow(item))}
+              </div>
+            )}
 
             {done.length > 0 && showDoneItems && (
               <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
@@ -1360,6 +1450,112 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
             </button>
           </div>
           {processing && <p className="text-center text-sm text-gray-500 mt-2">Processando...</p>}
+        </div>
+      )}
+
+      {/* Modal AFTER photo — exibido antes do modal de pagamento */}
+      {afterPhotoModal && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-60 flex items-end">
+          <div className="bg-white w-full rounded-t-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <div>
+                <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-green-600" />
+                  Foto DEPOIS — {afterPhotoModal.label}
+                </h3>
+                <p className="text-xs text-gray-500">Registre o resultado do serviço em cada item</p>
+              </div>
+              <button
+                onClick={() => { setAfterPhotoModal(null); setAfterItemPhotos({}); setAfterCameraProblems({}); }}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {afterPhotoModal.itemIds.map(itemId => {
+                const item = client.items.find(i => i.id === itemId);
+                if (!item) return null;
+                const photos = afterItemPhotos[itemId] || [];
+                const hasProblem = afterCameraProblems[itemId] || false;
+                const uploading = uploadingAfterPhotos[itemId];
+                const isReady = photos.length > 0 || hasProblem;
+
+                return (
+                  <div key={itemId} className={`border rounded-xl p-3 ${isReady ? 'border-green-300 bg-green-50' : 'border-gray-200'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      {isReady
+                        ? <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                        : <Camera className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                      }
+                      <span className="text-sm font-medium text-gray-800 truncate">{item.name}</span>
+                    </div>
+
+                    {!hasProblem && (
+                      <div className="mb-2">
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          capture="environment"
+                          disabled={uploading}
+                          onChange={e => { uploadAfterPhoto(itemId, Array.from(e.target.files)); e.target.value = ''; }}
+                          className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-green-100 file:text-green-800 hover:file:bg-green-200 disabled:opacity-50"
+                        />
+                        {uploading && <p className="text-xs text-gray-400 mt-1">Enviando...</p>}
+                      </div>
+                    )}
+
+                    {photos.length > 0 && (
+                      <div className="flex gap-2 flex-wrap mb-2">
+                        {photos.map(p => (
+                          <img key={p.id} src={p.url} alt="" className="w-16 h-16 object-cover rounded-lg border border-green-200" />
+                        ))}
+                      </div>
+                    )}
+
+                    {photos.length === 0 && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hasProblem}
+                          onChange={e => setAfterCameraProblems(prev => ({ ...prev, [itemId]: e.target.checked }))}
+                          className="w-4 h-4 accent-gray-600"
+                        />
+                        <span className="text-xs text-gray-600">Problema com câmera — não foi possível fotografar</span>
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="px-4 py-3 border-t border-gray-100">
+              <button
+                onClick={handleAfterPhotosConfirmed}
+                disabled={!allAfterItemsReady()}
+                className="w-full py-3 rounded-xl bg-green-600 text-white font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Confirmar e registrar {afterPhotoModal.label.toLowerCase()}
+              </button>
+              {!allAfterItemsReady() && (
+                <p className="text-xs text-center text-gray-400 mt-1">
+                  Tire foto de cada item ou marque "problema com câmera"
+                </p>
+              )}
+              {isAdmin && !allAfterItemsReady() && (
+                <button
+                  onClick={handleAfterPhotosConfirmed}
+                  className="w-full mt-2 py-2.5 rounded-xl border border-orange-400 text-orange-600 font-semibold text-sm hover:bg-orange-50 flex items-center justify-center gap-2"
+                >
+                  <ShieldAlert className="w-4 h-4" />
+                  Pular fotos — Admin
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -2206,11 +2402,37 @@ function TabButton({ active, onClick, icon, label }) {
 }
 
 // Componente de Captura de Fotos
-function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadingPhotos, setUploadingPhotos, onProceed, allItemsHavePhotos }) {
+function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadingPhotos, setUploadingPhotos, onProceed, allItemsHavePhotos, cameraProblems, setCameraProblems, isAdmin, inCompanyStatuses, fieldDoneStatuses, onRefreshClient }) {
   const [photoObservations, setPhotoObservations] = useState({});
   const [damageInfo, setDamageInfo] = useState({});
   const [currentPhotoForObservation, setCurrentPhotoForObservation] = useState(null);
   const [flash, setFlash] = useState('');
+  const [skippedItems, setSkippedItems] = useState(new Set()); // "deixar pra depois"
+  const [cancellingItem, setCancellingItem] = useState(null);
+
+  const IN_COMPANY = inCompanyStatuses || new Set(['COLETADO','EM_LAVAGEM']);
+  const FIELD_DONE = fieldDoneStatuses || new Set(['EXECUTADO','ENTREGUE','BUSCOU','CANCELADO']);
+
+  // Itens que realmente precisam de foto hoje
+  const activeItems = (client.items || []).filter(
+    item => !IN_COMPANY.has(item.status) && !FIELD_DONE.has(item.status) && !skippedItems.has(item.id)
+  );
+
+  const handleSkipItem = (itemId) => {
+    setSkippedItems(prev => new Set([...prev, itemId]));
+  };
+
+  const handleCancelItem = async (item) => {
+    if (!window.confirm(`Cancelar "${item.name}"? Esta ação não pode ser desfeita.`)) return;
+    setCancellingItem(item.id);
+    try {
+      await itemsApi.updateStatus(item.id, 'CANCELADO');
+      // Força recarregar o cliente (volta pra lista)
+      if (onRefreshClient) onRefreshClient();
+    } catch (e) {
+      alert('Erro ao cancelar: ' + e.message);
+    } finally { setCancellingItem(null); }
+  };
 
   const showFlash = (msg) => {
     setFlash(msg);
@@ -2348,24 +2570,48 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
       </div>
 
       {/* Instruções */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
         <div className="flex items-start space-x-2">
-          <Camera className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+          <Camera className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
           <div>
-            <h4 className="font-medium text-yellow-800 mb-2">Registro Fotográfico (opcional)</h4>
-            <p className="text-sm text-yellow-700">
-              Capture fotos do estado atual dos itens se desejar registrar. Clique em "Prosseguir" para continuar sem fotos.
+            <h4 className="font-medium text-blue-800 mb-1">Foto ANTES obrigatória</h4>
+            <p className="text-sm text-blue-700">
+              Tire ao menos 1 foto do estado inicial de cada item. Se a câmera não funcionar, marque "Problema com câmera" no item.
             </p>
           </div>
         </div>
       </div>
 
+      {/* Itens na empresa — não precisam de foto */}
+      {(client.items || []).filter(i => IN_COMPANY.has(i.status)).length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <p className="text-xs font-semibold text-blue-700 mb-1">🏢 Itens na empresa — sem ação necessária agora:</p>
+          {(client.items || []).filter(i => IN_COMPANY.has(i.status)).map(i => (
+            <p key={i.id} className="text-xs text-blue-600">• {i.name} ({i.status})</p>
+          ))}
+        </div>
+      )}
+
+      {/* Itens pulados */}
+      {skippedItems.size > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+          <p className="text-xs font-semibold text-yellow-700 mb-1">⏭ Itens deixados para depois:</p>
+          {(client.items || []).filter(i => skippedItems.has(i.id)).map(i => (
+            <p key={i.id} className="text-xs text-yellow-600 flex items-center justify-between">
+              <span>• {i.name}</span>
+              <button onClick={() => setSkippedItems(prev => { const s = new Set(prev); s.delete(i.id); return s; })}
+                className="text-yellow-500 underline text-[10px]">desfazer</button>
+            </p>
+          ))}
+        </div>
+      )}
+
       {/* Lista de Items para Fotografar */}
       <div className="space-y-4 mb-6">
-        {client.items.map(item => {
+        {activeItems.map(item => {
           const itemPhotosArray = itemPhotos[item.id] || [];
           const hasPhotos = itemPhotosArray.length > 0;
-          
+
           return (
             <div key={item.id} className="bg-white rounded-lg shadow-md border border-gray-200">
               {/* Header do Item */}
@@ -2385,35 +2631,67 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
                       )}
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="flex flex-col items-end gap-1">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      hasPhotos 
-                        ? 'bg-green-100 text-green-800' 
+                      hasPhotos
+                        ? 'bg-green-100 text-green-800'
                         : 'bg-red-100 text-red-800'
                     }`}>
                       {hasPhotos ? `${itemPhotosArray.length} foto(s)` : 'Sem fotos'}
                     </span>
+                    {/* Botões Pular / Cancelar */}
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleSkipItem(item.id)}
+                        className="text-[10px] px-2 py-0.5 rounded border border-yellow-300 text-yellow-600 hover:bg-yellow-50"
+                      >
+                        ⏭ Depois
+                      </button>
+                      <button
+                        onClick={() => handleCancelItem(item)}
+                        disabled={cancellingItem === item.id}
+                        className="text-[10px] px-2 py-0.5 rounded border border-red-300 text-red-500 hover:bg-red-50 disabled:opacity-40"
+                      >
+                        {cancellingItem === item.id ? '…' : '✕ Cancelar'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Upload de Fotos */}
               <div className="p-4">
-                <div className="mb-4">
+                {/* Foto ANTES */}
+                <div className="mb-3">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {uploadingPhotos ? 'Enviando...' : 'Tirar/selecionar foto:'}
+                    {uploadingPhotos ? 'Enviando...' : '📷 Foto ANTES do serviço:'}
                   </label>
                   <input
                     type="file"
                     multiple
                     accept="image/*"
                     capture="environment"
-                    disabled={uploadingPhotos}
+                    disabled={uploadingPhotos || cameraProblems[item.id]}
                     onChange={(e) => { handlePhotoUpload(item.id, Array.from(e.target.files)); e.target.value = ''; }}
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
                   />
                 </div>
-                
+
+                {/* Fallback câmera com problema */}
+                {!hasPhotos && (
+                  <label className="flex items-center gap-2 mb-3 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg p-2">
+                    <input
+                      type="checkbox"
+                      checked={cameraProblems[item.id] || false}
+                      onChange={e => setCameraProblems(prev => ({ ...prev, [item.id]: e.target.checked }))}
+                      className="w-4 h-4 accent-gray-600"
+                    />
+                    <span className="text-xs text-gray-600">
+                      Problema com a câmera — não foi possível fotografar este item
+                    </span>
+                  </label>
+                )}
+
                 {/* Checkbox de Danos */}
                 <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                   <div className="flex items-start space-x-2">
@@ -2540,41 +2818,60 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
 
       {/* Botão para Prosseguir */}
       <div className="bg-white rounded-lg shadow-md p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-600">
-              Progresso: {Object.values(itemPhotos).filter(photos => photos.length > 0).length} de {client.items.length} itens fotografados
-            </p>
-            {/* Validação de danos — ainda obrigatória se marcou dano */}
-            {(() => {
-              const invalidDamageItems = client.items.filter(item => {
-                const info = damageInfo[item.id];
-                return info?.hasDamage && (!info.damageDetails?.trim() || !info.damagePhotos?.length);
-              });
-              if (invalidDamageItems.length > 0) {
-                return (
-                  <p className="text-sm text-orange-600 mt-1">
-                    ⚠️ Itens com danos precisam de detalhes e fotos específicas.
+        {/* Validação: apenas itens ativos (não pulados, não na empresa) precisam de foto */}
+        {(() => {
+          const sem = activeItems.filter(item =>
+            (itemPhotos[item.id] || []).length === 0 && !cameraProblems[item.id]
+          );
+          const invalidDamage = activeItems.filter(item => {
+            const info = damageInfo[item.id];
+            return info?.hasDamage && (!info.damageDetails?.trim() || !info.damagePhotos?.length);
+          });
+          const isReady = sem.length === 0 && invalidDamage.length === 0;
+          return (
+            <>
+              <div className="mb-3 space-y-1">
+                {activeItems.length === 0 && (
+                  <p className="text-sm text-green-600">
+                    ✅ Todos os itens foram tratados. Pode prosseguir.
                   </p>
-                );
-              }
-            })()}
-          </div>
-          <button
-            onClick={onProceed}
-            disabled={(() => {
-              const invalidDamageItems = client.items.filter(item => {
-                const info = damageInfo[item.id];
-                return info?.hasDamage && (!info.damageDetails?.trim() || !info.damagePhotos?.length);
-              });
-              return invalidDamageItems.length > 0;
-            })()}
-            className="py-2 px-6 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
-          >
-            <CheckCircle className="w-4 h-4" />
-            <span>Prosseguir para Atendimento</span>
-          </button>
-        </div>
+                )}
+                {sem.length > 0 && (
+                  <p className="text-sm text-red-600">
+                    ⚠️ {sem.length} item(s) sem foto: tire a foto, marque "Problema com câmera" ou use ⏭ Depois.
+                  </p>
+                )}
+                {invalidDamage.length > 0 && (
+                  <p className="text-sm text-orange-600">
+                    ⚠️ {invalidDamage.length} item(s) com dano precisam de detalhes e foto do dano.
+                  </p>
+                )}
+                {isReady && activeItems.length > 0 && (
+                  <p className="text-sm text-green-600">
+                    ✅ Todos os itens registrados. Pode prosseguir.
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={onProceed}
+                disabled={!isReady}
+                className="w-full py-2.5 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Prosseguir para Atendimento
+              </button>
+              {isAdmin && !isReady && (
+                <button
+                  onClick={onProceed}
+                  className="w-full mt-2 py-2.5 rounded-lg text-sm font-semibold border border-orange-400 text-orange-600 hover:bg-orange-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <ShieldAlert className="w-4 h-4" />
+                  Pular fotos — Admin
+                </button>
+              )}
+            </>
+          );
+        })()}
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   X, Save, Plus, Trash2, ChevronDown, ChevronUp, Loader2, MapPin,
   Calendar, User as UserIcon, CreditCard, FileText, Search, AlertCircle, Copy,
+  MessageSquare, Download, Send, Shield, CheckCircle, Link,
 } from 'lucide-react';
 import { clientsApi, servicesApi, placesApi, budgetsApi, usersApi } from '../../services/api';
 import { BACKEND_URL } from '../../lib/backendUrl';
@@ -105,6 +106,45 @@ function AddressAutocomplete({ value, onSelect, placeholder, compact = false }) 
   );
 }
 
+// Campo decimal com suporte a vírgula como separador (resolve bug de zero persistente no mobile)
+function DecimalInput({ value, defaultValue: def, onChange: onChangeProp, className, disabled, ...rest }) {
+  const toStr = (v) => (v != null && !isNaN(v) ? String(v) : (def != null ? String(def) : ''));
+  const [raw, setRaw] = React.useState(() => toStr(value));
+  const lastParent = React.useRef(value);
+  React.useEffect(() => {
+    if (value !== lastParent.current) {
+      lastParent.current = value;
+      setRaw(toStr(value));
+    }
+  // eslint-disable-next-line
+  }, [value]);
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={raw}
+      onChange={(e) => {
+        const txt = e.target.value;
+        setRaw(txt);
+        const v = parseFloat(txt.replace(',', '.'));
+        if (!isNaN(v)) onChangeProp(v);
+      }}
+      onBlur={(e) => {
+        const v = parseFloat(e.target.value.replace(',', '.'));
+        const fallback = def != null ? def : 0;
+        const final = isNaN(v) ? fallback : v;
+        lastParent.current = final;
+        setRaw(String(final));
+        onChangeProp(final);
+      }}
+      onFocus={(e) => e.target.select()}
+      disabled={disabled}
+      className={className}
+      {...rest}
+    />
+  );
+}
+
 // Sub-form para um item individual
 function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, paymentMethods = PAYMENT_METHODS, salespersons = [] }) {
   const [showAdvanced, setShowAdvanced] = useState(
@@ -153,11 +193,11 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
   useEffect(() => {
     let qty = Number(item.quantity || 1);
     if (needsArea && item.width && item.height) qty = Number(item.width) * Number(item.height);
-    if (needsLinear && item.fabric_folds && item.fabric_per_fold) qty = Number(item.fabric_folds) * Number(item.fabric_per_fold);
+    if (needsLinear && item.fabric_folds && item.fabric_per_fold) qty = Number(item.fabric_folds) * Number(item.fabric_per_fold) / 100;
     if (needsDiameter && item.diameter) qty = Math.PI * Math.pow(Number(item.diameter) / 2, 2);
     const total = qty * Number(item.unit_price || 0);
     const computedAreaM2 = needsArea && item.width && item.height ? Number(item.width) * Number(item.height) : null;
-    const computedLinear = needsLinear && item.fabric_folds && item.fabric_per_fold ? Number(item.fabric_folds) * Number(item.fabric_per_fold) : null;
+    const computedLinear = needsLinear && item.fabric_folds && item.fabric_per_fold ? Number(item.fabric_folds) * Number(item.fabric_per_fold) / 100 : null;
     if (Math.abs((item.total_value || 0) - total) > 0.001 ||
         (computedAreaM2 !== null && item.area_m2 !== computedAreaM2) ||
         (computedLinear !== null && item.linear_meters !== computedLinear)) {
@@ -263,12 +303,9 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Valor unit.</label>
-            <input
-              type="number" step="0.01"
-              value={item.unit_price || ''}
-              onChange={(e) => onChange({ ...item, unit_price: Number(e.target.value) })}
-              onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"
-            />
+            <DecimalInput value={item.unit_price || 0} defaultValue={0}
+              onChange={(v) => onChange({ ...item, unit_price: v })}
+              className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Total</label>
@@ -283,40 +320,40 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Largura (m)</label>
-              <input type="number" step="0.01" value={item.width || ''}
-                onChange={(e) => onChange({ ...item, width: Number(e.target.value) })}
-                onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
+              <DecimalInput value={item.width || 0} defaultValue={0}
+                onChange={(v) => onChange({ ...item, width: v })}
+                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Altura (m)</label>
-              <input type="number" step="0.01" value={item.height || ''}
-                onChange={(e) => onChange({ ...item, height: Number(e.target.value) })}
-                onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
+              <DecimalInput value={item.height || 0} defaultValue={0}
+                onChange={(v) => onChange({ ...item, height: v })}
+                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
           </div>
         )}
         {needsLinear && (
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Varões</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Dobras</label>
               <input type="number" value={item.fabric_folds || ''}
                 onChange={(e) => onChange({ ...item, fabric_folds: Number(e.target.value) })}
                 onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Tecido/varão (m)</label>
-              <input type="number" step="0.01" value={item.fabric_per_fold ?? 18}
-                onChange={(e) => onChange({ ...item, fabric_per_fold: Number(e.target.value) })}
-                onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
+              <label className="block text-xs font-medium text-gray-600 mb-1">Tecido/dobra (cm)</label>
+              <DecimalInput value={item.fabric_per_fold ?? 18} defaultValue={18}
+                onChange={(v) => onChange({ ...item, fabric_per_fold: v })}
+                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
           </div>
         )}
         {needsDiameter && (
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Diâmetro (m)</label>
-            <input type="number" step="0.01" value={item.diameter || ''}
-              onChange={(e) => onChange({ ...item, diameter: Number(e.target.value) })}
-              onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
+            <DecimalInput value={item.diameter || 0} defaultValue={0}
+              onChange={(v) => onChange({ ...item, diameter: v })}
+              className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
         )}
 
@@ -694,7 +731,7 @@ function BatchModal({ services, onClose, onAdd }) {
                   <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
                 </button>
                 {showServicePicker && (
-                  <div className="absolute z-20 bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-hidden flex flex-col">
+                  <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-72 overflow-hidden flex flex-col">
                     <div className="p-2 border-b border-gray-100">
                       <div className="relative">
                         <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -802,6 +839,63 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
   const [qcAddr, setQcAddr] = useState(null);       // objeto do AddressAutocomplete
   const [qcComplement, setQcComplement] = useState('');
   const [qcSaving, setQcSaving] = useState(false);
+  // ID efetivo do orçamento (atualizado após salvar/criar)
+  const [savedId, setSavedId] = useState(budget?.id || null);
+  const effectiveBudgetId = savedId || budget?.id;
+
+  // Painel "Enviar para cliente"
+  const [sendPanel, setSendPanel] = useState(false);
+  const [sendData, setSendData] = useState(null);
+  const [sendLoading, setSendLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Aceite Virtual
+  const [acceptanceLink, setAcceptanceLink] = useState('');
+  const [acceptanceStatus, setAcceptanceStatus] = useState(null); // null | 'PENDING' | 'ACCEPTED'
+  const [acceptanceCopied, setAcceptanceCopied] = useState(false);
+
+  const openSendPanel = async () => {
+    if (!effectiveBudgetId) return;
+    setSendLoading(true);
+    setSendPanel(true);
+    setSendData(null);
+    setAcceptanceLink('');
+    setAcceptanceStatus(null);
+    try {
+      // WhatsApp já gera aceite automaticamente no backend; buscamos status em paralelo
+      const [waResp, accResp] = await Promise.all([
+        budgetsApi.generateWhatsApp(effectiveBudgetId),
+        fetch(`${BACKEND_URL}/api/budgets/${effectiveBudgetId}/acceptance/status`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('superdry_token')}` }
+        }).then(r => r.ok ? r.json() : null).catch(() => null),
+      ]);
+      setSendData(waResp.data);
+      if (accResp?.has_acceptance) {
+        setAcceptanceLink(accResp.link || '');
+        setAcceptanceStatus(accResp.status || 'PENDING');
+      }
+    } catch (e) {
+      setSendData({ error: 'Não foi possível gerar o texto. Verifique se o orçamento foi salvo.' });
+    } finally {
+      setSendLoading(false);
+    }
+  };
+
+  const copyAcceptanceLink = () => {
+    navigator.clipboard.writeText(acceptanceLink).then(() => {
+      setAcceptanceCopied(true);
+      setTimeout(() => setAcceptanceCopied(false), 2000);
+    });
+  };
+
+  const handleCopy = () => {
+    if (!sendData?.message) return;
+    navigator.clipboard.writeText(sendData.message).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   const [form, setForm] = useState({
     client_id: budget?.client_id || preselectedClient?.id || '',
     client_name: budget?.client_name || preselectedClient?.name || '',
@@ -810,6 +904,8 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
     internal_observations: budget?.internal_observations || '',
     budget_observations: budget?.budget_observations || '',
     items: budget?.items?.length ? budget.items : [],
+    discount_type: budget?.discount_type || 'fixed',   // "fixed" | "percent"
+    discount_value: budget?.discount_value || 0,
   });
   // If preselectedClient provided, skip to step 2 directly
   const [step, setStep] = useState(preselectedClient ? 2 : 1);
@@ -856,12 +952,22 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
     ).slice(0, 50);
   }, [clients, clientSearch]);
 
-  const totals = useMemo(() => ({
-    value: (form.items || []).reduce((acc, i) => acc + Number(i.total_value || 0), 0),
-    units: (form.items || []).length,
-    area: (form.items || []).reduce((acc, i) => acc + Number(i.area_m2 || 0), 0),
-    linear: (form.items || []).reduce((acc, i) => acc + Number(i.linear_meters || 0), 0),
-  }), [form.items]);
+  const totals = useMemo(() => {
+    const subtotal = (form.items || []).reduce((acc, i) => acc + Number(i.total_value || 0), 0);
+    const dv = Number(form.discount_value || 0);
+    const discountAmount = form.discount_type === 'percent'
+      ? Math.round(subtotal * dv / 100 * 100) / 100
+      : Math.min(dv, subtotal);
+    const finalValue = Math.max(subtotal - discountAmount, 0);
+    return {
+      subtotal,
+      discountAmount,
+      value: finalValue,
+      units: (form.items || []).length,
+      area: (form.items || []).reduce((acc, i) => acc + Number(i.area_m2 || 0), 0),
+      linear: (form.items || []).reduce((acc, i) => acc + Number(i.linear_meters || 0), 0),
+    };
+  }, [form.items, form.discount_type, form.discount_value]);
 
   // Condição de pagamento padrão = Cartão de Crédito, com parcelas pelo valor do
   // orçamento (até 200→2x, 300→3x, 400→4x, 500→5x, 600+→6x). Apenas sugestão:
@@ -979,12 +1085,15 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
         internal_observations: form.internal_observations,
         budget_observations: form.budget_observations,
         items: form.items,
+        discount_type: Number(form.discount_value || 0) > 0 ? form.discount_type : null,
+        discount_value: Number(form.discount_value || 0),
       };
       const r = isEdit
         ? await budgetsApi.update(budget.id, payload)
         : await budgetsApi.create(payload);
+      setSavedId(r.data.id);
       onSaved?.(r.data);
-      onClose?.();
+      // Não fecha o editor — usuário clica em Enviar ou fecha pelo X
     } catch (e) {
       setError(e.response?.data?.detail || 'Erro ao salvar orçamento.');
     } finally {
@@ -1004,7 +1113,7 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="bg-white w-full sm:max-w-3xl sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[96vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 sticky top-0 bg-white z-10">
+        <div className="flex items-center justify-between px-4 py-3 border-b-2 border-blue-600 sticky top-0 bg-white z-10">
           <div className="min-w-0">
             <h3 className="font-semibold text-gray-900 truncate">
               {isEdit ? `Editar Orçamento — ${budget.id}` : 'Novo Orçamento'}
@@ -1013,13 +1122,162 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
               {form.client_name ? `Cliente: ${form.client_name}` : 'Selecione o cliente para começar'}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {effectiveBudgetId && (
+              <button
+                onClick={openSendPanel}
+                title="Enviar para cliente"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg"
+              >
+                <Send className="w-3.5 h-3.5" />
+                Enviar
+              </button>
+            )}
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
+        {/* Painel "Enviar para cliente" */}
+        {sendPanel && (
+          <div className="absolute inset-0 z-20 bg-white flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 sticky top-0 bg-white">
+              <div>
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-green-600" /> Enviar para cliente
+                </h3>
+                <p className="text-xs text-gray-500">{form.client_name}</p>
+              </div>
+              <button onClick={() => setSendPanel(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {sendLoading && (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                </div>
+              )}
+              {sendData?.error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                  {sendData.error}
+                </div>
+              )}
+              {sendData?.message && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Texto do orçamento — copiar e colar no WhatsApp
+                    </label>
+                    <textarea
+                      readOnly
+                      value={sendData.message}
+                      rows={14}
+                      className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-gray-50 resize-none"
+                    />
+                  </div>
+                  {sendData.note && (
+                    <p className="text-[11px] text-gray-400 italic">{sendData.note}</p>
+                  )}
+                </>
+              )}
+            </div>
+            {!sendLoading && sendData && !sendData.error && (
+              <div className="px-4 py-3 border-t border-gray-100 space-y-2">
+                <button
+                  onClick={handleCopy}
+                  className="w-full py-2.5 border border-gray-300 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-gray-50"
+                >
+                  <Copy className="w-4 h-4" />
+                  {copied ? 'Copiado!' : 'Copiar texto'}
+                </button>
+                {sendData.whatsapp_url && (
+                  <a
+                    href={sendData.whatsapp_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 bg-green-500 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-green-600 block text-center"
+                  >
+                    <MessageSquare className="w-4 h-4 inline" /> Abrir WhatsApp
+                  </a>
+                )}
+                <a
+                  href={`${BACKEND_URL}/api/budgets/${effectiveBudgetId}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-blue-700 block text-center"
+                >
+                  <Download className="w-4 h-4 inline" /> Download PDF
+                </a>
+
+                {/* Aceite Virtual */}
+                {acceptanceLink && (
+                  <div className="border border-blue-100 rounded-lg p-3 space-y-2 bg-blue-50">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-blue-800 flex items-center gap-1">
+                        <Shield className="w-3.5 h-3.5" /> Aceite Virtual
+                      </p>
+                      {acceptanceStatus === 'ACCEPTED' ? (
+                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> Assinado
+                        </span>
+                      ) : (
+                        <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">
+                          Aguardando assinatura
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-blue-700">
+                      Link já incluído na mensagem do WhatsApp. Copie separadamente se necessário:
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        readOnly
+                        value={acceptanceLink}
+                        className="flex-1 text-[11px] border border-blue-200 rounded px-2 py-1 bg-white truncate"
+                      />
+                      <button
+                        onClick={copyAcceptanceLink}
+                        className="px-2 py-1 text-[11px] border border-blue-300 rounded bg-white hover:bg-blue-100 flex-shrink-0 text-blue-700"
+                      >
+                        {acceptanceCopied ? 'Copiado!' : <Copy className="w-3 h-3" />}
+                      </button>
+                    </div>
+                    {/* Confirmação manual — só para ADMIN quando ainda não assinado */}
+                    {currentUser?.role === 'ADMIN' && acceptanceStatus !== 'ACCEPTED' && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const token = localStorage.getItem('superdry_token');
+                            const resp = await fetch(`${BACKEND_URL}/api/budgets/${effectiveBudgetId}/acceptance/admin-confirm`, {
+                              method: 'POST',
+                              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ name: `Admin — ${currentUser.name || currentUser.username || 'Admin'}` })
+                            });
+                            if (resp.ok) {
+                              setAcceptanceStatus('ACCEPTED');
+                            } else {
+                              alert('Erro ao confirmar aceite.');
+                            }
+                          } catch (e) {
+                            alert('Erro: ' + e.message);
+                          }
+                        }}
+                        className="w-full mt-1 py-1.5 rounded text-[11px] font-semibold border border-orange-400 text-orange-700 hover:bg-orange-50 flex items-center justify-center gap-1"
+                      >
+                        ⚡ Confirmar manualmente (Admin)
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Stepper */}
-        <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex gap-2 overflow-x-auto">
+        <div className="px-4 py-3 border-b border-blue-100 bg-blue-50 flex gap-2 overflow-x-auto">
           {[
             { n: 1, label: 'Cliente', icon: UserIcon },
             { n: 2, label: `Itens (${form.items.length})`, icon: FileText },
@@ -1031,19 +1289,21 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
               <button
                 key={s.n}
                 onClick={() => setStep(s.n)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
-                  active ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200'
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap flex-1 justify-center transition ${
+                  active
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
-                {s.n}. {s.label}
+                <Icon className="w-4 h-4 shrink-0" />
+                <span>{s.n}. {s.label}</span>
               </button>
             );
           })}
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 bg-gray-50">
           {loadError && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex items-center justify-between gap-3">
               <span>{loadError}</span>
@@ -1263,6 +1523,34 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
               </div>
 
               <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Desconto</label>
+                <div className="flex gap-2 items-center">
+                  <select
+                    value={form.discount_type}
+                    onChange={(e) => setForm({ ...form, discount_type: e.target.value })}
+                    className="px-2 py-2.5 border border-gray-300 rounded-lg text-sm bg-white w-28 shrink-0"
+                  >
+                    <option value="fixed">R$ fixo</option>
+                    <option value="percent">% porcent.</option>
+                  </select>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder={form.discount_type === 'percent' ? '0' : '0.00'}
+                    value={form.discount_value || ''}
+                    onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
+                    className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+                {Number(form.discount_value || 0) > 0 && (
+                  <div className="mt-1.5 text-[11px] bg-amber-50 text-amber-700 border border-amber-200 rounded-md px-2 py-1.5">
+                    Desconto: -{fmtMoney(totals.discountAmount)} → Total final: <b>{fmtMoney(totals.value)}</b>
+                  </div>
+                )}
+              </div>
+
+              <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Observações do orçamento (cliente vê)</label>
                 <textarea
                   rows={3}
@@ -1322,8 +1610,10 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
                 {totals.area > 0 ? `${totals.area.toFixed(2)}m²` : totals.linear > 0 ? `${totals.linear.toFixed(2)}m` : '—'}
               </div>
             </div>
-            <div className="bg-emerald-600 text-white rounded-lg py-1.5">
-              <div className="text-[10px] uppercase opacity-90">Total</div>
+            <div className={`${totals.discountAmount > 0 ? 'bg-amber-500' : 'bg-emerald-600'} text-white rounded-lg py-1.5`}>
+              <div className="text-[10px] uppercase opacity-90">
+                {totals.discountAmount > 0 ? `- ${fmtMoney(totals.discountAmount)}` : 'Total'}
+              </div>
               <div className="text-sm font-bold">{fmtMoney(totals.value)}</div>
             </div>
           </div>
@@ -1346,14 +1636,25 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
                 Avançar
               </button>
             ) : (
-              <button
-                onClick={save}
-                disabled={saving}
-                className="flex-1 px-3 py-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {isEdit ? 'Salvar Alterações' : 'Criar Orçamento'}
-              </button>
+              <>
+                {effectiveBudgetId && (
+                  <button
+                    onClick={openSendPanel}
+                    className="flex-1 px-3 py-2.5 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm font-semibold flex items-center justify-center gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    Enviar
+                  </button>
+                )}
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="flex-1 px-3 py-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {effectiveBudgetId ? 'Salvar' : 'Criar Orçamento'}
+                </button>
+              </>
             )}
           </div>
         </div>

@@ -97,8 +97,8 @@ const MiniMap = ({
   }
 
   return (
-    <div className={`relative ${className}`}>
-      <div 
+    <div className={`relative ${className}`} style={{ isolation: 'isolate' }}>
+      <div
         ref={mapRef}
         style={{ height, width }}
         className="rounded-lg cursor-pointer hover:opacity-90 transition-opacity"

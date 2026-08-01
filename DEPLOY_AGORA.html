@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SuperDry — Deploy Pronto</title>
+<style>
+body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 20px; background: #f5f5f5; }
+.card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; border: 1px solid #e0e0e0; }
+h1 { color: #1F4E8C; margin-top: 0; }
+.step { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
+.num { background: #1F4E8C; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; font-size: 16px; }
+code { background: #1e1e1e; color: #d4d4d4; padding: 12px 16px; border-radius: 8px; display: block; font-size: 13px; white-space: pre-wrap; word-break: break-all; margin-top: 8px; }
+.tip { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px; border-radius: 4px; font-size: 13px; color: #2e7d32; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🚀 Deploy SuperDry — Pronto!</h1>
+  <p>Os arquivos <code style="display:inline;background:#f0f0f0;color:#333;padding:2px 6px;border-radius:4px;">deploy_superdry.tar.gz</code> e <code style="display:inline;background:#f0f0f0;color:#333;padding:2px 6px;border-radius:4px;">run_deploy.sh</code> já estão nesta pasta.</p>
+
+  <div class="step">
+    <div class="num">1</div>
+    <div>
+      <strong>Abra o Git Bash</strong> (clique direito na pasta → "Git Bash Here" ou procure no Menu Iniciar)
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">2</div>
+    <div>
+      <strong>Cole este comando</strong> e pressione Enter:
+      <code>cd ~/OneDrive/SuperDry-Atual-MIGRACAO && scp -i oracle-vm-key.key -o StrictHostKeyChecking=no deploy_superdry.tar.gz run_deploy.sh opc@148.116.108.43:~/ && ssh -i oracle-vm-key.key opc@148.116.108.43 "bash ~/run_deploy.sh"</code>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">3</div>
+    <div>
+      <strong>Aguarde ~2 minutos.</strong> No final aparecerá:<br>
+      <em>Deploy concluído! — http://sistema.lavesuperdry.com.br/</em>
+    </div>
+  </div>
+
+  <div class="tip">
+    ✅ <strong>O que vai ser deployado:</strong> Tela "Comunicação WhatsApp" (remarketing + reativação), botão "Enviar para cliente" nos orçamentos, e endpoints de marketing no servidor.
+  </div>
+</div>
+</body>
+</html>

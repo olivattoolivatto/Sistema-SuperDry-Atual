@@ -113,6 +113,7 @@ export const itemsApi = {
   receiptUrl: (id) => `${BACKEND_URL}/api/items/${id}/receipt`,
   pickupReceiptUrl: (id) => `${BACKEND_URL}/api/items/${id}/pickup-receipt`,
   whatsappReceipt: (id, type = 'receipt') => api.get(`/items/${id}/whatsapp-receipt`, { params: { doc_type: type } }),
+  multiReceipt: (item_ids) => api.post('/items/multi-receipt', { item_ids }, { responseType: 'blob' }),
   // Company Mode
   companyMode: () => api.get('/items/company-mode'),
   bulkStatus: (item_ids, status, notes = '') => api.post('/items/bulk-status', { item_ids, status, notes }),
@@ -251,14 +252,27 @@ export const financeEntriesApi = {
   delete: (id) => api.delete(`/finance/entries/${id}`),
   confirmTransfer: (id) => api.post(`/finance/entries/${id}/confirm-transfer`),
   rejectTransfer: (id) => api.post(`/finance/entries/${id}/reject-transfer`),
-  importStatement: (accountId, file) => {
+  previewStatement: (accountId, file) => {
     const form = new FormData();
     form.append('account_id', accountId);
     form.append('file', file);
-    return api.post('/finance/entries/import-statement', form, {
+    return api.post('/finance/entries/import-statement/preview', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  commitStatement: (accountId, sourceFilename, rows) => api.post('/finance/entries/import-statement/commit', {
+    account_id: accountId,
+    source_filename: sourceFilename,
+    rows,
+  }),
+  agendaSuggestions: (params) => api.get('/finance/entries/agenda-suggestions', { params }),
+  applyAgendaMatch: (id, data) => api.post(`/finance/entries/${id}/apply-agenda-match`, data),
+  clearAgendaMatch: (id) => api.post(`/finance/entries/${id}/clear-agenda-match`),
+};
+
+export const marketingApi = {
+  remarketing: (days = 7) => api.get('/marketing/remarketing', { params: { days } }),
+  reactivation: (days = 30) => api.get('/marketing/reactivation', { params: { days } }),
 };
 
 export default api;

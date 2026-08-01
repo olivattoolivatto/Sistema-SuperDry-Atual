@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import {
   Plus, Search, FileText, Loader2, Edit2, Trash2,
   Download, MessageCircle, AlertTriangle, ChevronDown, ChevronUp,
-  User, X, ArrowUpDown, ArrowUp, ArrowDown,
+  User, X, ArrowUpDown, ArrowUp, ArrowDown, Archive, CheckCircle, Clock, XCircle,
 } from 'lucide-react';
 import { budgetsApi, clientsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,13 +11,50 @@ import ItemDetailDrawer from './budgets/ItemDetailDrawer';
 import {
   STATUS_COLOR, PAYMENT_STATUS_COLOR, fmtMoney, normalize,
 } from './budgets/_constants';
-
 import { BACKEND_URL } from '../lib/backendUrl';
 
+// ── Status administrativo do orçamento ───────────────────────────────────────
+const BUDGET_STATUS_CONFIG = {
+  RASCUNHO:  { label: 'Rascunho',  color: 'bg-gray-100 text-gray-600' },
+  ENVIADO:   { label: 'Enviado',   color: 'bg-yellow-100 text-yellow-700' },
+  APROVADO:  { label: 'Aprovado',  color: 'bg-green-100 text-green-700' },
+  CANCELADO: { label: 'Cancelado', color: 'bg-red-100 text-red-600' },
+  ARQUIVADO: { label: 'Arquivado', color: 'bg-gray-200 text-gray-500' },
+};
+
+async function changeBudgetStatus(budgetId, newStatus) {
+  const token = localStorage.getItem('superdry_token');
+  const r = await fetch(`${BACKEND_URL}/api/budgets/${budgetId}/budget-status`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ budget_status: newStatus }),
+  });
+  if (!r.ok) {
+    let detail = 'Erro ao atualizar status';
+    try { const d = await r.json(); detail = d.detail || detail; } catch {}
+    throw new Error(`${r.status}: ${detail}`);
+  }
+  return r.json();
+}
+
 // ── Linha da tabela ───────────────────────────────────────────────────────────
-function BudgetRow({ budget, onEdit, onDelete, onItemClick, onPDF, onWhats }) {
+function BudgetRow({ budget, onEdit, onDelete, onItemClick, onPDF, onWhats, onStatusChanged, isAdmin }) {
   const [expanded, setExpanded] = useState(false);
+  const [changingStatus, setChangingStatus] = useState(false);
   const items = budget.items || [];
+
+  const budgetStatus = budget.budget_status || 'APROVADO'; // null = legado = aprovado
+  const statusCfg = BUDGET_STATUS_CONFIG[budgetStatus] || BUDGET_STATUS_CONFIG.APROVADO;
+
+  const handleStatusChange = async (newStatus) => {
+    setChangingStatus(true);
+    try {
+      await changeBudgetStatus(budget.id, newStatus);
+      if (onStatusChanged) onStatusChanged();
+    } catch (e) {
+      alert('Erro ao alterar status: ' + e.message);
+    } finally { setChangingStatus(false); }
+  };
   const paid   = items.reduce((a, i) => a + Number(i.paid_value || 0), 0);
   const total  = Number(budget.total_value || 0);
   const allPaid = items.length > 0 && items.every(i => ['PAGO','CORTESIA'].includes(i.payment_status));
@@ -61,6 +98,12 @@ function BudgetRow({ budget, onEdit, onDelete, onItemClick, onPDF, onWhats }) {
         <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-500">
           {new Date(budget.created_at).toLocaleDateString('pt-BR')}
         </td>
+        {/* Status */}
+        <td className="px-3 py-2.5 whitespace-nowrap">
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${statusCfg.color}`}>
+            {statusCfg.label}
+          </span>
+        </td>
         {/* Ações */}
         <td className="px-3 py-2.5 whitespace-nowrap">
           <div className="flex items-center gap-1">
@@ -76,6 +119,37 @@ function BudgetRow({ budget, onEdit, onDelete, onItemClick, onPDF, onWhats }) {
               className="p-1.5 rounded hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700">
               <MessageCircle className="w-3.5 h-3.5" />
             </button>
+            {/* Ações de status rápidas */}
+            {budgetStatus !== 'APROVADO' && budgetStatus !== 'ARQUIVADO' && (
+              <button
+                onClick={() => handleStatusChange('APROVADO')}
+                disabled={changingStatus}
+                title="Marcar como Aprovado"
+                className="p-1.5 rounded hover:bg-green-50 text-green-600 hover:text-green-700 disabled:opacity-40"
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {budgetStatus !== 'ARQUIVADO' && (
+              <button
+                onClick={() => handleStatusChange('ARQUIVADO')}
+                disabled={changingStatus}
+                title="Arquivar"
+                className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 disabled:opacity-40"
+              >
+                <Archive className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {budgetStatus === 'ARQUIVADO' && (
+              <button
+                onClick={() => handleStatusChange('APROVADO')}
+                disabled={changingStatus}
+                title="Restaurar"
+                className="p-1.5 rounded hover:bg-green-50 text-green-600 hover:text-green-700 disabled:opacity-40"
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button onClick={() => onDelete(budget)} title="Excluir"
               className="p-1.5 rounded hover:bg-rose-50 text-rose-500 hover:text-rose-700">
               <Trash2 className="w-3.5 h-3.5" />
@@ -287,6 +361,13 @@ function SmartSearchBar({ budgets, search, setSearch, onOpenBudget, onQuickCreat
   );
 }
 
+function getBudgetPayStatus(b) {
+  const items = b.items || [];
+  if (items.length > 0 && items.every(i => ['PAGO','CORTESIA'].includes(i.payment_status))) return 'PAGO';
+  if (items.some(i => (i.paid_value||0) > 0)) return 'PARCIAL';
+  return 'PENDENTE';
+}
+
 const SORT_COLS = {
   id:           (a, b) => a.id.localeCompare(b.id),
   client_name:  (a, b) => (a.client_name||'').localeCompare(b.client_name||''),
@@ -294,13 +375,7 @@ const SORT_COLS = {
   total_value:  (a, b) => (a.total_value||0) - (b.total_value||0),
   payment:      (a, b) => {
     const rank = s => s === 'PAGO' ? 0 : s === 'PARCIAL' ? 1 : 2;
-    const ps = b => {
-      const items = b.items || [];
-      if (items.every(i => ['PAGO','CORTESIA'].includes(i.payment_status))) return 'PAGO';
-      if (items.some(i => (i.paid_value||0) > 0)) return 'PARCIAL';
-      return 'PENDENTE';
-    };
-    return rank(ps(a)) - rank(ps(b));
+    return rank(getBudgetPayStatus(a)) - rank(getBudgetPayStatus(b));
   },
   created_at:   (a, b) => new Date(a.created_at) - new Date(b.created_at),
 };
@@ -332,7 +407,11 @@ export function Budgets() {
   const [quickRegisterName, setQuickRegisterName] = useState(null);
   const [preselectedClient, setPreselectedClient] = useState(null);
   const [loadError, setLoadError] = useState('');
+  const [statusTab, setStatusTab] = useState('ativos'); // ativos | aguardando | historico | todos
+  const [paymentFilter, setPaymentFilter] = useState('todos'); // todos | PENDENTE | PARCIAL | PAGO
+  const [migrating, setMigrating] = useState(false);
   const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
 
   const handleSort = (col) => setSort(s =>
     s.col === col ? { col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' }
@@ -354,7 +433,18 @@ export function Budgets() {
 
   const filtered = useMemo(() => {
     const q = normalize(search);
-    let list = !q ? [...budgets] : budgets.filter(b =>
+    // Filtro por aba de status
+    let list = budgets.filter(b => {
+      const st = b.budget_status || 'APROVADO'; // legado sem campo = aprovado
+      if (statusTab === 'ativos')     return st === 'APROVADO';
+      if (statusTab === 'aguardando') return st === 'RASCUNHO' || st === 'ENVIADO';
+      if (statusTab === 'historico')  return st === 'CANCELADO' || st === 'ARQUIVADO';
+      return true; // todos
+    });
+    // Filtro por pagamento
+    if (paymentFilter !== 'todos') list = list.filter(b => getBudgetPayStatus(b) === paymentFilter);
+    // Filtro de busca
+    if (q) list = list.filter(b =>
       normalize(b.id).includes(q) ||
       normalize(b.client_name || '').includes(q) ||
       (b.items || []).some(it => normalize(it.id).includes(q) || normalize(it.service_name || '').includes(q))
@@ -362,7 +452,32 @@ export function Budgets() {
     const fn = SORT_COLS[sort.col];
     if (fn) list.sort((a, b) => sort.dir === 'asc' ? fn(a, b) : fn(b, a));
     return list;
-  }, [budgets, search, sort]);
+  }, [budgets, search, sort, statusTab, paymentFilter]);
+
+  // Contagens para badges das abas
+  const tabCounts = useMemo(() => ({
+    ativos:     budgets.filter(b => (b.budget_status || 'APROVADO') === 'APROVADO').length,
+    aguardando: budgets.filter(b => ['RASCUNHO','ENVIADO'].includes(b.budget_status || 'APROVADO') && b.budget_status && b.budget_status !== 'APROVADO').length,
+    historico:  budgets.filter(b => ['CANCELADO','ARQUIVADO'].includes(b.budget_status)).length,
+    todos:      budgets.length,
+  }), [budgets]);
+
+  // Contagens de pagamento (sobre a lista já filtrada por status/busca, sem o filtro de pagamento)
+  const payCounts = useMemo(() => {
+    const base = budgets.filter(b => {
+      const st = b.budget_status || 'APROVADO';
+      if (statusTab === 'ativos')     return st === 'APROVADO';
+      if (statusTab === 'aguardando') return st === 'RASCUNHO' || st === 'ENVIADO';
+      if (statusTab === 'historico')  return st === 'CANCELADO' || st === 'ARQUIVADO';
+      return true;
+    });
+    return {
+      todos:    base.length,
+      PENDENTE: base.filter(b => getBudgetPayStatus(b) === 'PENDENTE').length,
+      PARCIAL:  base.filter(b => getBudgetPayStatus(b) === 'PARCIAL').length,
+      PAGO:     base.filter(b => getBudgetPayStatus(b) === 'PAGO').length,
+    };
+  }, [budgets, statusTab]);
 
   const openNew = () => { setPreselectedClient(null); setEditing(null); setEditorOpen(true); };
   const openEdit = (b) => { setPreselectedClient(null); setEditing(b); setEditorOpen(true); };
@@ -423,6 +538,40 @@ export function Budgets() {
     } catch (e) { alert('Erro ao gerar mensagem WhatsApp'); }
   };
 
+  const runMigration = async () => {
+    if (!window.confirm('Definir status APROVADO em todos os orçamentos sem status? (executar só uma vez)')) return;
+    setMigrating(true);
+    try {
+      const token = localStorage.getItem('superdry_token');
+      const r = await fetch(`${BACKEND_URL}/api/budgets/migrate-status`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await r.json();
+      alert(data.message || 'Migração concluída');
+      await load();
+    } catch (e) {
+      alert('Erro na migração: ' + e.message);
+    } finally { setMigrating(false); }
+  };
+
+  const runPartnerMigration = async () => {
+    if (!window.confirm('Corrigir execution_mode dos itens de parceiro existentes?\nIsso os remove da tela de Rotas. Executar só uma vez.')) return;
+    setMigrating(true);
+    try {
+      const token = localStorage.getItem('superdry_token');
+      const r = await fetch(`${BACKEND_URL}/api/budgets/migrate-partner-execution-mode`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await r.json();
+      alert(data.message || 'Migração de parceiros concluída');
+      await load();
+    } catch (e) {
+      alert('Erro na migração de parceiros: ' + e.message);
+    } finally { setMigrating(false); }
+  };
+
   return (
     <div className="space-y-3">
       {/* Header / busca */}
@@ -443,8 +592,81 @@ export function Budgets() {
             <Plus className="w-4 h-4" /> Novo Orçamento
           </button>
         </div>
-        <div className="mt-2 text-xs text-gray-500">
-          {search ? `${filtered.length} de ${budgets.length} orçamento(s)` : `${budgets.length} orçamento(s)`}
+
+        {/* Abas de status */}
+        <div className="mt-3 flex gap-1 overflow-x-auto">
+          {[
+            { key: 'ativos',     label: 'Ativos',     icon: <CheckCircle className="w-3 h-3" /> },
+            { key: 'aguardando', label: 'Aguardando',  icon: <Clock className="w-3 h-3" /> },
+            { key: 'historico',  label: 'Histórico',   icon: <Archive className="w-3 h-3" /> },
+            { key: 'todos',      label: 'Todos',       icon: <FileText className="w-3 h-3" /> },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => { setStatusTab(tab.key); setPaymentFilter('todos'); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                statusTab === tab.key
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+              <span className={`text-[10px] px-1 rounded-full ${statusTab === tab.key ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                {tabCounts[tab.key]}
+              </span>
+            </button>
+          ))}
+          {isAdmin && (
+            <div className="ml-auto flex gap-1">
+              <button
+                onClick={runMigration}
+                disabled={migrating}
+                title="Executar uma vez após deploy para definir status nos orçamentos existentes"
+                className="px-2 py-1 text-[10px] text-gray-400 hover:text-gray-600 border border-dashed border-gray-300 rounded-lg disabled:opacity-50"
+              >
+                {migrating ? 'Migrando…' : '⚙ Migrar status'}
+              </button>
+              <button
+                onClick={runPartnerMigration}
+                disabled={migrating}
+                title="Corrigir itens de parceiro antigos — remove da tela de Rotas. Executar só uma vez."
+                className="px-2 py-1 text-[10px] text-orange-400 hover:text-orange-600 border border-dashed border-orange-300 rounded-lg disabled:opacity-50"
+              >
+                {migrating ? 'Migrando…' : '🤝 Migrar parceiros'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Filtro de pagamento */}
+        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mr-0.5">Pagamento:</span>
+          {[
+            { key: 'todos',    label: 'Todos',    cls: 'bg-gray-100 text-gray-600 hover:bg-gray-200',             active: 'bg-gray-600 text-white' },
+            { key: 'PENDENTE', label: 'Pendente', cls: 'bg-gray-100 text-gray-600 hover:bg-gray-200',             active: 'bg-gray-500 text-white' },
+            { key: 'PARCIAL',  label: 'Parcial',  cls: 'bg-sky-50 text-sky-700 hover:bg-sky-100',                active: 'bg-sky-600 text-white' },
+            { key: 'PAGO',     label: 'Pago',     cls: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',    active: 'bg-emerald-600 text-white' },
+          ].map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => setPaymentFilter(opt.key)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+                paymentFilter === opt.key ? opt.active : opt.cls
+              }`}
+            >
+              {opt.label}
+              <span className={`text-[10px] px-1 rounded-full ${
+                paymentFilter === opt.key ? 'bg-white/20 text-white' : 'bg-white/60 text-gray-500'
+              }`}>
+                {payCounts[opt.key]}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-1.5 text-xs text-gray-500">
+          {filtered.length} orçamento(s){paymentFilter !== 'todos' ? ` · pagamento: ${paymentFilter}` : ''}{search ? ` · busca: "${search}"` : ''}
         </div>
       </div>
 
@@ -482,6 +704,7 @@ export function Budgets() {
                   <SortHeader col="total_value" label="Valor"     sort={sort} onSort={handleSort} />
                   <SortHeader col="payment"     label="Pagamento" sort={sort} onSort={handleSort} />
                   <SortHeader col="created_at"  label="Data"      sort={sort} onSort={handleSort} />
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                   <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Ações</th>
                 </tr>
               </thead>
@@ -495,6 +718,8 @@ export function Budgets() {
                     onItemClick={setItemDetailId}
                     onPDF={handlePDF}
                     onWhats={handleWhats}
+                    onStatusChanged={load}
+                    isAdmin={isAdmin}
                   />
                 ))}
               </tbody>
@@ -566,7 +791,7 @@ export function Budgets() {
           budget={editing}
           preselectedClient={preselectedClient}
           onClose={() => { setEditorOpen(false); setPreselectedClient(null); }}
-          onSaved={() => { setEditorOpen(false); setPreselectedClient(null); load(); }}
+          onSaved={() => { load(); }}
         />
       )}
     </div>

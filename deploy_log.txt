@@ -1,0 +1,10 @@
+=== SuperDry Deploy Push === 
+warning: in the working copy of 'backend/server.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/automation/AutomationPage.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'setup_infinitepay.sh', LF will be replaced by CRLF the next time Git touches it
+[main a544ce0] feat: prompt ollama pedidos curtos + UI automacao + modulos permissao + script infinitepay
+ 4 files changed, 76 insertions(+), 22 deletions(-)
+ create mode 100644 setup_infinitepay.sh
+To https://github.com/olivattoolivatto/SuperDry-Atual-MIGRACAO.git
+   c9e8e0e..a544ce0  main -> main
+=== Concluido === 

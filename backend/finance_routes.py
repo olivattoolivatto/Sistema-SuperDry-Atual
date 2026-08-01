@@ -15,12 +15,13 @@ requisição, não de import) funciona sem problema.
 """
 import re
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 import server  # import tardio proposital — ver docstring acima
 import finance_import
+import finance_agenda_reconcile
 from finance_manager import (
     AccountType,
     CATEGORY_TREE,
@@ -737,15 +738,16 @@ async def reject_transfer(entry_id: str, current_user=Depends(server.get_current
     return {"ok": True, "rejected_entry_ids": ids_to_reject}
 
 
-@finance_router.post("/entries/import-statement")
-async def import_statement(
+@finance_router.post("/entries/import-statement/preview")
+async def import_statement_preview(
     account_id: str = Form(...),
     file: UploadFile = File(...),
     current_user=Depends(server.get_current_user),
 ):
-    """Importa um extrato OFX/QFX/CSV manualmente (fallback do fluxo automático
-    por e-mail — ver email_statement_poller.py e GESTOR_FINANCEIRO.md §18).
-    Cria 1 financial_entries por transação nova, com dedupe."""
+    """Lê o extrato (OFX/QFX/CSV/PDF) e devolve a lista de transações detectadas
+    para revisão na tela, SEM gravar nada no banco ainda — ver finance_import.
+    preview_transactions(). O usuário revisa/edita cada linha no frontend e
+    confirma via POST /entries/import-statement/commit."""
     account = await server.db.financial_accounts.find_one({"id": account_id})
     if not account:
         raise HTTPException(status_code=400, detail="Conta não encontrada.")
@@ -760,5 +762,89 @@ async def import_statement(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Falha ao ler o arquivo: {e}")
 
-    result = await finance_import.import_transactions(account_id, transactions, file.filename)
+    result = await finance_import.preview_transactions(account_id, transactions)
+    result["source_filename"] = file.filename
     return result
+
+
+@finance_router.post("/entries/import-statement/commit")
+async def import_statement_commit(payload: Dict[str, Any], current_user=Depends(server.get_current_user)):
+    """Confirma a importação: recebe de volta as linhas retornadas pelo /preview
+    (já revisadas/editadas pelo usuário na tela) e grava como financial_entries.
+    Body esperado: { account_id, source_filename, rows: [...] }."""
+    account_id = payload.get("account_id")
+    rows: List[Dict[str, Any]] = payload.get("rows") or []
+    source_filename = payload.get("source_filename") or ""
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id é obrigatório.")
+    account = await server.db.financial_accounts.find_one({"id": account_id})
+    if not account:
+        raise HTTPException(status_code=400, detail="Conta não encontrada.")
+
+    result = await finance_import.commit_transactions(account_id, rows, source_filename)
+    return result
+
+
+# ── Conciliação com a Agenda (Google Calendar) ────────────────────────────────
+# Ver finance_agenda_reconcile.py para o algoritmo de casamento (valor+data do
+# "registro de pagamento" no corpo do evento — convenção documentada em
+# memory/AGENDA_PADRAO_EVENTOS.md §3/§4c).
+@finance_router.get("/entries/agenda-suggestions")
+async def agenda_suggestions(
+    start_date: str,
+    end_date: str,
+    scope: Optional[str] = None,
+    current_user=Depends(server.get_current_user),
+):
+    """Sugestões de conciliação entre lançamentos e eventos da Agenda no
+    período informado. Não grava nada — o usuário confirma cada sugestão via
+    POST /entries/{id}/apply-agenda-match."""
+    query: Dict[str, Any] = {"date": {"$gte": start_date, "$lte": end_date}}
+    if scope:
+        _check_scope(scope)
+        query["scope"] = scope
+    entries = await server.db.financial_entries.find(query, {"_id": 0}).to_list(2000)
+
+    try:
+        events_resp = await server.get_all_calendar_events(start_date, end_date)
+    except HTTPException as e:
+        # Google Calendar não autenticado, etc. — devolve a mensagem original
+        # em vez de quebrar a tela do Gestor Financeiro.
+        raise HTTPException(status_code=400, detail=f"Agenda indisponível: {e.detail}")
+    events = events_resp.get("events", [])
+
+    suggestions = finance_agenda_reconcile.suggest_matches(entries, events)
+    return {"suggestions": suggestions, "entries_checked": len(entries), "events_checked": len(events)}
+
+
+@finance_router.post("/entries/{entry_id}/apply-agenda-match")
+async def apply_agenda_match(entry_id: str, payload: Dict[str, Any], current_user=Depends(server.get_current_user)):
+    """Confirma manualmente uma sugestão de conciliação com a Agenda: grava o
+    título do evento como referência no lançamento (`agenda_event_title`)."""
+    event_title = payload.get("event_title")
+    event_id = payload.get("event_id")
+    if not event_title:
+        raise HTTPException(status_code=400, detail="event_title é obrigatório.")
+    existing = await server.db.financial_entries.find_one({"id": entry_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
+
+    await server.db.financial_entries.update_one(
+        {"id": entry_id},
+        {"$set": {"agenda_event_id": event_id, "agenda_event_title": event_title}},
+    )
+    return await server.db.financial_entries.find_one({"id": entry_id}, {"_id": 0})
+
+
+@finance_router.post("/entries/{entry_id}/clear-agenda-match")
+async def clear_agenda_match(entry_id: str, current_user=Depends(server.get_current_user)):
+    """Desfaz uma conciliação de agenda confirmada por engano."""
+    existing = await server.db.financial_entries.find_one({"id": entry_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
+
+    await server.db.financial_entries.update_one(
+        {"id": entry_id},
+        {"$set": {"agenda_event_id": None, "agenda_event_title": None}},
+    )
+    return await server.db.financial_entries.find_one({"id": entry_id}, {"_id": 0})

@@ -225,26 +225,28 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     category: 'ESTOFADOS',
-    service_type: '',
+    service_type: SERVICE_TYPES['ESTOFADOS'][0],
     measure_type: 'UNITARIO',
     execution_location: 'RETIRADA',
-    cost_price: 0,
-    sale_price: 0,
+    cost_price: '',
+    sale_price: '',
     default_service_status: 'RETIRAR'
   });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (service) {
-      // Extrair apenas os campos necessários para o formulário
+      const cat = service.category || 'ESTOFADOS';
+      // Se o service_type vem vazio (bug de cadastro anterior), usa o primeiro da categoria
+      const stype = service.service_type || SERVICE_TYPES[cat]?.[0] || '';
       setFormData({
         name: service.name || '',
-        category: service.category || 'ESTOFADOS',
-        service_type: service.service_type || '',
+        category: cat,
+        service_type: stype,
         measure_type: service.measure_type || 'UNITARIO',
         execution_location: service.execution_location || 'RETIRADA',
-        cost_price: service.cost_price || 0,
-        sale_price: service.sale_price || 0,
+        cost_price: service.cost_price != null ? String(service.cost_price) : '',
+        sale_price: service.sale_price != null ? String(service.sale_price) : '',
         default_service_status: service.default_service_status || 'RETIRAR'
       });
     }
@@ -252,10 +254,20 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name.includes('price') ? parseFloat(value) || 0 : value
-    }));
+    if (name.includes('price')) {
+      // Aceita dígitos, vírgula e ponto — mantém como string durante digitação
+      // para não travar o campo em zero. Converte no blur/submit.
+      const sanitized = value.replace(/[^0-9.,]/g, '');
+      setFormData(prev => ({ ...prev, [name]: sanitized }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  // Converte string com vírgula ou ponto em float para submissão
+  const parsePrice = (v) => {
+    if (v === '' || v == null) return 0;
+    return parseFloat(String(v).replace(',', '.')) || 0;
   };
 
   const handleCategoryChange = (e) => {
@@ -271,7 +283,11 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await onSave(formData);
+      await onSave({
+        ...formData,
+        cost_price: parsePrice(formData.cost_price),
+        sale_price: parsePrice(formData.sale_price),
+      });
     } finally {
       setLoading(false);
     }
@@ -401,14 +417,14 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
                 Valor de Custo (R$) *
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 name="cost_price"
                 value={formData.cost_price}
                 onChange={handleInputChange}
-                min="0"
-                step="0.01"
+                placeholder="0,00"
                 required
-                onFocus={(e) => e.target.select()} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -417,14 +433,14 @@ const ServiceForm = ({ service, onSave, onCancel }) => {
                 Valor de Venda (R$) *
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 name="sale_price"
                 value={formData.sale_price}
                 onChange={handleInputChange}
-                min="0"
-                step="0.01"
+                placeholder="0,00"
                 required
-                onFocus={(e) => e.target.select()} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>

@@ -17,7 +17,10 @@ import { Agenda } from "./pages/Agenda";
 import { Reports } from "./pages/Reports";
 import TechnicianMode from "./pages/TechnicianMode";
 import { FinanceManager } from "./pages/finance/FinanceManager";
+import { ComunicacaoWhatsApp } from "./pages/ComunicacaoWhatsApp";
 import { AutomationPage } from "./pages/automation/AutomationPage";
+import AcceptancePage from "./pages/AcceptancePage";
+import PhotoGalleryPage from "./pages/PhotoGalleryPage";
 import { Toaster } from "./components/ui/sonner";
 import "./App.css";
 
@@ -54,7 +57,7 @@ function ProtectedShell() {
           <Route path="/system-config" element={<SystemConfig />} />
           <Route path="/agenda" element={<Agenda />} />
           <Route path="/technician" element={<TechnicianMode />} />
-          <Route path="/whatsapp" element={<Placeholder title="WhatsApp" />} />
+          <Route path="/whatsapp" element={<ComunicacaoWhatsApp />} />
           <Route path="/financial" element={<Financial />} />
           <Route path="/automations" element={<Automations />} />
           <Route path="/automation-ai" element={<AutomationPage />} />
@@ -75,6 +78,9 @@ function App() {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<LoginGate />} />
+            {/* Rotas públicas — sem autenticação */}
+            <Route path="/aceite/:token" element={<AcceptancePage />} />
+            <Route path="/galeria/:token" element={<PhotoGalleryPage />} />
             <Route path="/*" element={<ProtectedShell />} />
           </Routes>
         </AuthProvider>

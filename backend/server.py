@@ -29,6 +29,7 @@ import aiofiles
 import re
 import requests
 import math
+import unicodedata
 from typing import Tuple
 from PIL import Image as PILImage
 from reportlab.lib import colors
@@ -87,6 +88,18 @@ db = client[os.environ['DB_NAME']]
 # Google Maps client
 GOOGLE_MAPS_KEY = "AIzaSyCh2nGE77H8Iru2hMn5byQ4LJAdzKScKjY"
 gmaps = googlemaps.Client(key=GOOGLE_MAPS_KEY)
+
+# Condensa o texto de risco para a mensagem do WhatsApp (primeira frase, max 200 chars)
+def _condense_risk(text: str, max_len: int = 200) -> str:
+    if not text:
+        return ""
+    text = text.strip()
+    # Pega até o primeiro ponto final, exclamação, interrogação ou quebra de linha
+    m = re.search(r'[.!?\n]', text[:max_len + 30])
+    snippet = text[:m.start()].strip() if m else text[:max_len].strip()
+    if len(snippet) > max_len:
+        snippet = snippet[:max_len - 3] + '...'
+    return snippet
 
 # Utility functions for text formatting
 def format_whatsapp_text(text: str) -> str:
@@ -457,6 +470,12 @@ class Budget(BaseModel):
     suggested_payment_method: Optional[str] = "CREDITO"
     suggested_installments: Optional[int] = None
     payment_status: Optional[str] = "PENDENTE"
+    # Status administrativo do orçamento (ciclo comercial, independente dos itens)
+    # RASCUNHO → ENVIADO → APROVADO → CANCELADO / ARQUIVADO
+    # EM_EXECUCAO e CONCLUIDO são derivados dos itens (calculados, não gravados)
+    budget_status: Optional[str] = "RASCUNHO"
+    budget_status_updated_at: Optional[datetime] = None
+    budget_status_updated_by: Optional[str] = None
     source: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -1013,6 +1032,8 @@ class BudgetCreate(BaseModel):
     internal_observations: Optional[str] = None
     budget_observations: Optional[str] = None
     items: Optional[List[dict]] = []
+    discount_type: Optional[str] = None    # "fixed" | "percent"
+    discount_value: Optional[float] = 0.0  # valor do desconto (R$ ou %)
 
 class DashboardSummary(BaseModel):
     pending_routes: int
@@ -1427,21 +1448,28 @@ async def delete_client(
 async def create_service(service_data: ServiceCreate):
     """Criar um novo serviço"""
     try:
-        # Generate sequential ID
-        last_service = await db.services.find_one(sort=[("created_at", -1)])
-        if last_service:
-            last_id_num = int(last_service["id"].split("-")[1])
-            new_id_num = last_id_num + 1
+        # Generate sequential ID: busca o maior número já usado, não apenas o último inserido
+        # Isso evita colisão quando o created_at mais recente não é o de maior ID
+        all_services = await db.services.find(
+            {"id": {"$regex": r"^SRV-\d+$"}}, {"id": 1}
+        ).to_list(length=None)
+        if all_services:
+            max_num = max(int(s["id"].split("-")[1]) for s in all_services if s.get("id", "").startswith("SRV-"))
+            new_id_num = max_num + 1
         else:
             new_id_num = 1
-        
+
+        # Garante unicidade (igual ao endpoint de clientes)
+        while await db.services.find_one({"id": f"SRV-{str(new_id_num).zfill(4)}"}):
+            new_id_num += 1
+
         service_dict = service_data.dict()
         service_dict["id"] = f"SRV-{str(new_id_num).zfill(4)}"
         service_dict["created_at"] = datetime.utcnow()
         service_dict["updated_at"] = datetime.utcnow()
-        
+
         service = Service(**service_dict)
-        
+
         await db.services.insert_one(service.dict())
         return service
     except Exception as e:
@@ -2611,16 +2639,28 @@ def compute_net(gross, fee_pct) -> dict:
     return {"fee_pct": pct, "fee_amount": fee, "net_value": round(gross - fee, 2)}
 
 
-def calc_budget_totals(items: List[dict]) -> dict:
-    total_value = sum(float(i.get("total_value", 0) or 0) for i in items)
+def calc_budget_totals(items: List[dict], discount_type: str = None, discount_value: float = 0.0) -> dict:
+    subtotal = sum(float(i.get("total_value", 0) or 0) for i in items)
+    dv = float(discount_value or 0)
+    if discount_type == "percent":
+        discount_amount = round(subtotal * dv / 100, 2)
+    elif discount_type == "fixed":
+        discount_amount = round(min(dv, subtotal), 2)
+    else:
+        discount_amount = 0.0
+    final_value = round(max(subtotal - discount_amount, 0), 2)
     return {
-        "total_value": total_value,
+        "subtotal_value": subtotal,
+        "discount_type": discount_type or None,
+        "discount_value": dv if discount_type else 0.0,
+        "discount_amount": discount_amount,
+        "total_value": final_value,          # total_value = valor final (com desconto)
         "total_area_m2": sum(float(i.get("area_m2", 0) or 0) for i in items),
         "total_linear_meters": sum(float(i.get("linear_meters", 0) or 0) for i in items),
         "total_units": len(items),
         # Condição de pagamento padrão sugerida (não vincula o pagamento real)
         "suggested_payment_method": "CREDITO",
-        "suggested_installments": suggest_credit_installments(total_value),
+        "suggested_installments": suggest_credit_installments(final_value),
     }
 
 
@@ -2664,7 +2704,11 @@ async def create_budget(
             enriched = await enrich_budget_item(item_data, new_budget_id, client, current_user, is_new=True)
             processed_items.append(enriched)
         budget_dict["items"] = processed_items
-        budget_dict.update(calc_budget_totals(processed_items))
+        budget_dict.update(calc_budget_totals(
+            processed_items,
+            discount_type=budget_data.discount_type,
+            discount_value=budget_data.discount_value or 0.0,
+        ))
 
         await db.budgets.insert_one(budget_dict)
         await log_audit("budget", new_budget_id, "CREATE", current_user, {
@@ -2776,7 +2820,11 @@ async def update_budget(
             processed_items.append(enriched)
 
         update_data["items"] = processed_items
-        update_data.update(calc_budget_totals(processed_items))
+        update_data.update(calc_budget_totals(
+            processed_items,
+            discount_type=budget_data.discount_type,
+            discount_value=budget_data.discount_value or 0.0,
+        ))
 
         await db.budgets.update_one({"id": budget_id}, {"$set": update_data})
         await log_audit("budget", budget_id, "UPDATE", current_user, {
@@ -2862,6 +2910,106 @@ async def cleanup_automation_measures(current_user: UserPublic = Depends(get_cur
     r = await db.budgets.delete_many({"source": "AUTOMATION_MEASURES"})
     return {"message": f"{r.deleted_count} orçamento(s) de automação removidos. Clientes preservados."}
 
+@api_router.put("/budgets/{budget_id}/budget-status")
+async def update_budget_status(
+    budget_id: str,
+    body: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Atualiza o status administrativo do orçamento.
+    Valores válidos: RASCUNHO, ENVIADO, APROVADO, CANCELADO, ARQUIVADO
+    """
+    VALID_STATUSES = {"RASCUNHO", "ENVIADO", "APROVADO", "CANCELADO", "ARQUIVADO"}
+    new_status = (body.get("budget_status") or "").upper()
+    if new_status not in VALID_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Status inválido. Use: {', '.join(VALID_STATUSES)}")
+
+    budget = await db.budgets.find_one({"id": budget_id})
+    if not budget:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado")
+
+    now = datetime.utcnow()
+    try:
+        await db.budgets.update_one(
+            {"id": budget_id},
+            {"$set": {
+                "budget_status": new_status,
+                "budget_status_updated_at": now,
+                "budget_status_updated_by": current_user.name or current_user.username or "admin",
+                "updated_at": now,
+            }}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar no banco: {str(e)}")
+
+    try:
+        await log_audit("budget", budget_id, "STATUS_CHANGED", current_user, {
+            "from": budget.get("budget_status", "RASCUNHO"),
+            "to": new_status,
+        })
+    except Exception:
+        pass  # auditoria não pode derrubar a operação principal
+
+    return {"success": True, "budget_id": budget_id, "budget_status": new_status}
+
+
+@api_router.post("/budgets/migrate-status")
+async def migrate_budget_statuses(current_user: UserPublic = Depends(get_current_user)):
+    """Admin — define budget_status='APROVADO' em todos os orçamentos que ainda não têm o campo.
+    Executar uma única vez após o deploy desta versão.
+    """
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Apenas administradores")
+
+    result = await db.budgets.update_many(
+        {"budget_status": {"$exists": False}},
+        {"$set": {"budget_status": "APROVADO", "budget_status_updated_at": datetime.utcnow(), "budget_status_updated_by": "migration"}}
+    )
+    # Também cobre documentos com budget_status=null
+    result2 = await db.budgets.update_many(
+        {"budget_status": None},
+        {"$set": {"budget_status": "APROVADO", "budget_status_updated_at": datetime.utcnow(), "budget_status_updated_by": "migration"}}
+    )
+    total = result.modified_count + result2.modified_count
+    return {"success": True, "migrated": total, "message": f"{total} orçamento(s) receberam status APROVADO"}
+
+
+@api_router.post("/budgets/migrate-partner-execution-mode")
+async def migrate_partner_execution_mode(current_user: UserPublic = Depends(get_current_user)):
+    """Admin — corrige execution_mode de itens de parceiro criados antes do deploy 2025-07.
+    Itens cujo service_id está no mapeamento de parceiros devem ter execution_mode=CLIENTE_TROUXE
+    para não aparecer na tela de rotas.
+    """
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Apenas administradores")
+
+    partner_service_ids: list = []
+    for sq, sr in _PARTNER_SERVICE_MAP.values():
+        partner_service_ids.append(sq)
+        partner_service_ids.append(sr)
+
+    result = await db.budgets.update_many(
+        {"items": {"$elemMatch": {
+            "service_id": {"$in": partner_service_ids},
+            "execution_mode": {"$ne": "CLIENTE_TROUXE"},
+        }}},
+        {"$set": {
+            "items.$[elem].execution_mode": "CLIENTE_TROUXE",
+            "items.$[elem].is_partner_item": True,
+            "items.$[elem].updated_at": datetime.utcnow(),
+        }},
+        array_filters=[{
+            "elem.service_id": {"$in": partner_service_ids},
+            "elem.execution_mode": {"$ne": "CLIENTE_TROUXE"},
+        }],
+    )
+    return {
+        "success": True,
+        "budgets_touched": result.modified_count,
+        "message": f"{result.modified_count} orçamento(s) com itens de parceiro corrigidos",
+    }
+
+
 @api_router.delete("/budgets/{budget_id}")
 async def delete_budget(budget_id: str, current_user: UserPublic = Depends(get_current_user)):
     """Excluir orçamento (bloqueia se algum item já está em rota ou executado)."""
@@ -2917,45 +3065,109 @@ async def generate_whatsapp_message(budget_id: str):
         # Add items
         for item in budget.get('items', []):
             item_line = f"- {item.get('service_name', 'N/A')}"
-            
+
+            # Safe float conversion (campos podem ser None no banco)
+            area_m2       = float(item.get('area_m2')       or 0)
+            linear_meters = float(item.get('linear_meters') or 0)
+
             # Add measurements based on service type
-            if item.get('area_m2', 0) > 0:
-                if item.get('diameter'):
-                    item_line += f" - Ø{item.get('diameter'):.1f}m - {item.get('area_m2'):.1f} m²"
-                elif item.get('width') and item.get('height'):
-                    item_line += f" - {item.get('width'):.1f} x {item.get('height'):.1f} - {item.get('area_m2'):.1f} m²"
+            if area_m2 > 0:
+                diameter = item.get('diameter')
+                width    = item.get('width')
+                height   = item.get('height')
+                if diameter:
+                    item_line += f" - Ø{float(diameter):.1f}m - {area_m2:.1f} m²"
+                elif width and height:
+                    item_line += f" - {float(width):.1f} x {float(height):.1f} - {area_m2:.1f} m²"
                 else:
-                    item_line += f" - {item.get('area_m2'):.1f} m²"
-            elif item.get('linear_meters', 0) > 0:
-                if item.get('fabric_folds') and item.get('fabric_per_fold'):
-                    item_line += f" - {item.get('fabric_folds'):.0f} dobras x {item.get('fabric_per_fold'):.0f}cm - {item.get('linear_meters'):.1f}m lineares"
+                    item_line += f" - {area_m2:.1f} m²"
+            elif linear_meters > 0:
+                ff = item.get('fabric_folds')
+                fp = item.get('fabric_per_fold')
+                if ff and fp:
+                    item_line += f" - {float(ff):.0f} dobras x {float(fp):.0f}cm - {linear_meters:.1f}m lineares"
                 else:
-                    item_line += f" - {item.get('linear_meters'):.1f}m lineares"
+                    item_line += f" - {linear_meters:.1f}m lineares"
             else:
-                quantity = item.get('quantity', 1)
+                quantity = float(item.get('quantity') or 1)
                 item_line += f" - {quantity:.0f} unid." if quantity > 1 else " - 1 unid."
-            
-            item_line += f" - R$ {item.get('total_value', 0):.2f}"
+
+            item_line += f" - R$ {float(item.get('total_value') or 0):.2f}"
             message += f"\n_{item_line}_"
         
-        # Add total
+        # Add desconto + total
+        _disc_amt = float(budget.get("discount_amount") or 0)
+        _subtotal = float(budget.get("subtotal_value") or budget.get("total_value", 0))
+        if _disc_amt > 0:
+            _disc_type = budget.get("discount_type", "fixed")
+            _disc_val  = float(budget.get("discount_value") or 0)
+            _disc_label = f"{_disc_val:.0f}%" if _disc_type == "percent" else f"R$ {_disc_val:.2f}"
+            message += f"\n\n*Subtotal:* R$ {_subtotal:.2f}"
+            message += f"\n*Desconto ({_disc_label}):* -R$ {_disc_amt:.2f}"
         message += f"\n\n*VALOR TOTAL:* R$ {budget.get('total_value', 0):.2f}"
         
-        # Link público do PDF (servido pelo backend via Tailscale Funnel ou servidor de produção)
+        # Avisos condensados por categoria (extraídos do BudgetConfig)
+        budget_cfg = await db.budget_config.find_one({}) or {}
+        _CAT_TO_RISK_WA = {
+            'ESTOFADOS':                    ('risks_estofados',              '🛋️ Estofados'),
+            'COLCHOES':                     ('risks_colchoes',               '🛏️ Colchões'),
+            'BOX':                          ('risks_box',                    '🛏️ Box'),
+            'TAPETES':                      ('risks_tapetes',                '🗞️ Tapetes'),
+            'CARPETES_E_TAPETES_NO_LOCAL':  ('risks_carpetes_tapetes_local', '🧹 Carpetes/local'),
+            'CORTINAS':                     ('risks_cortinas',               '📜 Cortinas'),
+            'PERSIANAS':                    ('risks_persianas',              '🪟 Persianas'),
+            'ITENS_INFANTIS':               ('risks_itens_infantis',         '🛒 Itens Infantis'),
+            'VEICULOS':                     ('risks_veiculos',               '🚗 Veículos'),
+            'IMPERMEABILIZACAO':            ('risks_impermeabilizacao',      '💦 Impermeabilização'),
+            'OUTROS_ITENS':                 ('risks_outros_itens',           '📦 Outros'),
+        }
+        cats_seen = {itm.get('service_category') for itm in budget.get('items', []) if itm.get('service_category')}
+        risk_lines = []
+        for cat in sorted(cats_seen):
+            if cat in _CAT_TO_RISK_WA:
+                rk, label = _CAT_TO_RISK_WA[cat]
+                condensed = _condense_risk(budget_cfg.get(rk, '') or '')
+                if condensed:
+                    risk_lines.append(f"⚠️ *{label}:* _{condensed}_")
+        if risk_lines:
+            message += "\n\n*⚠️ Avisos importantes:*\n" + '\n'.join(risk_lines)
+
+        # Link público do PDF + aceite virtual
         sys_cfg = await db.system_config.find_one({}) or {}
         public_url = (
             os.environ.get("PUBLIC_WEBHOOK_URL", "")
             .replace("/api/webhooks/payment", "")
             .strip("/")
         )
+
+        # Aceite Virtual — gera automaticamente se ainda não existir
+        acceptance = await db.service_acceptances.find_one({"budget_id": budget_id})
+        if not acceptance and public_url:
+            new_acc = ServiceAcceptance(
+                budget_id=budget_id,
+                client_id=budget.get("client_id"),
+                client_name_on_budget=budget.get("client_name"),
+                client_phone=budget.get("client_phone"),
+            )
+            await db.service_acceptances.insert_one(new_acc.dict())
+            acceptance_token = new_acc.token
+        elif acceptance:
+            acceptance_token = acceptance["token"]
+        else:
+            acceptance_token = None
+
         pdf_line = ""
         if public_url:
             pdf_line = f"\n✉ *PDF do orçamento com mais informações sobre o serviço:* ✉\n{public_url}/api/budgets/{budget_id}/pdf"
 
+        aceite_line = ""
+        if public_url and acceptance_token:
+            aceite_line = f"\n\n✅ *Leia e confirme os termos do serviço:*\n{public_url}/aceite/{acceptance_token}"
+
         # Footer
         message += f"""
 
-{pdf_line}
+{pdf_line}{aceite_line}
 _Caso tenha dúvidas, estou à disposição!_
 _Agradecemos a confiança. Orçamento válido por 30 dias._
 
@@ -4646,6 +4858,7 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
         "items": budget_items,
         "total_value": sum(float(i.get("value", 0)) for i in items),
         "payment_status": "PENDENTE",
+        "budget_status": "APROVADO",  # automação = serviço já confirmado
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow(),
         "source": "AUTOMATION",
@@ -4827,35 +5040,82 @@ async def _resolve_service_for_item(client_id: str, is_round: bool) -> Optional[
     return await db.services.find_one({"id": srv_id})
 
 
+def _strip_accents(s: str) -> str:
+    """Remove acentos: 'Katia' == 'Kátia', 'Jose' == 'José'."""
+    return unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
+
+def _norm_client_name(s: str) -> str:
+    """Minúsculo + sem acentos + espaços normalizados."""
+    return ' '.join(_strip_accents(s).lower().split())
+
 async def _resolve_client_fuzzy(name: str) -> List[Dict[str, Any]]:
-    """Busca clientes com nome exato ou parcialmente similar. Retorna lista de candidatos."""
-    candidates = []
-    # 1. Exato
-    exact = await db.clients.find(
-        {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"id": 1, "name": 1}
+    """Busca clientes tolerando apelidos, acentos errados, espaços extras e nomes compostos.
+
+    Estratégia de score (maior = melhor match):
+      100 — exato normalizado                     "Katia Salles" → "Katia Salles"
+       95 — sem espaços igual (nome colado)       "Jose Lito"    → "Joselito"
+       90 — digitado é prefixo do cadastrado      "Katia"        → "Katia Salles"
+       85 — cadastrado é prefixo do digitado      "Katia Salles" → "Katia" (cadastrado assim)
+       75 — todos os tokens digitados (≥3 chars)
+             estão presentes no nome cadastrado   "Katia Carvalho" → "Ana Katia Carvalho"
+       60 — primeiro token longo (≥4 chars) está
+             no início do nome cadastrado         "Katia" → "Katia Maria..."
+       40 — algum token longo (≥5 chars) aparece
+             em qualquer posição do nome          "Salles" dentro de "Jose Salles"
+
+    Desempate: clientes com orçamento mais recente sobem (tapeteiro recorrente).
+    """
+    name_norm     = _norm_client_name(name)
+    name_nospace  = name_norm.replace(' ', '')
+    tokens        = [t for t in name_norm.split() if len(t) >= 3]
+    long_tokens   = [t for t in tokens if len(t) >= 4]
+    first_token   = tokens[0] if tokens else ""
+
+    # Traz todos os clientes (coleção pequena; full scan é ok)
+    all_clients = await db.clients.find(
+        {}, {"id": 1, "name": 1, "updated_at": 1, "created_at": 1}
     ).to_list(None)
-    if exact:
-        return exact
-    # 2. Nome digitado é prefixo do cadastrado
-    prefix = await db.clients.find(
-        {"name": {"$regex": f"^{re.escape(name)}\\b", "$options": "i"}}, {"id": 1, "name": 1}
-    ).to_list(5)
-    candidates.extend(prefix)
-    # 3. Primeiro token do nome digitado (mín 4 chars)
-    if not candidates:
-        token = name.split()[0] if name.split() else ""
-        if len(token) >= 4:
-            token_matches = await db.clients.find(
-                {"name": {"$regex": f"^{re.escape(token)}", "$options": "i"}}, {"id": 1, "name": 1}
-            ).to_list(5)
-            candidates.extend(token_matches)
-    # Remove duplicatas preservando ordem
-    seen, unique = set(), []
-    for c in candidates:
-        if c["id"] not in seen:
-            seen.add(c["id"])
-            unique.append(c)
-    return unique
+
+    scored: List[tuple] = []
+    for c in all_clients:
+        cn         = _norm_client_name(c.get("name", ""))
+        cn_nospace = cn.replace(' ', '')
+        cn_tokens  = cn.split()
+
+        if cn == name_norm:
+            score = 100
+        elif cn_nospace == name_nospace:
+            score = 95
+        elif cn.startswith(name_norm + ' ') or cn == name_norm:
+            score = 90
+        elif name_norm.startswith(cn + ' ') or name_norm == cn:
+            score = 85
+        elif tokens and all(t in cn_tokens for t in tokens):
+            score = 75
+        elif first_token and len(first_token) >= 4 and cn.startswith(first_token):
+            score = 60
+        elif any(t in cn for t in long_tokens if len(t) >= 5):
+            score = 40
+        else:
+            continue
+
+        # Tiebreaker: data mais recente sobe (usa updated_at ou created_at)
+        ts_raw = c.get("updated_at") or c.get("created_at")
+        ts = ts_raw.timestamp() if isinstance(ts_raw, datetime) else 0
+        scored.append((score, ts, c))
+
+    if not scored:
+        return []
+
+    scored.sort(key=lambda x: (-x[0], -x[1]))
+
+    # Só retorna candidatos no mesmo nível de score do melhor
+    best_score = scored[0][0]
+    # Threshold: se o melhor é ≥75 retorna apenas esse tier; senão o melhor disponível
+    tier_min = 75 if best_score >= 75 else best_score
+    result = [c for s, _, c in scored if s >= tier_min]
+
+    return result[:5]
 
 
 @api_router.post("/automation/preview-measures")
@@ -5153,7 +5413,9 @@ async def execute_measures_automation(payload: Dict[str, Any], current_user: Use
             "quantity": 1,
             "unit_price": unit_price, "cost_price": cost_price, "total_value": total_val,
             "status": item_status, "payment_status": "PENDENTE", "paid_value": 0.0,
-            "execution_mode": "RETIRAR_E_LEVAR",
+            # Parceiro: item já chegou lavado, cliente/parceiro vem buscar — não é rota nossa
+            "execution_mode": "CLIENTE_TROUXE" if is_partner_item else "RETIRAR_E_LEVAR",
+            "is_partner_item": is_partner_item,  # flag explícita para filtros futuros
             "execution_location": svc_exloc,
             # Histórico de status sintetizado — sem isso o item nasce "órfão" de
             # histórico (este endpoint insere direto no Mongo, sem passar pelo
@@ -5174,6 +5436,7 @@ async def execute_measures_automation(payload: Dict[str, Any], current_user: Use
             "salesperson": current_user.display_name or current_user.name,
             "budget_observations": "", "internal_observations": "Criado via Automação de Medidas",
             "items": [budget_item], "total_value": total_val, "payment_status": "PENDENTE",
+            "budget_status": "APROVADO",  # automação já é confirmação implícita do serviço
             "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(),
             "source": "AUTOMATION_MEASURES",
         })
@@ -5211,6 +5474,110 @@ def _format_partner_tag(item: Dict[str, Any], partner_name: str = "") -> str:
             return ""
         return text
     return ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MARKETING — Remarketing & Reativação
+# ─────────────────────────────────────────────────────────────────────────────
+
+@api_router.get("/marketing/remarketing")
+async def get_remarketing_budgets(
+    days: int = 7,
+    current_user: dict = Depends(get_current_user)
+):
+    """Orçamentos PENDENTE/ENVIADO sem movimento por X dias (remarketing)."""
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    pipeline = [
+        {"$match": {
+            "status": {"$in": ["PENDENTE", "ENVIADO"]},
+            "updated_at": {"$lt": cutoff}
+        }},
+        {"$lookup": {
+            "from": "clients",
+            "localField": "client_id",
+            "foreignField": "id",
+            "as": "_client"
+        }},
+        {"$project": {
+            "_id": 0,
+            "id": 1,
+            "client_id": 1,
+            "client_name": 1,
+            "total_value": 1,
+            "updated_at": 1,
+            "created_at": 1,
+            "status": 1,
+            "items": {"$slice": ["$items", 3]},
+            "phone": {"$arrayElemAt": ["$_client.phone_primary", 0]}
+        }},
+        {"$sort": {"updated_at": 1}},
+        {"$limit": 200}
+    ]
+    results = await db.budgets.aggregate(pipeline).to_list(200)
+    now = datetime.utcnow()
+    for r in results:
+        upd = r.get("updated_at")
+        if isinstance(upd, str):
+            try:
+                upd = datetime.fromisoformat(upd.replace("Z", "+00:00")).replace(tzinfo=None)
+            except Exception:
+                upd = None
+        r["days_since"] = (now - upd).days if upd else 0
+    return results
+
+
+@api_router.get("/marketing/reactivation")
+async def get_reactivation_clients(
+    days: int = 30,
+    current_user: dict = Depends(get_current_user)
+):
+    """Clientes com último serviço concluído há mais de X dias — candidatos a reativação."""
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    pipeline = [
+        {"$match": {
+            "status": {"$in": ["ENTREGUE", "EXECUTADO", "BUSCOU"]},
+        }},
+        {"$group": {
+            "_id": {"client_id": "$client_id", "service_category": "$service_category"},
+            "last_date": {"$max": "$updated_at"},
+            "client_name": {"$first": "$client_name"},
+            "client_id": {"$first": "$client_id"},
+            "service_name": {"$first": "$service_name"},
+            "last_value": {"$last": "$total_value"},
+        }},
+        {"$match": {"last_date": {"$lt": cutoff}}},
+        {"$lookup": {
+            "from": "clients",
+            "localField": "client_id",
+            "foreignField": "id",
+            "as": "_client"
+        }},
+        {"$project": {
+            "_id": 0,
+            "client_id": 1,
+            "client_name": 1,
+            "service_category": "$_id.service_category",
+            "service_name": 1,
+            "last_date": 1,
+            "last_value": 1,
+            "phone": {"$arrayElemAt": ["$_client.phone_primary", 0]}
+        }},
+        {"$sort": {"last_date": 1}},
+        {"$limit": 200}
+    ]
+    results = await db.budget_items.aggregate(pipeline).to_list(200)
+    now = datetime.utcnow()
+    for r in results:
+        last = r.get("last_date")
+        if isinstance(last, str):
+            try:
+                last = datetime.fromisoformat(last.replace("Z", "+00:00")).replace(tzinfo=None)
+            except Exception:
+                last = None
+        r["days_since"] = (now - last).days if last else 0
+        if last:
+            r["last_date"] = last.isoformat()
+    return results
 
 
 @api_router.get("/reports/partner-items")
@@ -5712,12 +6079,20 @@ async def get_available_budget_items_for_routes(current_user: UserPublic = Depen
         pipeline = [
             {"$unwind": "$items"},
             {"$match": {
+                # Só orçamentos aprovados (ou legado sem campo = APROVADO implícito)
+                "$or": [
+                    {"budget_status": "APROVADO"},
+                    {"budget_status": {"$exists": False}},
+                    {"budget_status": None},
+                ],
                 "items.status": {"$in": route_statuses},
                 "items.client_desisted": {"$ne": True},   # exclui desistências
-                "$or": [
+                # Itens de parceiro (client trouxe / client leva) não geram rota de técnico
+                "items.execution_mode": {"$nin": ["CLIENTE_TROUXE", "CLIENTE_LEVARA"]},
+                "$and": [{"$or": [
                     {"items.current_route_id": None},
                     {"items.current_route_id": {"$exists": False}},
-                ],
+                ]}],
             }},
             {"$lookup": {
                 "from": "clients",
@@ -5739,6 +6114,9 @@ async def get_available_budget_items_for_routes(current_user: UserPublic = Depen
         results = []
         async for doc in cursor:
             item = doc["item"]
+            # Ignora itens sem ID válido (criados antes do sistema de IDs)
+            if not item.get("id"):
+                continue
             status = item.get("status")
             # Endereço específico por etapa, com fallback no cliente
             if status == ServiceStatus.RETIRAR.value:
@@ -6507,9 +6885,413 @@ async def delete_technician_photo(photo_id: str):
             raise HTTPException(status_code=404, detail="Photo not found in database")
         
         return {"success": True, "message": "Photo deleted successfully"}
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting photo: {str(e)}")
+
+
+# ============================================================
+# ACEITE VIRTUAL — modelos e endpoints públicos
+# ============================================================
+
+class ServiceAcceptance(BaseModel):
+    id: str = Field(default_factory=lambda: f"ACE-{str(uuid.uuid4().int)[:7].zfill(7)}")
+    token: str = Field(default_factory=lambda: uuid.uuid4().hex + uuid.uuid4().hex)
+    budget_id: str
+    client_id: Optional[str] = None
+    client_name_on_budget: Optional[str] = None
+    client_phone: Optional[str] = None
+    status: str = "PENDING"  # PENDING | ACCEPTED
+    accepted_at: Optional[datetime] = None
+    accepted_ip: Optional[str] = None
+    accepted_user_agent: Optional[str] = None
+    accepted_name: Optional[str] = None
+    accepted_checkboxes: Dict[str, bool] = {}
+    gallery_token: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+@api_router.post("/budgets/{budget_id}/acceptance/generate")
+async def generate_acceptance_link(
+    budget_id: str,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Gera (ou retorna existente) o token de aceite para um orçamento."""
+    budget = await db.budgets.find_one({"id": budget_id})
+    if not budget:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado")
+
+    existing = await db.service_acceptances.find_one({"budget_id": budget_id})
+    if existing:
+        public_url = (
+            os.environ.get("PUBLIC_WEBHOOK_URL", "")
+            .replace("/api/webhooks/payment", "")
+            .strip("/")
+        )
+        return {
+            "acceptance_id": existing["id"],
+            "token": existing["token"],
+            "status": existing.get("status", "PENDING"),
+            "link": f"{public_url}/aceite/{existing['token']}",
+        }
+
+    acceptance = ServiceAcceptance(
+        budget_id=budget_id,
+        client_id=budget.get("client_id"),
+        client_name_on_budget=budget.get("client_name"),
+        client_phone=budget.get("client_phone"),
+    )
+    await db.service_acceptances.insert_one(acceptance.dict())
+
+    public_url = (
+        os.environ.get("PUBLIC_WEBHOOK_URL", "")
+        .replace("/api/webhooks/payment", "")
+        .strip("/")
+    )
+    return {
+        "acceptance_id": acceptance.id,
+        "token": acceptance.token,
+        "status": "PENDING",
+        "link": f"{public_url}/aceite/{acceptance.token}",
+    }
+
+
+@api_router.post("/budgets/{budget_id}/acceptance/admin-confirm")
+async def admin_confirm_acceptance(
+    budget_id: str,
+    body: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Admin confirma aceite manualmente, sem necessidade de assinatura do cliente."""
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem confirmar aceite manualmente")
+
+    doc = await db.service_acceptances.find_one({"budget_id": budget_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Aceite não encontrado para este orçamento")
+
+    if doc.get("status") == "ACCEPTED":
+        return {"success": True, "already_accepted": True}
+
+    name = (body.get("name") or f"Admin — {current_user.name}").strip()
+    now = datetime.utcnow()
+
+    await db.service_acceptances.update_one(
+        {"budget_id": budget_id},
+        {"$set": {
+            "status": "ACCEPTED",
+            "accepted_at": now,
+            "accepted_name": name,
+            "accepted_ip": "admin-manual",
+            "accepted_user_agent": "admin-override",
+            "accepted_checkboxes": {"admin_override": True},
+            "acceptance_status": "ACCEPTED",
+            "acceptance_confirmed_at": now,
+        }}
+    )
+
+    await log_audit(
+        db=db,
+        action="ADMIN_CONFIRMED",
+        entity_type="service_acceptance",
+        entity_id=doc["id"],
+        user_id=current_user.id,
+        user_name=current_user.name,
+        details={"budget_id": budget_id, "admin_name": name, "override": True}
+    )
+
+    await db.budgets.update_one(
+        {"id": budget_id},
+        {"$set": {"acceptance_status": "ACCEPTED", "acceptance_confirmed_at": now, "accepted_name": name}}
+    )
+
+    return {"success": True, "accepted_at": now.isoformat(), "admin_override": True}
+
+
+@api_router.get("/budgets/{budget_id}/acceptance/status")
+async def get_acceptance_status(
+    budget_id: str,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Retorna o status do aceite de um orçamento."""
+    doc = await db.service_acceptances.find_one({"budget_id": budget_id})
+    if not doc:
+        return {"has_acceptance": False}
+    public_url = (
+        os.environ.get("PUBLIC_WEBHOOK_URL", "")
+        .replace("/api/webhooks/payment", "")
+        .strip("/")
+    )
+    return {
+        "has_acceptance": True,
+        "status": doc.get("status", "PENDING"),
+        "accepted_at": doc.get("accepted_at"),
+        "accepted_name": doc.get("accepted_name"),
+        "accepted_ip": doc.get("accepted_ip"),
+        "link": f"{public_url}/aceite/{doc['token']}",
+    }
+
+
+@api_router.get("/acceptance/{token}")
+async def get_acceptance_public(token: str, request: HttpRequest):
+    """Público — retorna dados do orçamento + textos de risco para a página de aceite."""
+    doc = await db.service_acceptances.find_one({"token": token})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Link inválido ou expirado")
+
+    budget = await db.budgets.find_one({"id": doc["budget_id"]})
+    if not budget:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado")
+
+    budget_cfg = await db.budget_config.find_one({}) or {}
+
+    # Coleta categorias dos itens do orçamento
+    items = await db.budget_items.find({"budget_id": doc["budget_id"]}).to_list(None)
+    categories_present = set()
+    for item in items:
+        cat = item.get("service_category", "")
+        if cat:
+            categories_present.add(cat)
+
+    # Mapeia categoria → chave no BudgetConfig → label legível
+    CAT_MAP = {
+        "ESTOFADOS": ("risks_estofados", "Estofados"),
+        "COLCHOES": ("risks_colchoes", "Colchões"),
+        "BOX": ("risks_box", "Box"),
+        "TAPETES": ("risks_tapetes", "Tapetes"),
+        "CARPETES_TAPETES_LOCAL": ("risks_carpetes_tapetes_local", "Carpetes e Tapetes (local)"),
+        "CORTINAS": ("risks_cortinas", "Cortinas"),
+        "PERSIANAS": ("risks_persianas", "Persianas"),
+        "ITENS_INFANTIS": ("risks_itens_infantis", "Itens Infantis"),
+        "VEICULOS": ("risks_veiculos", "Veículos"),
+        "IMPERMEABILIZACAO": ("risks_impermeabilizacao", "Impermeabilização"),
+        "OUTROS": ("risks_outros_itens", "Outros"),
+    }
+
+    risk_sections = []
+    for cat in sorted(categories_present):
+        if cat in CAT_MAP:
+            key, label = CAT_MAP[cat]
+            text = budget_cfg.get(key, "")
+            if text:
+                risk_sections.append({"category": cat, "label": label, "text": text})
+
+    general_conditions = budget_cfg.get("general_conditions", "")
+    footer_text = budget_cfg.get("footer_text", "")
+
+    sys_cfg = await db.system_config.find_one({}) or {}
+    company_name = sys_cfg.get("company_name", "SuperDry Lavanderia")
+    company_phone = sys_cfg.get("phone", "")
+
+    return {
+        "acceptance_id": doc["id"],
+        "status": doc.get("status", "PENDING"),
+        "accepted_at": doc.get("accepted_at"),
+        "accepted_name": doc.get("accepted_name"),
+        "budget": {
+            "id": budget.get("id"),
+            "client_name": budget.get("client_name"),
+            "total_value": budget.get("total_value", 0),
+            "item_count": len(items),
+        },
+        "risk_sections": risk_sections,
+        "general_conditions": general_conditions,
+        "footer_text": footer_text,
+        "company_name": company_name,
+        "company_phone": company_phone,
+    }
+
+
+@api_router.post("/acceptance/{token}/confirm")
+async def confirm_acceptance(token: str, body: Dict[str, Any], request: HttpRequest):
+    """Público — cliente confirma aceite dos termos."""
+    doc = await db.service_acceptances.find_one({"token": token})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Link inválido ou expirado")
+    if doc.get("status") == "ACCEPTED":
+        return {"success": True, "already_accepted": True}
+
+    client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown")
+    user_agent = request.headers.get("User-Agent", "unknown")
+    accepted_name = (body.get("name") or "").strip()
+    checkboxes = body.get("checkboxes", {})
+    alternative_address = (body.get("alternative_address") or "").strip() or None
+    address_note = (body.get("address_note") or "").strip() or None
+
+    if not accepted_name:
+        raise HTTPException(status_code=400, detail="Nome é obrigatório para confirmar o aceite")
+
+    now = datetime.utcnow()
+    update_fields = {
+        "status": "ACCEPTED",
+        "accepted_at": now,
+        "accepted_ip": client_ip,
+        "accepted_user_agent": user_agent,
+        "accepted_name": accepted_name,
+        "accepted_checkboxes": checkboxes,
+        "updated_at": now,
+    }
+    if alternative_address:
+        update_fields["alternative_address"] = alternative_address
+    if address_note:
+        update_fields["address_note"] = address_note
+
+    await db.service_acceptances.update_one(
+        {"token": token},
+        {"$set": update_fields}
+    )
+
+    # Grava no budget também — e promove status para APROVADO automaticamente
+    await db.budgets.update_one(
+        {"id": doc["budget_id"]},
+        {"$set": {
+            "acceptance_status": "ACCEPTED",
+            "acceptance_confirmed_at": now,
+            "accepted_name": accepted_name,
+            "budget_status": "APROVADO",
+            "budget_status_updated_at": now,
+            "budget_status_updated_by": f"aceite-cliente:{accepted_name}",
+        }}
+    )
+
+    await db.audit_logs.insert_one(AuditLog(
+        entity_type="service_acceptance",
+        entity_id=doc["id"],
+        action="ACCEPTED",
+        user_id="CLIENT",
+        user_name=accepted_name,
+        details={"ip": client_ip, "user_agent": user_agent[:200], "budget_id": doc["budget_id"]},
+    ).dict())
+
+    return {"success": True, "accepted_at": now.isoformat()}
+
+
+# ============================================================
+# GALERIA DE FOTOS (notificação de conclusão)
+# ============================================================
+
+@api_router.post("/budgets/{budget_id}/notify-completion")
+async def notify_completion(
+    budget_id: str,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Gera token de galeria e retorna texto WhatsApp de conclusão."""
+    budget = await db.budgets.find_one({"id": budget_id})
+    if not budget:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado")
+
+    # Cria ou reutiliza gallery_token na acceptance (ou no budget diretamente)
+    gallery_token = None
+    acceptance = await db.service_acceptances.find_one({"budget_id": budget_id})
+    if acceptance and acceptance.get("gallery_token"):
+        gallery_token = acceptance["gallery_token"]
+    else:
+        gallery_token = uuid.uuid4().hex + uuid.uuid4().hex
+        if acceptance:
+            await db.service_acceptances.update_one(
+                {"budget_id": budget_id},
+                {"$set": {"gallery_token": gallery_token, "updated_at": datetime.utcnow()}}
+            )
+        else:
+            # Salva direto no budget
+            await db.budgets.update_one(
+                {"id": budget_id},
+                {"$set": {"gallery_token": gallery_token}}
+            )
+
+    public_url = (
+        os.environ.get("PUBLIC_WEBHOOK_URL", "")
+        .replace("/api/webhooks/payment", "")
+        .strip("/")
+    )
+    gallery_link = f"{public_url}/galeria/{gallery_token}"
+
+    sys_cfg = await db.system_config.find_one({}) or {}
+    company_name = sys_cfg.get("company_name", "SuperDry Lavanderia")
+
+    client_name = budget.get("client_name", "")
+    total = budget.get("total_value", 0)
+
+    msg = (
+        f"Olá *{client_name}*! 👋\n\n"
+        f"Seu serviço foi *concluído* com sucesso pela *{company_name}*! ✅\n\n"
+        f"Veja as fotos do antes e depois dos seus itens pelo link abaixo:\n"
+        f"🔗 {gallery_link}\n\n"
+        f"Valor total: *R$ {total:.2f}*\n\n"
+        f"Obrigado pela confiança! 🙏"
+    )
+
+    phone = budget.get("client_phone", "")
+    whatsapp_url = None
+    if phone:
+        digits = re.sub(r'\D', '', phone)
+        if not digits.startswith('55'):
+            digits = '55' + digits
+        whatsapp_url = f"https://wa.me/{digits}?text={requests.utils.quote(msg)}"
+
+    return {
+        "gallery_token": gallery_token,
+        "gallery_link": gallery_link,
+        "message": msg,
+        "whatsapp_url": whatsapp_url,
+    }
+
+
+@api_router.get("/gallery/{gallery_token}")
+async def get_gallery_public(gallery_token: str):
+    """Público — retorna fotos antes/depois de todos os itens do orçamento."""
+    # Busca token na acceptance ou direto no budget
+    acceptance = await db.service_acceptances.find_one({"gallery_token": gallery_token})
+    if acceptance:
+        budget_id = acceptance["budget_id"]
+    else:
+        budget = await db.budgets.find_one({"gallery_token": gallery_token})
+        if not budget:
+            raise HTTPException(status_code=404, detail="Link inválido ou expirado")
+        budget_id = budget["id"]
+
+    budget = await db.budgets.find_one({"id": budget_id})
+    if not budget:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado")
+
+    items = await db.budget_items.find({"budget_id": budget_id}).to_list(None)
+
+    public_url = (
+        os.environ.get("PUBLIC_WEBHOOK_URL", "")
+        .replace("/api/webhooks/payment", "")
+        .strip("/")
+    )
+
+    result_items = []
+    for item in items:
+        item_id = item.get("id")
+        photos = await db.technician_photos.find({"item_id": item_id}).to_list(None)
+        before = [p for p in photos if p.get("photo_type") == "BEFORE"]
+        after  = [p for p in photos if p.get("photo_type") == "AFTER"]
+        damage = [p for p in photos if p.get("photo_type") == "DAMAGE"]
+
+        def photo_url(p):
+            return f"{public_url}/api/technician/photos/file/{p['filename']}"
+
+        result_items.append({
+            "item_id": item_id,
+            "service_name": item.get("service_name", ""),
+            "status": item.get("status", ""),
+            "before": [{"url": photo_url(p), "uploaded_at": p.get("uploaded_at")} for p in before],
+            "after":  [{"url": photo_url(p), "uploaded_at": p.get("uploaded_at")} for p in after],
+            "damage": [{"url": photo_url(p), "uploaded_at": p.get("uploaded_at")} for p in damage],
+        })
+
+    sys_cfg = await db.system_config.find_one({}) or {}
+
+    return {
+        "budget_id": budget_id,
+        "client_name": budget.get("client_name", ""),
+        "company_name": sys_cfg.get("company_name", "SuperDry Lavanderia"),
+        "items": result_items,
+    }
+
 
 # ============================================================
 # AUTH endpoints (Phase 1)
@@ -6809,6 +7591,58 @@ async def list_audit_logs(
 
 
 # ============================================================
+# DIAGNÓSTICO TEMPORÁRIO — remover após uso
+# ============================================================
+@api_router.get("/debug/dashboard-items")
+async def debug_dashboard_items(current_user: UserPublic = Depends(get_current_user)):
+    """Endpoint temporário: lista exatamente quais itens estão nos contadores do dashboard."""
+    ROUTE_ST  = {"RETIRAR", "EXECUTAR_NO_LOCAL", "ENTREGAR"}
+    WASH_ST   = {"EM_LAVAGEM", "EM_LAVAGEM_PARCEIRO", "COLETADO", "AGUARDANDO_ENTREGA",
+                 "AGUARDANDO_BUSCAR", "EXECUCAO_PARCIAL"}
+    DELIV_ST  = {"ENTREGUE", "EXECUTADO", "BUSCOU"}
+    DEBT_PAY  = {"PENDENTE", "PARCIAL", "INADIMPLENTE"}
+
+    pending_route, active_budgets_list, washing, financial = [], [], [], []
+
+    async for b in db.budgets.find({"budget_status": "APROVADO"}):
+        binfo = {"orc": b.get("id"), "cliente": b.get("client_name"), "status_orc": b.get("budget_status")}
+        pending_in_b = []
+        for it in (b.get("items") or []):
+            st = it.get("status")
+            if (st in ROUTE_ST and not it.get("current_route_id")
+                    and it.get("execution_mode") not in ("CLIENTE_TROUXE", "CLIENTE_LEVARA")):
+                entry = {**binfo, "item": it.get("id"), "servico": it.get("service_name"),
+                         "status": st, "modo": it.get("execution_mode")}
+                pending_route.append(entry)
+                pending_in_b.append(entry)
+        if pending_in_b:
+            active_budgets_list.append({**binfo, "itens_pendentes": len(pending_in_b)})
+
+    async for b in db.budgets.find({"items.status": {"$in": list(WASH_ST)}}):
+        for it in (b.get("items") or []):
+            if it.get("status") in WASH_ST:
+                washing.append({"orc": b.get("id"), "cliente": b.get("client_name"),
+                                 "status_orc": b.get("budget_status"),
+                                 "item": it.get("id"), "servico": it.get("service_name"),
+                                 "status": it.get("status")})
+
+    async for b in db.budgets.find({"items.status": {"$in": list(DELIV_ST)}}):
+        for it in (b.get("items") or []):
+            if it.get("status") in DELIV_ST and it.get("payment_status") in DEBT_PAY:
+                financial.append({"orc": b.get("id"), "cliente": b.get("client_name"),
+                                   "item": it.get("id"), "servico": it.get("service_name"),
+                                   "status": it.get("status"), "pagamento": it.get("payment_status"),
+                                   "valor": it.get("total_price", 0)})
+
+    return {
+        "itens_pendentes_rota":  {"total": len(pending_route),  "itens": pending_route},
+        "orcamentos_ativos":     {"total": len(active_budgets_list), "orcamentos": active_budgets_list},
+        "em_lavagem":            {"total": len(washing),         "itens": washing},
+        "pendencias_financeiras":{"total": len(financial),       "itens": financial},
+    }
+
+
+# ============================================================
 # DASHBOARD detalhado (Phase 1)
 # ============================================================
 @api_router.get("/dashboard/summary")
@@ -6819,20 +7653,24 @@ async def get_dashboard_summary(current_user: UserPublic = Depends(get_current_u
         today = _date.today().isoformat()
 
         # 1) Itens pendentes de rota: status route-eligible + sem rota corrente
+        #    Só orçamentos APROVADOS (exclui RASCUNHO/ARQUIVADO/CANCELADO)
         route_statuses = [
             ServiceStatus.RETIRAR.value,
             ServiceStatus.EXECUTAR_NO_LOCAL.value,
             ServiceStatus.ENTREGAR.value,
         ]
+        approved_filter = {"budget_status": "APROVADO"}
         items_pending_routes = 0
-        async for b in db.budgets.find({"items.status": {"$in": route_statuses}}):
+        async for b in db.budgets.find({**approved_filter, "items.status": {"$in": route_statuses}}):
             for it in (b.get("items") or []):
-                if it.get("status") in route_statuses and not it.get("current_route_id"):
+                if (it.get("status") in route_statuses
+                        and not it.get("current_route_id")
+                        and it.get("execution_mode") not in ("CLIENTE_TROUXE", "CLIENTE_LEVARA")):
                     items_pending_routes += 1
 
-        # 2) Orçamentos ativos (com algum item pendente de rota)
+        # 2) Orçamentos ativos (APROVADOS com algum item pendente de rota)
         active_budgets = 0
-        async for b in db.budgets.find({}):
+        async for b in db.budgets.find({**approved_filter}):
             items = b.get("items") or []
             has_pending = any(
                 (it.get("status") in route_statuses and not it.get("current_route_id"))
@@ -6869,12 +7707,17 @@ async def get_dashboard_summary(current_user: UserPublic = Depends(get_current_u
                 if it.get("status") in wash_statuses:
                     items_in_washing += 1
 
-        # 5) Pendências financeiras (itens com payment_status != PAGO e != CORTESIA)
-        pending_payment_statuses = ["PENDENTE", "PARCIAL", "INADIMPLENTE"]
+        # 5) Pendências financeiras — itens já entregues/executados com pagamento em aberto.
+        #    Usa os mesmos status que o módulo Financeiro exibe (ENTREGUE, EXECUTADO, BUSCOU).
+        #    Só conta se payment_status está EXPLICITAMENTE em PENDENTE/PARCIAL/INADIMPLENTE
+        #    (sem default "PENDENTE" para não inflar com itens que nunca foram entregues).
+        delivered_statuses = {"ENTREGUE", "EXECUTADO", "BUSCOU"}
+        pending_pay_set = {"PENDENTE", "PARCIAL", "INADIMPLENTE"}
         financial_pending = 0
-        async for b in db.budgets.find({"items.payment_status": {"$in": pending_payment_statuses}}):
+        async for b in db.budgets.find({"items.status": {"$in": list(delivered_statuses)}}):
             for it in (b.get("items") or []):
-                if it.get("payment_status", "PENDENTE") in pending_payment_statuses:
+                if (it.get("status") in delivered_statuses
+                        and it.get("payment_status") in pending_pay_set):
                     financial_pending += 1
 
         # 6) Resumo do gerenciador financeiro (placeholder - implementado em fase futura)
@@ -6922,6 +7765,43 @@ async def _find_budget_and_item(item_id: str):
         return None, None
     item = next((it for it in (budget.get("items") or []) if it.get("id") == item_id), None)
     return budget, item
+
+
+async def _maybe_auto_archive_budget(budget_id: str, triggered_by: str = "auto"):
+    """
+    Arquiva automaticamente um orçamento quando todos os seus itens estão
+    em status terminal (ENTREGUE/EXECUTADO/BUSCOU) E todos estão pagos
+    (PAGO ou CORTESIA). Silencioso — não levanta exceção em caso de falha.
+    """
+    try:
+        budget = await db.budgets.find_one({"id": budget_id})
+        if not budget:
+            return
+        # Não rearquiva o que já está arquivado/cancelado
+        if budget.get("budget_status") in ("ARQUIVADO", "CANCELADO"):
+            return
+
+        TERMINAL_STATUSES = {"ENTREGUE", "EXECUTADO", "BUSCOU", "CANCELADO_PELO_CLIENTE"}
+        PAID_STATUSES     = {"PAGO", "CORTESIA"}
+
+        items = [it for it in (budget.get("items") or []) if not it.get("client_desisted")]
+        if not items:
+            return  # orçamento vazio, não arquivar automaticamente
+
+        all_terminal = all(it.get("status") in TERMINAL_STATUSES for it in items)
+        all_paid     = all(it.get("payment_status") in PAID_STATUSES for it in items)
+
+        if all_terminal and all_paid:
+            await db.budgets.update_one(
+                {"id": budget_id},
+                {"$set": {
+                    "budget_status": "ARQUIVADO",
+                    "budget_status_updated_at": datetime.utcnow(),
+                    "budget_status_updated_by": triggered_by,
+                }}
+            )
+    except Exception:
+        pass  # falha silenciosa — não bloqueia o fluxo de pagamento
 
 
 async def _update_item_fields(item_id: str, fields: Dict[str, Any], user: UserPublic):
@@ -7338,6 +8218,11 @@ async def register_item_payment(
         "method": method, "value": value, "paid_total": paid_total, "new_status": payment_status,
     })
     await _sync_linked_events_color(item_id)
+
+    # Auto-arquivar orçamento se todos os itens estão finalizados e pagos
+    if budget and budget.get("id"):
+        await _maybe_auto_archive_budget(budget["id"], triggered_by=f"payment:{current_user.name or current_user.id}")
+
     return {"success": True, "record": record, "paid_value": paid_total, "payment_status": payment_status}
 
 
@@ -7540,6 +8425,13 @@ async def create_consolidated_payment(
                     {"total": total_received, "items": len(applied),
                      "payer": payer_name, "provider": "MANUAL" if force_manual else provider.name,
                      "status": cp_status, "force_manual": force_manual})
+
+    # Auto-arquivar orçamentos afetados se todos os itens estão finalizados e pagos
+    if not gateway_mode:
+        unique_budget_ids = list({t["budget"]["id"] for t in targets if t.get("budget") and t["budget"].get("id")})
+        for bid in unique_budget_ids:
+            await _maybe_auto_archive_budget(bid, triggered_by=f"consolidated:{cpid}")
+
     doc.pop("_id", None)
     return {"success": True, "consolidated_payment": doc}
 
@@ -7990,6 +8882,228 @@ async def generate_item_receipt(item_id: str):
         BytesIO(buffer.read()),
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=recibo_{item_id}.pdf"}
+    )
+
+
+@api_router.post("/items/multi-receipt")
+async def generate_multi_receipt(payload: Dict[str, Any]):
+    """Gera um único PDF de recibo consolidado para múltiplos itens selecionados."""
+    item_ids = payload.get("item_ids", [])
+    if not item_ids:
+        raise HTTPException(status_code=400, detail="Nenhum item informado.")
+
+    from reportlab.lib.pagesizes import A5 as A5_sz
+
+    system_config = await db.system_config.find_one({}) or {}
+    company_name     = system_config.get('company_name', 'SuperDry Lavanderia')
+    company_cnpj     = system_config.get('cnpj', '')
+    company_phone    = system_config.get('phone', '')
+    company_whatsapp = system_config.get('whatsapp', '')
+    company_email    = system_config.get('email', '')
+    company_instagram= system_config.get('instagram', '')
+    company_address  = system_config.get('address_full', '')
+    company_city     = system_config.get('city', '')
+    company_state    = system_config.get('state', '')
+
+    # Busca todos os itens
+    items_data = []
+    for iid in item_ids:
+        budget, item = await _find_budget_and_item(iid)
+        if item:
+            items_data.append((budget, item))
+    if not items_data:
+        raise HTTPException(status_code=404, detail="Nenhum item encontrado.")
+
+    # Infere nome do cliente (único ou múltiplos)
+    client_names = list(dict.fromkeys(
+        it.get("client_name") or bud.get("client_name", "N/A")
+        for bud, it in items_data
+    ))
+    client_label = client_names[0] if len(client_names) == 1 else ", ".join(client_names[:3])
+    if len(client_names) > 3:
+        client_label += f" +{len(client_names)-3}"
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A5_sz,
+        leftMargin=1.5*cm, rightMargin=1.5*cm,
+        topMargin=1*cm, bottomMargin=1.5*cm,
+    )
+    styles = getSampleStyleSheet()
+
+    title_style  = ParagraphStyle('MRT', parent=styles['Heading1'], fontSize=14,
+                                  spaceAfter=4, alignment=1, textColor=colors.HexColor('#1e3a5f'))
+    label_style  = ParagraphStyle('MRL', parent=styles['Normal'], fontSize=9,
+                                  textColor=colors.HexColor('#444444'))
+    value_style  = ParagraphStyle('MRV', parent=styles['Normal'], fontSize=9,
+                                  fontName='Helvetica-Bold')
+    small_style  = ParagraphStyle('MRS', parent=styles['Normal'], fontSize=8,
+                                  textColor=colors.HexColor('#777777'))
+    center_style = ParagraphStyle('MRC', parent=styles['Normal'], fontSize=8, alignment=1)
+
+    story = []
+
+    # ── Logo + cabeçalho empresa ───────────────────────────────────────────────
+    logo_element = None
+    for lp in ["/app/backend/uploads/logo.png", "/app/backend/logo-superdry.png"]:
+        if os.path.exists(lp):
+            try: logo_element = Image(lp, width=0.75*inch, height=0.6*inch); break
+            except: pass
+
+    company_lines = [f"<b><font size='11'>{company_name}</font></b>"]
+    if company_address:
+        city_state = f", {company_city}/{company_state}" if company_city else ""
+        company_lines.append(f"<font size='7.5' color='#555555'>{company_address}{city_state}</font>")
+    contact_parts = []
+    if company_phone:     contact_parts.append(f"Tel: {company_phone}")
+    if company_whatsapp:  contact_parts.append(f"WhatsApp: {company_whatsapp}")
+    if company_email:     contact_parts.append(company_email)
+    if company_instagram: contact_parts.append(f"@{company_instagram}")
+    if company_cnpj:      contact_parts.append(f"CNPJ: {company_cnpj}")
+    if contact_parts:
+        company_lines.append(f"<font size='7.5' color='#555555'>{' | '.join(contact_parts[:3])}</font>")
+        if len(contact_parts) > 3:
+            company_lines.append(f"<font size='7.5' color='#555555'>{' | '.join(contact_parts[3:])}</font>")
+
+    company_para = Paragraph("<br/>".join(company_lines),
+        ParagraphStyle('CHdr', parent=styles['Normal'], fontSize=10, leading=13))
+
+    page_w = A5_sz[0] - 3*cm
+    if logo_element:
+        logo_col = 0.85*inch
+        hdr_tbl = Table([[logo_element, company_para]], colWidths=[logo_col, page_w - logo_col])
+        hdr_tbl.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LEFTPADDING', (0,0), (0,0), 0),
+            ('RIGHTPADDING', (0,0), (0,0), 8),
+        ]))
+        story.append(hdr_tbl)
+    else:
+        story.append(company_para)
+
+    story.append(Spacer(1, 8))
+
+    # ── Título ─────────────────────────────────────────────────────────────────
+    rec_id = f"REC-{item_ids[0][:10]}" if len(item_ids) == 1 else f"REC-MULTI-{len(item_ids)}itens"
+    story.append(Paragraph("RECIBO DE PAGAMENTO", title_style))
+    story.append(Paragraph(f"Nº {rec_id}", small_style))
+    story.append(Spacer(1, 6))
+    story.append(Table([['']], colWidths=['100%'],
+        style=TableStyle([('LINEABOVE', (0,0), (-1,-1), 1, colors.HexColor('#1e3a5f'))])))
+    story.append(Spacer(1, 6))
+
+    # ── Dados do cliente ───────────────────────────────────────────────────────
+    info_data = [
+        [Paragraph("<b>Cliente:</b>", label_style), Paragraph(client_label, value_style)],
+    ]
+    if len(client_names) == 1:
+        client_doc = await db.clients.find_one({"name": client_names[0]})
+        phone = client_doc.get("phone_primary", "") if client_doc else ""
+        if phone:
+            info_data.append([Paragraph("<b>Telefone:</b>", label_style), Paragraph(phone, value_style)])
+    info_table = Table(info_data, colWidths=[page_w*0.3, page_w*0.7])
+    info_table.setStyle(TableStyle([
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 8))
+
+    # ── Tabela de itens ────────────────────────────────────────────────────────
+    story.append(Paragraph("<b>Serviços</b>", label_style))
+    story.append(Spacer(1, 4))
+
+    hdr_para = lambda t: Paragraph(f"<b><font color='white'>{t}</font></b>", center_style)
+    tbl_header = [hdr_para("Serviço"), hdr_para("Valor"), hdr_para("Pago"), hdr_para("Status")]
+    tbl_rows = [tbl_header]
+
+    total_valor = 0.0
+    total_pago  = 0.0
+
+    for bud, it in items_data:
+        svc_name   = it.get("service_name", "—")
+        val        = float(it.get("total_value", 0))
+        paid       = float(it.get("paid_value", 0))
+        pstatus    = it.get("payment_status", "PENDENTE")
+        status_lbl = {"PAGO": "✓ Pago", "PARCIAL": "Parcial", "CORTESIA": "Cortesia"}.get(pstatus, "Pendente")
+        cname      = it.get("client_name") or bud.get("client_name", "")
+        row_name   = f"{svc_name}" if len(client_names) == 1 else f"{svc_name}\n{cname}"
+        total_valor += val
+        total_pago  += paid
+        tbl_rows.append([
+            Paragraph(row_name, ParagraphStyle('SN', parent=styles['Normal'], fontSize=7.5)),
+            Paragraph(f"R$ {val:.2f}",  center_style),
+            Paragraph(f"R$ {paid:.2f}", center_style),
+            Paragraph(status_lbl,        center_style),
+        ])
+
+    items_table = Table(tbl_rows, colWidths=[page_w*0.42, page_w*0.20, page_w*0.20, page_w*0.18])
+    items_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e3a5f')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#f8fafc'), colors.white]),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
+        ('FONTSIZE', (0,0), (-1,-1), 7.5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    story.append(items_table)
+    story.append(Spacer(1, 8))
+
+    # ── Totais ─────────────────────────────────────────────────────────────────
+    remaining = total_valor - total_pago
+    totals_data = [
+        [Paragraph("Total dos Serviços:", label_style), Paragraph(f"R$ {total_valor:.2f}", value_style)],
+        [Paragraph("Total Pago:",         label_style), Paragraph(f"R$ {total_pago:.2f}",  value_style)],
+    ]
+    if remaining > 0.01:
+        totals_data.append([
+            Paragraph("Saldo em Aberto:", label_style),
+            Paragraph(f"R$ {remaining:.2f}",
+                ParagraphStyle('Rem2', parent=styles['Normal'], fontSize=9,
+                    fontName='Helvetica-Bold', textColor=colors.HexColor('#cc0000')))
+        ])
+    totals_table = Table(totals_data, colWidths=[page_w*0.55, page_w*0.45])
+    totals_table.setStyle(TableStyle([
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+    ]))
+    story.append(totals_table)
+    story.append(Spacer(1, 6))
+
+    # ── Status geral ───────────────────────────────────────────────────────────
+    if total_pago >= total_valor - 0.01:
+        overall_status, overall_color = "✓ QUITADO", '#16a34a'
+    elif total_pago > 0:
+        overall_status, overall_color = "⚡ PARCIALMENTE PAGO", '#ca8a04'
+    else:
+        overall_status, overall_color = "⚠ EM ABERTO", '#dc2626'
+
+    story.append(Paragraph(
+        f"<font color='{overall_color}'><b>{overall_status}</b></font>",
+        ParagraphStyle('OSt', parent=styles['Normal'], fontSize=11, alignment=1)
+    ))
+    story.append(Spacer(1, 8))
+    story.append(Table([['']], colWidths=['100%'],
+        style=TableStyle([('LINEABOVE', (0,0), (-1,-1), 0.5, colors.HexColor('#aaaaaa'))])))
+    story.append(Spacer(1, 4))
+    receipt_date = datetime.utcnow().strftime("%d/%m/%Y às %H:%M")
+    story.append(Paragraph(f"Recibo emitido em {receipt_date} — {company_name}", small_style))
+
+    if total_pago >= total_valor - 0.01:
+        story.append(Spacer(1, 14))
+        story.append(Paragraph("_" * 45, ParagraphStyle('Sig', parent=styles['Normal'], fontSize=9, alignment=1)))
+        story.append(Paragraph("Assinatura / Carimbo", center_style))
+
+    doc.build(story)
+    buffer.seek(0)
+    fname = f"recibo_{item_ids[0]}.pdf" if len(item_ids) == 1 else f"recibo_consolidado_{len(item_ids)}itens.pdf"
+    return StreamingResponse(
+        BytesIO(buffer.read()),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={fname}"}
     )
 
 

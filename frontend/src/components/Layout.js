@@ -45,7 +45,7 @@ const ALL_ITEMS = [
   { path: '/financial',      label: 'Financeiro',           short: 'Finan.',   icon: Wallet,       roles: ['ADMIN','FINANCEIRO'] },
   { path: '/automations',    label: 'Automações',           short: 'Auto',     icon: Zap,          roles: ['ADMIN','ATENDENTE'] },
   { path: '/automation-ai', label: 'Automação com IA',     short: 'Auto IA',  icon: Wand2,        roles: ['ADMIN','ATENDENTE'] },
-  { path: '/whatsapp',       label: 'WhatsApp',             short: 'WhatsApp', icon: MessageSquare,roles: ['ADMIN','ATENDENTE'] },
+  { path: '/whatsapp',       label: 'Comunicação WhatsApp', short: 'Comunic.',  icon: MessageSquare,roles: ['ADMIN','ATENDENTE'] },
   { path: '/tickets',        label: 'Chamados e Manutenção',short: 'Chamados', icon: Wrench,       roles: ['ADMIN','MANUTENCAO'] },
   { path: '/reports',        label: 'Relatórios',           short: 'Relat.',   icon: BarChart3,    roles: ['ADMIN','FINANCEIRO'] },
   { path: '/finance-manager',label: 'Gerenciador Financeiro',short:'Ger.Fin.', icon: BarChart3,    roles: ['ADMIN','FINANCEIRO'] },

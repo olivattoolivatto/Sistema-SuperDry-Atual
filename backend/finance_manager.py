@@ -174,10 +174,26 @@ def splits_balanced(total_value: float, splits: List[Dict[str, Any]]) -> bool:
     return abs(splits_total(splits) - round(float(total_value or 0), 2)) <= SPLIT_TOLERANCE
 
 
+def splits_categorized(splits: List[Dict[str, Any]]) -> bool:
+    """True se existe ao menos uma split e TODAS têm category_id preenchido.
+
+    Uma split com valor/descrição mas sem categoria (ex.: usuário digitou um
+    nome novo que não existe ainda na árvore e não havia como criá-lo na hora)
+    não está, de fato, categorizada — mesmo que a soma dela bata com o total.
+    Sem essa checagem o lançamento aparentava "resolvido" (saldo ok) mas as
+    categorias reais (o que importa pros relatórios) ficavam órfãs e
+    invisíveis em qualquer busca por categoria. Bug relatado pelo Diego em
+    2026-06-28 (fracionamento "Lanchinho"/"Gasosa" que não aparecia em
+    nenhuma busca).
+    """
+    return bool(splits) and all(s.get("category_id") for s in splits)
+
+
 def derive_status(total_value: float, splits: List[Dict[str, Any]],
                   current: str = EntryStatus.PENDENTE.value) -> str:
-    """A_CATEGORIZAR enquanto as splits não fecham; senão preserva o status atual."""
-    if not splits_balanced(total_value, splits):
+    """A_CATEGORIZAR enquanto as splits não fecham ou alguma ainda não tem
+    categoria definida; senão preserva o status atual."""
+    if not splits_balanced(total_value, splits) or not splits_categorized(splits):
         return EntryStatus.A_CATEGORIZAR.value
     return current if current != EntryStatus.A_CATEGORIZAR.value else EntryStatus.PENDENTE.value
 

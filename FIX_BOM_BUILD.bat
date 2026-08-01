@@ -1,0 +1,13 @@
+@echo off
+title SuperDry -- Fix BOM e Rebuild
+echo [1/4] Re-copiando BudgetEditor.js sem BOM...
+"C:\Program Files\Git\bin\bash.exe" -c "scp -i ~/OneDrive/SuperDry-Atual-MIGRACAO/oracle-vm-key.key -o StrictHostKeyChecking=no ~/OneDrive/SuperDry-Atual-MIGRACAO/frontend/src/pages/budgets/BudgetEditor.js opc@148.116.108.43:/home/opc/superdry/frontend/src/pages/budgets/BudgetEditor.js && echo SCP_OK"
+echo [2/4] Strip CRLF...
+"C:\Program Files\Git\bin\bash.exe" -c "ssh -i ~/OneDrive/SuperDry-Atual-MIGRACAO/oracle-vm-key.key -o StrictHostKeyChecking=no opc@148.116.108.43 'sed -i s/\r// /home/opc/superdry/frontend/src/pages/budgets/BudgetEditor.js && echo CRLF_OK'"
+echo [3/4] Build + restart...
+"C:\Program Files\Git\bin\bash.exe" -c "ssh -i ~/OneDrive/SuperDry-Atual-MIGRACAO/oracle-vm-key.key -o StrictHostKeyChecking=no opc@148.116.108.43 'cd /home/opc/superdry/frontend && npm run build 2>&1 | tail -10 && sudo systemctl restart superdry && echo BUILD_DONE'"
+echo [4/4] Verificando (10s)...
+timeout /t 10 /nobreak > nul
+"C:\Program Files\Git\bin\bash.exe" -c "ssh -i ~/OneDrive/SuperDry-Atual-MIGRACAO/oracle-vm-key.key -o StrictHostKeyChecking=no opc@148.116.108.43 'curl -s -o /dev/null -w HTTP_%{http_code} http://localhost:8001/api/auth/me'"
+echo.
+pause

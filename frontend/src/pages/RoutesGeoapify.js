@@ -257,7 +257,15 @@ export function RoutesGeoapify() {
   const loadAvailableItems = async () => {
     try {
       const res   = await routesApi.getAvailableItems();
-      const items = Array.isArray(res.data) ? res.data : res.data.available_items || [];
+      const raw   = Array.isArray(res.data) ? res.data : res.data.available_items || [];
+      // Filtra itens sem ID válido para evitar bug onde clicar num item sem ID remove todos
+      const valid = raw.filter(i => i.budget_item_id && i.budget_item_id !== 'null');
+      // Mais recentes no topo: ordena por created_at desc, fallback para inverter array
+      const items = [...valid].sort((a, b) => {
+        const da = a.created_at || a.id || '';
+        const db = b.created_at || b.id || '';
+        return db.localeCompare(da);
+      });
       setAvailableItems(items);
     } catch (err) {
       console.error(err);
@@ -301,10 +309,10 @@ export function RoutesGeoapify() {
     if (!newStatus || newStatus === item.status) return;
     try {
       await budgetItemsApi.updateStatus(item.budget_item_id, newStatus);
-      const valid = ['EXECUTAR_NO_LOCAL','RETIRAR','ENTREGAR'];
+      const routeEligible = ['RETIRAR','EXECUTAR_NO_LOCAL','ENTREGAR','AGUARDANDO_ENTREGA'];
       setAvailableItems(prev =>
         prev.map(i => i.budget_item_id === item.budget_item_id ? { ...i, status: newStatus } : i)
-            .filter(i => valid.includes(i.status))
+            .filter(i => routeEligible.includes(i.status))
       );
       setEditingStatus(prev => { const u = { ...prev }; delete u[item.budget_item_id]; return u; });
       toast({ title: 'Sucesso', description: `Status atualizado para ${newStatus}` });

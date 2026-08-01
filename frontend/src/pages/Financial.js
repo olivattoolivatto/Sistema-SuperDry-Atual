@@ -185,7 +185,7 @@ function PaymentModal({ item, onClose, onSaved }) {
 }
 
 // ── Linha de item (lista flat) ────────────────────────────────────────────────
-function ItemListRow({ doc, onRegisterPayment, selected, onToggleSelect }) {
+function ItemListRow({ doc, onRegisterPayment, selected, onToggleSelect, outOfPeriod }) {
   const [expanded, setExpanded] = useState(false);
   const item = doc.item;
   const ps = PAY_STATUS[item.payment_status] || PAY_STATUS.PENDENTE;
@@ -193,6 +193,12 @@ function ItemListRow({ doc, onRegisterPayment, selected, onToggleSelect }) {
   const pct = item.total_value > 0 ? Math.min(100, ((item.paid_value || 0) / item.total_value) * 100) : 0;
   const remaining = (item.total_value || 0) - (item.paid_value || 0);
   const canSelect = !['PAGO', 'CORTESIA'].includes(item.payment_status) && remaining > 0;
+
+  // Calcula dias em aberto para itens fora do período
+  const daysOverdue = outOfPeriod ? (() => {
+    const ref = itemRefDate(doc);
+    return Math.floor((Date.now() - ref.getTime()) / 86400000);
+  })() : null;
 
   const lastPayment = item.payment_records?.length > 0
     ? item.payment_records[item.payment_records.length - 1]
@@ -222,6 +228,11 @@ function ItemListRow({ doc, onRegisterPayment, selected, onToggleSelect }) {
             <span className="text-sm font-medium text-gray-800 truncate max-w-[180px]">{item.service_name}</span>
             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${ss.color}`}>{ss.label}</span>
             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${ps.color}`}>{ps.icon} {ps.label}</span>
+            {outOfPeriod && daysOverdue !== null && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 bg-orange-100 text-orange-700 border border-orange-200">
+                ⏰ {daysOverdue}d em aberto
+              </span>
+            )}
           </div>
           {item.total_value > 0 && (
             <div className="flex items-center gap-1.5 mt-1">
@@ -781,6 +792,19 @@ export function Financial() {
   const selectedDocs  = useMemo(() => [...selected.values()], [selected]);
   const selectedTotal = selectedDocs.reduce((s, d) => s + ((d.item.total_value||0) - (d.item.paid_value||0)), 0);
 
+  const handleMultiReceipt = async () => {
+    const ids = selectedDocs.map(d => d.item.id || d.item._id);
+    if (!ids.length) return;
+    try {
+      const res = await itemsApi.multiReceipt(ids);
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url  = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (e) {
+      toast({ title: 'Erro ao gerar recibo', description: e.message, variant: 'destructive' });
+    }
+  };
+
   // ── Carga ─────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true);
@@ -810,14 +834,35 @@ export function Financial() {
   useEffect(() => { load(); }, [load]);
 
   // ── Aplicar filtro de período ─────────────────────────────────────────────
+  // REGRA FUNDAMENTAL: itens com pagamento em aberto (PENDENTE/PARCIAL/INADIMPLENTE)
+  // NUNCA são ocultados pelo filtro de data — dívida não tem prazo de validade.
+  // Itens sem payment_status definido são tratados como PENDENTE (defensivo).
+  // Itens PAGO/CORTESIA respeitam o filtro normalmente.
+  const DEBT_STATUSES = new Set(['PENDENTE', 'PARCIAL', 'INADIMPLENTE']);
+
   const periodFilteredItems = useMemo(() => {
     if (!dateRange) return items;
     return items.filter(doc => {
+      const ps = doc.item?.payment_status || 'PENDENTE'; // fallback: sem campo = ainda não pago
+      if (DEBT_STATUSES.has(ps)) return true;            // devedores: sempre visíveis
       const d = itemRefDate(doc);
       if (dateRange.from && d < dateRange.from) return false;
       if (dateRange.to   && d > dateRange.to)   return false;
       return true;
     });
+  }, [items, dateRange]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Conjunto de IDs fora do período (para badge "⏰ Xd em aberto")
+  // Inclui qualquer item cujo itemRefDate está fora do período — independente de status.
+  const outOfPeriodIds = useMemo(() => {
+    if (!dateRange) return new Set();
+    const out = new Set();
+    for (const doc of items) {
+      const d = itemRefDate(doc);
+      const outside = (dateRange.from && d < dateRange.from) || (dateRange.to && d > dateRange.to);
+      if (outside) out.add(doc.item.id || doc.item._id);
+    }
+    return out;
   }, [items, dateRange]);
 
   // ── KPIs (calculados sobre itens do período) ──────────────────────────────
@@ -996,7 +1041,9 @@ export function Financial() {
         {grouped.length > 0 && (
           <p className="text-[10px] text-gray-400">
             {grouped.length} cliente{grouped.length > 1 ? 's' : ''} · {periodFilteredItems.length} serviço{periodFilteredItems.length > 1 ? 's' : ''} no período
-            {items.length !== periodFilteredItems.length && ` (${items.length} no total)`}
+            {outOfPeriodIds.size > 0 && (
+              <span className="text-orange-500 font-medium"> · ⏰ {outOfPeriodIds.size} em aberto fora do período</span>
+            )}
           </p>
         )}
       </div>
@@ -1011,7 +1058,7 @@ export function Financial() {
           <DollarSign className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="text-sm">Nenhum registro encontrado.</p>
           {periodPreset !== '' ? (
-            <p className="text-xs mt-1">Tente ampliar o período ou selecionar "Todos".</p>
+            <p className="text-xs mt-1">Tente ampliar o período, mudar o filtro de status ou selecionar "Todos".</p>
           ) : (
             <p className="text-xs mt-1">Itens aparecem aqui após serem marcados como Entregue ou Executado.</p>
           )}
@@ -1033,6 +1080,7 @@ export function Financial() {
                   onRegisterPayment={setPayModal}
                   selected={selectedIds.has(doc.item.id)}
                   onToggleSelect={toggleSelect}
+                  outOfPeriod={outOfPeriodIds.has(doc.item.id || doc.item._id)}
                 />
               ))}
             </div>
@@ -1053,6 +1101,10 @@ export function Financial() {
             </div>
           </div>
           <button onClick={clearSelection} className="text-xs text-gray-400 hover:text-gray-600">limpar</button>
+          <button onClick={handleMultiReceipt}
+            className="px-3 py-2 bg-white border border-blue-300 text-blue-700 text-sm font-semibold rounded-xl hover:bg-blue-50">
+            📄 Recibo
+          </button>
           <button onClick={() => setManualBaixaOpen(true)}
             className="px-3 py-2 bg-white border border-emerald-300 text-emerald-700 text-sm font-semibold rounded-xl hover:bg-emerald-50">
             Já recebi (baixa)
