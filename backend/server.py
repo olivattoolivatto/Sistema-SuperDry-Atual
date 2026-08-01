@@ -101,6 +101,57 @@ def _condense_risk(text: str, max_len: int = 200) -> str:
         snippet = snippet[:max_len - 3] + '...'
     return snippet
 
+
+# Textos curtos de aviso por categoria para a mensagem de WhatsApp
+_WA_SHORT_RISKS = {
+    'ESTOFADOS':
+        "🚨 Estofados podem esconder *situações perigosas*: migração de manchas, ferrugem entre outros danos irreversíveis, *não garantimos* remoção delas nem outros tipos de manchas. Leia atentamente o termo de aceite para mais informações.",
+    'COLCHOES':
+        "🚨 Colchões podem esconder *situações perigosas*: migração de manchas ou cores, ferrugem entre outros danos irreversíveis, *não garantimos* remoção delas nem outros tipos de manchas. Leia atentamente o termo de aceite para mais informações.",
+    'BOX':
+        "🚨 Colchões/Box podem esconder *situações perigosas*: migração de manchas ou cores, ferrugem entre outros danos irreversíveis, *não garantimos* remoção delas nem outros tipos de manchas. Leia atentamente o termo de aceite para mais informações.",
+    'TAPETES':
+        "🚨 Felpas amassadas e tapete soltando areia são sinais de desgaste irreversíveis. Não removemos manchas. Tapetes orientais/persas com histórico de urina podem migrar ou variar a cor. Prazo de entrega: até 5 dias úteis. Leia atentamente o termo de aceite para mais informações.",
+    'CARPETES_E_TAPETES_NO_LOCAL':
+        "🚨 Felpas amassadas por desgaste são irreversíveis. Itens com urina prévia podem migrar ou variar a cor. Secagem: ±12h. Leia atentamente o termo de aceite para mais informações.",
+    'CORTINAS':
+        "🚨 Cortinas e especialmente *Blackouts podem escurecer ou descolar*. Tecidos nunca lavados podem encolher ou alongar. Materiais com PVC e similares podem colar ou rasgar por enfraquecimento devido à radiação solar. Leia atentamente o termo de aceite para mais informações.",
+    'PERSIANAS':
+        "🚨 Blackouts podem escurecer ou descolar por desgaste via radiação solar. Materiais com PVC podem colar ou rasgar. Leia atentamente o termo de aceite para mais informações.",
+    'ITENS_INFANTIS':
+        "🚨 Priorizamos produtos suaves — algumas manchas podem não sair totalmente. Leia atentamente o termo de aceite para mais informações.",
+    'VEICULOS':
+        "🚨 Risco de descolamento do tecido do teto e forrações — avalie antes. Não garantimos remoção de manchas. Tecidos escuros podem parecer desbotados após limpeza. Leia atentamente o termo de aceite para mais informações.",
+    'IMPERMEABILIZACAO':
+        "🚨 Não protege contra óleos nem urina por tempo prolongado. Atrito diário reduz a durabilidade. Aguardar 24h para uso após aplicação. Leia atentamente o termo de aceite para mais informações.",
+    'OUTROS_ITENS':
+        "🚨 Não garantimos remoção de manchas. Peças escuras podem parecer desbotadas após limpeza. Secagem: ±8h. Leia atentamente o termo de aceite para mais informações.",
+}
+
+# Ordem de exibição das categorias na mensagem (mantém coerência visual)
+_CAT_ORDER = [
+    'ESTOFADOS', 'COLCHOES', 'BOX', 'TAPETES', 'CARPETES_E_TAPETES_NO_LOCAL',
+    'CORTINAS', 'PERSIANAS', 'ITENS_INFANTIS', 'VEICULOS', 'IMPERMEABILIZACAO', 'OUTROS_ITENS',
+]
+
+
+def _suggest_installments(total: float) -> int:
+    """Calcula máximo de parcelas sugerido: ~R$100/parcela, teto 6x."""
+    if total <= 200: return 2
+    if total <= 300: return 3
+    if total <= 400: return 4
+    if total <= 500: return 5
+    return 6  # R$600+ → 6x (teto)
+
+
+def _format_payment_wa(total: float) -> str:
+    """Formata sugestão de pagamento para WhatsApp."""
+    installments = _suggest_installments(total)
+    return (
+        f"R$ {total:.2f} à vista no PIX ou em até {installments}x sem juros no cartão de crédito"
+    )
+
+
 # Utility functions for text formatting
 def format_whatsapp_text(text: str) -> str:
     """Convert markdown-like formatting to WhatsApp format"""
@@ -3034,43 +3085,42 @@ async def delete_budget(budget_id: str, current_user: UserPublic = Depends(get_c
 
 @api_router.get("/budgets/{budget_id}/whatsapp")
 async def generate_whatsapp_message(budget_id: str):
-    """Gerar mensagem formatada para WhatsApp"""
+    """Gerar mensagem formatada para WhatsApp."""
     try:
         budget = await db.budgets.find_one({"id": budget_id})
         if not budget:
             raise HTTPException(status_code=404, detail="Budget not found")
-        
-        # Get client info
+
         client = await db.clients.find_one({"id": budget.get("client_id")})
         if not client:
             raise HTTPException(status_code=404, detail="Client not found")
-        
-        # Format date
-        updated_date = budget.get("updated_at", datetime.utcnow())
-        if isinstance(updated_date, str):
-            updated_date = datetime.fromisoformat(updated_date.replace('Z', '+00:00'))
-        formatted_date = updated_date.strftime("%d/%m/%Y")
-        
-        # Build WhatsApp message
-        message = f"""░▒▒▓▓ *ORÇAMENTO PERSONALIZADO* ▓▓▒▒░
-     _SuperDry Lavanderia de Tapetes e Estofados_
 
-*Código do Orçamento:* {budget_id}
-*Cliente:* {budget.get('client_name', 'N/A')}
-*Atendente:* {budget.get('salesperson', 'N/A')}
-*Data do Orçamento:* {formatted_date}
+        # Data do orçamento: prefere created_at, cai em updated_at
+        orc_date = budget.get("created_at") or budget.get("updated_at") or datetime.utcnow()
+        if isinstance(orc_date, str):
+            orc_date = datetime.fromisoformat(orc_date.replace('Z', '+00:00'))
+        formatted_date = orc_date.strftime("%d/%m/%Y")
 
-*Quantidade de Itens:* {len(budget.get('items', []))}"""
+        items = budget.get("items") or []
+        total_value = float(budget.get("total_value") or 0)
 
-        # Add items
-        for item in budget.get('items', []):
+        # ── Cabeçalho ──────────────────────────────────────────────────────────
+        message = (
+            "🔸*ORÇAMENTO PERSONALIZADO*🔸\n"
+            "                     💙_SuperDry®_💚\n"
+            "  _Lavanderia de Tapetes e Estofados_\n\n"
+            f"🏷️ *Código do Orçamento:* {budget_id}\n"
+            f"👨‍👩‍👦 *Cliente:* {budget.get('client_name', 'N/A')}\n"
+            f"🗣️ *Atendente:* {budget.get('salesperson', 'N/A')}\n"
+            f"📅 *Data do Orçamento:* {formatted_date}\n\n"
+            f"📄 *Quantidade de Itens:* {len(items)}"
+        )
+
+        # ── Itens ──────────────────────────────────────────────────────────────
+        for item in items:
             item_line = f"- {item.get('service_name', 'N/A')}"
-
-            # Safe float conversion (campos podem ser None no banco)
             area_m2       = float(item.get('area_m2')       or 0)
             linear_meters = float(item.get('linear_meters') or 0)
-
-            # Add measurements based on service type
             if area_m2 > 0:
                 diameter = item.get('diameter')
                 width    = item.get('width')
@@ -3089,58 +3139,42 @@ async def generate_whatsapp_message(budget_id: str):
                 else:
                     item_line += f" - {linear_meters:.1f}m lineares"
             else:
-                quantity = float(item.get('quantity') or 1)
-                item_line += f" - {quantity:.0f} unid." if quantity > 1 else " - 1 unid."
-
+                qty = float(item.get('quantity') or 1)
+                item_line += f" - {qty:.0f} unid." if qty > 1 else " - 1 unid."
             item_line += f" - R$ {float(item.get('total_value') or 0):.2f}"
             message += f"\n_{item_line}_"
-        
-        # Add desconto + total
-        _disc_amt = float(budget.get("discount_amount") or 0)
-        _subtotal = float(budget.get("subtotal_value") or budget.get("total_value", 0))
-        if _disc_amt > 0:
-            _disc_type = budget.get("discount_type", "fixed")
-            _disc_val  = float(budget.get("discount_value") or 0)
-            _disc_label = f"{_disc_val:.0f}%" if _disc_type == "percent" else f"R$ {_disc_val:.2f}"
-            message += f"\n\n*Subtotal:* R$ {_subtotal:.2f}"
-            message += f"\n*Desconto ({_disc_label}):* -R$ {_disc_amt:.2f}"
-        message += f"\n\n*VALOR TOTAL:* R$ {budget.get('total_value', 0):.2f}"
-        
-        # Avisos condensados por categoria (extraídos do BudgetConfig)
-        budget_cfg = await db.budget_config.find_one({}) or {}
-        _CAT_TO_RISK_WA = {
-            'ESTOFADOS':                    ('risks_estofados',              '🛋️ Estofados'),
-            'COLCHOES':                     ('risks_colchoes',               '🛏️ Colchões'),
-            'BOX':                          ('risks_box',                    '🛏️ Box'),
-            'TAPETES':                      ('risks_tapetes',                '🗞️ Tapetes'),
-            'CARPETES_E_TAPETES_NO_LOCAL':  ('risks_carpetes_tapetes_local', '🧹 Carpetes/local'),
-            'CORTINAS':                     ('risks_cortinas',               '📜 Cortinas'),
-            'PERSIANAS':                    ('risks_persianas',              '🪟 Persianas'),
-            'ITENS_INFANTIS':               ('risks_itens_infantis',         '🛒 Itens Infantis'),
-            'VEICULOS':                     ('risks_veiculos',               '🚗 Veículos'),
-            'IMPERMEABILIZACAO':            ('risks_impermeabilizacao',      '💦 Impermeabilização'),
-            'OUTROS_ITENS':                 ('risks_outros_itens',           '📦 Outros'),
-        }
-        cats_seen = {itm.get('service_category') for itm in budget.get('items', []) if itm.get('service_category')}
-        risk_lines = []
-        for cat in sorted(cats_seen):
-            if cat in _CAT_TO_RISK_WA:
-                rk, label = _CAT_TO_RISK_WA[cat]
-                condensed = _condense_risk(budget_cfg.get(rk, '') or '')
-                if condensed:
-                    risk_lines.append(f"⚠️ *{label}:* _{condensed}_")
-        if risk_lines:
-            message += "\n\n*⚠️ Avisos importantes:*\n" + '\n'.join(risk_lines)
 
-        # Link público do PDF + aceite virtual
-        sys_cfg = await db.system_config.find_one({}) or {}
+        # ── Total + desconto + pagamento ───────────────────────────────────────
+        _disc_amt  = float(budget.get("discount_amount") or 0)
+        _subtotal  = float(budget.get("subtotal_value")  or total_value)
+        if _disc_amt > 0:
+            _disc_type  = budget.get("discount_type", "fixed")
+            _disc_val   = float(budget.get("discount_value") or 0)
+            _disc_label = f"{_disc_val:.0f}%" if _disc_type == "percent" else f"R$ {_disc_val:.2f}"
+            message += f"\n\n📝 *Subtotal:* R$ {_subtotal:.2f}"
+            message += f"\n🏷️ *Desconto ({_disc_label}):* -R$ {_disc_amt:.2f}"
+        message += f"\n\n📝*VALOR TOTAL:* R$ {total_value:.2f}"
+        message += f"\n💳*FORMAS DE PAGAMENTO:* {_format_payment_wa(total_value)}"
+
+        # ── Avisos por categoria (textos curtos fixos) ─────────────────────────
+        cats_seen = [
+            cat for cat in _CAT_ORDER
+            if any(itm.get('service_category') == cat for itm in items)
+        ]
+        if cats_seen:
+            message += "\n\n*⚠️ Avisos importantes:*"
+            for cat in cats_seen:
+                risk_txt = _WA_SHORT_RISKS.get(cat)
+                if risk_txt:
+                    message += f"\n{risk_txt}"
+
+        # ── Links: aceite + PDF ────────────────────────────────────────────────
         public_url = (
             os.environ.get("PUBLIC_WEBHOOK_URL", "")
             .replace("/api/webhooks/payment", "")
             .strip("/")
         )
 
-        # Aceite Virtual — gera automaticamente se ainda não existir
         acceptance = await db.service_acceptances.find_one({"budget_id": budget_id})
         if not acceptance and public_url:
             new_acc = ServiceAcceptance(
@@ -3152,63 +3186,54 @@ async def generate_whatsapp_message(budget_id: str):
             await db.service_acceptances.insert_one(new_acc.dict())
             acceptance_token = new_acc.token
         elif acceptance:
-            acceptance_token = acceptance["token"]
+            acceptance_token = acceptance.get("token")
         else:
             acceptance_token = None
 
-        pdf_line = ""
-        if public_url:
-            pdf_line = f"\n✉ *PDF do orçamento com mais informações sobre o serviço:* ✉\n{public_url}/api/budgets/{budget_id}/pdf"
-
-        aceite_line = ""
         if public_url and acceptance_token:
-            aceite_line = f"\n\n✅ *Leia e confirme os termos do serviço:*\n{public_url}/aceite/{acceptance_token}"
+            message += (
+                f"\n\n✅ *Para autorizar a execução leia e confirme os termos do serviço:*\n"
+                f"{public_url}/aceite/{acceptance_token}"
+            )
 
-        # Footer
-        message += f"""
+        if public_url:
+            message += (
+                f"\n\n✉ *PDF do orçamento com mais informações sobre o serviço:* ✉\n"
+                f"{public_url}/api/budgets/{budget_id}/pdf"
+            )
 
-{pdf_line}{aceite_line}
-_Caso tenha dúvidas, estou à disposição!_
-_Agradecemos a confiança. Orçamento válido por 30 dias._
+        # ── Rodapé ─────────────────────────────────────────────────────────────
+        message += (
+            "\n_Caso tenha dúvidas, estou à disposição!_"
+            "\n_Agradecemos a confiança. Orçamento válido por 30 dias._"
+            "\n\nSuperDry Lavanderia |\ninstragram.com/lavesuperdry"
+        )
 
-SuperDry Lavanderia | @superdrylavanderia"""
+        # ── URL WhatsApp ───────────────────────────────────────────────────────
+        phone_raw = (client.get('phone_primary') or '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '')
+        phone_clean = phone_raw if phone_raw.startswith('55') else f"55{phone_raw}"
 
-        # Clean phone number for WhatsApp URL
-        phone_raw = client.get('phone_primary', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '')
-        
-        # Ensure phone starts with country code
-        if not phone_raw.startswith('55'):
-            phone_clean = f"55{phone_raw}"
-        else:
-            phone_clean = phone_raw
-        
-        # Create WhatsApp URL with proper encoding
         import urllib.parse
         message_encoded = urllib.parse.quote(message, safe='')
-        
-        # Create two versions - one with text parameter and one without for manual paste
         whatsapp_url = f"https://wa.me/{phone_clean}"
         whatsapp_url_with_text = f"https://wa.me/{phone_clean}?text={message_encoded}"
-        
-        # Check if URL is too long (WhatsApp limit ~2000 chars)
+
         if len(whatsapp_url_with_text) > 2000:
-            # Provide URL without text parameter for manual copy/paste
             return {
                 "message": message,
                 "phone": client.get("phone_primary", ""),
                 "whatsapp_url": whatsapp_url,
                 "whatsapp_url_with_text": None,
-                "note": "Mensagem muito longa para URL automática. Use o campo 'message' para copiar e colar manualmente."
+                "note": "Mensagem muito longa para URL automática. Copie e cole manualmente.",
             }
-        else:
-            return {
-                "message": message,
-                "phone": client.get("phone_primary", ""),
-                "whatsapp_url": whatsapp_url_with_text,
-                "whatsapp_url_simple": whatsapp_url,
-                "note": "Mensagem incluída na URL automaticamente."
-            }
-        
+        return {
+            "message": message,
+            "phone": client.get("phone_primary", ""),
+            "whatsapp_url": whatsapp_url_with_text,
+            "whatsapp_url_simple": whatsapp_url,
+            "note": "Mensagem incluída na URL automaticamente.",
+        }
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error generating WhatsApp message: {str(e)}")
 
@@ -7033,6 +7058,37 @@ async def get_acceptance_status(
     }
 
 
+@api_router.get("/acceptances")
+async def list_acceptances(
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Lista todos os aceites com info do orçamento — para painel de gestão."""
+    public_url = (
+        os.environ.get("PUBLIC_WEBHOOK_URL", "")
+        .replace("/api/webhooks/payment", "")
+        .strip("/")
+    )
+    docs = await db.service_acceptances.find({}).sort("created_at", -1).to_list(500)
+    result = []
+    for doc in docs:
+        budget = await db.budgets.find_one({"id": doc.get("budget_id")}, {"client_name": 1, "total_value": 1, "budget_status": 1})
+        gallery_token = doc.get("gallery_token")
+        result.append({
+            "id": doc.get("id"),
+            "budget_id": doc.get("budget_id"),
+            "client_name": budget.get("client_name", "—") if budget else "—",
+            "total_value": budget.get("total_value", 0) if budget else 0,
+            "status": doc.get("status", "PENDING"),
+            "accepted_at": doc.get("accepted_at"),
+            "accepted_name": doc.get("accepted_name"),
+            "accepted_ip": doc.get("accepted_ip"),
+            "created_at": doc.get("created_at"),
+            "link": f"{public_url}/aceite/{doc['token']}",
+            "gallery_link": f"{public_url}/galeria/{gallery_token}" if gallery_token else None,
+        })
+    return {"acceptances": result, "total": len(result)}
+
+
 @api_router.get("/acceptance/{token}")
 async def get_acceptance_public(token: str, request: HttpRequest):
     """Público — retorna dados do orçamento + textos de risco para a página de aceite."""
@@ -7589,57 +7645,6 @@ async def list_audit_logs(
     cleaned_docs = [clean_doc(d) for d in docs]
     return {"logs": cleaned_docs, "count": len(cleaned_docs)}
 
-
-# ============================================================
-# DIAGNÓSTICO TEMPORÁRIO — remover após uso
-# ============================================================
-@api_router.get("/debug/dashboard-items")
-async def debug_dashboard_items():
-    """Endpoint temporário: lista exatamente quais itens estão nos contadores do dashboard."""
-    ROUTE_ST  = {"RETIRAR", "EXECUTAR_NO_LOCAL", "ENTREGAR"}
-    WASH_ST   = {"EM_LAVAGEM", "EM_LAVAGEM_PARCEIRO", "COLETADO", "AGUARDANDO_ENTREGA",
-                 "AGUARDANDO_BUSCAR", "EXECUCAO_PARCIAL"}
-    DELIV_ST  = {"ENTREGUE", "EXECUTADO", "BUSCOU"}
-    DEBT_PAY  = {"PENDENTE", "PARCIAL", "INADIMPLENTE"}
-
-    pending_route, active_budgets_list, washing, financial = [], [], [], []
-
-    async for b in db.budgets.find({"budget_status": "APROVADO"}):
-        binfo = {"orc": b.get("id"), "cliente": b.get("client_name"), "status_orc": b.get("budget_status")}
-        pending_in_b = []
-        for it in (b.get("items") or []):
-            st = it.get("status")
-            if (st in ROUTE_ST and not it.get("current_route_id")
-                    and it.get("execution_mode") not in ("CLIENTE_TROUXE", "CLIENTE_LEVARA")):
-                entry = {**binfo, "item": it.get("id"), "servico": it.get("service_name"),
-                         "status": st, "modo": it.get("execution_mode")}
-                pending_route.append(entry)
-                pending_in_b.append(entry)
-        if pending_in_b:
-            active_budgets_list.append({**binfo, "itens_pendentes": len(pending_in_b)})
-
-    async for b in db.budgets.find({"items.status": {"$in": list(WASH_ST)}}):
-        for it in (b.get("items") or []):
-            if it.get("status") in WASH_ST:
-                washing.append({"orc": b.get("id"), "cliente": b.get("client_name"),
-                                 "status_orc": b.get("budget_status"),
-                                 "item": it.get("id"), "servico": it.get("service_name"),
-                                 "status": it.get("status")})
-
-    async for b in db.budgets.find({"items.status": {"$in": list(DELIV_ST)}}):
-        for it in (b.get("items") or []):
-            if it.get("status") in DELIV_ST and it.get("payment_status") in DEBT_PAY:
-                financial.append({"orc": b.get("id"), "cliente": b.get("client_name"),
-                                   "item": it.get("id"), "servico": it.get("service_name"),
-                                   "status": it.get("status"), "pagamento": it.get("payment_status"),
-                                   "valor": it.get("total_price", 0)})
-
-    return {
-        "itens_pendentes_rota":  {"total": len(pending_route),  "itens": pending_route},
-        "orcamentos_ativos":     {"total": len(active_budgets_list), "orcamentos": active_budgets_list},
-        "em_lavagem":            {"total": len(washing),         "itens": washing},
-        "pendencias_financeiras":{"total": len(financial),       "itens": financial},
-    }
 
 
 # ============================================================

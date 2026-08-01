@@ -54,11 +54,12 @@ const EditableField = ({ label, description, value, onSave, placeholder }) => {
 
   const formatPreview = (text) => {
     if (!text) return 'Nenhum texto configurado';
-    
+
     // Convert WhatsApp style formatting to HTML for preview
     return text
       .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
-      .replace(/_(.*?)_/g, '<em>$1</em>');
+      .replace(/_(.*?)_/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>');
   };
 
   return (
@@ -116,7 +117,7 @@ const EditableField = ({ label, description, value, onSave, placeholder }) => {
         </div>
       ) : (
         <div 
-          className="prose prose-sm max-w-none text-gray-700 p-3 bg-gray-50 rounded-lg min-h-[80px] flex items-start"
+          className="text-gray-700 p-3 bg-gray-50 rounded-lg min-h-[80px] text-sm leading-relaxed overflow-hidden"
           dangerouslySetInnerHTML={{ __html: formatPreview(value) }}
         />
       )}

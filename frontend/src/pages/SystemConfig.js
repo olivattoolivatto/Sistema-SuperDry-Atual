@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { Save, MapPin, Building2, Shield, Users, ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, X, KeyRound } from 'lucide-react';
+import { Save, MapPin, Building2, Shield, Users, ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, X, KeyRound, FileCheck, Image, ExternalLink, Copy, CheckCheck, RefreshCw } from 'lucide-react';
 import { systemConfigApi, placesApi, usersApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from '../hooks/use-toast';
@@ -89,6 +89,7 @@ export const SystemConfig = () => {
     users: false,
     catalog: false,
     budgetConfig: false,
+    documents: false,
   });
 
   useEffect(() => {
@@ -100,7 +101,13 @@ export const SystemConfig = () => {
       ...prev,
       [sectionName]: !prev[sectionName]
     }));
+    // Carrega aceites na primeira abertura
+    if (sectionName === 'documents' && !expandedSections.documents) {
+      setDocumentsLoaded(false);
+    }
   };
+
+  const [documentsLoaded, setDocumentsLoaded] = useState(false);
 
   const loadConfig = async () => {
     try {
@@ -753,6 +760,13 @@ export const SystemConfig = () => {
           <BudgetConfig embedded />
         </CollapsibleSection>
 
+        {/* Aceites & Fotos */}
+        <CollapsibleSection
+          sectionKey="documents" label="Aceites Digitais & Galerias de Fotos" icon="📋"
+          expanded={expandedSections.documents} onToggle={() => toggleSection('documents')}>
+          <AcceptancesPanel forceRefresh={!expandedSections.documents} />
+        </CollapsibleSection>
+
         {/* Save Button */}
         <div className="flex justify-end pt-2">
           <button
@@ -1236,3 +1250,210 @@ function UsersManager({ expanded, onToggle }) {
   );
 }
 
+// ============================================================
+// AcceptancesPanel — Aceites Digitais & Galerias de Fotos
+// ============================================================
+function AcceptancesPanel() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [filter, setFilter] = useState('ALL'); // ALL | ACCEPTED | PENDING
+  const [search, setSearch] = useState('');
+  const [copied, setCopied] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const r = await fetch(`${BACKEND_URL}/api/acceptances`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error('Erro ao carregar aceites');
+      const data = await r.json();
+      setItems(data.acceptances || []);
+      setLoaded(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!loaded) load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const copyLink = (link, id) => {
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(id);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const fmtDate = (iso) => {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('pt-BR', {
+      timeZone: 'America/Cuiaba',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const filtered = items.filter(a => {
+    if (filter !== 'ALL' && a.status !== filter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        (a.client_name || '').toLowerCase().includes(q) ||
+        (a.budget_id || '').toLowerCase().includes(q) ||
+        (a.accepted_name || '').toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  const counts = {
+    ALL: items.length,
+    ACCEPTED: items.filter(a => a.status === 'ACCEPTED').length,
+    PENDING: items.filter(a => a.status !== 'ACCEPTED').length,
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Controles */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="flex gap-2">
+          {[['ALL', 'Todos'], ['ACCEPTED', 'Assinados'], ['PENDING', 'Pendentes']].map(([v, l]) => (
+            <button
+              key={v}
+              onClick={() => setFilter(v)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                filter === v
+                  ? v === 'ACCEPTED' ? 'bg-green-100 text-green-800' : v === 'PENDING' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {l} <span className="ml-1 opacity-70">{counts[v]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 items-center">
+          <input
+            type="text"
+            placeholder="Buscar cliente ou orçamento..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={load}
+            disabled={loading}
+            className="p-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
+            title="Recarregar"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Lista */}
+      {loading && !loaded ? (
+        <div className="flex items-center justify-center py-10 text-gray-400">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando...
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-10 text-gray-400 text-sm">
+          {items.length === 0 ? 'Nenhum aceite gerado ainda.' : 'Nenhum resultado para o filtro atual.'}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(a => (
+            <div key={a.id || a.budget_id} className={`rounded-lg border p-4 ${a.status === 'ACCEPTED' ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                {/* Info principal */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      a.status === 'ACCEPTED' ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'
+                    }`}>
+                      {a.status === 'ACCEPTED' ? <><CheckCheck className="w-3 h-3" /> Assinado</> : 'Pendente'}
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900 truncate">{a.client_name}</span>
+                    <span className="text-xs text-gray-500">{a.budget_id}</span>
+                    {a.total_value > 0 && (
+                      <span className="text-xs text-gray-500">R$ {Number(a.total_value).toFixed(2)}</span>
+                    )}
+                  </div>
+
+                  {a.status === 'ACCEPTED' && (
+                    <div className="mt-1.5 text-xs text-gray-600 space-y-0.5">
+                      <div><span className="font-medium">Assinado por:</span> {a.accepted_name}</div>
+                      <div><span className="font-medium">Em:</span> {fmtDate(a.accepted_at)}</div>
+                      <div><span className="font-medium">IP:</span> {a.accepted_ip || '—'}</div>
+                    </div>
+                  )}
+                  {a.status !== 'ACCEPTED' && (
+                    <div className="mt-1 text-xs text-amber-700">
+                      Gerado em {fmtDate(a.created_at)} — aguardando assinatura do cliente
+                    </div>
+                  )}
+                </div>
+
+                {/* Ações */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Link do aceite */}
+                  <button
+                    onClick={() => copyLink(a.link, `aceite-${a.budget_id}`)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                    title="Copiar link do aceite"
+                  >
+                    {copied === `aceite-${a.budget_id}` ? <CheckCheck className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <FileCheck className="w-3.5 h-3.5" />
+                    Termo
+                  </button>
+                  <a
+                    href={a.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                    title="Abrir termo de aceite"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+
+                  {/* Galeria */}
+                  {a.gallery_link && (
+                    <>
+                      <button
+                        onClick={() => copyLink(a.gallery_link, `galeria-${a.budget_id}`)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-purple-300 bg-white text-xs text-purple-700 hover:bg-purple-50 transition-colors"
+                        title="Copiar link da galeria"
+                      >
+                        {copied === `galeria-${a.budget_id}` ? <CheckCheck className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <Image className="w-3.5 h-3.5" />
+                        Fotos
+                      </button>
+                      <a
+                        href={a.gallery_link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 rounded-lg border border-purple-300 bg-white text-purple-600 hover:bg-purple-50"
+                        title="Abrir galeria de fotos"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="text-xs text-gray-400 text-center pt-1">
+        Aceites com validade jurídica — Lei 14.063/2020 e Marco Civil da Internet
+      </p>
+    </div>
+  );
+}
