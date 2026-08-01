@@ -2,7 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle, AlertTriangle, Shield, FileText, Loader2, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+// Usa sempre o domínio atual para evitar mixed-content (HTTP dentro de HTTPS)
+const BACKEND_URL = window.location.origin;
 
 // Converte texto com simbologia WhatsApp para JSX formatado
 // *bold*, _italic_, ~strikethrough~, `code`

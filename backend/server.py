@@ -3196,17 +3196,11 @@ async def generate_whatsapp_message(budget_id: str):
                 f"{public_url}/aceite/{acceptance_token}"
             )
 
-        if public_url:
-            message += (
-                f"\n\n✉ *PDF do orçamento com mais informações sobre o serviço:* ✉\n"
-                f"{public_url}/api/budgets/{budget_id}/pdf"
-            )
-
         # ── Rodapé ─────────────────────────────────────────────────────────────
         message += (
             "\n_Caso tenha dúvidas, estou à disposição!_"
             "\n_Agradecemos a confiança. Orçamento válido por 30 dias._"
-            "\n\nSuperDry Lavanderia |\ninstragram.com/lavesuperdry"
+            "\n\nSuperDry Lavanderia | instagram.com/lavesuperdry"
         )
 
         # ── URL WhatsApp ───────────────────────────────────────────────────────
