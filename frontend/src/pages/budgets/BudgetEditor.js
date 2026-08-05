@@ -821,7 +821,7 @@ function BatchModal({ services, onClose, onAdd }) {
 }
 
 export default function BudgetEditor({ budget, onClose, onSaved, preselectedClient = null }) {
-  const isEdit = Boolean(budget?.id);
+  const isEdit = Boolean(budget?.id || savedId);
   const { user: currentUser } = useAuth();
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
@@ -888,12 +888,25 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
     });
   };
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!sendData?.message) return;
-    navigator.clipboard.writeText(sendData.message).then(() => {
+    try {
+      await navigator.clipboard.writeText(sendData.message);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    } catch {
+      // Fallback para contextos sem clipboard API
+      const el = document.createElement('textarea');
+      el.value = sendData.message;
+      el.style.position = 'fixed';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+      el.select();
+      try { document.execCommand('copy'); } catch {}
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const [form, setForm] = useState({
@@ -1089,7 +1102,7 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
         discount_value: Number(form.discount_value || 0),
       };
       const r = isEdit
-        ? await budgetsApi.update(budget.id, payload)
+        ? await budgetsApi.update(effectiveBudgetId, payload)
         : await budgetsApi.create(payload);
       setSavedId(r.data.id);
       onSaved?.(r.data);
