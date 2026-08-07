@@ -821,7 +821,6 @@ function BatchModal({ services, onClose, onAdd }) {
 }
 
 export default function BudgetEditor({ budget, onClose, onSaved, preselectedClient = null }) {
-  const isEdit = Boolean(budget?.id || savedId);
   const { user: currentUser } = useAuth();
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
@@ -842,6 +841,7 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
   // ID efetivo do orçamento (atualizado após salvar/criar)
   const [savedId, setSavedId] = useState(budget?.id || null);
   const effectiveBudgetId = savedId || budget?.id;
+  const isEdit = Boolean(effectiveBudgetId);
 
   // Painel "Enviar para cliente"
   const [sendPanel, setSendPanel] = useState(false);
