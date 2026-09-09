@@ -1129,7 +1129,7 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
         <div className="flex items-center justify-between px-4 py-3 border-b-2 border-blue-600 sticky top-0 bg-white z-10">
           <div className="min-w-0">
             <h3 className="font-semibold text-gray-900 truncate">
-              {isEdit ? `Editar Orçamento — ${budget.id}` : 'Novo Orçamento'}
+              {isEdit ? `Editar Orçamento — ${effectiveBudgetId}` : 'Novo Orçamento'}
             </h3>
             <p className="text-xs text-gray-500">
               {form.client_name ? `Cliente: ${form.client_name}` : 'Selecione o cliente para começar'}

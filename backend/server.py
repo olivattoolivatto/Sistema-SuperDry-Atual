@@ -31,6 +31,7 @@ import requests
 import math
 import unicodedata
 from typing import Tuple
+from xml.sax.saxutils import escape as _xml_escape
 from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -3182,11 +3183,14 @@ async def generate_whatsapp_message(budget_id: str):
 
         acceptance = await db.service_acceptances.find_one({"budget_id": budget_id})
         if not acceptance and public_url:
+            _wa_term = await _get_current_term_version()
             new_acc = ServiceAcceptance(
                 budget_id=budget_id,
                 client_id=budget.get("client_id"),
                 client_name_on_budget=budget.get("client_name"),
                 client_phone=budget.get("client_phone"),
+                term_version_id=_wa_term["id"] if _wa_term else None,
+                term_text_snapshot=_wa_term["text"] if _wa_term else None,
             )
             await db.service_acceptances.insert_one(new_acc.dict())
             acceptance_short = new_acc.short_id
@@ -3484,8 +3488,16 @@ async def generate_pdf_budget(budget_id: str):
                                 risk_key = 'risks_outros_itens'
                 service_categories.add(risk_key)
 
+                desc_text = item.get('service_name') or 'N/A'
+                item_obs = (item.get('observations') or '').strip()
+                if item_obs:
+                        desc_text = (
+                                f"{desc_text}<br/>"
+                                f"<font size='7' color='#666666'><i>{_xml_escape(item_obs)}</i></font>"
+                        )
+
                 table_data.append([
-                        Paragraph(item.get('service_name') or 'N/A', centered_style),
+                        Paragraph(desc_text, centered_style),
                         Paragraph(measures, centered_style),
                         Paragraph(area_m2_str, centered_style),
                         Paragraph(linear_meters_str, centered_style),
@@ -6928,6 +6940,92 @@ async def delete_technician_photo(photo_id: str):
 # ACEITE VIRTUAL — modelos e endpoints públicos
 # ============================================================
 
+class TermVersion(BaseModel):
+    """Versão imutável do Termo de Ciência. Nunca sobrescreve versões antigas."""
+    id: str = Field(default_factory=lambda: f"TRM-{str(uuid.uuid4().int)[:4].zfill(4)}")
+    version_number: int
+    text: str
+    is_active: bool = True
+    label: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: Optional[str] = None
+    created_by_name: Optional[str] = None
+
+
+async def _get_current_term_version() -> Optional[Dict]:
+    """Retorna a versão ativa do Termo de Ciência.
+    Na primeira chamada (sem versões), migra general_conditions do budget_config como v1."""
+    tv = await db.term_versions.find_one({"is_active": True}, sort=[("version_number", -1)])
+    if tv:
+        tv.pop("_id", None)
+        return tv
+    # Migração automática: usa general_conditions de budget_config como v1
+    budget_cfg = await db.budget_config.find_one({}) or {}
+    gc = budget_cfg.get("general_conditions", "")
+    if gc:
+        v1 = TermVersion(version_number=1, text=gc, is_active=True, label="v1 — migrado")
+        await db.term_versions.insert_one(v1.dict())
+        d = v1.dict()
+        d.pop("_id", None)
+        return d
+    return None
+
+
+@api_router.get("/term-versions")
+async def list_term_versions(current_user: UserPublic = Depends(get_current_user)):
+    """Lista todas as versões do Termo de Ciência (mais recente primeiro)."""
+    versions = await db.term_versions.find({}).sort("version_number", -1).to_list(200)
+    for v in versions:
+        v.pop("_id", None)
+    return {"versions": versions}
+
+
+@api_router.get("/term-versions/current")
+async def get_current_term_version_endpoint(current_user: UserPublic = Depends(get_current_user)):
+    """Retorna a versão ativa atual do Termo de Ciência."""
+    v = await _get_current_term_version()
+    if not v:
+        raise HTTPException(status_code=404, detail="Nenhum termo cadastrado")
+    return v
+
+
+@api_router.post("/term-versions")
+async def create_term_version(body: Dict[str, Any], current_user: UserPublic = Depends(get_current_user)):
+    """Cria nova versão do Termo (não apaga as antigas). Apenas ADMIN."""
+    if current_user.role not in ("ADMIN",):
+        raise HTTPException(status_code=403, detail="Apenas administradores podem criar versões do termo")
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Texto do termo é obrigatório")
+    label = (body.get("label") or "").strip() or None
+
+    latest = await db.term_versions.find_one({}, sort=[("version_number", -1)])
+    next_num = (latest["version_number"] + 1) if latest else 1
+
+    # Desativa todas as anteriores
+    await db.term_versions.update_many({}, {"$set": {"is_active": False}})
+
+    new_version = TermVersion(
+        version_number=next_num,
+        text=text,
+        is_active=True,
+        created_by=current_user.id,
+        created_by_name=current_user.name,
+        label=label or f"v{next_num}",
+    )
+    await db.term_versions.insert_one(new_version.dict())
+
+    await log_audit(
+        db=db, action="TERM_VERSION_CREATED", entity_type="term_version",
+        entity_id=new_version.id, user_id=current_user.id, user_name=current_user.name,
+        details={"version_number": next_num, "label": new_version.label}
+    )
+
+    d = new_version.dict()
+    d.pop("_id", None)
+    return d
+
+
 class ServiceAcceptance(BaseModel):
     id: str = Field(default_factory=lambda: f"ACE-{str(uuid.uuid4().int)[:7].zfill(7)}")
     token: str = Field(default_factory=lambda: uuid.uuid4().hex + uuid.uuid4().hex)
@@ -6943,6 +7041,9 @@ class ServiceAcceptance(BaseModel):
     accepted_name: Optional[str] = None
     accepted_checkboxes: Dict[str, bool] = {}
     gallery_token: Optional[str] = None
+    # Versionamento do termo — snapshot imutável no momento da criação do aceite
+    term_version_id: Optional[str] = None
+    term_text_snapshot: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -6971,11 +7072,15 @@ async def generate_acceptance_link(
             "link": f"{public_url}/aceite/{existing['token']}",
         }
 
+    # Amarra o aceite à versão atual do termo (snapshot imutável)
+    current_term = await _get_current_term_version()
     acceptance = ServiceAcceptance(
         budget_id=budget_id,
         client_id=budget.get("client_id"),
         client_name_on_budget=budget.get("client_name"),
         client_phone=budget.get("client_phone"),
+        term_version_id=current_term["id"] if current_term else None,
+        term_text_snapshot=current_term["text"] if current_term else None,
     )
     await db.service_acceptances.insert_one(acceptance.dict())
 
@@ -7164,8 +7269,11 @@ async def get_acceptance_public(token: str, request: HttpRequest):
 
     budget_cfg = await db.budget_config.find_one({}) or {}
 
-    # Coleta categorias dos itens do orçamento
-    items = await db.budget_items.find({"budget_id": doc["budget_id"]}).to_list(None)
+    # Coleta categorias dos itens do orçamento — itens ficam embutidos no budget
+    items = budget.get("items") or []
+    # Fallback: tenta na coleção separada se embedded vier vazio
+    if not items:
+        items = await db.budget_items.find({"budget_id": doc["budget_id"]}).to_list(None)
     categories_present = set()
     for item in items:
         cat = item.get("service_category", "")
@@ -7174,17 +7282,17 @@ async def get_acceptance_public(token: str, request: HttpRequest):
 
     # Mapeia categoria → chave no BudgetConfig → label legível
     CAT_MAP = {
-        "ESTOFADOS": ("risks_estofados", "Estofados"),
-        "COLCHOES": ("risks_colchoes", "Colchões"),
-        "BOX": ("risks_box", "Box"),
-        "TAPETES": ("risks_tapetes", "Tapetes"),
-        "CARPETES_TAPETES_LOCAL": ("risks_carpetes_tapetes_local", "Carpetes e Tapetes (local)"),
-        "CORTINAS": ("risks_cortinas", "Cortinas"),
-        "PERSIANAS": ("risks_persianas", "Persianas"),
-        "ITENS_INFANTIS": ("risks_itens_infantis", "Itens Infantis"),
-        "VEICULOS": ("risks_veiculos", "Veículos"),
-        "IMPERMEABILIZACAO": ("risks_impermeabilizacao", "Impermeabilização"),
-        "OUTROS": ("risks_outros_itens", "Outros"),
+        "ESTOFADOS":                  ("risks_estofados",            "Estofados"),
+        "COLCHOES":                   ("risks_colchoes",             "Colchões"),
+        "BOX":                        ("risks_box",                  "Box"),
+        "TAPETES":                    ("risks_tapetes",              "Tapetes"),
+        "CARPETES_E_TAPETES_NO_LOCAL":("risks_carpetes_tapetes_local","Carpetes e Tapetes (local)"),
+        "CORTINAS":                   ("risks_cortinas",             "Cortinas"),
+        "PERSIANAS":                  ("risks_persianas",            "Persianas"),
+        "ITENS_INFANTIS":             ("risks_itens_infantis",       "Itens Infantis"),
+        "VEICULOS":                   ("risks_veiculos",             "Veículos"),
+        "IMPERMEABILIZACAO":          ("risks_impermeabilizacao",    "Impermeabilização"),
+        "OUTROS_ITENS":               ("risks_outros_itens",         "Outros"),
     }
 
     risk_sections = []
@@ -7195,7 +7303,14 @@ async def get_acceptance_public(token: str, request: HttpRequest):
             if text:
                 risk_sections.append({"category": cat, "label": label, "text": text})
 
-    general_conditions = budget_cfg.get("general_conditions", "")
+    # Usa o snapshot do termo amarrado ao aceite (garante auditoria imutável).
+    # Fallback: versão ativa atual → budget_config (para aceites antigos sem snapshot).
+    if doc.get("term_text_snapshot"):
+        general_conditions = doc["term_text_snapshot"]
+    else:
+        _current_tv = await _get_current_term_version()
+        general_conditions = _current_tv["text"] if _current_tv else budget_cfg.get("general_conditions", "")
+
     footer_text = budget_cfg.get("footer_text", "")
 
     sys_cfg = await db.system_config.find_one({}) or {}
@@ -7207,6 +7322,7 @@ async def get_acceptance_public(token: str, request: HttpRequest):
         "status": doc.get("status", "PENDING"),
         "accepted_at": doc.get("accepted_at"),
         "accepted_name": doc.get("accepted_name"),
+        "term_version_id": doc.get("term_version_id"),
         "budget": {
             "id": budget.get("id"),
             "client_name": budget.get("client_name"),
@@ -7250,6 +7366,13 @@ async def confirm_acceptance(token: str, body: Dict[str, Any], request: HttpRequ
         "accepted_checkboxes": checkboxes,
         "updated_at": now,
     }
+    # Retrocompatibilidade: aceites criados antes do versionamento não têm snapshot.
+    # Salva o snapshot no momento da confirmação para garantir rastreabilidade.
+    if not doc.get("term_text_snapshot"):
+        _confirm_term = await _get_current_term_version()
+        if _confirm_term:
+            update_fields["term_text_snapshot"] = _confirm_term["text"]
+            update_fields["term_version_id"] = _confirm_term["id"]
     if alternative_address:
         update_fields["alternative_address"] = alternative_address
     if address_note:

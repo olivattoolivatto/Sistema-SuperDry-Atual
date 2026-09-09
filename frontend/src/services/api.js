@@ -152,6 +152,13 @@ export const budgetConfigApi = {
   update: (data) => api.put('/budget-config', data),
 };
 
+// Term Versions API — versionamento imutável do Termo de Ciência
+export const termVersionsApi = {
+  list: () => api.get('/term-versions'),
+  getCurrent: () => api.get('/term-versions/current'),
+  create: (data) => api.post('/term-versions', data),
+};
+
 // System Config API
 export const systemConfigApi = {
   get: () => api.get('/system-config'),

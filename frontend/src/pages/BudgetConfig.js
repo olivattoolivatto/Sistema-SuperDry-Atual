@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Edit2, Save, X } from 'lucide-react';
-import { budgetConfigApi } from '../services/api';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Edit2, Save, X, Plus, ChevronDown, ChevronUp, BadgeCheck, Clock } from 'lucide-react';
+import { budgetConfigApi, termVersionsApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
 
 const CATEGORIES = [
@@ -125,6 +125,196 @@ const EditableField = ({ label, description, value, onSave, placeholder }) => {
   );
 };
 
+// ─── Gerenciador de Versões do Termo de Ciência ──────────────────────────────
+
+const formatPreviewText = (text) => {
+  if (!text) return 'Nenhum texto configurado';
+  return text
+    .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+    .replace(/_(.*?)_/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+};
+
+const TermVersionManager = () => {
+  const [versions, setVersions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [newText, setNewText] = useState('');
+  const [newLabel, setNewLabel] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await termVersionsApi.list();
+      setVersions(r.data.versions || []);
+      // Auto-expand active version
+      const active = (r.data.versions || []).find(v => v.is_active);
+      if (active) setExpandedId(active.id);
+    } catch (e) {
+      toast({ title: 'Erro', description: 'Não foi possível carregar as versões do termo.', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleCreate = async () => {
+    if (!newText.trim()) {
+      toast({ title: 'Atenção', description: 'O texto do termo não pode estar vazio.', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await termVersionsApi.create({ text: newText.trim(), label: newLabel.trim() || undefined });
+      toast({ title: 'Versão criada!', description: 'Nova versão do termo salva com sucesso.', variant: 'default' });
+      setCreating(false);
+      setNewText('');
+      setNewLabel('');
+      await load();
+    } catch (e) {
+      toast({ title: 'Erro', description: e?.response?.data?.detail || 'Erro ao criar versão.', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="h-32 bg-gray-100 rounded-lg animate-pulse" />;
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Lista de versões */}
+      {versions.length === 0 && !creating && (
+        <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+          <p className="mb-2">Nenhuma versão do termo cadastrada.</p>
+          <p className="text-sm">Clique em "Nova Versão" para criar a primeira.</p>
+        </div>
+      )}
+
+      {versions.map((v) => (
+        <div
+          key={v.id}
+          className={`rounded-lg border ${v.is_active ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'}`}
+        >
+          {/* Header da versão */}
+          <div
+            className="flex items-center justify-between p-4 cursor-pointer"
+            onClick={() => setExpandedId(expandedId === v.id ? null : v.id)}
+          >
+            <div className="flex items-center gap-3">
+              {v.is_active ? (
+                <BadgeCheck className="w-5 h-5 text-blue-600 shrink-0" />
+              ) : (
+                <Clock className="w-5 h-5 text-gray-400 shrink-0" />
+              )}
+              <div>
+                <span className="font-semibold text-gray-900">
+                  {v.label || `v${v.version_number}`}
+                </span>
+                {v.is_active && (
+                  <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                    ATIVA
+                  </span>
+                )}
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Criada em {v.created_at ? new Date(v.created_at).toLocaleString('pt-BR') : '—'}
+                  {v.created_by_name ? ` por ${v.created_by_name}` : ''}
+                </p>
+              </div>
+            </div>
+            {expandedId === v.id
+              ? <ChevronUp className="w-4 h-4 text-gray-400" />
+              : <ChevronDown className="w-4 h-4 text-gray-400" />
+            }
+          </div>
+
+          {/* Conteúdo expandido — somente leitura */}
+          {expandedId === v.id && (
+            <div className="px-4 pb-4">
+              <div
+                className="text-sm text-gray-700 p-4 bg-white rounded-lg border border-gray-200 leading-relaxed min-h-[80px]"
+                dangerouslySetInnerHTML={{ __html: formatPreviewText(v.text) }}
+              />
+              <p className="text-xs text-gray-400 mt-2">
+                ID: {v.id} · Versão {v.version_number}
+                {!v.is_active && ' · Esta versão está arquivada — aceites já emitidos com ela continuam vinculados a este texto.'}
+              </p>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Editor de nova versão */}
+      {creating ? (
+        <div className="border-2 border-blue-300 border-dashed rounded-lg p-5 bg-blue-50 space-y-3">
+          <h4 className="font-semibold text-blue-900">Nova versão do Termo de Ciência</h4>
+          <p className="text-xs text-blue-700">
+            A versão anterior será arquivada. Todos os novos aceites emitidos a partir de agora usarão este texto.
+            Aceites já emitidos continuam amarrados ao texto original — garantia de auditoria.
+          </p>
+          <div>
+            <label className="text-xs font-medium text-gray-700 block mb-1">Rótulo da versão (opcional)</label>
+            <input
+              type="text"
+              value={newLabel}
+              onChange={e => setNewLabel(e.target.value)}
+              placeholder="ex: v2 — inclui cláusula de impermeabilização"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-700 block mb-1">Texto do termo</label>
+            <textarea
+              value={newText}
+              onChange={e => setNewText(e.target.value)}
+              placeholder="Digite o texto completo do Termo de Ciência..."
+              rows={10}
+              className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical font-mono"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              <strong>Formatação:</strong> *negrito* · _itálico_
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleCreate}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'Salvando...' : 'Publicar nova versão'}
+            </button>
+            <button
+              onClick={() => { setCreating(false); setNewText(''); setNewLabel(''); }}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+            >
+              <X className="w-4 h-4" />
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => {
+            // Pre-fill with current active version text to make editing easier
+            const active = versions.find(v => v.is_active);
+            setNewText(active?.text || '');
+            setNewLabel('');
+            setCreating(true);
+          }}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-blue-400 hover:text-blue-600 transition-colors text-sm font-medium"
+        >
+          <Plus className="w-4 h-4" />
+          Nova Versão do Termo
+        </button>
+      )}
+    </div>
+  );
+};
+
 export const BudgetConfig = ({ embedded = false }) => {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -207,22 +397,17 @@ export const BudgetConfig = ({ embedded = false }) => {
         </div>
       </div>
 
-      {/* General Conditions Section */}
+      {/* Termo de Ciência — com versionamento imutável */}
       <div className="mb-12">
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Condições Gerais</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Termo de Ciência</h2>
           <p className="text-gray-600">
-            Configure o texto das condições gerais que aparecerá sempre ao final de todos os orçamentos PDF.
+            Texto que o cliente lê e assina digitalmente antes de autorizar o serviço.
+            Cada edição gera uma nova versão — a versão anterior fica arquivada e continua
+            vinculada aos aceites que foram emitidos com ela, garantindo rastreabilidade para auditoria.
           </p>
         </div>
-
-        <EditableField
-          label="Condições Gerais do Orçamento"
-          description="Texto fixo que aparece em todos os orçamentos PDF"
-          value={config?.general_conditions}
-          onSave={(value) => handleSaveField('general_conditions', value)}
-          placeholder="Digite as condições gerais do orçamento..."
-        />
+        <TermVersionManager />
       </div>
 
       {/* Footer Section */}

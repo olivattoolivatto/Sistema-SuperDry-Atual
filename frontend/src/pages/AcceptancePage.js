@@ -238,13 +238,18 @@ export default function AcceptancePage() {
           </div>
         )}
 
-        {/* General conditions */}
+        {/* General conditions / Termo de Ciência */}
         {data.general_conditions && (
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5 mb-2">
-              <FileText className="w-4 h-4 text-gray-500" /> Condições gerais
+              <FileText className="w-4 h-4 text-gray-500" /> Termo de Ciência
             </h3>
             <FormatText text={data.general_conditions} />
+            {data.term_version_id && (
+              <p className="text-xs text-gray-400 mt-2">
+                Versão do termo: {data.term_version_id}
+              </p>
+            )}
             <label className="flex items-start gap-2 mt-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -253,7 +258,7 @@ export default function AcceptancePage() {
                 className="mt-0.5 accent-blue-600 w-4 h-4 flex-shrink-0"
               />
               <span className="text-xs text-gray-600">
-                Li e aceito as condições gerais de prestação de serviço.
+                Li e aceito os termos e condições gerais de prestação de serviço.
               </span>
             </label>
           </div>
@@ -351,7 +356,9 @@ export default function AcceptancePage() {
         )}
 
         {data.footer_text && (
-          <p className="text-xs text-center text-gray-400 pb-4">{data.footer_text}</p>
+          <div className="text-xs text-center text-gray-400 pb-4 italic">
+            <FormatText text={data.footer_text} />
+          </div>
         )}
       </div>
     </div>
