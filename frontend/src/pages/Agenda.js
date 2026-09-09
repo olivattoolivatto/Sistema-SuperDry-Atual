@@ -2087,11 +2087,30 @@ export function Agenda() {
     setCheckingItem(true);
     try {
       const { data } = await itemsApi.get(iid);
+      const itemStatus = data?.item?.status || null;
       setLinkedItemPreview({
         ok: true,
         client_name: data?.item?.client_name || '(sem nome)',
         service_name: data?.item?.service_name || '(sem serviço)',
+        status: itemStatus,
       });
+      // Ajusta a duração automaticamente pro tipo de serviço do item vinculado
+      // (RETIRAR/ENTREGAR = 30min, EXECUTAR_NO_LOCAL = 90min), em vez de manter
+      // o padrão fixo de 2h — recalcula o horário de fim se já houver início.
+      if (itemStatus) {
+        const correctDuration = calculateDuration(itemStatus);
+        setNewEvent(prev => {
+          if (!prev.start_time) {
+            return { ...prev, duration: correctDuration };
+          }
+          const [hours, minutes] = prev.start_time.split(':');
+          const startDate = new Date();
+          startDate.setHours(parseInt(hours), parseInt(minutes));
+          const endDate = new Date(startDate.getTime() + correctDuration * 60000);
+          const endTime = endDate.toTimeString().slice(0, 5);
+          return { ...prev, duration: correctDuration, end_time: endTime };
+        });
+      }
     } catch (error) {
       setLinkedItemPreview({ ok: false });
     } finally {
@@ -3072,18 +3091,24 @@ export function Agenda() {
                     value={newEvent.start_time}
                     onChange={(e) => {
                       setNewEvent(prev => {
-                        // Automaticamente ajustar o horário de fim para 2 horas depois
+                        // Ajusta o fim automaticamente: usa a duração do item vinculado
+                        // (30min retirar/entregar, 90min executar no local) quando houver;
+                        // sem item vinculado, mantém o padrão de 2h.
                         const startTime = e.target.value;
                         const [hours, minutes] = startTime.split(':');
                         const startDate = new Date();
                         startDate.setHours(parseInt(hours), parseInt(minutes));
-                        const endDate = new Date(startDate.getTime() + 120 * 60000); // Adicionar 2 horas
+                        const durationMin = linkedItemPreview?.ok && linkedItemPreview?.status
+                          ? calculateDuration(linkedItemPreview.status)
+                          : 120;
+                        const endDate = new Date(startDate.getTime() + durationMin * 60000);
                         const endTime = endDate.toTimeString().slice(0, 5);
                         
                         return { 
                           ...prev, 
                           start_time: startTime,
-                          end_time: endTime 
+                          end_time: endTime,
+                          duration: durationMin,
                         };
                       });
                     }}
@@ -3122,7 +3147,7 @@ export function Agenda() {
               </div>
               
               <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded">
-                💡 Dica: O horário de fim é ajustado automaticamente para 2 horas após o início
+                💡 Dica: o horário de fim é ajustado automaticamente — usa a duração do item vinculado (30min retirar/entregar, 90min executar no local) quando houver, ou 2h por padrão
               </div>
 
               {/* Cor do evento */}
@@ -3181,6 +3206,9 @@ export function Agenda() {
                 {linkedItemPreview?.ok && (
                   <p className="text-xs text-green-700 mt-1">
                     ✓ {linkedItemPreview.client_name} — {linkedItemPreview.service_name}
+                    {linkedItemPreview.status && (
+                      <> (duração ajustada: {calculateDuration(linkedItemPreview.status)}min)</>
+                    )}
                   </p>
                 )}
                 {linkedItemPreview?.ok === false && (
