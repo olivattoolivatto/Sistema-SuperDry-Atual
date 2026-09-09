@@ -4464,7 +4464,7 @@ async def preview_budget(payload: Dict[str, Any], current_user: UserPublic = Dep
     }
 
 
-_CLAUDE_API_SKIP = False  # True após receber 400/401/403 — evita chamadas desnecessárias na sessão
+_OPENAI_API_SKIP = False  # True após receber 400/401/403 — evita chamadas desnecessárias na sessão
 
 
 @api_router.post("/automation/interpret-message")
@@ -4473,7 +4473,7 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
     Interpreta mensagem WhatsApp colada pelo atendente.
 
     Fluxo (três camadas de retaguarda):
-      1. Claude API (ANTHROPIC_API_KEY no .env) — melhor qualidade
+      1. OpenAI API (OPENAI_API_KEY no .env, modelo gpt-5.6-luna) — melhor qualidade
       2. Ollama local (llama3.2:3b em localhost:11434) — sem custo, sem internet
       3. Parser Python — fallback sempre disponível
     Após extração: matching de catálogo + verificação de cliente existente.
@@ -4493,13 +4493,13 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
         for s in services[:80]
     ) if services else "(catálogo vazio)"
 
-    # ── 1. Tentar Claude API ──────────────────────────────────────────────────
-    global _CLAUDE_API_SKIP
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    # ── 1. Tentar OpenAI API (GPT-5.6 Luna) ──────────────────────────────────
+    global _OPENAI_API_SKIP
+    openai_key = os.getenv("OPENAI_API_KEY", "")
     raw_parsed = None
     source = "python_parser"
 
-    if anthropic_key and not _CLAUDE_API_SKIP:
+    if openai_key and not _OPENAI_API_SKIP:
         try:
             prompt = (
                 "Você é o assistente da SuperDry Lavanderia em Cuiabá-MT.\n"
@@ -4536,31 +4536,31 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                 "- total_pix = valor à vista (pix/dinheiro mais barato) ou o total principal\n"
                 "- total_cash = valor em dinheiro se diferente do PIX, ou null\n"
             )
-            async with _httpx.AsyncClient(timeout=8.0) as hc:
+            async with _httpx.AsyncClient(timeout=12.0) as hc:
                 r = await hc.post(
-                    "https://api.anthropic.com/v1/messages",
+                    "https://api.openai.com/v1/chat/completions",
                     headers={
-                        "x-api-key": anthropic_key,
-                        "anthropic-version": "2023-06-01",
+                        "Authorization": f"Bearer {openai_key}",
                         "content-type": "application/json",
                     },
                     json={
-                        "model": "claude-3-5-haiku-20241022",
-                        "max_tokens": 1500,
+                        "model": "gpt-5.6-luna",
+                        "max_completion_tokens": 1500,
+                        "response_format": {"type": "json_object"},
                         "messages": [{"role": "user", "content": prompt}],
                     },
                 )
             if r.status_code == 200:
-                content = r.json().get("content", [{}])[0].get("text", "")
+                content = r.json().get("choices", [{}])[0].get("message", {}).get("content", "")
                 json_match = re.search(r'\{.*\}', content, re.DOTALL)
                 if json_match:
                     raw_parsed = _json.loads(json_match.group())
-                    source = "claude"
+                    source = "openai"
             elif r.status_code in (400, 401, 403):
-                _CLAUDE_API_SKIP = True
-                logging.info(f"Claude API retornou {r.status_code} — desabilitando para esta sessão do servidor.")
+                _OPENAI_API_SKIP = True
+                logging.info(f"OpenAI API retornou {r.status_code} — desabilitando para esta sessão do servidor.")
         except Exception as _ex:
-            logging.warning(f"Claude API falhou no interpret-message: {_ex}")
+            logging.warning(f"OpenAI API falhou no interpret-message: {_ex}")
 
     # ── 2. Fallback: Ollama local (llama3.2:3b) ──────────────────────────────
     if raw_parsed is None:
