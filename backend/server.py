@@ -4510,13 +4510,13 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                 "{\n"
                 '  "client_name": "nome real do cliente (sem timestamps, sem prefixos de grupo)",\n'
                 '  "phone": "telefone com DDD, ex: +55 65 99973-1235",\n'
-                '  "address": "endereço completo com nome do edifício/condomínio e bairro se mencionados",\n'
-                '  "complement": "apto, bloco, sala etc",\n'
+                '  "address": "PRIORIDADE 1: nome do edifício/condomínio (para busca automática no mapa). PRIORIDADE 2 (só se não houver prédio/condomínio): endereço completo (rua, número, bairro) ou ponto de referência (ex: perto de tal parque/shopping)",\n'
+                '  "complement": "TODOS os identificadores internos juntos numa string: nome do edifício/condomínio + apartamento + bloco/torre + quadra/lote/casa + nome de rua interna do condomínio, quando existirem. Ex: Edifício Sofisticato, Torre A, Apto 302 | Condomínio Belvedere, Rua das Tesourinhas Qd 02 Lt 12",\n'
                 '  "scheduled_date": "YYYY-MM-DD ou null",\n'
                 '  "scheduled_time": "HH:MM ou null",\n'
                 '  "total_pix": numero ou null,\n'
                 '  "total_cash": numero ou null,\n'
-                '  "notes": "observações ou null",\n'
+                '  "notes": "observações ou null — inclua aqui pontos de referência (perto de tal lugar) quando já houver nome de prédio/condomínio no campo address",\n'
                 '  "items": [\n'
                 '    {\n'
                 '      "service_name": "descrição completa do item (ex: Sofá 2 lugares, Cadeira Tipo Poltrona)",\n'
@@ -4535,6 +4535,9 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                 "- Ignore parágrafos de condições, riscos e rodapé — só extraia serviços com preços\n"
                 "- total_pix = valor à vista (pix/dinheiro mais barato) ou o total principal\n"
                 "- total_cash = valor em dinheiro se diferente do PIX, ou null\n"
+                "- ENDEREÇO/CONDOMÍNIO — regra importante: se a mensagem citar nome de edifício/condomínio, esse nome vai SOZINHO no campo address (é usado pra busca automática no mapa — não misture com ponto de referência). Se também houver ponto de referência (ex: 'perto do parque X'), esse ponto de referência vai para notes, não para address.\n"
+                "- No campo complement, quando houver condomínio, junte TODOS os identificadores internos disponíveis numa única string: nome do condomínio/edifício + apartamento + bloco/torre + quadra/lote/casa + rua interna. Reconheça variações e abreviações comuns: Qd/Quadra, Lt/Lote, Cs/Casa, Bl/Bloco, T1/TA/Torre A/Torre 1, Ap/Apto/Apartamento — mantenha a forma como veio na mensagem, sem precisar expandir a abreviação.\n"
+                "- Nunca invente dado de endereço que não esteja explícito na mensagem (nem bairro, nem ponto de referência, nem número)\n"
             )
             async with _httpx.AsyncClient(timeout=12.0) as hc:
                 r = await hc.post(
@@ -4577,8 +4580,8 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                     "REGRAS:\n"
                     "1. client_name = nome do cliente (sem timestamps, sem prefixos como '20/07 10:30 -')\n"
                     "2. phone = telefone, apenas DDD+número sem +55 (ex: '65 99973-1235')\n"
-                    "3. address = endereço real: rua, edifício/condomínio, bairro. Nunca copie instruções como texto do endereço. Se não houver, null\n"
-                    "4. complement = unidade com tipo obrigatório: 'Apto 2402', 'Bloco B', 'Casa 3', 'Sala 5', 'Lote 12', 'Torre A'. Se não houver, null\n"
+                    "3. address = nome do edifício/condomínio se houver (prioridade, usado pra busca no mapa); senão, rua/bairro ou ponto de referência. Nunca copie instruções como texto do endereço. Se não houver, null\n"
+                    "4. complement = junte tudo: edifício/condomínio + apto/bloco/torre/quadra/lote/casa, ex: 'Edifício Sofisticato, Apto 302' ou 'Condomínio Belvedere, Qd 02 Lt 12'. Se não houver, null\n"
                     "5. items = lista de serviços. CADA serviço diferente = item SEPARADO:\n"
                     "   - service_name = nome mais próximo do catálogo disponível\n"
                     "   - quantity = quantidade de peças/unidades (ex: '2 sofás' → quantity:2)\n"
