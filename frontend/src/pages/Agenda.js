@@ -1687,15 +1687,15 @@ export function Agenda() {
     const totalItems = budget.items ? budget.items.length : 0;
     const totalValue = budget.items ? budget.items.reduce((sum, item) => sum + (parseFloat(item.total_value) || 0), 0) : 0;
     
-    let description = `Código do Orçamento: ${budget.id}\n`;
-    description += `<b>Cliente: ${client.name}</b>\n`;
-    description += `Atendente: ${budget.salesperson || 'Não informado'}\n`;
-    description += `Endereço: ${getClientAddress(client)}\n`;
-    description += `Complemento: ${getClientComplement(client)}\n`;
-    description += `Data do Orçamento: ${new Date(budget.updated_at || budget.created_at).toLocaleDateString('pt-BR')}\n`;
-    description += `Forma de Pagamento: ${budget.payment_method || 'Não informado'}\n`;
-    description += `<i>Observações Internas:</i> ${budget.internal_observations || 'Nenhuma observação'}\n\n`;
-    description += `<b>Quantidade de Itens:</b> ${totalItems}\n`;
+    let description = `🧾 Código do Orçamento: ${budget.id}\n`;
+    description += `<b>👤 Cliente: ${client.name}</b>\n`;
+    description += `🧑‍💼 Atendente: ${budget.salesperson || 'Não informado'}\n`;
+    description += `📍 Endereço: ${getClientAddress(client)}\n`;
+    description += `🏠 Complemento: ${getClientComplement(client)}\n`;
+    description += `📅 Data do Orçamento: ${new Date(budget.updated_at || budget.created_at).toLocaleDateString('pt-BR')}\n`;
+    description += `💳 Forma de Pagamento: ${budget.payment_method || 'Não informado'}\n`;
+    description += `<i>📝 Observações Internas:</i> ${budget.internal_observations || 'Nenhuma observação'}\n\n`;
+    description += `<b>📦 Quantidade de Itens:</b> ${totalItems}\n`;
     
     // Adicionar itens do orçamento
     if (budget.items && budget.items.length > 0) {
@@ -1708,7 +1708,8 @@ export function Agenda() {
       budget.items.forEach(item => {
         const quantity = item.quantity || 1;
         const unitValue = parseFloat(item.total_value) || 0;
-        let itemLine = `<i>- ${item.service_name || 'Serviço'} - ${quantity} unid. - R$ ${unitValue.toFixed(2)}`;
+        const itemEmoji = getServiceEmoji(item.service_name);
+        let itemLine = `<i>- ${itemEmoji} ${item.service_name || 'Serviço'} - ${quantity} unid. - R$ ${unitValue.toFixed(2)}`;
         
         // Adicionar observações do item se houver
         if (item.observations && item.observations.trim()) {
@@ -1720,7 +1721,7 @@ export function Agenda() {
       });
     }
     
-    description += `\n<b><i>VALOR TOTAL: R$ ${totalValue.toFixed(2)}</b></i>`;
+    description += `\n<b><i>💰 VALOR TOTAL: R$ ${totalValue.toFixed(2)}</b></i>`;
     
     return description;
   };
