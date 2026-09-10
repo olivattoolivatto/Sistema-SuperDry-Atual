@@ -1617,15 +1617,14 @@ export function Agenda() {
     else if (name.includes('carro') || name.includes('veiculo') || name.includes('veículo')) serviceEmoji = '🚘';
     else if (name.includes('pagamento') || name.includes('cartão')) serviceEmoji = '💳';
     else if (name.includes('colchao') || name.includes('colchão') || name.includes('box') || name.includes('cabeceira')) serviceEmoji = '🛏️';
-    else if (name.includes('cortina')) serviceEmoji = '🪟';
-    else if (name.includes('tapete')) serviceEmoji = '🗞️';
+    else if (name.includes('cortina')) serviceEmoji = '📜'; // mesmo emoji da persiana -- janela nao renderiza no agenda do PC
+    else if (name.includes('tapete') || name.includes('carpete')) serviceEmoji = '🗞️';
     else if (name.includes('persiana')) serviceEmoji = '📜';
     else if (name.includes('cadeira') || name.includes('cadeirão')) serviceEmoji = '🪑';
     else if (name.includes('sofa') || name.includes('sofá') || name.includes('namoradeira') || name.includes('chaise') || name.includes('cheise')) serviceEmoji = '🛋️';
     else if (name.includes('poltrona')) serviceEmoji = '💺';
     else if (name.includes('edredom') || name.includes('colcha') || name.includes('pillowtop')) serviceEmoji = '🧺';
-    else if (name.includes('carpete')) serviceEmoji = '⬜';
-    else if (name.includes('carrinho') || name.includes('cadeirinha') || name.includes('bebe') || name.includes('bebê')) serviceEmoji = '🛒👶';
+    else if (name.includes('carrinho') || name.includes('cadeirinha') || name.includes('bebe') || name.includes('bebê')) serviceEmoji = '🛒';
     else if (name.includes('almofada') || name.includes('puff')) serviceEmoji = '🛏️';
     
     // Emoji do vendedor
@@ -2088,27 +2087,43 @@ export function Agenda() {
     try {
       const { data } = await itemsApi.get(iid);
       const itemStatus = data?.item?.status || null;
+      const clientName = data?.item?.client_name || '(sem nome)';
+      const serviceName = data?.item?.service_name || '(sem serviço)';
+      const salesperson = data?.budget_salesperson || null;
       setLinkedItemPreview({
         ok: true,
-        client_name: data?.item?.client_name || '(sem nome)',
-        service_name: data?.item?.service_name || '(sem serviço)',
+        client_name: clientName,
+        service_name: serviceName,
         status: itemStatus,
       });
       // Ajusta a duração automaticamente pro tipo de serviço do item vinculado
       // (RETIRAR/ENTREGAR = 30min, EXECUTAR_NO_LOCAL = 90min), em vez de manter
-      // o padrão fixo de 2h — recalcula o horário de fim se já houver início.
+      // o padrão fixo de 2h -- recalcula o horário de fim se já houver início.
+      // Também sugere o título com emoji (categoria + vendedor), no mesmo padrão
+      // usado no lançamento em lote -- só preenche se o campo título ainda
+      // estiver vazio, pra não sobrescrever o que o usuário já digitou.
+      const suggestedTitle = itemStatus
+        ? (() => {
+            const emoji = getServiceEmoji(serviceName, salesperson);
+            const acao = itemStatus === 'RETIRAR' ? 'Retirar '
+                        : itemStatus === 'ENTREGAR' ? 'Entregar '
+                        : '';
+            return `${emoji} ${acao}${clientName}`.trim();
+          })()
+        : null;
       if (itemStatus) {
         const correctDuration = calculateDuration(itemStatus);
         setNewEvent(prev => {
+          const tituloAtualizado = (!prev.title.trim() && suggestedTitle) ? suggestedTitle : prev.title;
           if (!prev.start_time) {
-            return { ...prev, duration: correctDuration };
+            return { ...prev, duration: correctDuration, title: tituloAtualizado };
           }
           const [hours, minutes] = prev.start_time.split(':');
           const startDate = new Date();
           startDate.setHours(parseInt(hours), parseInt(minutes));
           const endDate = new Date(startDate.getTime() + correctDuration * 60000);
           const endTime = endDate.toTimeString().slice(0, 5);
-          return { ...prev, duration: correctDuration, end_time: endTime };
+          return { ...prev, duration: correctDuration, end_time: endTime, title: tituloAtualizado };
         });
       }
     } catch (error) {

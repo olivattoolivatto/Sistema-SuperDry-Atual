@@ -1801,6 +1801,94 @@ def calculate_optimized_durations(stops):
     
     return duration_map
 
+# -- Geracao automatica de titulo/emoji de eventos de agenda ------------------
+def _emoji_categoria_servico(service_category: str, service_name: str) -> str:
+    """Emoji principal pelo tipo de item (tapete tem prioridade sobre a categoria)."""
+    cat = (service_category or "").upper()
+    nome = (service_name or "").lower()
+
+    if cat in ("TAPETES", "CARPETES_E_TAPETES_NO_LOCAL") or "tapete" in nome or "carpete" in nome:
+        return "🗞️"
+    if "edredom" in nome or "edredon" in nome or "colcha" in nome:
+        return "🧺"
+    if cat == "COLCHOES" or cat == "BOX" or "colch" in nome or "pillowtop" in nome or "box" in nome:
+        return "🛏️"
+    if cat == "CORTINAS" or "cortina" in nome:
+        return "📜"
+    if cat == "PERSIANAS" or "persiana" in nome:
+        return "📜"
+    if cat == "VEICULOS" or "veiculo" in nome or "banco de carro" in nome:
+        return "🚘"
+    if cat == "ITENS_INFANTIS" or "carrinho" in nome or "bebe conforto" in nome or "cadeirinha" in nome:
+        return "🛒"
+    if cat == "ESTOFADOS":
+        if "sofa" in nome:
+            return "🛋️"
+        if "cadeira" in nome:
+            return "🪑"
+        if "poltrona" in nome:
+            return "💺"
+        return "🛋️"
+    return ""
+
+
+def _palavra_acao(service_status: str) -> Optional[str]:
+    """Palavra de acao exibida no titulo -- so pra retirada/entrega separada."""
+    if service_status == "RETIRAR":
+        return "Retirar"
+    if service_status == "ENTREGAR":
+        return "Entregar"
+    return None
+
+
+def _eh_venda_proprietario(salesperson: Optional[str]) -> bool:
+    """Marcador de venda feita diretamente por Diego ou Daiana (so identificacao visual)."""
+    sp = (salesperson or "").lower()
+    return "diego" in sp or "daiana" in sp
+
+
+async def _montar_titulo_evento(budget_item_id: str, client_name: str, service_status: str,
+                                  service_name_fallback: str = "") -> str:
+    """
+    Monta o titulo do evento de agenda no padrao da empresa:
+    {emojis}{acao opcional} {cliente}
+    Busca o item/orcamento pra achar categoria, nome do servico e vendedor.
+    """
+    emojis = []
+    palavra_acao = _palavra_acao(service_status)
+    service_name = service_name_fallback
+    observations = ""
+    salesperson = None
+
+    if budget_item_id:
+        budget = await db.budgets.find_one(
+            {"items.id": budget_item_id}, {"items.$": 1, "salesperson": 1}
+        )
+        if budget:
+            salesperson = budget.get("salesperson")
+            items = budget.get("items") or []
+            if items:
+                item = items[0]
+                service_name = item.get("service_name") or service_name_fallback
+                observations = item.get("observations") or ""
+
+    cat_emoji = _emoji_categoria_servico(None, service_name)
+    if cat_emoji:
+        emojis.append(cat_emoji)
+
+    nome_lower = (service_name or "").lower()
+    obs_lower = (observations or "").lower()
+    if "imperm" in nome_lower or "imperm" in obs_lower:
+        emojis.append("💦")
+
+    if _eh_venda_proprietario(salesperson):
+        emojis.append("🏷️")
+
+    prefixo = "".join(emojis)
+    partes = [p for p in (prefixo, palavra_acao, client_name) if p]
+    return " ".join(partes)
+
+
 @api_router.post("/calendar/events")
 async def create_calendar_events(event_request: CalendarEventCreate):
     """Create calendar events from route stops"""
@@ -1844,8 +1932,14 @@ async def create_calendar_events(event_request: CalendarEventCreate):
             end_datetime = current_datetime + timedelta(minutes=duration_minutes)
             
             # Create Google Calendar event
+            titulo_evento = await _montar_titulo_evento(
+                budget_item_id=stop.get("budget_item_id"),
+                client_name=stop["client_name"],
+                service_status=stop["service_status"],
+                service_name_fallback=stop.get("service_name", ""),
+            )
             event = {
-                'summary': f'{stop["service_status"]} - {stop["client_name"]}',
+                'summary': titulo_evento,
                 'description': f'Serviço: {stop["service_name"]}\nValor: R$ {stop["service_value"]:.2f}\nVeículo: {route.get("vehicle_type", "N/A")}',
                 'location': stop.get("address", {}).get("full_address", ""),
                 'start': {
@@ -8100,6 +8194,7 @@ async def get_item(item_id: str, current_user: UserPublic = Depends(get_current_
         "item": {k: v for k, v in item.items() if not k.startswith("_")},
         "budget_id": budget.get("id"),
         "budget_payment_method": budget.get("payment_method"),
+        "budget_salesperson": budget.get("salesperson"),
     }
 
 
