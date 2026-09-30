@@ -5,7 +5,7 @@ import {
   CheckCircle2, AlertCircle, RefreshCw, Search, UserPlus,
   DollarSign, StickyNote, Zap, ArrowRightLeft, CalendarCheck,
 } from 'lucide-react';
-import api, { placesApi, clientsApi } from '../../services/api';
+import api, { placesApi, clientsApi, servicesApi } from '../../services/api';
 import { toast } from '../../hooks/use-toast';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -147,13 +147,206 @@ function ClientSearch({ value, onChange }) {
 }
 
 // ── ItemRow ───────────────────────────────────────────────────────────────────
+const CATEGORIES = {
+  ESTOFADOS: 'Estofados',
+  COLCHOES: 'Colchões',
+  BOX: 'Box',
+  TAPETES: 'Tapetes',
+  CARPETES_E_TAPETES_NO_LOCAL: 'Carpetes e Tapetes no Local',
+  CORTINAS: 'Cortinas',
+  PERSIANAS: 'Persianas',
+  ITENS_INFANTIS: 'Itens Infantis',
+  VEICULOS: 'Veículos',
+  IMPERMEABILIZACAO: 'Impermeabilização',
+  OUTROS_ITENS: 'Outros Itens',
+};
+
+// ── ServiceSearchSelect ──────────────────────────────────────────────────────
+// Busca rápida no catálogo -- nunca deixa o serviço como texto livre. Se nada
+// bater, oferece cadastro rápido em vez de aceitar um nome inventado.
+function ServiceSearchSelect({ item, onSelect, onCreateNew }) {
+  const [q, setQ] = useState(item.matched_service?.name || item.service_name || '');
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debRef = useRef(null);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    if (debRef.current) clearTimeout(debRef.current);
+    if (!q || q.length < 2) { setResults([]); return; }
+    debRef.current = setTimeout(async () => {
+      try {
+        setLoading(true);
+        const r = await servicesApi.getAll({ search: q, limit: 10 });
+        setResults(r.data || []);
+      } catch { setResults([]); }
+      finally { setLoading(false); }
+    }, 300);
+  }, [q]);
+
+  useEffect(() => {
+    const h = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const choose = (svc) => {
+    setQ(svc.name);
+    setOpen(false);
+    onSelect(svc);
+  };
+
+  const matched = item.matched_service;
+
+  return (
+    <div className="relative" ref={boxRef}>
+      <div className="relative">
+        <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input value={q}
+          onChange={e => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Buscar serviço no catálogo…"
+          className="w-full pl-8 pr-8 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+        {loading && <Loader2 className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />}
+      </div>
+      {open && (
+        <ul className="absolute z-40 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+          {results.map(s => (
+            <li key={s.id} onClick={() => choose(s)}
+              className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-100 last:border-0">
+              <div className="font-medium text-gray-900">{s.name}</div>
+              <div className="text-[11px] text-gray-500">{CATEGORIES[s.category] || s.category} · R$ {fmt(s.sale_price)}</div>
+            </li>
+          ))}
+          {results.length === 0 && !loading && q.length >= 2 && (
+            <li className="px-3 py-2 text-xs text-gray-400">Nenhum serviço encontrado no catálogo.</li>
+          )}
+          <li onClick={() => { setOpen(false); onCreateNew(q); }}
+            className="px-3 py-2 hover:bg-green-50 cursor-pointer text-sm text-green-700 font-medium flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Cadastrar novo serviço no catálogo…
+          </li>
+        </ul>
+      )}
+      {matched ? (
+        <p className={`text-[11px] mt-0.5 ${matched.low_confidence ? 'text-amber-600' : 'text-green-600'}`}>
+          {matched.low_confidence ? '⚠️' : '✓'} Vinculado ao catálogo: {matched.name}
+          {matched.match_score != null && ` (score ${Number(matched.match_score).toFixed(1)})`}
+        </p>
+      ) : (
+        <p className="text-[11px] mt-0.5 text-red-500">
+          ⚠️ Nenhum serviço do catálogo selecionado -- busque ou cadastre antes de confirmar.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── QuickCreateServiceModal ──────────────────────────────────────────────────
+// Cadastro mínimo de serviço, sem sair da tela de automação. O essencial é
+// nome + categoria + preço; custo/tipo detalhados ficam pra ajustar depois no
+// Catálogo -- o objetivo aqui é nunca deixar a pessoa "inventar" um item.
+function QuickCreateServiceModal({ initialName, onClose, onCreated }) {
+  const [name, setName] = useState(initialName || '');
+  const [category, setCategory] = useState('ESTOFADOS');
+  const [salePrice, setSalePrice] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleCreate = async () => {
+    if (!name.trim() || !salePrice) {
+      toast({ title: 'Preencha nome e preço.', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const r = await servicesApi.create({
+        name: name.trim(),
+        category,
+        service_type: 'Geral',
+        measure_type: 'UNITARIO',
+        execution_location: 'RETIRADA',
+        cost_price: 0,
+        sale_price: Number(salePrice),
+      });
+      toast({ title: 'Serviço cadastrado!', description: `${r.data.name} foi adicionado ao catálogo.` });
+      onCreated(r.data);
+    } catch (e) {
+      toast({ title: 'Erro ao cadastrar', description: e.response?.data?.detail || e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl p-5 w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold text-gray-800">Cadastro rápido de serviço</h3>
+        <p className="text-xs text-gray-500">
+          Ajuste custo e tipo com calma depois no Catálogo -- aqui é só o essencial pra não travar o orçamento.
+        </p>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Nome do serviço</label>
+          <input value={name} onChange={e => setName(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Categoria</label>
+          <select value={category} onChange={e => setCategory(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500">
+            {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Preço de venda (R$)</label>
+          <input type="number" step="0.01" value={salePrice} onChange={e => setSalePrice(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose}
+            className="flex-1 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button onClick={handleCreate} disabled={saving}
+            className="flex-1 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+            {saving ? 'Salvando…' : 'Cadastrar e usar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ItemRow ───────────────────────────────────────────────────────────────────
 function ItemRow({ item, idx, onChange, onRemove }) {
   const [open, setOpen] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createSeed, setCreateSeed] = useState('');
+
+  const applyService = (svc) => {
+    onChange(idx, {
+      service_name: svc.name,
+      unit_price: svc.sale_price,
+      value: svc.sale_price * (item.quantity || 1),
+      matched_service: {
+        id: svc.id,
+        name: svc.name,
+        category: svc.category,
+        measure_type: svc.measure_type,
+        sale_price: svc.sale_price,
+        match_score: null,
+        low_confidence: false,
+      },
+    });
+  };
+
+  const matched = item.matched_service;
+
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 cursor-pointer"
         onClick={() => setOpen(o => !o)}>
         <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+        {!matched && <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
         <span className="flex-1 text-sm font-medium text-gray-800 truncate">{item.service_name || 'Item sem nome'}</span>
         <span className="text-sm font-semibold text-blue-700">R$ {fmt(item.value)}</span>
         <button onClick={e => { e.stopPropagation(); onRemove(idx); }}
@@ -165,14 +358,12 @@ function ItemRow({ item, idx, onChange, onRemove }) {
       {open && (
         <div className="px-3 py-3 space-y-3 bg-white border-t border-gray-100">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Serviço</label>
-            <input value={item.service_name || ''} onChange={e => onChange(idx, { service_name: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
-            {item.matched_service && (
-              <p className="text-[11px] text-green-600 mt-0.5">
-                ✓ Match: {item.matched_service.name} (score {item.matched_service.match_score?.toFixed(1)})
-              </p>
-            )}
+            <label className="block text-xs font-medium text-gray-600 mb-1">Serviço (catálogo)</label>
+            <ServiceSearchSelect
+              item={item}
+              onSelect={applyService}
+              onCreateNew={(seed) => { setCreateSeed(seed); setShowCreate(true); }}
+            />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div>
@@ -203,9 +394,17 @@ function ItemRow({ item, idx, onChange, onRemove }) {
           )}
         </div>
       )}
+      {showCreate && (
+        <QuickCreateServiceModal
+          initialName={createSeed}
+          onClose={() => setShowCreate(false)}
+          onCreated={(svc) => { setShowCreate(false); applyService(svc); }}
+        />
+      )}
     </div>
   );
 }
+
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export function AutomationPage() {
@@ -284,6 +483,17 @@ export function AutomationPage() {
     if (items.length === 0) { toast({ title: 'Adicione pelo menos um item', variant: 'destructive' }); return; }
     if (launchAgenda && !schedDate) {
       toast({ title: 'Informe a data do serviço para lançar na agenda', variant: 'destructive' }); return;
+    }
+    // Nenhum item pode ser salvo sem estar vinculado a um serviço real do
+    // catálogo -- evita criar itens "inventados" fora do catálogo.
+    const semCatalogo = items.filter(it => !it.matched_service?.id);
+    if (semCatalogo.length > 0) {
+      toast({
+        title: 'Itens sem serviço vinculado',
+        description: `Busque ou cadastre no catálogo: ${semCatalogo.map(it => it.service_name || '(sem nome)').join(', ')}`,
+        variant: 'destructive',
+      });
+      return;
     }
     setSaving(true);
     try {

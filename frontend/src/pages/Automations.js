@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Zap, FileText, Ruler, Play, Check, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, MapPin, Building2, Loader2, MessageCircle, Send } from 'lucide-react';
-import api, { placesApi } from '../services/api';
+import { Zap, FileText, Ruler, Play, Check, RefreshCw, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, MapPin, Building2, Loader2, MessageCircle, Send, Search, Plus } from 'lucide-react';
+import api, { placesApi, servicesApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
 
 import { BACKEND_URL as BACKEND } from '../lib/backendUrl';
@@ -100,6 +100,162 @@ function AddressAutocomplete({ value, onSelect, placeholder }) {
   );
 }
 
+const CATEGORIES = {
+  ESTOFADOS: 'Estofados',
+  COLCHOES: 'Colchões',
+  BOX: 'Box',
+  TAPETES: 'Tapetes',
+  CARPETES_E_TAPETES_NO_LOCAL: 'Carpetes e Tapetes no Local',
+  CORTINAS: 'Cortinas',
+  PERSIANAS: 'Persianas',
+  ITENS_INFANTIS: 'Itens Infantis',
+  VEICULOS: 'Veículos',
+  IMPERMEABILIZACAO: 'Impermeabilização',
+  OUTROS_ITENS: 'Outros Itens',
+};
+
+// ── ServiceSearchSelect ──────────────────────────────────────────────────────
+// Busca rápida no catálogo -- nunca deixa o serviço como texto livre. Se nada
+// bater, oferece cadastro rápido em vez de aceitar um nome inventado.
+function ServiceSearchSelect({ item, onSelect, onCreateNew }) {
+  const [q, setQ] = useState(item.matched?.service_name || item.service_name || '');
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debRef = useRef(null);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    if (debRef.current) clearTimeout(debRef.current);
+    if (!q || q.length < 2) { setResults([]); return; }
+    debRef.current = setTimeout(async () => {
+      try {
+        setLoading(true);
+        const r = await servicesApi.getAll({ search: q, limit: 10 });
+        setResults(r.data || []);
+      } catch { setResults([]); }
+      finally { setLoading(false); }
+    }, 300);
+  }, [q]);
+
+  useEffect(() => {
+    const h = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const choose = (svc) => {
+    setQ(svc.name);
+    setOpen(false);
+    onSelect(svc);
+  };
+
+  const matched = item.matched;
+
+  return (
+    <div className="relative" ref={boxRef}>
+      <div className="relative">
+        <Search className="w-3 h-3 absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input value={q}
+          onChange={e => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Buscar serviço no catálogo…"
+          className="w-full pl-5 pr-5 text-xs px-1.5 py-0.5 border border-gray-300 rounded min-w-0" />
+        {loading && <Loader2 className="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />}
+      </div>
+      {open && (
+        <ul className="absolute z-40 mt-1 w-full max-h-52 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+          {results.map(s => (
+            <li key={s.id} onClick={() => choose(s)}
+              className="px-2 py-1.5 hover:bg-blue-50 cursor-pointer text-xs border-b border-gray-100 last:border-0">
+              <div className="font-medium text-gray-900">{s.name}</div>
+              <div className="text-[10px] text-gray-500">{CATEGORIES[s.category] || s.category} · R$ {Number(s.sale_price || 0).toFixed(2)}</div>
+            </li>
+          ))}
+          {results.length === 0 && !loading && q.length >= 2 && (
+            <li className="px-2 py-1.5 text-[10px] text-gray-400">Nenhum serviço encontrado no catálogo.</li>
+          )}
+          <li onClick={() => { setOpen(false); onCreateNew(q); }}
+            className="px-2 py-1.5 hover:bg-green-50 cursor-pointer text-xs text-green-700 font-medium flex items-center gap-1">
+            <Plus className="w-3 h-3" /> Cadastrar novo serviço…
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ── QuickCreateServiceModal ──────────────────────────────────────────────────
+function QuickCreateServiceModal({ initialName, onClose, onCreated }) {
+  const [name, setName] = useState(initialName || '');
+  const [category, setCategory] = useState('ESTOFADOS');
+  const [salePrice, setSalePrice] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleCreate = async () => {
+    if (!name.trim() || !salePrice) {
+      toast({ title: 'Preencha nome e preço.', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const r = await servicesApi.create({
+        name: name.trim(),
+        category,
+        service_type: 'Geral',
+        measure_type: 'UNITARIO',
+        execution_location: 'RETIRADA',
+        cost_price: 0,
+        sale_price: Number(salePrice),
+      });
+      toast({ title: 'Serviço cadastrado!', description: `${r.data.name} foi adicionado ao catálogo.` });
+      onCreated(r.data);
+    } catch (e) {
+      toast({ title: 'Erro ao cadastrar', description: e.response?.data?.detail || e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl p-5 w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold text-gray-800">Cadastro rápido de serviço</h3>
+        <p className="text-xs text-gray-500">
+          Ajuste custo e tipo com calma depois no Catálogo -- aqui é só o essencial pra não travar o orçamento.
+        </p>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Nome do serviço</label>
+          <input value={name} onChange={e => setName(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Categoria</label>
+          <select value={category} onChange={e => setCategory(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500">
+            {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Preço de venda (R$)</label>
+          <input type="number" step="0.01" value={salePrice} onChange={e => setSalePrice(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose}
+            className="flex-1 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button onClick={handleCreate} disabled={saving}
+            className="flex-1 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+            {saving ? 'Salvando…' : 'Cadastrar e usar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── AutoBudget ─────────────────────────────────────────────────────────────────
 function AutoBudget() {
   const [text, setText] = useState('');
@@ -113,6 +269,7 @@ function AutoBudget() {
   const [sendWhats, setSendWhats] = useState(true);
   const [sendPdf, setSendPdf] = useState(false);
   const [sending, setSending] = useState(false);
+  const [createFor, setCreateFor] = useState(null); // { idx, seed } | null -- cadastro rápido de serviço
 
   const handlePreview = async () => {
     if (!text.trim()) return;
@@ -156,11 +313,22 @@ function AutoBudget() {
 
   const handleExecute = async () => {
     if (!preview) return;
+    // Nenhum item pode ser salvo sem estar vinculado a um serviço real do
+    // catálogo -- evita criar itens "inventados" fora do catálogo.
+    const semCatalogo = editableItems.filter(it => !it.matched?.service_id);
+    if (semCatalogo.length > 0) {
+      toast({
+        title: 'Itens sem serviço vinculado',
+        description: `Busque ou cadastre no catálogo: ${semCatalogo.map(it => it.service_name || '(sem nome)').join(', ')}`,
+        variant: 'destructive',
+      });
+      return;
+    }
     setLoading(true);
     try {
       const r = await post('/automation/execute-budget', {
         ...preview,
-        items: editableItems,
+        items: editableItems.map(it => ({ ...it, matched_service_id: it.matched?.service_id || null })),
         client_address_obj: addressObj ? { ...addressObj, complement } : null,
         complement, // complemento (condomínio/qd/lt) — preservado mesmo sem busca de endereço
       });
@@ -283,11 +451,27 @@ function AutoBudget() {
                 return (
                 <div key={i} className="mb-2 pb-2 border-b border-gray-100 last:border-0">
                   <div className="flex items-center gap-1">
-                    <input
-                      className="flex-1 text-xs px-1.5 py-0.5 border border-gray-300 rounded min-w-0"
-                      value={item.service_name}
-                      onChange={e => setEditableItems(prev => prev.map((it, j) => j===i ? {...it, service_name: e.target.value} : it))}
-                    />
+                    {!m && <AlertCircle className="w-3 h-3 text-red-500 shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <ServiceSearchSelect
+                        item={item}
+                        onSelect={(svc) => setEditableItems(prev => prev.map((it, j) => j===i ? {
+                          ...it,
+                          service_name: svc.name,
+                          measure_type: svc.measure_type,
+                          unit_price: svc.sale_price,
+                          value: ['AREA_DE_TAPETE','AREA_PERSIANA','CARPETE_TAPETE_LOCAL','TAPETE_REDONDO_DIAMETRO'].includes(svc.measure_type)
+                            ? (it.area_m2 ? +(it.area_m2 * svc.sale_price).toFixed(2) : 0)
+                            : svc.sale_price * (it.quantity || 1),
+                          matched: {
+                            service_id: svc.id, service_name: svc.name, category: svc.category,
+                            measure_type: svc.measure_type, sale_price: svc.sale_price,
+                            match_score: null, low_confidence: false,
+                          },
+                        } : it))}
+                        onCreateNew={(seed) => setCreateFor({ idx: i, seed })}
+                      />
+                    </div>
                     <input
                       type="number" className="w-16 text-xs px-1.5 py-0.5 border border-gray-300 rounded font-semibold"
                       value={item.value}
@@ -329,20 +513,35 @@ function AutoBudget() {
                     </div>
                   )}
 
-                  {m ? (
-                    <div className={`mt-1 text-[10px] flex items-center gap-1 flex-wrap ${m.low_confidence ? 'text-amber-600' : 'text-emerald-600'}`}>
-                      <span>{m.low_confidence ? '⚠️' : '✓'} {m.service_name}</span>
-                      {item.needs_measure && <span className="bg-amber-50 text-amber-600 px-1 rounded">preencha a medida acima</span>}
-                      {m.low_confidence && <span className="text-amber-500">(confira o serviço)</span>}
-                    </div>
-                  ) : (
-                    <div className="mt-0.5 text-[10px] text-gray-400">sem correspondência no catálogo — defina o valor manualmente</div>
+                  {item.needs_measure && (
+                    <div className="mt-1 text-[10px] text-amber-600 bg-amber-50 px-1 rounded inline-block">preencha a medida acima</div>
                   )}
                 </div>
                 );
               })}
               <button onClick={() => setEditableItems(prev => [...prev, {service_name:'', value:0}])}
                 className="text-[10px] text-blue-600 hover:text-blue-700 mt-1">+ item</button>
+              {createFor && (
+                <QuickCreateServiceModal
+                  initialName={createFor.seed}
+                  onClose={() => setCreateFor(null)}
+                  onCreated={(svc) => {
+                    setEditableItems(prev => prev.map((it, j) => j === createFor.idx ? {
+                      ...it,
+                      service_name: svc.name,
+                      measure_type: svc.measure_type,
+                      unit_price: svc.sale_price,
+                      value: svc.sale_price * (it.quantity || 1),
+                      matched: {
+                        service_id: svc.id, service_name: svc.name, category: svc.category,
+                        measure_type: svc.measure_type, sale_price: svc.sale_price,
+                        match_score: null, low_confidence: false,
+                      },
+                    } : it));
+                    setCreateFor(null);
+                  }}
+                />
+              )}
             </div>
           </div>
 

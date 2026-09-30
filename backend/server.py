@@ -4813,9 +4813,15 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
             mtype = m.get("measure_type", "UNITARIO")
             price = float(m.get("sale_price") or 0)
             item["matched_service"] = {
-                "id": m.get("id"), "name": m.get("name"),
+                # BUG histórico: usava m.get("id")/m.get("name"), chaves que não existem no
+                # retorno de match_service_in_catalog (é "service_id"/"service_name") --
+                # isso fazia matched_service.id vir sempre None, e o item nunca ficava
+                # vinculado ao catálogo mesmo com um bom match.
+                "id": m.get("service_id"), "name": m.get("service_name"),
+                "category": m.get("category"),
                 "measure_type": mtype, "sale_price": price,
                 "match_score": m.get("match_score"),
+                "low_confidence": m.get("low_confidence", False),
             }
             area = float(item.get("area_m2") or 0)
             if mtype in AREA_TYPES:
@@ -4952,13 +4958,40 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
         exec_location  = "RETIRADA"
         item_status    = "RETIRAR"
 
-    budget_items = []
+    # ── Trava anti-item-orfao: nenhum item pode virar orcamento sem estar
+    # vinculado a um servico real do catalogo. Se o frontend nao mandou
+    # matched_service_id (usuario nao selecionou/nao criou o servico), tenta
+    # um ultimo match automatico por texto; se ainda assim nao achar nada
+    # razoavel, recusa a requisicao inteira (nada e criado pela metade) e diz
+    # exatamente quais itens precisam ser resolvidos manualmente.
+    resolved_services = []
+    unresolved_names = []
     for raw_item in items:
-        item_counter = len(budget_items) + 1
-        item_id = f"ITM-AUTO-{budget_id}-{item_counter}"
-        # Busca serviço do catálogo pelo ID enviado pelo frontend (matched_service_id)
         _msvc_id = raw_item.get("matched_service_id")
         _svc = (await db.services.find_one({"id": _msvc_id})) if _msvc_id else None
+        if not _svc:
+            _fallback = await match_service_in_catalog(raw_item.get("service_name", ""))
+            if _fallback and not _fallback.get("low_confidence"):
+                _svc = await db.services.find_one({"id": _fallback["service_id"]})
+        if not _svc:
+            unresolved_names.append(raw_item.get("service_name") or "(sem nome)")
+        resolved_services.append(_svc)
+
+    if unresolved_names:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Os seguintes itens não foram vinculados a nenhum serviço do catálogo: "
+                + ", ".join(unresolved_names)
+                + ". Selecione um serviço existente na busca ou cadastre um novo antes de confirmar."
+            ),
+        )
+
+    budget_items = []
+    for _idx, raw_item in enumerate(items):
+        item_counter = len(budget_items) + 1
+        item_id = f"ITM-AUTO-{budget_id}-{item_counter}"
+        _svc = resolved_services[_idx]
         val = float(raw_item.get("value") or 0)
         qty = int(raw_item.get("quantity") or 1)
         item_doc = {
