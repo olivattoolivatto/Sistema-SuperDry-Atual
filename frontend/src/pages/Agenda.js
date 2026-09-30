@@ -2090,41 +2090,64 @@ export function Agenda() {
       const itemStatus = data?.item?.status || null;
       const clientName = data?.item?.client_name || '(sem nome)';
       const serviceName = data?.item?.service_name || '(sem serviço)';
-      const salesperson = data?.budget_salesperson || null;
+      const budgetId = data?.budget_id || null;
       setLinkedItemPreview({
         ok: true,
         client_name: clientName,
         service_name: serviceName,
         status: itemStatus,
       });
-      // Ajusta a duração automaticamente pro tipo de serviço do item vinculado
-      // (RETIRAR/ENTREGAR = 30min, EXECUTAR_NO_LOCAL = 90min), em vez de manter
-      // o padrão fixo de 2h -- recalcula o horário de fim se já houver início.
-      // Também sugere o título com emoji (categoria + vendedor), no mesmo padrão
-      // usado no lançamento em lote -- só preenche se o campo título ainda
-      // estiver vazio, pra não sobrescrever o que o usuário já digitou.
-      const suggestedTitle = itemStatus
-        ? (() => {
-            const emoji = getServiceEmoji(serviceName, salesperson);
+
+      // Busca o orçamento inteiro + cliente pra gerar título e descrição no
+      // MESMO padrão usado no lançamento em lote (generateEventTitle /
+      // formatEventDescription) -- não importa se o orçamento nasceu pelo
+      // caminho manual (cliente->orçamento->agendamento) ou pela automação
+      // com IA, o evento de agenda fica idêntico. Só preenche título,
+      // descrição e local se o usuário ainda não tiver digitado nada ali,
+      // pra nunca sobrescrever o que já foi customizado à mão.
+      let suggestedTitle = null;
+      let suggestedDescription = null;
+      let suggestedLocation = null;
+      if (budgetId) {
+        try {
+          const budgetRes = await budgetsApi.getById(budgetId);
+          const budget = budgetRes.data;
+          const clientRes = budget?.client_id ? await clientsApi.getById(budget.client_id) : null;
+          const client = clientRes?.data || { name: clientName };
+          suggestedTitle = generateEventTitle(budget, client.name || clientName, itemStatus);
+          suggestedDescription = formatEventDescription(budget, client, {});
+          suggestedLocation = getClientAddress(client);
+        } catch {
+          // Se o orçamento/cliente não puder ser carregado, cai pro fallback
+          // simples (só emoji de categoria) em vez de travar o vínculo.
+          if (itemStatus) {
+            const emoji = getServiceEmoji(serviceName, null);
             const acao = itemStatus === 'RETIRAR' ? 'Retirar '
                         : itemStatus === 'ENTREGAR' ? 'Entregar '
                         : '';
-            return `${emoji} ${acao}${clientName}`.trim();
-          })()
-        : null;
+            suggestedTitle = `${emoji} ${acao}${clientName}`.trim();
+          }
+        }
+      }
+
+      // Ajusta a duração automaticamente pro tipo de serviço do item vinculado
+      // (RETIRAR/ENTREGAR = 30min, EXECUTAR_NO_LOCAL = 90min), em vez de manter
+      // o padrão fixo de 2h -- recalcula o horário de fim se já houver início.
       if (itemStatus) {
         const correctDuration = calculateDuration(itemStatus);
         setNewEvent(prev => {
           const tituloAtualizado = (!prev.title.trim() && suggestedTitle) ? suggestedTitle : prev.title;
+          const descricaoAtualizada = (!prev.description.trim() && suggestedDescription) ? suggestedDescription : prev.description;
+          const localAtualizado = (!prev.location.trim() && suggestedLocation) ? suggestedLocation : prev.location;
           if (!prev.start_time) {
-            return { ...prev, duration: correctDuration, title: tituloAtualizado };
+            return { ...prev, duration: correctDuration, title: tituloAtualizado, description: descricaoAtualizada, location: localAtualizado };
           }
           const [hours, minutes] = prev.start_time.split(':');
           const startDate = new Date();
           startDate.setHours(parseInt(hours), parseInt(minutes));
           const endDate = new Date(startDate.getTime() + correctDuration * 60000);
           const endTime = endDate.toTimeString().slice(0, 5);
-          return { ...prev, duration: correctDuration, end_time: endTime, title: tituloAtualizado };
+          return { ...prev, duration: correctDuration, end_time: endTime, title: tituloAtualizado, description: descricaoAtualizada, location: localAtualizado };
         });
       }
     } catch (error) {

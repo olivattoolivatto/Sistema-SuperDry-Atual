@@ -1889,6 +1889,80 @@ async def _montar_titulo_evento(budget_item_id: str, client_name: str, service_s
     return " ".join(partes)
 
 
+def _build_event_summary_and_description(
+    items: list,
+    client_name: str,
+    client_phone: str,
+    salesperson: str,
+    budget_id: str,
+    payment_method: str,
+    notes: str,
+    complement: str,
+    location_text: str,
+    sched_fmt: str,
+    item_status: str,
+) -> tuple:
+    """
+    Gera título (com emoji) + descrição (emojizada) + duração em minutos pra um
+    evento de agenda criado a partir de um orçamento inteiro -- mesmo padrão
+    visual usado no lançamento em lote da Agenda (generateEventTitle /
+    formatEventDescription no frontend), só que em Python, pra ser usado por
+    qualquer caminho que crie eventos no backend (hoje: automação com IA com
+    launch_agenda=true). Existir só uma vez aqui evita ter um 3º padrão
+    diferente de título/descrição cada vez que um novo caminho de criação
+    de evento for escrito.
+    """
+    emojis = []
+    seen = set()
+    for it in items:
+        e = _emoji_categoria_servico(it.get("service_category"), it.get("service_name", ""))
+        if e and e not in seen:
+            emojis.append(e)
+            seen.add(e)
+        nome_lower = (it.get("service_name") or "").lower()
+        obs_lower = (it.get("observations") or "").lower()
+        if ("imperm" in nome_lower or "imperm" in obs_lower) and "💦" not in seen:
+            emojis.append("💦")
+            seen.add("💦")
+
+    if _eh_venda_proprietario(salesperson):
+        emojis.insert(0, "🏷️")
+
+    palavra_acao = _palavra_acao(item_status)
+    prefixo = "".join(emojis)
+    summary = " ".join(p for p in (prefixo, palavra_acao, client_name) if p)
+
+    duration_minutes = 90 if item_status == "EXECUTAR_NO_LOCAL" else 30
+
+    total_val = sum(float(it.get("value", 0)) for it in items)
+    desc_lines = [
+        f"🧾 Código do Orçamento: {budget_id}",
+        f"👤 Cliente: {client_name}" + (f" | {client_phone}" if client_phone else ""),
+        f"🧑‍💼 Atendente: {salesperson}",
+        f"📍 Endereço: {location_text or 'Não informado'}",
+        f"🏠 Complemento: {complement or 'NENHUM'}",
+        f"📅 Data do Orçamento: {sched_fmt or datetime.utcnow().strftime('%d/%m/%Y')}",
+        f"💳 Forma de Pagamento: {payment_method}",
+        f"📝 Observações Internas: {notes or 'Nenhuma observação'}",
+        "",
+        f"📦 Quantidade de Itens: {len(items)}",
+    ]
+    for it in items:
+        emoji = _emoji_categoria_servico(it.get("service_category"), it.get("service_name", ""))
+        qty = int(it.get("quantity") or 1)
+        val = float(it.get("value") or 0)
+        line = f"- {emoji} {it.get('service_name', 'Serviço')} - {qty} unid. - R$ {val:.2f}"
+        obs = (it.get("observations") or "").strip()
+        if obs:
+            line += f" (Obs: {obs})"
+        desc_lines.append(line)
+    desc_lines.append("")
+    desc_lines.append(f"💰 VALOR TOTAL: R$ {total_val:.2f}")
+
+    description = "\n".join(desc_lines)
+    return summary, description, duration_minutes
+
+
 @api_router.post("/calendar/events")
 async def create_calendar_events(event_request: CalendarEventCreate):
     """Create calendar events from route stops"""
@@ -5053,28 +5127,6 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
                 agenda_error = "Google Calendar não autenticado"
             else:
                 service = get_calendar_service(creds_doc["credentials"])
-                # Data/hora do evento
-                if scheduled_date:
-                    start_str = scheduled_date
-                    time_part = scheduled_time or "09:00"
-                    # Duração estimada: 2h
-                    try:
-                        from datetime import datetime as dt2, timedelta
-                        start_dt = dt2.fromisoformat(f"{start_str}T{time_part}:00")
-                        end_dt   = start_dt + timedelta(hours=2)
-                        tz = "America/Cuiaba"
-                        start_iso = start_dt.isoformat()
-                        end_iso   = end_dt.isoformat()
-                    except Exception:
-                        start_iso = f"{start_str}T{time_part}:00"
-                        end_iso   = f"{start_str}T{(int(time_part[:2])+2):02d}:{time_part[3:]}:00"
-                        tz = "America/Cuiaba"
-                else:
-                    # Sem data: evento de hoje às 09:00
-                    today = datetime.utcnow().strftime("%Y-%m-%d")
-                    start_iso = f"{today}T09:00:00"
-                    end_iso   = f"{today}T11:00:00"
-                    tz = "America/Cuiaba"
 
                 # Local: endereço de execução se houver, senão endereço do cliente
                 location_text = ""
@@ -5088,8 +5140,6 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
                     if comp:
                         location_text += f" - {comp}"
 
-                # Descrição detalhada do evento (formato padrão SuperDry)
-                total_val = sum(float(i.get("value", 0)) for i in items)
                 _desc_complement = (payload.get("complement") or "").strip()
                 _sched_fmt = ""
                 if scheduled_date:
@@ -5098,30 +5148,48 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
                         _sched_fmt = _dt2.strptime(scheduled_date, "%Y-%m-%d").strftime("%d/%m/%Y")
                     except Exception:
                         _sched_fmt = scheduled_date
-                _items_lines = "\n".join(
-                    f"- {it.get('service_name','Serviço')} - {int(it.get('quantity',1))} unid."
-                    f" - R$ {float(it.get('value',0)):.2f}"
-                    for it in items
-                )
-                _desc_parts = [
-                    f"Código do Orçamento: {budget_id}",
-                    f"Cliente: {client_name}" + (f" | {client_phone}" if client_phone else ""),
-                    f"Atendente: {salesperson_val}",
-                ]
-                if location_text:
-                    _desc_parts.append(f"Endereço: {location_text}")
-                if _desc_complement:
-                    _desc_parts.append(f"Complemento: {_desc_complement}")
-                if _sched_fmt:
-                    _desc_parts.append(f"Data do Orçamento: {_sched_fmt}")
-                _desc_parts.append(f"Forma de Pagamento: {payment_method}")
-                _desc_parts.append(f"Observações Internas: {notes or 'Nenhuma observação'}")
-                _desc_parts.append(f"\nQuantidade de Itens: {len(items)}")
-                _desc_parts.append(_items_lines)
-                _desc_parts.append(f"\nVALOR TOTAL: R$ {total_val:.2f}")
-                description = "\n".join(_desc_parts)
 
-                summary = f"SuperDry – {client_name}"
+                # Título com emoji + descrição emojizada + duração real do serviço
+                # (30min retirada/entrega, 90min execução no local) -- mesmo padrão
+                # usado no lançamento em lote da Agenda, pra ficar igual não
+                # importa se o orçamento nasceu pelo caminho manual ou pela
+                # automação com IA.
+                summary, description, duration_minutes = _build_event_summary_and_description(
+                    items=items,
+                    client_name=client_name,
+                    client_phone=client_phone,
+                    salesperson=salesperson_val,
+                    budget_id=budget_id,
+                    payment_method=payment_method,
+                    notes=notes,
+                    complement=_desc_complement,
+                    location_text=location_text,
+                    sched_fmt=_sched_fmt,
+                    item_status=item_status,
+                )
+
+                # Data/hora do evento
+                from datetime import datetime as dt2, timedelta
+                tz = "America/Cuiaba"
+                if scheduled_date:
+                    start_str = scheduled_date
+                    time_part = scheduled_time or "09:00"
+                    try:
+                        start_dt = dt2.fromisoformat(f"{start_str}T{time_part}:00")
+                        end_dt   = start_dt + timedelta(minutes=duration_minutes)
+                        start_iso = start_dt.isoformat()
+                        end_iso   = end_dt.isoformat()
+                    except Exception:
+                        start_iso = f"{start_str}T{time_part}:00"
+                        _end_dt_fallback = dt2.strptime(time_part, "%H:%M") + timedelta(minutes=duration_minutes)
+                        end_iso = f"{start_str}T{_end_dt_fallback.strftime('%H:%M')}:00"
+                else:
+                    # Sem data: evento de hoje às 09:00
+                    today = datetime.utcnow().strftime("%Y-%m-%d")
+                    start_dt = dt2.fromisoformat(f"{today}T09:00:00")
+                    end_dt = start_dt + timedelta(minutes=duration_minutes)
+                    start_iso = start_dt.isoformat()
+                    end_iso = end_dt.isoformat()
 
                 google_ev = {
                     "summary": summary,
