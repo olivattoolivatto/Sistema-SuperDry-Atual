@@ -232,3 +232,34 @@ Detalhes do serviço podem ser vistos em: {link_pdf_orcamento}
   Consolidada / CPG-XXXX).
 - Texto fixo "referentes ao último serviço prestado" — genérico de propósito, não cita o serviço
   específico (decisão explícita do dono para manter a mensagem curta).
+
+---
+
+## Atualização 01/10/2026 — confirmado: InfinitePay segue ativa, ninguém testou de novo desde jun/2026
+
+Reconfirmado contra o servidor em produção (`sistema.lavesuperdry.com.br`, via chamada direta ao
+endpoint, sem precisar de SSH): `PAYMENT_PROVIDER=INFINITEPAY` continua ativo (webhook não retorna
+503/MANUAL). `.env` local confirma os mesmos valores de jun/2026 (`INFINITEPAY_HANDLE=superdry`,
+`INFINITEPAY_API_KEY` ainda vazia, `INFINITEPAY_REDIRECT_URL` agora aponta para
+`/api/payments/infinitepay/return`).
+
+**Pesquisa na documentação oficial da InfinitePay (out/2026)**: continua sendo só a API de
+"Checkout Integrado" (`POST /links`), igual ao que já está implementado — não existe parâmetro pra
+controlar parcelamento por transação/valor. O limite de parcelas (ex.: 6x) é configuração única da
+conta, vale pra toda venda igual, independente do valor. Não há API alternativa mais nova que
+resolva isso — é uma limitação de produto da InfinitePay, não do nosso código.
+
+**Diagnóstico adicionado (commit 68e9b84)**: `confirm_payment` (payment_check) agora grava a
+resposta crua da InfinitePay em `backend/payment_check_log.txt` — nunca foi confirmado contra uma
+chamada real, o parsing de status era só uma suposição. Ler esse arquivo depois do próximo teste
+real pra confirmar/ajustar o parsing.
+
+**Teste pendente, nunca refeito desde as 3 cobranças de jun/2026** (CPG-0002/0003 nunca confirmadas,
+CPG-0004 do Eduardo foi paga de verdade mas só confirmada manualmente — nem webhook nem redirect
+dispararam nem para essa). Próximo teste real deve conferir, nessa ordem:
+1. `webhook_recebidos.log` recebeu alguma linha depois do pagamento? Se não, o problema é a
+   InfinitePay não estar chamando nosso webhook/redirect de volta (checar painel da própria
+   InfinitePay, ou abrir chamado com o suporte deles perguntando se o Checkout Integrado realmente
+   dispara webhook pra todo link gerado via API, e se há algo a habilitar do lado da conta).
+2. Se a linha chegou no webhook_recebidos.log, olhar `payment_check_log.txt` pra ver a resposta real
+   do `payment_check` e ajustar o parsing em `InfinitePayProvider.confirm_payment` se necessário.
