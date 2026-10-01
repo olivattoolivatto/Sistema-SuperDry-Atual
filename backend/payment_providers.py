@@ -204,14 +204,30 @@ class InfinitePayProvider(PaymentProvider):
         )
 
     async def confirm_payment(self, *, order_nsu, transaction_nsu, slug) -> bool:
-        """Confirmação server-to-server (payment_check) — fonte da verdade."""
+        """Confirmação server-to-server (payment_check) — fonte da verdade.
+        LOG DE DIAGNÓSTICO: grava a resposta crua em payment_check_log.txt (raiz do
+        backend) pra conferir o formato real na primeira ativação — nunca testado
+        contra a API de produção da InfinitePay até agora."""
         import httpx
+        from pathlib import Path
+        from datetime import datetime as _dt
         body = {"handle": self.handle, "order_nsu": order_nsu,
                 "transaction_nsu": transaction_nsu, "slug": slug}
+        log_path = Path(__file__).resolve().parent / "payment_check_log.txt"
+
+        NL = chr(10)
+        def _log(line: str):
+            try:
+                with open(log_path, "a", encoding="utf-8") as lf:
+                    lf.write(NL + "[" + _dt.utcnow().isoformat() + "] " + line + NL)
+            except Exception:
+                pass
+
         try:
             async with httpx.AsyncClient(timeout=20) as c:
                 r = await c.post(f"{self.API_BASE}/payment_check",
                                  headers=self._headers(), json=body)
+            _log("REQUEST body=" + str(body) + NL + "RESPONSE status=" + str(r.status_code) + " body=" + r.text)
             if r.status_code != 200:
                 return False
             d = r.json()
@@ -222,7 +238,8 @@ class InfinitePayProvider(PaymentProvider):
                 if str(d.get("status", "")).lower() in ("paid", "approved", "success", "captured"):
                     return True
             return False
-        except Exception:
+        except Exception as e:
+            _log(f"EXCEPTION order_nsu={order_nsu} transaction_nsu={transaction_nsu} slug={slug} erro={e}")
             return False
 
 
