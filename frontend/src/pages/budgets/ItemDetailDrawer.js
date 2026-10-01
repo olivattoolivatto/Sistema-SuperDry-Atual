@@ -274,6 +274,7 @@ export default function ItemDetailDrawer({ itemId, onClose, onUpdated }) {
   };
 
   const [sendingToTech, setSendingToTech] = useState(false);
+  const [techScheduledTime, setTechScheduledTime] = useState('');
   const onSendToTechnician = async () => {
     try {
       setSendingToTech(true);
@@ -284,6 +285,7 @@ export default function ItemDetailDrawer({ itemId, onClose, onUpdated }) {
         technician_id: 'TECH-001',
         assigned_date: today,
         assignment_type: 'MANUAL',
+        item_schedule: { [itemId]: { scheduled_time: techScheduledTime || null } },
       });
       await reload();
       onUpdated?.();
@@ -484,6 +486,15 @@ export default function ItemDetailDrawer({ itemId, onClose, onUpdated }) {
                   Manda este item direto pro técnico hoje, sem precisar montar uma rota.
                   Útil pra serviço avulso (sofá, cadeira) ou item de última hora.
                 </p>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-xs text-gray-500 whitespace-nowrap">Horário previsto (opcional):</label>
+                  <input
+                    type="time"
+                    value={techScheduledTime}
+                    onChange={(e) => setTechScheduledTime(e.target.value)}
+                    className="px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
                 <button
                   onClick={onSendToTechnician}
                   disabled={sendingToTech}

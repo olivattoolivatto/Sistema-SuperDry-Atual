@@ -218,6 +218,7 @@ export const technicianApi = {
   updateAssignmentStatus: (assignmentId, status) => api.put(`/technician/assignment/${assignmentId}/status`, null, {
     params: { status }
   }),
+  updateItemSchedule: (assignmentId, payload) => api.patch(`/technician/assignment/${assignmentId}/item-schedule`, payload),
   finalizeToday: (date) => api.post('/technician/finalize-today', {}, { params: date ? { date } : {} }),
   markDesisted:   (itemId) => api.patch(`/items/${itemId}/desist`),
   reactivateItem: (itemId) => api.patch(`/items/${itemId}/reactivate`),

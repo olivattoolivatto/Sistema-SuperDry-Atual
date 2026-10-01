@@ -1796,6 +1796,16 @@ export function Agenda() {
       })));
       
       // Preparar dados para assignment usando budget_item_ids corretos E data/horários reais
+      // item_schedule: horário calculado pela rota (Geoapify), por item — assim o técnico
+      // vê a ordem real da rota mesmo quando ela não é a única fonte de agendamento do dia.
+      const itemSchedule = {};
+      selectedEvents.forEach(event => {
+        const ids = event.all_budget_item_ids || [event.budget_item_id || event.id];
+        ids.forEach(id => {
+          itemSchedule[id] = { scheduled_time: event.estimated_start_time || null };
+        });
+      });
+
       const assignmentData = {
         route_id: selectedRoute.id,
         // Usa all_budget_item_ids para garantir que stops mesclados enviem TODOS os IDs
@@ -1804,17 +1814,8 @@ export function Agenda() {
         ),
         technician_id: 'TECH-001',
         assigned_date: customEventDate,
-        assigned_time: selectedEvents[0]?.estimated_start_time || '08:00',
         assignment_type: 'AGENDA',
-        events_schedule: eventsWithDateTime.map(event => ({
-          event_id: event.budget_item_id || event.id,
-          client_name: event.client_name,
-          scheduled_date: event.scheduled_date,
-          scheduled_time: event.scheduled_time,
-          start_datetime: event.start_datetime,
-          end_datetime: event.end_datetime,
-          duration: event.duration
-        }))
+        item_schedule: itemSchedule,
       };
       
       // Enviar para API
@@ -2205,7 +2206,8 @@ export function Agenda() {
 
       const data = await response.json();
 
-      // Envia direto pro técnico também, se marcado (sem precisar de Rota)
+      // Envia direto pro técnico também, se marcado (sem precisar de Rota) — usa o
+      // horário de início escolhido no formulário como scheduled_time do item.
       if (alsoSendToTechnician && itemId) {
         try {
           const today = new Date().toISOString().split('T')[0];
@@ -2215,6 +2217,7 @@ export function Agenda() {
             technician_id: 'TECH-001',
             assigned_date: today,
             assignment_type: 'MANUAL',
+            item_schedule: { [itemId]: { scheduled_time: newEvent.start_time || null } },
           });
         } catch (techError) {
           console.error('Erro ao enviar pro técnico:', techError);

@@ -2067,6 +2067,13 @@ class TechnicianAssignment(BaseModel):
     assigned_date: str
     assignment_type: str = "AGENDA"  # "AGENDA" | "STATUS_BASED" | "MANUAL"
     status: str = "ASSIGNED"  # "ASSIGNED" | "IN_PROGRESS" | "COMPLETED"
+    # item_schedule: ordem/prioridade que o técnico vê, por item (event_id -> dados).
+    # scheduled_time ("HH:MM") vem automático de onde o item foi originado (rota calculada
+    # pela Geoapify, ou horário do evento na Agenda) quando existir; manual_priority é a
+    # edição rápida do Diego que, quando preenchida, tem autoridade sobre o horário.
+    # Resolução de ordem (ver get_technician_daily_tasks): manual_priority > scheduled_time
+    # > ordem de chegada (fallback de sempre, sem quebrar nada que já funcionava).
+    item_schedule: Dict[str, Dict[str, Any]] = {}
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -2269,6 +2276,7 @@ async def get_technician_daily_tasks(
 
                 if budget_found and item_found:
                     client = await db.clients.find_one({"id": budget_found.get("client_id")})
+                    item_sched = (assignment.get("item_schedule") or {}).get(event_id, {}) or {}
                     tasks["status_items"].append({
                         "id": item_found.get("id"),
                         "budget_id": budget_found.get("id"),
@@ -2286,14 +2294,68 @@ async def get_technician_daily_tasks(
                         "assignment_type": assignment.get("assignment_type"),
                         "assignment_status": assignment.get("status"),
                         "assigned_date": assignment.get("assigned_date"),
-                        "route_id": assignment.get("route_id")
+                        "route_id": assignment.get("route_id"),
+                        "scheduled_time": item_sched.get("scheduled_time"),
+                        "manual_priority": item_sched.get("manual_priority"),
                     })
                 # ITM não encontrado → ignora silenciosamente (não gera ÓRFÃO)
+
+        # Ordem final: manual_priority (menor primeiro) > scheduled_time (HH:MM) >
+        # ordem de chegada (posição original — mesma lógica que já existia, preservada
+        # como fallback pra não quebrar nada que já funcionava sem essas infos novas).
+        for idx, it in enumerate(tasks["status_items"]):
+            it["_arrival_order"] = idx
+        def _sort_key(it):
+            mp = it.get("manual_priority")
+            st = it.get("scheduled_time")
+            if mp is not None:
+                return (0, mp, it["_arrival_order"])
+            if st:
+                return (1, st, it["_arrival_order"])
+            return (2, "", it["_arrival_order"])
+        tasks["status_items"].sort(key=_sort_key)
+        for idx, it in enumerate(tasks["status_items"]):
+            it["order_index"] = idx
+            it.pop("_arrival_order", None)
 
         return tasks
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting technician tasks: {str(e)}")
+
+@api_router.patch("/technician/assignment/{assignment_id}/item-schedule")
+async def update_assignment_item_schedule(
+    assignment_id: str,
+    body: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Edição rápida de horário previsto / prioridade manual de 1 item dentro de uma
+    assignment já enviada ao técnico — não precisa reenviar a lista toda.
+    Body: {item_id, scheduled_time?: "HH:MM"|None, manual_priority?: int|None}
+    manual_priority=None volta ao neutro (passa a obedecer scheduled_time/ordem de chegada).
+    """
+    item_id = body.get("item_id")
+    if not item_id:
+        raise HTTPException(status_code=400, detail="item_id é obrigatório")
+
+    asgn = await db.technician_assignments.find_one({"id": assignment_id})
+    if not asgn:
+        raise HTTPException(status_code=404, detail="Assignment não encontrada")
+
+    fields = {}
+    if "scheduled_time" in body:
+        fields["scheduled_time"] = body["scheduled_time"]
+    if "manual_priority" in body:
+        fields["manual_priority"] = body["manual_priority"]
+
+    await db.technician_assignments.update_one(
+        {"id": assignment_id},
+        {"$set": {f"item_schedule.{item_id}": {
+            **(asgn.get("item_schedule", {}).get(item_id, {})), **fields,
+        }, "updated_at": datetime.utcnow()}},
+    )
+    return {"success": True}
+
 
 @api_router.put("/technician/assignment/{assignment_id}/status")
 async def update_assignment_status(assignment_id: str, status: str):

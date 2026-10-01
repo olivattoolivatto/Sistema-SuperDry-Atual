@@ -420,7 +420,8 @@ function StreetMode({ onBack }) {
             name: item.client_name,
             address: item.client_address,
             phone: item.client_phone,
-            scheduledTime: '08:00',
+            scheduledTime: item.scheduled_time || '—',
+            manualPriority: item.manual_priority ?? null,
             items: [],
             internalObservations: item.internal_observations,
             budgetObservations: item.budget_observations,
@@ -455,6 +456,15 @@ function StreetMode({ onBack }) {
             value: parseFloat(item.service_value),
             observations: item.observations
           });
+        }
+        // Card reflete o horário mais cedo entre seus itens, e a prioridade manual
+        // de qualquer um deles (geralmente todos vêm da mesma edição rápida).
+        if (item.scheduled_time && (unifiedClients[groupKey].scheduledTime === '—' ||
+            item.scheduled_time < unifiedClients[groupKey].scheduledTime)) {
+          unifiedClients[groupKey].scheduledTime = item.scheduled_time;
+        }
+        if (item.manual_priority !== null && item.manual_priority !== undefined) {
+          unifiedClients[groupKey].manualPriority = item.manual_priority;
         }
       }
       
@@ -698,6 +708,29 @@ function AgendaTab({ clients, loading, generateNavigationLink, reload }) {
 // Card do Cliente
 function ClientCard({ client, onClick, generateNavigationLink }) {
   const { wazeUrl, mapsUrl } = generateNavigationLink(getClientAddress(client));
+  const { user: cardUser } = useAuth();
+  const isAdminCard = cardUser?.role === 'ADMIN';
+  const [editingPriority, setEditingPriority] = useState(false);
+  const [priorityDraft, setPriorityDraft] = useState(client.manualPriority ?? '');
+  const [savingPriority, setSavingPriority] = useState(false);
+
+  const saveManualPriority = async (e) => {
+    e.stopPropagation();
+    const value = priorityDraft === '' ? null : parseInt(priorityDraft, 10);
+    setSavingPriority(true);
+    try {
+      // Aplica em todos os itens deste card (mesma visita/parada) — eles vêm da
+      // mesma assignment, então a edição vale pra todos de uma vez.
+      await Promise.all(client.items.map(it =>
+        technicianApi.updateItemSchedule(client.original_assignment_id, {
+          item_id: it.id, manual_priority: value,
+        })
+      ));
+      setEditingPriority(false);
+    } catch (err) {
+      alert('Erro ao salvar prioridade. Tente novamente.');
+    } finally { setSavingPriority(false); }
+  };
 
   const totalValue = client.items.reduce((sum, item) => sum + item.value, 0);
   const execStatus = getCardExecutionStatus(client.items);
@@ -773,8 +806,37 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
                 </span>
               )}
             </div>
-            
-            {/* Badge removido - agora apenas assignments da agenda */}
+
+            {/* Prioridade manual — sobrepõe o horário na ordenação. Edição rápida: um
+                número só, aplicado a todos os itens desta parada. Vazio = neutro. */}
+            {client.manualPriority !== null && client.manualPriority !== undefined && !editingPriority && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                prioridade {client.manualPriority}
+              </span>
+            )}
+            {isAdminCard && !editingPriority && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setEditingPriority(true); }}
+                className="text-[10px] text-gray-400 hover:text-gray-600 underline"
+              >
+                {client.manualPriority !== null && client.manualPriority !== undefined ? 'editar' : '+ prioridade'}
+              </button>
+            )}
+            {isAdminCard && editingPriority && (
+              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="number"
+                  value={priorityDraft}
+                  onChange={(e) => setPriorityDraft(e.target.value)}
+                  placeholder="neutro"
+                  className="w-16 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                />
+                <button onClick={saveManualPriority} disabled={savingPriority}
+                  className="text-[10px] text-green-700 font-medium disabled:opacity-50">ok</button>
+                <button onClick={(e) => { e.stopPropagation(); setEditingPriority(false); }}
+                  className="text-[10px] text-gray-400">x</button>
+              </div>
+            )}
           </div>
           <div className="text-right">
             <p className="text-sm font-medium text-green-600">R$ {totalValue.toFixed(2)}</p>
