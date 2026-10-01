@@ -3153,19 +3153,43 @@ async def update_budget_status(
     if not budget:
         raise HTTPException(status_code=404, detail="Orçamento não encontrado")
 
-    now = datetime.utcnow()
-    try:
-        await db.budgets.update_one(
-            {"id": budget_id},
-            {"$set": {
-                "budget_status": new_status,
-                "budget_status_updated_at": now,
-                "budget_status_updated_by": current_user.name or current_user.username or "admin",
-                "updated_at": now,
-            }}
+    # Trava de aceite — fase de testes do sistema (01/10/2026): aprovar sem o cliente
+    # ter aceitado os termos só é permitido para ADMIN (override manual e consciente).
+    # Atendentes/outros usuários precisam que o aceite já esteja confirmado antes de aprovar.
+    if (
+        new_status == "APROVADO"
+        and budget.get("budget_status") != "APROVADO"
+        and budget.get("acceptance_status") != "ACCEPTED"
+        and current_user.role != "ADMIN"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Este orçamento ainda não tem o Termo de Ciência aceito pelo cliente. "
+                   "Gere o link de aceite e aguarde a confirmação, ou peça a um administrador "
+                   "para aprovar manualmente.",
         )
+
+    now = datetime.utcnow()
+    admin_override = (
+        new_status == "APROVADO"
+        and budget.get("acceptance_status") != "ACCEPTED"
+        and current_user.role == "ADMIN"
+    )
+    try:
+        update_fields = {
+            "budget_status": new_status,
+            "budget_status_updated_at": now,
+            "budget_status_updated_by": current_user.name or current_user.username or "admin",
+            "updated_at": now,
+        }
+        await db.budgets.update_one({"id": budget_id}, {"$set": update_fields})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao salvar no banco: {str(e)}")
+
+    if admin_override:
+        await log_audit("budget", budget_id, "APROVADO_SEM_ACEITE_ADMIN", current_user, {
+            "note": "Admin aprovou orçamento sem aceite confirmado do cliente (fase de testes).",
+        })
 
     try:
         await log_audit("budget", budget_id, "STATUS_CHANGED", current_user, {
@@ -5592,11 +5616,37 @@ async def execute_measures_automation(payload: Dict[str, Any], current_user: Use
             # tapete foi de fato recolhido/medido (usada no relatório de parceiros).
             measures["reference_date"] = item_data["reference_date"]
 
+        # A medida chegando pela mensagem colada significa que o tapete JÁ foi
+        # recolhido, lavado e medido — não é mais "em andamento". Avança o status
+        # pro último estágio antes da finalização, pra ficar disponível pra rota
+        # de entrega (própria) ou de busca (parceiro) assim que o item já estava
+        # ativo (COLETADO/EM_LAVAGEM/EM_LAVAGEM_PARCEIRO/CLIENTE_TROUXE).
+        is_partner_item = bool(pl_check.get("type"))
+        ready_status = "AGUARDANDO_BUSCAR" if is_partner_item else "AGUARDANDO_ENTREGA"
+
         # ── Atualiza item existente se o frontend indicou qual é ───────────────
         target_item_id = item_data.get("target_item_id")
         if target_item_id and item_data.get("action") == "update":
-            updated = await _update_item_fields(target_item_id, measures, current_user)
+            target_doc = None
+            async for bud_lookup in db.budgets.find({"items.id": target_item_id}):
+                for it_lookup in bud_lookup.get("items", []):
+                    if it_lookup.get("id") == target_item_id:
+                        target_doc = it_lookup
+                        break
+                if target_doc:
+                    break
+            update_fields = dict(measures)
+            status_advanced = bool(target_doc and target_doc.get("status") in ACTIVE_STATUSES)
+            if status_advanced:
+                update_fields["status"] = ready_status
+            updated = await _update_item_fields(target_item_id, update_fields, current_user)
             if updated:
+                if status_advanced:
+                    await _append_to_item_array(target_item_id, "status_history", {
+                        "status": ready_status, "at": datetime.utcnow().isoformat(),
+                        "by_user_id": current_user.id, "by_user_name": current_user.name,
+                        "notes": "Medidas confirmadas via automação (mensagem de WhatsApp) — pronto",
+                    })
                 bud = await db.budgets.find_one({"items.id": target_item_id}, {"id": 1})
                 results.append({
                     "status": "updated",
@@ -5609,9 +5659,15 @@ async def execute_measures_automation(payload: Dict[str, Any], current_user: Use
         # ── Tenta encontrar item ativo sem medida automaticamente ──────────────
         active_items = await _find_active_items(client_id)
         if len(active_items) == 1:
-            # Só um candidato → atualiza sem ambiguidade
+            # Só um candidato → atualiza sem ambiguidade (sempre ACTIVE_STATUSES por
+            # construção de _find_active_items, então sempre avança pro status "pronto")
             ai = active_items[0]
-            await _update_item_fields(ai["item_id"], measures, current_user)
+            await _update_item_fields(ai["item_id"], {**measures, "status": ready_status}, current_user)
+            await _append_to_item_array(ai["item_id"], "status_history", {
+                "status": ready_status, "at": datetime.utcnow().isoformat(),
+                "by_user_id": current_user.id, "by_user_name": current_user.name,
+                "notes": "Medidas confirmadas via automação (mensagem de WhatsApp) — pronto",
+            })
             results.append({
                 "status": "updated", "item_id": ai["item_id"],
                 "budget_id": ai["budget_id"], "client": client_name,

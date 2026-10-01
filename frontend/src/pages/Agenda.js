@@ -48,6 +48,7 @@ export function Agenda() {
     item_id: ''      // Vínculo opcional com um ITM-XXXXXXX-N, sem precisar de Rota
   });
   const [linkedItemPreview, setLinkedItemPreview] = useState(null); // {ok, client_name, service_name} | null
+  const [alsoSendToTechnician, setAlsoSendToTechnician] = useState(false);
   const [checkingItem, setCheckingItem] = useState(false);
   const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false);
   const [calendarEvents, setCalendarEvents] = useState([]);
@@ -2204,15 +2205,39 @@ export function Agenda() {
 
       const data = await response.json();
 
+      // Envia direto pro técnico também, se marcado (sem precisar de Rota)
+      if (alsoSendToTechnician && itemId) {
+        try {
+          const today = new Date().toISOString().split('T')[0];
+          await technicianApi.assignEvents({
+            route_id: null,
+            event_ids: [itemId],
+            technician_id: 'TECH-001',
+            assigned_date: today,
+            assignment_type: 'MANUAL',
+          });
+        } catch (techError) {
+          console.error('Erro ao enviar pro técnico:', techError);
+          toast({
+            title: "Evento criado, mas...",
+            description: "Não consegui enviar pro técnico automaticamente. Envie manualmente pela tela do orçamento.",
+            variant: "destructive",
+          });
+        }
+      }
+
       toast({
         title: "Sucesso!",
-        description: "Evento criado no Google Calendar com sucesso!",
+        description: alsoSendToTechnician && itemId
+          ? "Evento criado e enviado pro técnico!"
+          : "Evento criado no Google Calendar com sucesso!",
         variant: "default",
       });
 
       // Close modal and refresh calendar
       setShowCreateEventModal(false);
       setLinkedItemPreview(null);
+      setAlsoSendToTechnician(false);
 
       // Refresh calendar events
       await loadCalendarEvents();
@@ -3256,6 +3281,17 @@ export function Agenda() {
                 <p className="text-xs text-gray-500 mt-1">
                   Liga o evento direto ao item — sem precisar montar uma Rota.
                 </p>
+                {linkedItemPreview?.ok && (
+                  <label className="flex items-center gap-2 mt-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={alsoSendToTechnician}
+                      onChange={(e) => setAlsoSendToTechnician(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    Enviar direto pro técnico também (hoje, sem rota)
+                  </label>
+                )}
               </div>
             </div>
 
@@ -3266,6 +3302,7 @@ export function Agenda() {
                   setShowCreateEventModal(false);
                   setLocationSuggestions([]); // Limpar sugestões de local
                   setLinkedItemPreview(null);
+                  setAlsoSendToTechnician(false);
                   setNewEvent({
                     title: '',
                     description: '',

@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   X, Clock, Play, StopCircle, Wallet, ChevronDown, ChevronUp,
   AlertCircle, Loader2, History, MapPin, Calendar as CalendarIcon,
-  DollarSign, Check, ArrowRight, RefreshCw,
+  DollarSign, Check, ArrowRight, RefreshCw, Send,
 } from 'lucide-react';
-import api, { itemsApi, enumsApi, placesApi } from '../../services/api';
+import api, { itemsApi, enumsApi, placesApi, technicianApi } from '../../services/api';
 import {
   STATUS_COLOR, PAYMENT_STATUS_COLOR, PAYMENT_METHODS, fmtMoney,
   EXECUTION_MODES,
@@ -273,6 +273,25 @@ export default function ItemDetailDrawer({ itemId, onClose, onUpdated }) {
     } finally { setBusy(false); }
   };
 
+  const [sendingToTech, setSendingToTech] = useState(false);
+  const onSendToTechnician = async () => {
+    try {
+      setSendingToTech(true);
+      const today = new Date().toISOString().split('T')[0];
+      await technicianApi.assignEvents({
+        route_id: null,
+        event_ids: [itemId],
+        technician_id: 'TECH-001',
+        assigned_date: today,
+        assignment_type: 'MANUAL',
+      });
+      await reload();
+      onUpdated?.();
+    } catch (e) {
+      setError(e.response?.data?.detail || 'Erro ao enviar para o técnico.');
+    } finally { setSendingToTech(false); }
+  };
+
   const onPay = async () => {
     const v = Number(payValue);
     if (!v || v <= 0) { setError('Valor inválido.'); return; }
@@ -456,6 +475,25 @@ export default function ItemDetailDrawer({ itemId, onClose, onUpdated }) {
           {/* TAB: ACTIONS */}
           {activeTab === 'actions' && (
             <div className="space-y-3">
+              {/* Enviar direto pro técnico — sem precisar de rota */}
+              <div className="bg-white border border-gray-200 rounded-xl p-3">
+                <div className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-1.5">
+                  <Send className="w-4 h-4 text-orange-600" /> Enviar pro técnico
+                </div>
+                <p className="text-xs text-gray-500 mb-2">
+                  Manda este item direto pro técnico hoje, sem precisar montar uma rota.
+                  Útil pra serviço avulso (sofá, cadeira) ou item de última hora.
+                </p>
+                <button
+                  onClick={onSendToTechnician}
+                  disabled={sendingToTech}
+                  className="w-full px-3 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1"
+                >
+                  {sendingToTech ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Enviar direto pro técnico
+                </button>
+              </div>
+
               {/* Mudar status */}
               <div className="bg-white border border-gray-200 rounded-xl p-3">
                 <div className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-1.5">
