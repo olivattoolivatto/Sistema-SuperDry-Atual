@@ -866,13 +866,19 @@ function AutoMeasures() {
                 <div className="divide-y divide-gray-50">
                   {group.items.map((item) => {
                     const idx = item._idx;
-                    const hasMultipleActive = (item.active_items?.length || 0) > 1;
+                    const hasMultipleActive = (item.active_items?.length || 0) > 1 || !!item.shape_conflict;
                     const isDupeSig = warnSigs.has(`${item.client_name}|${dimsSig(item)}`);
+                    const rowBg = item.shape_conflict ? 'bg-red-50' : isDupeSig ? 'bg-yellow-50' : '';
                     return (
-                      <div key={idx} className={`flex flex-col gap-1 px-3 py-1.5 ${isDupeSig ? 'bg-yellow-50' : ''}`}>
+                      <div key={idx} className={`flex flex-col gap-1 px-3 py-1.5 ${rowBg}`}>
                         <div className="flex items-center gap-2">
                         <MeasureTag item={item} />
                         <LabelTag pl={item.partner_label} />
+                        {item.shape_conflict && (
+                          <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0" title="A forma (quadrado/redondo) não bate com nenhum item pendente — confira manualmente abaixo.">
+                            ⚠ forma não confere
+                          </span>
+                        )}
                         {isDupeSig && (
                           <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full shrink-0">⚠ mesmo tamanho</span>
                         )}

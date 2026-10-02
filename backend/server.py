@@ -261,6 +261,7 @@ class MeasureType(str, Enum):
     METRAGEM_LINEAR_CORTINA_SIMPLES = "METRAGEM_LINEAR_CORTINA_SIMPLES"
     METRAGEM_LINEAR_PE_DIREITO_DUPLO = "METRAGEM_LINEAR_PE_DIREITO_DUPLO"
     METRAGEM_LINEAR_ESPECIAL = "METRAGEM_LINEAR_ESPECIAL"
+    TAPETE_A_IDENTIFICAR = "TAPETE_A_IDENTIFICAR"  # placeholder — forma ainda não definida (ajuste 02/10/2026)
 
 class ExecutionLocation(str, Enum):
     RETIRADA = "RETIRADA"
@@ -4482,8 +4483,10 @@ def _parse_measures_text(text: str) -> AutoMeasureLine:
                 "number": color_match.group(2),
             }
 
-        # Higia Service: higia, lucas
-        if idn_lower in ('higia', 'lucas'):
+        # Higia Service: higia, lucas — aceita com ou sem o prefixo "parceiro "
+        # (ajuste 02/10/2026: antes só reconhecia a palavra isolada; "Parceiro
+        # Higia", mesmo escrito certo, não batia — Wesley/Domus já aceitavam o prefixo).
+        if re.fullmatch(r'(parceiro\s+)?(higia|lucas)', idn_lower):
             return None, PARTNER_HIGIA, False, None
 
         # Vinicius: ambíguo (pode ser cliente comum ou parceiro Higia)
@@ -5346,8 +5349,58 @@ async def _find_active_items(client_id: str) -> List[Dict[str, Any]]:
                     "width": it.get("width"),
                     "height": it.get("height"),
                     "diameter": it.get("diameter"),
+                    "measure_type": it.get("measure_type"),
                 })
     return items
+
+
+def _shape_of_measure_type(mt: Optional[str]) -> str:
+    """'square' | 'round' | 'unknown' — unknown inclui TAPETE_A_IDENTIFICAR e None.
+    Ajuste 02/10/2026 (conciliação de medidas por forma)."""
+    if mt == "TAPETE_REDONDO_DIAMETRO":
+        return "round"
+    if mt in ("AREA_DE_TAPETE", "CARPETE_TAPETE_LOCAL"):
+        return "square"
+    return "unknown"
+
+
+def _shape_of_parsed_item(item: Dict[str, Any]) -> str:
+    """Forma detectada na linha da mensagem colada (diâmetro = redondo)."""
+    return "round" if item.get("diameter") else "square"
+
+
+def _reconcile_measures_with_items(
+    parsed_items: List[Dict[str, Any]], indices: List[int], active_items: List[Dict[str, Any]],
+) -> Dict[int, Dict[str, Any]]:
+    """Casa cada medida recebida (por índice no texto) com o item pendente certo,
+    por FORMA (quadrado/redondo), não por posição na mensagem.
+      1. Tenta casar com um item pendente da MESMA forma.
+      2. Se não achar, tenta um item "a identificar" (forma ainda não definida).
+      3. Se ainda não achar E existir item pendente de OUTRA forma não usado,
+         não decide sozinho — sinaliza shape_conflict pra conferência manual.
+    Ajuste 02/10/2026."""
+    pool_square  = [ai for ai in active_items if _shape_of_measure_type(ai.get("measure_type")) == "square"]
+    pool_round   = [ai for ai in active_items if _shape_of_measure_type(ai.get("measure_type")) == "round"]
+    pool_unknown = [ai for ai in active_items if _shape_of_measure_type(ai.get("measure_type")) == "unknown"]
+
+    resolution: Dict[int, Dict[str, Any]] = {}
+    pending: List[int] = []
+    for i in indices:
+        shape = _shape_of_parsed_item(parsed_items[i])
+        pool = pool_square if shape == "square" else pool_round
+        if pool:
+            resolution[i] = {"target": pool.pop(0), "shape_conflict": False}
+        else:
+            pending.append(i)
+
+    for i in pending:
+        if pool_unknown:
+            resolution[i] = {"target": pool_unknown.pop(0), "shape_conflict": False}
+        else:
+            leftover = pool_square + pool_round  # forma diferente, ainda sem uso
+            resolution[i] = {"target": None, "shape_conflict": bool(leftover)}
+
+    return resolution
 
 
 # Mapeamento parceiro → (serviço_quadrado, serviço_redondo)
@@ -5368,6 +5421,40 @@ async def _resolve_service_for_item(client_id: str, is_round: bool) -> Optional[
     pair = _PARTNER_SERVICE_MAP.get(client_id, _GENERIC_SERVICE_MAP)
     srv_id = pair[1] if is_round else pair[0]
     return await db.services.find_one({"id": srv_id})
+
+
+async def _resolve_measure_update_fields(
+    measures: Dict[str, Any], target_doc: Optional[Dict[str, Any]], client_id: str,
+) -> Dict[str, Any]:
+    """Prepara os campos pra atualizar a medida de um item existente:
+      1. Limpa o campo da forma anterior (não deixa largura/altura velha junto
+         com diâmetro novo, ou vice-versa, quando a forma real muda).
+      2. Se o item era um placeholder "a identificar" (ou sem medida_type),
+         resolve o serviço/preço reais pela forma que chegou — item só fica
+         com preço e catálogo corretos depois que a forma é conhecida.
+    Ajuste 02/10/2026."""
+    fields = dict(measures)
+    is_round = fields.get("diameter") is not None
+    if is_round:
+        fields.setdefault("width", None)
+        fields.setdefault("height", None)
+    elif fields.get("width") is not None or fields.get("height") is not None:
+        fields.setdefault("diameter", None)
+
+    current_mtype = (target_doc or {}).get("measure_type")
+    if current_mtype in (None, "", "TAPETE_A_IDENTIFICAR"):
+        svc = await _resolve_service_for_item(client_id, is_round)
+        if svc:
+            unit_price = float(svc.get("sale_price") or 0)
+            area = fields.get("area_m2") or 0
+            fields["service_id"] = svc["id"]
+            fields["service_name"] = svc["name"]
+            fields["service_code"] = svc.get("id")
+            fields["service_category"] = svc.get("category")
+            fields["measure_type"] = svc.get("measure_type")
+            fields["unit_price"] = unit_price
+            fields["total_value"] = round(unit_price * area, 2) if area else 0.0
+    return fields
 
 
 def _strip_accents(s: str) -> str:
@@ -5485,19 +5572,28 @@ async def preview_measures(payload: Dict[str, Any], current_user: UserPublic = D
             "candidates":     [{"id": c["id"], "name": c["name"]} for c in candidates],
         }
 
-    # Anota cada item com info do cliente + auto-assign de item ativo
-    # Rastreia quantos itens ativos já foram atribuídos por cliente
-    assigned: Dict[str, int] = {}
+    # Conciliação por cliente: casa cada medida com o item pendente certo pela
+    # FORMA (quadrado/redondo), não pela posição na mensagem — ver
+    # _reconcile_measures_with_items. Ajuste 02/10/2026.
+    by_client_idx: Dict[str, List[int]] = {}
+    for i, item in enumerate(parsed.items):
+        by_client_idx.setdefault(item.get("client_name", ""), []).append(i)
+
+    resolution: Dict[int, Dict[str, Any]] = {}
+    for cname, idxs in by_client_idx.items():
+        info = client_info.get(cname, {"active_items": []})
+        resolution.update(
+            _reconcile_measures_with_items(parsed.items, idxs, list(info.get("active_items", [])))
+        )
+
     annotated = []
-    for item in parsed.items:
+    for i, item in enumerate(parsed.items):
         cname = item.get("client_name", "")
         info  = client_info.get(cname, {"exists": False, "client_id": None, "active_items": [],
                                         "ambiguous": False, "candidates": [], "canonical_name": None})
         active_items = info.get("active_items", [])
-        idx          = assigned.get(cname, 0)
-        # Auto-assign: se há item ativo disponível na posição correspondente → sugere atualizar
-        target = active_items[idx] if idx < len(active_items) else None
-        assigned[cname] = idx + 1
+        res    = resolution.get(i, {"target": None, "shape_conflict": False})
+        target = res["target"]
 
         annotated.append({
             **item,
@@ -5510,6 +5606,7 @@ async def preview_measures(payload: Dict[str, Any], current_user: UserPublic = D
             "target_item_id":     target["item_id"] if target else None,
             "target_budget_id":   target["budget_id"] if target else None,
             "action":             "update" if target else "create",
+            "shape_conflict":     res["shape_conflict"],
         })
 
     return {"items": annotated, "count": len(annotated), "clients_summary": client_info}
@@ -5697,7 +5794,7 @@ async def execute_measures_automation(payload: Dict[str, Any], current_user: Use
                         break
                 if target_doc:
                     break
-            update_fields = dict(measures)
+            update_fields = await _resolve_measure_update_fields(measures, target_doc, client_id)
             status_advanced = bool(target_doc and target_doc.get("status") in ACTIVE_STATUSES)
             if status_advanced:
                 update_fields["status"] = ready_status
@@ -5724,7 +5821,9 @@ async def execute_measures_automation(payload: Dict[str, Any], current_user: Use
             # Só um candidato → atualiza sem ambiguidade (sempre ACTIVE_STATUSES por
             # construção de _find_active_items, então sempre avança pro status "pronto")
             ai = active_items[0]
-            await _update_item_fields(ai["item_id"], {**measures, "status": ready_status}, current_user)
+            ai_update_fields = await _resolve_measure_update_fields(measures, ai, client_id)
+            ai_update_fields["status"] = ready_status
+            await _update_item_fields(ai["item_id"], ai_update_fields, current_user)
             await _append_to_item_array(ai["item_id"], "status_history", {
                 "status": ready_status, "at": datetime.utcnow().isoformat(),
                 "by_user_id": current_user.id, "by_user_name": current_user.name,
@@ -9986,6 +10085,29 @@ async def startup_bootstrap():
                 })
     except Exception as e:
         print(f"[startup] erro seed categorias financeiras: {e}")
+
+    # Serviço placeholder "Tapete a Identificar" — usado quando a forma (quadrado/
+    # redondo) ainda não é conhecida na hora de cadastrar o orçamento (antes disso
+    # era obrigatório chutar uma forma). Idempotente. Ajuste 02/10/2026.
+    try:
+        if not await db.services.find_one({"id": "SRV-0046"}):
+            await db.services.insert_one({
+                "id": "SRV-0046",
+                "name": "Tapete a Identificar (forma pendente)",
+                "category": "TAPETES",
+                "service_type": "LAVAGEM",
+                "measure_type": "TAPETE_A_IDENTIFICAR",
+                "execution_location": "CLIENTE_TROUXE",
+                "cost_price": 0.0,
+                "sale_price": 0.0,
+                "is_active": True,
+                "default_service_status": "CLIENTE_TROUXE",
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            })
+            print("[startup] serviço placeholder SRV-0046 (Tapete a Identificar) criado.")
+    except Exception as e:
+        print(f"[startup] erro seed serviço placeholder de tapete: {e}")
 
     # Pré-aquecimento do Ollama (carrega llama3.2:3b na RAM logo após o boot)
     asyncio.create_task(_warmup_ollama())
