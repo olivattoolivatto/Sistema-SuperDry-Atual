@@ -146,12 +146,26 @@ function DecimalInput({ value, defaultValue: def, onChange: onChangeProp, classN
 }
 
 // Sub-form para um item individual
-function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, paymentMethods = PAYMENT_METHODS, salespersons = [] }) {
+function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, paymentMethods = PAYMENT_METHODS, salespersons = [], autoOpen = false, onAutoOpened }) {
   const [showAdvanced, setShowAdvanced] = useState(
     !!(item.pickup_address || item.execution_address || item.delivery_address)
   );
   const [serviceSearch, setServiceSearch] = useState('');
   const [showServicePicker, setShowServicePicker] = useState(false);
+  const containerRef = useRef(null);
+
+  // Ao adicionar um item novo, abre direto o campo de busca do serviço e
+  // rola a tela até ele — evita ter que rolar e clicar manualmente.
+  useEffect(() => {
+    if (!autoOpen) return;
+    setShowServicePicker(true);
+    const t = setTimeout(() => {
+      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+    onAutoOpened?.();
+    return () => clearTimeout(t);
+    // eslint-disable-next-line
+  }, [autoOpen]);
 
   const filteredServices = useMemo(() => {
     const q = normalize(serviceSearch);
@@ -213,7 +227,7 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
   }, [item.unit_price, item.width, item.height, item.diameter, item.fabric_folds, item.fabric_per_fold, item.quantity, measureType]);
 
   return (
-    <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+    <div ref={containerRef} className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
       <div className="bg-blue-600 text-white px-3 py-2 flex items-center justify-between">
         <div className="text-sm font-semibold flex items-center gap-2">
           Item #{idx + 1}{item.service_name ? ` — ${item.service_name}` : ''}
@@ -1053,7 +1067,14 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
     } finally { setQcSaving(false); }
   };
 
-  const addItem = () => setForm(f => ({ ...f, items: [...(f.items || []), newEmptyItem()] }));
+  const [autoOpenItemIdx, setAutoOpenItemIdx] = useState(null);
+  const addItem = () => {
+    setForm(f => {
+      const items = [...(f.items || []), newEmptyItem()];
+      setAutoOpenItemIdx(items.length - 1);
+      return { ...f, items };
+    });
+  };
   const updateItem = (idx, newItem) => setForm(f => ({
     ...f,
     items: f.items.map((it, i) => i === idx ? newItem : it),
@@ -1488,6 +1509,8 @@ export default function BudgetEditor({ budget, onClose, onSaved, preselectedClie
                   onChange={(it) => updateItem(idx, it)}
                   onRemove={() => removeItem(idx)}
                   onDuplicate={() => duplicateItem(idx)}
+                  autoOpen={idx === autoOpenItemIdx}
+                  onAutoOpened={() => setAutoOpenItemIdx(null)}
                 />
               ))}
             </div>
