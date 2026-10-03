@@ -917,22 +917,45 @@ function AutoMeasures() {
                           )}
                         </div>
                         </div>
-                        {/* Seletor de status do item */}
-                        <div className="flex items-center gap-2 pb-0.5">
-                          <span className="text-[10px] text-gray-400 shrink-0">Status:</span>
-                          <select
-                            value={item.status || 'CLIENTE_TROUXE'}
-                            onChange={e => updateItem(idx, { status: e.target.value })}
-                            className="flex-1 text-[10px] border border-gray-200 rounded px-1 py-0.5 bg-white"
-                          >
-                            <option value="CLIENTE_TROUXE">Cliente trouxe</option>
-                            <option value="COLETADO">Coletado</option>
-                            <option value="EM_LAVAGEM">Em lavagem</option>
-                            <option value="RETIRAR">Aguardando retirada</option>
-                            <option value="AGUARDANDO_ENTREGA">Aguardando entrega</option>
-                            <option value="ENTREGAR">Pronto para entregar</option>
-                          </select>
-                        </div>
+                        {/* Seletor de status do item — corrigido em 03/10/2026: antes mostrava
+                            sempre "Cliente trouxe" selecionado (até pra parceiro e pra item que vai
+                            ATUALIZAR um pendente já existente), mesmo quando esse campo nem é usado
+                            nesse caso. Pra "update", o status real já vem do item encontrado — mostra
+                            só informativo, sem selecionável (a automação avança ele automaticamente).
+                            Pra "create" (item novo, sem pendente pra casar), o padrão que o backend
+                            realmente usa se nada for escolhido aqui é "Aguardando buscar" pra parceiro
+                            (peça já lavada, esperando ser retirada por ele) e "Cliente trouxe" pra
+                            cliente próprio — refletido abaixo em vez de um valor fixo. */}
+                        {item.action === 'update' && item.target_item_id ? (
+                          <div className="flex items-center gap-2 pb-0.5">
+                            <span className="text-[10px] text-gray-400 shrink-0">Status:</span>
+                            <span className="text-[10px] text-blue-600">
+                              Vai atualizar o item pendente {item.target_item_id} — status avança automaticamente
+                              ao confirmar (esse seletor não se aplica aqui).
+                            </span>
+                          </div>
+                        ) : (() => {
+                          const isPartnerRow = !!(item.partner_label && item.partner_label.type);
+                          const defaultStatus = isPartnerRow ? 'AGUARDANDO_BUSCAR' : 'CLIENTE_TROUXE';
+                          return (
+                            <div className="flex items-center gap-2 pb-0.5">
+                              <span className="text-[10px] text-gray-400 shrink-0">Status do item novo:</span>
+                              <select
+                                value={item.status || defaultStatus}
+                                onChange={e => updateItem(idx, { status: e.target.value })}
+                                className="flex-1 text-[10px] border border-gray-200 rounded px-1 py-0.5 bg-white"
+                              >
+                                <option value="CLIENTE_TROUXE">Cliente trouxe</option>
+                                <option value="AGUARDANDO_BUSCAR">Aguardando buscar (parceiro)</option>
+                                <option value="COLETADO">Coletado</option>
+                                <option value="EM_LAVAGEM">Em lavagem</option>
+                                <option value="RETIRAR">Aguardando retirada</option>
+                                <option value="AGUARDANDO_ENTREGA">Aguardando entrega</option>
+                                <option value="ENTREGAR">Pronto para entregar</option>
+                              </select>
+                            </div>
+                          );
+                        })()}
                         {/* Seletor de item quando há múltiplos ativos sem medida */}
                         {hasMultipleActive && (
                           <div className="flex items-center gap-2 pb-0.5">

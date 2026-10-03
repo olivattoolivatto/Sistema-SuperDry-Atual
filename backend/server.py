@@ -5663,13 +5663,41 @@ async def preview_measures(payload: Dict[str, Any], current_user: UserPublic = D
     # Conciliação por cliente: casa cada medida com o item pendente certo pela
     # FORMA (quadrado/redondo), não pela posição na mensagem — ver
     # _reconcile_measures_with_items. Ajuste 02/10/2026.
+    #
+    # Agrupar pelo CLIENTE RESOLVIDO (client_id canônico), não pelo texto exato
+    # digitado na mensagem. Corrigido em 03/10/2026: quando a mesma pessoa
+    # aparece grafada de duas formas na mesma colagem (ex. "Márcio Guedes" com
+    # acento numa linha e "Marcio Guedes" sem acento noutra — ou "Regina" e
+    # "Regina Coelli"), o agrupamento por texto bruto rodava DUAS conciliações
+    # independentes pra ela, cada uma vendo o MESMO item pendente disponível e
+    # podendo reivindicá-lo pra medidas diferentes — a segunda sobrescrevia a
+    # primeira silenciosamente na hora de executar, sem aviso nenhum. Pra
+    # cliente ambíguo (mais de um candidato) ou não encontrado, mantém o
+    # agrupamento pelo texto bruto mesmo (mais cauteloso — não dá pra unir
+    # grupos sem saber que é a mesma pessoa).
     by_client_idx: Dict[str, List[int]] = {}
+    group_key_by_name: Dict[str, str] = {}
+    for name, info in client_info.items():
+        if info.get("exists") and not info.get("ambiguous") and info.get("client_id"):
+            group_key_by_name[name] = f"id:{info['client_id']}"
+        else:
+            group_key_by_name[name] = f"name:{name}"
+
     for i, item in enumerate(parsed.items):
-        by_client_idx.setdefault(item.get("client_name", ""), []).append(i)
+        cname = item.get("client_name", "")
+        gkey = group_key_by_name.get(cname, f"name:{cname}")
+        by_client_idx.setdefault(gkey, []).append(i)
+
+    # info por grupo: qualquer um dos nomes que caem nesse grupo serve (todos
+    # apontam pro mesmo client_id resolvido, logo pros mesmos active_items).
+    info_by_group: Dict[str, Dict[str, Any]] = {}
+    for name, gkey in group_key_by_name.items():
+        if gkey not in info_by_group:
+            info_by_group[gkey] = client_info.get(name, {"active_items": []})
 
     resolution: Dict[int, Dict[str, Any]] = {}
-    for cname, idxs in by_client_idx.items():
-        info = client_info.get(cname, {"active_items": []})
+    for gkey, idxs in by_client_idx.items():
+        info = info_by_group.get(gkey, {"active_items": []})
         resolution.update(
             _reconcile_measures_with_items(parsed.items, idxs, list(info.get("active_items", [])))
         )
@@ -5769,6 +5797,30 @@ async def execute_measures_automation(payload: Dict[str, Any], current_user: Use
                 continue
             seen_labeled.add(key)
         deduped_items.append(item_data)
+
+    # ── Nível 1b: trava contra alvo duplicado na mesma execução ────────────────
+    # Rede de segurança pro ajuste de agrupamento por cliente canônico em
+    # preview_measures (03/10/2026): se por qualquer motivo duas medidas desta
+    # mesma execução apontarem pro MESMO target_item_id (ex.: a mesma pessoa
+    # grafada de duas formas, cada uma com seu próprio preview desatualizado),
+    # processar as duas faria a segunda sobrescrever a primeira em silêncio,
+    # perdendo uma medida real sem nenhum aviso. Processa só a primeira,
+    # reporta a segunda como conflito pra conferência manual.
+    claimed_target_ids: set = set()
+    final_items = []
+    for item_data in deduped_items:
+        tid = item_data.get("target_item_id") if item_data.get("action") == "update" else None
+        if tid and tid in claimed_target_ids:
+            results.append({
+                "status": "conflict",
+                "reason": f"mais de uma medida desta colagem aponta pro mesmo item pendente ({tid}) — confira manualmente, só a primeira foi aplicada",
+                "item_id": tid,
+            })
+            continue
+        if tid:
+            claimed_target_ids.add(tid)
+        final_items.append(item_data)
+    deduped_items = final_items
 
     # ── Nível 2: processa itens únicos ─────────────────────────────────────────
     for item_data in deduped_items:
