@@ -2328,8 +2328,12 @@ async def get_technician_daily_tasks(
         tasks = {"agenda_events": [], "status_items": [], "assignments": []}
 
         # Build query — when all=true skip date filter
+        # technician_id aceita uma lista separada por vírgula (migração TECH-001 →
+        # ID real de usuário, ex. "TECH-001,USR-6249") pra não esconder assignments
+        # abertas sob o id legado enquanto a transição não tiver passado por elas.
+        tech_ids = [t.strip() for t in technician_id.split(",") if t.strip()]
         query: dict = {
-            "technician_id": technician_id,
+            "technician_id": {"$in": tech_ids} if len(tech_ids) > 1 else technician_id,
             "status": {"$in": ["ASSIGNED", "IN_PROGRESS"]}
         }
         if not all:

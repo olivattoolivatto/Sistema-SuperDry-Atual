@@ -23,6 +23,7 @@ import {
   X,
   Search
 } from 'lucide-react';
+import { TECHNICIAN_ID, TECHNICIAN_IDS_READ } from '../constants/technician';
 import { routesApi, placesApi, clientsApi, budgetsApi, agendaApi, technicianApi, itemsApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
 
@@ -739,11 +740,11 @@ export function Agenda() {
 
       if (dateFilter && dateFilter.trim()) {
         // Filtro por data específica
-        const response = await technicianApi.getDailyTasks('TECH-001', dateFilter, false);
+        const response = await technicianApi.getDailyTasks(TECHNICIAN_IDS_READ, dateFilter, false);
         status_items = response.data.status_items || [];
       } else {
         // Sem filtro: busca TODOS os pendentes (all=true no backend)
-        const response = await technicianApi.getDailyTasks('TECH-001', null, true);
+        const response = await technicianApi.getDailyTasks(TECHNICIAN_IDS_READ, null, true);
         status_items = response.data.status_items || [];
       }
 
@@ -955,7 +956,7 @@ export function Agenda() {
       
       const queryDate = filterDate || sentServicesDate || new Date().toISOString().split('T')[0];
       
-      const response = await technicianApi.getDailyTasks('TECH-001', queryDate);
+      const response = await technicianApi.getDailyTasks(TECHNICIAN_IDS_READ, queryDate);
       const { assignments, status_items } = response.data;
       
       // Processar assignments
@@ -1843,7 +1844,7 @@ export function Agenda() {
         event_ids: selectedEvents.flatMap(event =>
           event.all_budget_item_ids || [event.budget_item_id || event.id]
         ),
-        technician_id: 'TECH-001',
+        technician_id: TECHNICIAN_ID,
         assigned_date: customEventDate,
         assignment_type: 'AGENDA',
         item_schedule: itemSchedule,
@@ -2245,7 +2246,7 @@ export function Agenda() {
           await technicianApi.assignEvents({
             route_id: null,
             event_ids: [itemId],
-            technician_id: 'TECH-001',
+            technician_id: TECHNICIAN_ID,
             assigned_date: today,
             assignment_type: 'MANUAL',
             item_schedule: { [itemId]: { scheduled_time: newEvent.start_time || null } },

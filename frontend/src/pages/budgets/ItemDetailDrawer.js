@@ -5,6 +5,7 @@ import {
   DollarSign, Check, ArrowRight, RefreshCw, Send,
 } from 'lucide-react';
 import api, { itemsApi, enumsApi, placesApi, technicianApi } from '../../services/api';
+import { TECHNICIAN_ID } from '../../constants/technician';
 import {
   STATUS_COLOR, PAYMENT_STATUS_COLOR, PAYMENT_METHODS, fmtMoney,
   EXECUTION_MODES,
@@ -282,7 +283,7 @@ export default function ItemDetailDrawer({ itemId, onClose, onUpdated }) {
       await technicianApi.assignEvents({
         route_id: null,
         event_ids: [itemId],
-        technician_id: 'TECH-001',
+        technician_id: TECHNICIAN_ID,
         assigned_date: today,
         assignment_type: 'MANUAL',
         item_schedule: { [itemId]: { scheduled_time: techScheduledTime || null } },

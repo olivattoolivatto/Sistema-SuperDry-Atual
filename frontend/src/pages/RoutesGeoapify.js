@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from '../hooks/use-toast';
 import { routesApi, budgetItemsApi, technicianApi } from '../services/api';
+import { TECHNICIAN_ID } from '../constants/technician';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -71,7 +72,7 @@ export function RoutesGeoapify() {
       await technicianApi.assignDirect({
         item_ids: directOrder,
         order: directOrder,
-        technician_id: 'TECH-001',
+        technician_id: TECHNICIAN_ID,
       });
       toast({ title: 'Enviado ao técnico', description: `${directOrder.length} serviço(s) enviado(s) direto, fora de rota.` });
       setAvailableItems(prev => prev.filter(i => !directOrder.includes(i.budget_item_id)));

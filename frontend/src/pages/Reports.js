@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BarChart3, FileSpreadsheet, ChevronRight, ChevronLeft, Printer, Lock, Ruler, Loader2, Search, Columns3, RotateCcw, MessageCircle, CheckCircle2, History, AlertTriangle, RefreshCw, Route as RouteIcon, Copy, Clock, PauseCircle } from 'lucide-react';
 import { reportsApi, clientsApi } from '../services/api';
 
@@ -59,6 +59,18 @@ function PartnerBillingReport({ onBack }) {
   const [sendingWhats, setSendingWhats] = useState(false);
   const [lastClosure, setLastClosure] = useState(null); // último fechamento desse parceiro
   const [closing, setClosing] = useState(false);
+
+  // Nome do arquivo do PDF (gerado via Ctrl+P / "Salvar como PDF" -- o navegador usa
+  // document.title como nome padrão). Diego pediu o padrão fixo
+  // "Fechamento de Tapetes - NOME DO PARCEIRO.pdf".
+  const originalTitleRef = useRef(document.title);
+  useEffect(() => {
+    const label = PARTNERS.find(p => p.id === partnerId)?.label || 'Todos os Parceiros';
+    document.title = `Fechamento de Tapetes - ${label}`;
+  }, [partnerId]);
+  useEffect(() => {
+    return () => { document.title = originalTitleRef.current; };
+  }, []);
 
   const loadLastClosure = async (pid) => {
     if (!pid) { setLastClosure(null); return; }

@@ -8,6 +8,7 @@ import {
 import { routesApi, budgetItemsApi, technicianApi, itemsApi } from '../services/api';
 import { BACKEND_URL } from '../lib/backendUrl';
 import { useAuth } from '../contexts/AuthContext';
+import { TECHNICIAN_ID, TECHNICIAN_IDS_READ } from '../constants/technician';
 
 // Função para extrair endereço legível do objeto cliente (COPIADA DA AGENDA)
 const getClientAddress = (client) => {
@@ -349,7 +350,7 @@ function StreetMode({ onBack, onSwitchMode }) {
       console.log(`📅 TechnicianMode: Buscando tarefas para a data: ${today}`);
       
       let response = await technicianApi.getDailyTasks(
-        'TECH-001', // TODO: Usar technicianData.id quando disponível
+        TECHNICIAN_IDS_READ, // migração TECH-001 -> USR-6249, ver constants/technician.js
         today
       );
       
@@ -369,7 +370,7 @@ function StreetMode({ onBack, onSwitchMode }) {
         
         for (const date of dates) {
           console.log(`🔍 Tentando data: ${date}`);
-          const dateResponse = await technicianApi.getDailyTasks('TECH-001', date);
+          const dateResponse = await technicianApi.getDailyTasks(TECHNICIAN_IDS_READ, date);
           
           if (dateResponse.data.assignments && dateResponse.data.assignments.length > 0) {
             console.log(`✅ Encontrou ${dateResponse.data.assignments.length} assignments para ${date}`);
@@ -1030,7 +1031,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
     try {
       const formData = new FormData();
       formData.append('item_id', itemId);
-      formData.append('technician_id', 'TECH-001');
+      formData.append('technician_id', TECHNICIAN_ID);
       formData.append('photo_type', 'AFTER');
       for (let file of files) formData.append('files', file);
       const response = await fetch(`${BACKEND_URL}/api/technician/upload-photos`, { method: 'POST', body: formData });
@@ -2545,7 +2546,7 @@ function PhotoCaptureScreen({ client, onBack, embedded = false, itemPhotos, setI
     try {
       const formData = new FormData();
       formData.append('item_id', itemId);
-      formData.append('technician_id', 'TECH-001');
+      formData.append('technician_id', TECHNICIAN_ID);
       formData.append('photo_type', 'BEFORE');
       if (client.original_assignment_id) formData.append('assignment_id', client.original_assignment_id);
       for (let file of files) formData.append('files', file);
@@ -2593,7 +2594,7 @@ function PhotoCaptureScreen({ client, onBack, embedded = false, itemPhotos, setI
     try {
       const formData = new FormData();
       formData.append('item_id', itemId);
-      formData.append('technician_id', 'TECH-001');
+      formData.append('technician_id', TECHNICIAN_ID);
       formData.append('photo_type', 'DAMAGE');
       if (client.original_assignment_id) formData.append('assignment_id', client.original_assignment_id);
       for (let file of files) formData.append('files', file);
