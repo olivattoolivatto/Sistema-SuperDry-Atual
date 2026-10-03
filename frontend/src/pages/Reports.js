@@ -4,6 +4,10 @@ import { reportsApi, clientsApi } from '../services/api';
 
 const COL_LABELS = ['Data ref.', 'Objeto', 'Identificação', 'Medidas', 'Área', 'Valor'];
 const DEFAULT_COL_WIDTHS = [10, 32, 24, 12, 9, 13];
+// Larguras fixas usadas SÓ na impressão/PDF — independentes do ajuste manual
+// (que fica salvo só no localStorage de cada aparelho/navegador, por isso
+// podia sair diferente no PC e no celular). Dá mais espaço pra Data/Medidas.
+const PRINT_COL_WIDTHS = [14, 22, 18, 20, 10, 16];
 const COL_WIDTHS_KEY = 'partnerReportColWidths';
 
 function loadColWidths() {
@@ -146,6 +150,13 @@ function PartnerBillingReport({ onBack }) {
           .print-meta .meta-label { font-size: 8px !important; }
           .print-meta .meta-value { font-size: 10.5px !important; }
           .print-table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; border: 1px solid #94a3b8 !important; }
+          .print-colgroup col:nth-child(1) { width: ${PRINT_COL_WIDTHS[0]}% !important; }
+          .print-colgroup col:nth-child(2) { width: ${PRINT_COL_WIDTHS[1]}% !important; }
+          .print-colgroup col:nth-child(3) { width: ${PRINT_COL_WIDTHS[2]}% !important; }
+          .print-colgroup col:nth-child(4) { width: ${PRINT_COL_WIDTHS[3]}% !important; }
+          .print-colgroup col:nth-child(5) { width: ${PRINT_COL_WIDTHS[4]}% !important; }
+          .print-colgroup col:nth-child(6) { width: ${PRINT_COL_WIDTHS[5]}% !important; }
+          .print-table td, .print-table th { white-space: nowrap !important; }
           .print-table th, .print-table td { padding: 3px 9px !important; line-height: 1.3 !important; overflow: hidden !important; text-overflow: ellipsis !important; word-break: break-word !important; border: 1px solid #cbd5e1 !important; }
           .print-table th { font-size: 9.5px !important; background: #eef2f7 !important; }
           .print-table td { font-size: 10.5px !important; }
@@ -325,7 +336,7 @@ function PartnerBillingReport({ onBack }) {
               {/* Tabela */}
               <div className="overflow-x-auto print-table-wrap">
                 <table className="w-full text-sm print-table border border-gray-300" style={{ tableLayout: 'fixed', borderCollapse: 'collapse' }}>
-                  <colgroup>
+                  <colgroup className="print-colgroup">
                     {colWidths.map((w, idx) => (
                       <col key={idx} style={{ width: `${w}%` }} />
                     ))}
