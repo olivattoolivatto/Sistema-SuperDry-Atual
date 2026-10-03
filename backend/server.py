@@ -6332,6 +6332,145 @@ async def get_partner_report_history(
     return {"history": out}
 
 
+_ORPHAN_NON_TERMINAL = {
+    "RETIRAR", "EXECUTAR_NO_LOCAL", "CLIENTE_TROUXE", "COLETADO",
+    "EM_LAVAGEM", "EM_LAVAGEM_PARCEIRO", "AGUARDANDO_ENTREGA",
+    "AGUARDANDO_BUSCAR", "ENTREGAR", "AGENDADO", "RETOQUE_NECESSARIO",
+    "EM_TRANSITO_DEVOLUCAO", "EXECUCAO_PARCIAL",
+}
+_ORPHAN_READY_STATUSES = {"AGUARDANDO_ENTREGA", "AGUARDANDO_BUSCAR", "ENTREGAR"}
+_ORPHAN_STALE_DAYS = 10
+_ORPHAN_FAST_READY_HOURS = 3
+
+
+@api_router.get("/reports/orphan-items")
+async def get_orphan_items_report(current_user: UserPublic = Depends(get_current_user)):
+    """
+    Varredura de itens "órfãos ou estranhos" -- sinais de que algo pode ter
+    saído do padrão (igual aos bugs que já achamos manualmente: itens presos
+    fora de rota, duplicados, status avançado rápido demais pela automação).
+    Não corrige nada sozinho -- só aponta pra conferência manual.
+
+    Categorias:
+      - rota_orfa: item.current_route_id aponta pra rota que não existe mais,
+        ou existe mas não lista esse item em nenhum stop (o bug Monica/Márcio/
+        Regina -- re-otimização de rota já mesclada apaga extra_budget_item_ids).
+      - duplicado: 2+ itens ativos do mesmo cliente, mesma data de referência
+        e mesmas medidas -- possível lançamento repetido.
+      - avanco_rapido: item pulou de COLETADO direto pra um status "pronto
+        pra entrega/buscar" em poucas horas -- a automação de medidas assume
+        que "chegou medida = já lavado", o que pode não ser real.
+      - parado: item ativo sem nenhuma mudança de status há muitos dias --
+        pode ter ficado esquecido.
+    """
+    cursor = db.budgets.find({
+        "$or": [
+            {"budget_status": "APROVADO"},
+            {"budget_status": {"$exists": False}},
+            {"budget_status": None},
+        ],
+    })
+    budgets = await cursor.to_list(None)
+
+    routes_cache: Dict[str, Any] = {}
+    async def _get_route(route_id):
+        if route_id not in routes_cache:
+            routes_cache[route_id] = await db.routes.find_one({"id": route_id})
+        return routes_cache[route_id]
+
+    now = datetime.utcnow()
+    findings: List[Dict[str, Any]] = []
+    dup_groups: Dict[tuple, List[Dict[str, Any]]] = {}
+
+    for bud in budgets:
+        for it in bud.get("items", []):
+            status = it.get("status")
+            if status not in _ORPHAN_NON_TERMINAL:
+                continue
+            if it.get("client_desisted"):
+                continue
+            item_id = it.get("id")
+            if not item_id:
+                continue
+            base = {
+                "item_id": item_id, "budget_id": bud.get("id"),
+                "client_name": bud.get("client_name"), "status": status,
+                "service_name": it.get("service_name"),
+            }
+
+            # ── rota órfã ────────────────────────────────────────────────
+            rid = it.get("current_route_id")
+            if rid:
+                route = await _get_route(rid)
+                if not route:
+                    findings.append({**base, "category": "rota_orfa",
+                        "detail": f"current_route_id={rid} não existe mais"})
+                else:
+                    in_route = False
+                    for stop in route.get("stops", []):
+                        if stop.get("budget_item_id") == item_id or item_id in (stop.get("extra_budget_item_ids") or []):
+                            in_route = True
+                            break
+                    if not in_route:
+                        findings.append({**base, "category": "rota_orfa",
+                            "detail": f"current_route_id={rid}, mas item não está em nenhuma parada dessa rota"})
+
+            # ── duplicado (mesmo cliente + data_referencia + medidas) ──────
+            ref_date = (it.get("reference_date") or "")[:10]
+            w, h, d = it.get("width"), it.get("height"), it.get("diameter")
+            if ref_date and (w and h or d):
+                key = (bud.get("client_id"), ref_date, w, h, d)
+                dup_groups.setdefault(key, []).append(base)
+
+            # ── avanço rápido demais ────────────────────────────────────
+            if status in _ORPHAN_READY_STATUSES:
+                hist = it.get("status_history") or []
+                coletado_at = None
+                ready_at = None
+                for h_entry in hist:
+                    if h_entry.get("status") == "COLETADO" and not coletado_at:
+                        coletado_at = h_entry.get("at")
+                    if h_entry.get("status") == status:
+                        ready_at = h_entry.get("at")
+                if coletado_at and ready_at:
+                    try:
+                        t1 = datetime.fromisoformat(str(coletado_at).replace("Z", "+00:00")).replace(tzinfo=None)
+                        t2 = datetime.fromisoformat(str(ready_at).replace("Z", "+00:00")).replace(tzinfo=None)
+                        delta_h = (t2 - t1).total_seconds() / 3600
+                        if 0 <= delta_h < _ORPHAN_FAST_READY_HOURS:
+                            findings.append({**base, "category": "avanco_rapido",
+                                "detail": f"coletado e marcado pronto em {delta_h:.1f}h — confira se foi realmente lavado"})
+                    except (ValueError, TypeError):
+                        pass
+
+            # ── parado há muito tempo ───────────────────────────────────
+            hist = it.get("status_history") or []
+            last_change = hist[-1].get("at") if hist else it.get("created_at")
+            if last_change:
+                try:
+                    t_last = datetime.fromisoformat(str(last_change).replace("Z", "+00:00")).replace(tzinfo=None)
+                    days = (now - t_last).total_seconds() / 86400
+                    if days >= _ORPHAN_STALE_DAYS:
+                        findings.append({**base, "category": "parado",
+                            "detail": f"sem mudança de status há {int(days)} dias"})
+                except (ValueError, TypeError):
+                    pass
+
+    for key, group in dup_groups.items():
+        if len(group) > 1:
+            for g in group:
+                findings.append({**g, "category": "duplicado",
+                    "detail": f"{len(group)} itens do mesmo cliente/data/medida — possível lançamento repetido"})
+
+    order = {"rota_orfa": 0, "duplicado": 1, "avanco_rapido": 2, "parado": 3}
+    findings.sort(key=lambda f: order.get(f["category"], 9))
+    by_category = {}
+    for f in findings:
+        by_category[f["category"]] = by_category.get(f["category"], 0) + 1
+
+    return {"findings": findings, "by_category": by_category, "total": len(findings)}
+
+
 @api_router.get("/payment-methods")
 async def get_payment_methods():
     """Retorna lista de formas de pagamento configuradas no sistema."""

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, FileSpreadsheet, ChevronRight, ChevronLeft, Printer, Lock, Ruler, Loader2, Search, Columns3, RotateCcw, MessageCircle, CheckCircle2, History } from 'lucide-react';
+import { BarChart3, FileSpreadsheet, ChevronRight, ChevronLeft, Printer, Lock, Ruler, Loader2, Search, Columns3, RotateCcw, MessageCircle, CheckCircle2, History, AlertTriangle, RefreshCw, Route as RouteIcon, Copy, Clock, PauseCircle } from 'lucide-react';
 import { reportsApi, clientsApi } from '../services/api';
 
 const COL_LABELS = ['Data ref.', 'Objeto', 'Identificação', 'Medidas', 'Área', 'Valor'];
@@ -490,6 +490,125 @@ function PartnerBillingReport({ onBack }) {
   );
 }
 
+// ── Relatório: Itens Órfãos / Estranhos ─────────────────────────────────────
+const ORPHAN_CATEGORY_META = {
+  rota_orfa:      { label: 'Rota órfã',         icon: RouteIcon,     color: 'text-red-700 bg-red-50 border-red-200' },
+  duplicado:      { label: 'Possível duplicado', icon: Copy,          color: 'text-amber-700 bg-amber-50 border-amber-200' },
+  avanco_rapido:  { label: 'Avanço rápido demais', icon: Clock,       color: 'text-purple-700 bg-purple-50 border-purple-200' },
+  parado:         { label: 'Parado há muito tempo', icon: PauseCircle, color: 'text-gray-700 bg-gray-100 border-gray-200' },
+};
+
+function OrphanItemsReport({ onBack }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [data, setData] = useState(null);
+  const [filter, setFilter] = useState('TODAS');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await reportsApi.orphanItems();
+      setData(res.data);
+    } catch (e) {
+      setError(e?.response?.data?.detail || 'Erro ao gerar a varredura. Tente novamente.');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const findings = data?.findings || [];
+  const visible = filter === 'TODAS' ? findings : findings.filter(f => f.category === filter);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700">
+          <ChevronLeft className="w-4 h-4" /> Voltar aos relatórios
+        </button>
+        <button onClick={load} disabled={loading} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 border border-gray-200 rounded-lg px-2.5 py-1.5 disabled:opacity-60">
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Atualizar varredura
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center gap-2 mb-1">
+          <AlertTriangle className="w-4 h-4 text-amber-500" />
+          <h2 className="text-sm font-semibold text-gray-900">Itens Órfãos / Estranhos</h2>
+        </div>
+        <p className="text-xs text-gray-500">
+          Varredura automática de sinais de que algo pode ter saído do padrão: itens presos fora de
+          rota, possíveis duplicados, avanço de status rápido demais pela automação, ou itens parados
+          sem movimento há muito tempo. Não corrige nada sozinho — é só pra apontar onde conferir.
+        </p>
+      </div>
+
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{error}</div>}
+
+      {data && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setFilter('TODAS')}
+              className={`text-xs font-medium px-3 py-1.5 rounded-lg border ${filter === 'TODAS' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+            >
+              Todas ({data.total})
+            </button>
+            {Object.entries(ORPHAN_CATEGORY_META).map(([cat, meta]) => {
+              const count = data.by_category?.[cat] || 0;
+              if (!count) return null;
+              const Icon = meta.icon;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setFilter(cat)}
+                  className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border ${filter === cat ? meta.color.replace('bg-', 'bg-').concat(' ring-1 ring-inset ring-current') : `${meta.color} opacity-70 hover:opacity-100`}`}
+                >
+                  <Icon className="w-3.5 h-3.5" /> {meta.label} ({count})
+                </button>
+              );
+            })}
+          </div>
+
+          {data.total === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
+              <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-green-400" />
+              <p className="text-sm">Nenhum item fora do padrão encontrado agora.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+              {visible.map((f, idx) => {
+                const meta = ORPHAN_CATEGORY_META[f.category] || {};
+                const Icon = meta.icon || AlertTriangle;
+                return (
+                  <div key={`${f.item_id}-${f.category}-${idx}`} className="p-3 flex items-start gap-3">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${meta.color}`}>
+                      <Icon className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-gray-900">{f.client_name}</span>
+                        <span className="text-[10px] text-gray-400 font-mono">{f.item_id}</span>
+                        <span className="text-[10px] text-gray-400 font-mono">{f.budget_id}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{f.status}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">{f.service_name}</div>
+                      <div className="text-xs text-gray-700 mt-0.5">{f.detail}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Menu de relatórios ───────────────────────────────────────────────────────────
 const REPORTS = [
   {
@@ -497,6 +616,13 @@ const REPORTS = [
     title: 'Fechamento de Parceiro — Tapetes/Cortinas',
     subtitle: 'Escolha o parceiro e o período',
     icon: FileSpreadsheet,
+    available: true,
+  },
+  {
+    id: 'orphan-items',
+    title: 'Itens Órfãos / Estranhos',
+    subtitle: 'Varredura: rota órfã, duplicados, avanço rápido, parados',
+    icon: AlertTriangle,
     available: true,
   },
   { id: 'commissions', title: 'Comissões de Vendedores e Técnicos', subtitle: 'Em breve', icon: BarChart3, available: false },
@@ -509,6 +635,9 @@ export function Reports() {
 
   if (open === 'partner-billing') {
     return <PartnerBillingReport onBack={() => setOpen(null)} />;
+  }
+  if (open === 'orphan-items') {
+    return <OrphanItemsReport onBack={() => setOpen(null)} />;
   }
 
   return (
