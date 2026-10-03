@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { BarChart3, FileSpreadsheet, ChevronRight, ChevronLeft, Printer, Lock, Ruler, Loader2, Search, Columns3, RotateCcw } from 'lucide-react';
-import { reportsApi } from '../services/api';
+import { BarChart3, FileSpreadsheet, ChevronRight, ChevronLeft, Printer, Lock, Ruler, Loader2, Search, Columns3, RotateCcw, MessageCircle } from 'lucide-react';
+import { reportsApi, clientsApi } from '../services/api';
 
-const COL_LABELS = ['Data ref.', 'Parceiro', 'Objeto', 'Identificação', 'Medidas', 'Área', 'Valor'];
-const DEFAULT_COL_WIDTHS = [10, 20, 22, 14, 12, 9, 13];
+const COL_LABELS = ['Data ref.', 'Objeto', 'Identificação', 'Medidas', 'Área', 'Valor'];
+const DEFAULT_COL_WIDTHS = [10, 32, 24, 12, 9, 13];
 const COL_WIDTHS_KEY = 'partnerReportColWidths';
 
 function loadColWidths() {
@@ -52,6 +52,7 @@ function PartnerBillingReport({ onBack }) {
   const [result, setResult] = useState(null); // { rows, totals_by_partner }
   const [colWidths, setColWidths] = useState(loadColWidths);
   const [showColPanel, setShowColPanel] = useState(false);
+  const [sendingWhats, setSendingWhats] = useState(false);
 
   const updateColWidth = (idx, value) => {
     const v = Math.max(4, Math.min(50, Number(value) || 0));
@@ -85,6 +86,39 @@ function PartnerBillingReport({ onBack }) {
       setResult(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendWhatsApp = async () => {
+    if (!partnerId) {
+      alert('Selecione um parceiro específico (não "Todos os parceiros") pra enviar o fechamento por WhatsApp.');
+      return;
+    }
+    setSendingWhats(true);
+    try {
+      const partnerLabel = PARTNERS.find(p => p.id === partnerId)?.label || partnerId;
+      const client = await clientsApi.getById(partnerId);
+      const phoneRaw = (client.data?.phone_primary || '').replace(/[^0-9]/g, '');
+      const phone = phoneRaw ? (phoneRaw.startsWith('55') ? phoneRaw : `55${phoneRaw}`) : '';
+      const message =
+        `🔸*FECHAMENTO DE COBRANÇA — PARCEIRO*🔸\n` +
+        `                     💙_SuperDry®_💚\n` +
+        `  _Lavanderia de Tapetes e Estofados_\n\n` +
+        `🤝 *Parceiro:* ${partnerLabel}\n` +
+        `📅 *Período:* ${fmtDateBR(startDate)} a ${fmtDateBR(endDate)}\n\n` +
+        `📄 *Itens:* ${qtdTotal}\n` +
+        `📏 *Metragem total lavada:* ${fmtArea(areaTotal)}\n\n` +
+        `💰*TOTAL A COBRAR:* ${fmtMoney(valorTotal)}\n\n` +
+        `😁_Segue o relatório detalhado em anexo (PDF)._\n` +
+        `_Qualquer dúvida, estou à disposição!_`;
+      const url = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank');
+    } catch (e) {
+      alert('Erro ao gerar mensagem WhatsApp. Verifique o telefone cadastrado do parceiro.');
+    } finally {
+      setSendingWhats(false);
     }
   };
 
@@ -144,9 +178,14 @@ function PartnerBillingReport({ onBack }) {
           <ChevronLeft className="w-4 h-4" /> Voltar aos relatórios
         </button>
         {result && (
-          <button onClick={() => window.print()} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 border border-gray-200 rounded-lg px-2.5 py-1.5">
-            <Printer className="w-3.5 h-3.5" /> Imprimir / PDF
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={sendWhatsApp} disabled={sendingWhats} className="flex items-center gap-1.5 text-xs text-white bg-[#25D366] hover:bg-[#1ebe57] border border-[#25D366] rounded-lg px-2.5 py-1.5 disabled:opacity-60">
+              <MessageCircle className="w-3.5 h-3.5" /> Enviar por WhatsApp
+            </button>
+            <button onClick={() => window.print()} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 border border-gray-200 rounded-lg px-2.5 py-1.5">
+              <Printer className="w-3.5 h-3.5" /> Imprimir / PDF
+            </button>
+          </div>
         )}
       </div>
 
@@ -292,7 +331,6 @@ function PartnerBillingReport({ onBack }) {
                   <thead>
                     <tr className="bg-gray-50 text-[11px] text-gray-500 uppercase tracking-wide">
                       <th className="text-left px-3 py-1">Data ref.</th>
-                      <th className="text-left px-3 py-1">Parceiro</th>
                       <th className="text-left px-3 py-1">Objeto</th>
                       <th className="text-left px-3 py-1">Identificação</th>
                       <th className="text-right px-3 py-1">Medidas</th>
@@ -304,7 +342,6 @@ function PartnerBillingReport({ onBack }) {
                     {rows.map((r, i) => (
                       <tr key={r.item_id || i} className={i % 2 ? 'bg-gray-50/40' : ''}>
                         <td className="px-3 py-0.5 text-gray-500 text-xs">{fmtDateBR(r.data_referencia)}</td>
-                        <td className="px-3 py-0.5 text-xs text-gray-700">{r.parceiro}</td>
                         <td className="px-3 py-0.5 text-xs text-gray-700">{r.objeto}</td>
                         <td className="px-3 py-0.5 text-xs text-gray-700">
                           {r.etiqueta ? <span className="font-medium">{r.etiqueta}</span> : <span className="text-gray-400 italic">sem nome</span>}
@@ -346,6 +383,16 @@ function PartnerBillingReport({ onBack }) {
                     <div className="font-bold text-lg">{fmtMoney(valorTotal)}</div>
                   </div>
                 </div>
+              </div>
+
+              {/* Réplica dos botões no rodapé — o do topo é fácil de perder de vista */}
+              <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-2 no-print">
+                <button onClick={sendWhatsApp} disabled={sendingWhats} className="flex items-center gap-1.5 text-xs text-white bg-[#25D366] hover:bg-[#1ebe57] border border-[#25D366] rounded-lg px-2.5 py-1.5 disabled:opacity-60">
+                  <MessageCircle className="w-3.5 h-3.5" /> Enviar por WhatsApp
+                </button>
+                <button onClick={() => window.print()} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 border border-gray-200 rounded-lg px-2.5 py-1.5">
+                  <Printer className="w-3.5 h-3.5" /> Imprimir / PDF
+                </button>
               </div>
             </>
           )}
