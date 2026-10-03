@@ -20,7 +20,8 @@ import {
   Edit3,
   Save,
   Check,
-  X
+  X,
+  Search
 } from 'lucide-react';
 import { routesApi, placesApi, clientsApi, budgetsApi, agendaApi, technicianApi, itemsApi } from '../services/api';
 import { toast } from '../hooks/use-toast';
@@ -29,6 +30,8 @@ import { BACKEND_URL } from '../lib/backendUrl';
 
 export function Agenda() {
   const [savedRoutes, setSavedRoutes] = useState([]);
+  const [routesSearchText, setRoutesSearchText] = useState('');
+  const [routesVisibleCount, setRoutesVisibleCount] = useState(5);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [routeEvents, setRouteEvents] = useState([]);
   const [selectedStops, setSelectedStops] = useState(new Set());
@@ -129,6 +132,34 @@ export function Agenda() {
     if (sentServicesHasMore && !loadingSentServices) {
       loadAllSentServices(sentServicesPage + 1, sentServicesDate, true); // append = true
     }
+  };
+
+  // Ao selecionar uma rota, rola automaticamente pra seção de eventos dela --
+  // sem isso, numa tela com várias rotas salvas era preciso rolar manualmente
+  // pra achar a lista de eventos/seleção logo abaixo.
+  useEffect(() => {
+    if (selectedRoute) {
+      const el = document.getElementById('eventos-rota-selecionada');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selectedRoute]);
+
+  // Filtro de busca + mais recentes primeiro, pras Rotas Salvas (reduz poluição
+  // visual -- só mostra as 5 mais recentes por padrão, com botão "carregar mais").
+  const getFilteredSavedRoutes = () => {
+    const q = routesSearchText.trim().toLowerCase();
+    let list = [...savedRoutes];
+    list.sort((a, b) => {
+      const da = a.updated_at || a.planned_date || '';
+      const db_ = b.updated_at || b.planned_date || '';
+      return db_.localeCompare(da);
+    });
+    if (!q) return list;
+    return list.filter(r =>
+      (r.alias || '').toLowerCase().includes(q) ||
+      (r.id || '').toLowerCase().includes(q) ||
+      (r.stops || []).some(s => (s.neighborhood || '').toLowerCase().includes(q))
+    );
   };
 
   const loadSavedRoutes = async () => {
@@ -756,8 +787,8 @@ export function Agenda() {
         return a.assigned_date.localeCompare(b.assigned_date);
       });
 
-      // Paginação
-      const perPage = 20;
+      // Paginação -- 5 por vez pra reduzir poluição visual na tela
+      const perPage = 5;
       const start = (page - 1) * perPage;
       const pageItems = allServices.slice(start, start + perPage);
 
@@ -2306,15 +2337,31 @@ export function Agenda() {
 
       {/* Rotas Salvas */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Rotas Salvas</h2>
-        
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Rotas Salvas</h2>
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={routesSearchText}
+              onChange={(e) => { setRoutesSearchText(e.target.value); setRoutesVisibleCount(5); }}
+              placeholder="Buscar por nome, ID ou bairro…"
+              className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
         {savedRoutes.length === 0 ? (
           <p className="text-gray-500 text-center py-8">
             Nenhuma rota salva encontrada. Crie rotas na aba "Rotas" primeiro.
           </p>
+        ) : getFilteredSavedRoutes().length === 0 ? (
+          <p className="text-gray-500 text-center py-8">
+            Nenhuma rota encontrada com esse filtro.
+          </p>
         ) : (
           <div className="grid gap-4">
-            {savedRoutes.map((route) => (
+            {getFilteredSavedRoutes().slice(0, routesVisibleCount).map((route) => (
               <div
                 key={route.id}
                 className={`p-4 border rounded-lg cursor-pointer transition-colors ${
@@ -2353,11 +2400,21 @@ export function Agenda() {
             ))}
           </div>
         )}
+        {getFilteredSavedRoutes().length > routesVisibleCount && (
+          <div className="flex justify-center mt-4">
+            <button
+              onClick={() => setRoutesVisibleCount(c => c + 5)}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium px-4 py-1.5 border border-blue-200 rounded-lg hover:bg-blue-50"
+            >
+              Carregar mais 5 rotas ({getFilteredSavedRoutes().length - routesVisibleCount} restantes)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Eventos da Rota Selecionada */}
       {selectedRoute && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div id="eventos-rota-selecionada" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           {/* Título + seleção + botões de ação ficam fixos no topo do card ao
               rolar a lista de eventos abaixo -- antes era preciso rolar a tela
               de volta pro topo toda vez que selecionava algo mais embaixo. */}
@@ -2756,7 +2813,7 @@ export function Agenda() {
                 ) : (
                   <ChevronDown className="w-4 h-4" />
                 )}
-                <span>{loadingSentServices ? 'Carregando...' : 'Carregar mais 10 serviços'}</span>
+                <span>{loadingSentServices ? 'Carregando...' : 'Carregar mais 5 serviços'}</span>
               </button>
             </div>
           )}
