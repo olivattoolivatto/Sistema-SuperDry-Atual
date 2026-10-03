@@ -405,8 +405,8 @@ function ItemRow({ item, idx, onChange, onRemove, secondaryActive = false, secon
               />
               <span className="text-orange-700">
                 {item.use_secondary_address !== false
-                  ? <>Executar no endereço secundário <span className="text-orange-500">({secondaryLabel})</span></>
-                  : 'Executar no endereço principal do cliente'}
+                  ? <>Usar endereço secundário pra este item <span className="text-orange-500">({secondaryLabel})</span></>
+                  : 'Usar o endereço principal do cliente pra este item'}
               </span>
             </label>
           )}
@@ -817,8 +817,11 @@ export function AutomationPage() {
                       className="w-full border border-orange-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 bg-white" />
                   </div>
                   <p className="text-[10px] text-orange-600">
-                    Por padrão, todo item novo vai pro endereço secundário (modo <strong>EXECUTAR_NO_LOCAL</strong>) —
-                    desmarque o item que deve ir pro endereço principal do cliente.
+                    Por padrão, todo item novo usa o endereço secundário — desmarque o item que deve
+                    ir pro endereço principal do cliente. O status do item (retirar / executar no
+                    local / cliente trouxe) continua vindo do serviço escolhido no catálogo, não do
+                    endereço: o endereço secundário só diz pra onde o técnico vai, seja pra retirar
+                    ou pra executar no local.
                   </p>
                 </div>
               )}

@@ -5200,16 +5200,36 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
         # orçamento; agora cada item pode ir pro endereço do cliente ou pro
         # secundário, no mesmo orçamento.
         item_uses_secondary = bool(resolved_exec_addr) and bool(raw_item.get("use_secondary_address"))
-        if item_uses_secondary:
-            exec_mode     = "EXECUTAR_NO_LOCAL"
-            exec_location = "NO_LOCAL"
-            item_status   = "EXECUTAR_NO_LOCAL"
-            item_exec_addr = resolved_exec_addr
+        item_exec_addr = resolved_exec_addr if item_uses_secondary else None
+
+        # Status/modo de execução vêm do SERVIÇO casado no catálogo — igual ao
+        # orçamento manual (ver herança de default_service_status/execution_location
+        # em BudgetItem). O endereço secundário decide só ONDE o técnico vai
+        # buscar/atender, não SE o item é retirado, executado no local ou
+        # trazido pelo cliente.
+        # Corrigido em 03/10/2026: antes, marcar "usar endereço secundário"
+        # forçava EXECUTAR_NO_LOCAL incondicionalmente — um tapete retirado
+        # num condomínio diferente do endereço do cliente (serviço de
+        # retirada no catálogo) virava "execução no local" por engano,
+        # mesmo com o serviço certo casado e as medidas certas capturadas.
+        _svc_default_status = (_svc or {}).get("default_service_status")
+        _svc_exec_loc = (_svc or {}).get("execution_location")
+        if _svc_default_status:
+            item_status = _svc_default_status
+        elif _svc_exec_loc == "RETIRADA":
+            item_status = "RETIRAR"
+        elif _svc_exec_loc == "CLIENTE_TROUXE":
+            item_status = "CLIENTE_TROUXE"
         else:
-            exec_mode     = "RETIRAR_E_LEVAR"
-            exec_location = "RETIRADA"
-            item_status   = "RETIRAR"
-            item_exec_addr = None
+            item_status = "EXECUTAR_NO_LOCAL"
+
+        if item_status == "RETIRAR":
+            exec_mode = "RETIRAR_E_LEVAR"
+        elif item_status == "CLIENTE_TROUXE":
+            exec_mode = "CLIENTE_TROUXE"
+        else:
+            exec_mode = "EXECUTAR_NO_LOCAL"
+        exec_location = _svc_exec_loc or ("RETIRADA" if item_status == "RETIRAR" else "NO_LOCAL")
 
         item_doc = {
             "id": item_id,
@@ -5289,7 +5309,13 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
                     comp = (payload.get("complement") or "").strip()
                     if comp:
                         location_text += f" - {comp}"
-                agenda_item_status = "EXECUTAR_NO_LOCAL" if any_item_secondary else "RETIRAR"
+                # Duração do evento: baseada no status REAL de cada item (vem do
+                # serviço casado no catálogo, ver correção acima), não mais em
+                # "usa endereço secundário" — a mesma confusão que causava o
+                # status errado no item também inflava a duração do evento da
+                # Agenda pra itens de retirada num endereço diferente do cliente.
+                any_item_on_site = any(bi.get("status") == "EXECUTAR_NO_LOCAL" for bi in budget_items)
+                agenda_item_status = "EXECUTAR_NO_LOCAL" if any_item_on_site else "RETIRAR"
 
                 _desc_complement = (payload.get("complement") or "").strip()
                 _sched_fmt = ""
