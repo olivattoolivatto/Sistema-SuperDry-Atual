@@ -2358,7 +2358,10 @@ export function Agenda() {
       {/* Eventos da Rota Selecionada */}
       {selectedRoute && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="mb-4">
+          {/* Título + seleção + botões de ação ficam fixos no topo do card ao
+              rolar a lista de eventos abaixo -- antes era preciso rolar a tela
+              de volta pro topo toda vez que selecionava algo mais embaixo. */}
+          <div className="mb-4 sticky top-0 z-10 bg-white -mx-6 px-6 pt-1 pb-3 border-b border-gray-100">
             <div className="flex items-start justify-between gap-2 flex-wrap">
               <h2 className="text-base font-semibold text-gray-900 leading-tight">
                 {selectedRoute.alias || selectedRoute.id}
