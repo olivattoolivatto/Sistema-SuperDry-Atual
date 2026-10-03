@@ -453,6 +453,12 @@ class BudgetItem(BaseModel):
     technician_id: Optional[str] = None
     agenda_event_ids: List[str] = Field(default_factory=list)
     assignment_ids: List[str] = Field(default_factory=list)
+    # Lock de "envio direto ao técnico" (Pilar 2 do Modo Rua) -- aponta pra
+    # TechnicianAssignment (assignment_type=MANUAL) enquanto o item estiver
+    # reservado para entrega direta, sem passar por rota. Some de
+    # available-for-routes enquanto setado; limpa automaticamente junto com
+    # current_route_id quando o status entra em CLEAR_ROUTE_ON.
+    direct_assignment_id: Optional[str] = None
 
     # Fotos
     photos_before: List[str] = Field(default_factory=list)
@@ -2220,6 +2226,95 @@ async def assign_events_to_technician(assignment: TechnicianAssignment):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error assigning events: {str(e)}")
+
+
+@api_router.post("/technician/assign-direct")
+async def assign_items_direct_to_technician(
+    body: Dict[str, Any],
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Pilar 2 do Modo Rua: enviar itens específicos DIRETO pro técnico, sem passar
+    por rota. Diferente do Pilar 1 (deixar disponível pra rota em available-for-routes),
+    isso é uma ação explícita e deliberada -- o que chega aqui funciona como a agenda
+    literal do dia do técnico, então a ordem precisa ser preservada.
+
+    Body: {
+      item_ids: List[str] (ITM-...),            -- obrigatório, 1+
+      technician_id: str,                       -- obrigatório
+      assigned_date: Optional[str] "YYYY-MM-DD" -- default hoje
+      order: Optional[List[str]]                -- mesma lista de item_ids, na ordem
+                                                     desejada. Default = ordem recebida
+                                                     em item_ids. Vira manual_priority
+                                                     sequencial (1, 2, 3...) -- resolução
+                                                     de ordem no técnico já prioriza
+                                                     manual_priority sobre scheduled_time.
+      scheduled_times: Optional[Dict[str,str]]  -- {item_id: "HH:MM"} opcional, pra quem
+                                                     preferir horário fixo em vez de ordem
+                                                     simples (fica visível no card também).
+    }
+
+    Marca um lock (`direct_assignment_id`) em cada item pra ele sumir de
+    available-for-routes enquanto estiver reservado dessa forma -- some sozinho quando o
+    status do item entrar em CLEAR_ROUTE_ON (mesma lógica que já existe pra
+    current_route_id), sem precisar de nenhuma limpeza manual.
+    """
+    item_ids = body.get("item_ids") or []
+    technician_id = body.get("technician_id")
+    if not item_ids:
+        raise HTTPException(status_code=400, detail="item_ids é obrigatório (lista não vazia)")
+    if not technician_id:
+        raise HTTPException(status_code=400, detail="technician_id é obrigatório")
+
+    assigned_date = body.get("assigned_date") or datetime.now().strftime('%Y-%m-%d')
+    order = body.get("order") or item_ids
+    scheduled_times = body.get("scheduled_times") or {}
+    # Garante que 'order' só contém ids realmente presentes em item_ids (evita lock
+    # órfão em item que não foi de fato selecionado).
+    order = [iid for iid in order if iid in item_ids]
+    for iid in item_ids:
+        if iid not in order:
+            order.append(iid)
+
+    item_schedule: Dict[str, Dict[str, Any]] = {}
+    for idx, iid in enumerate(order):
+        entry: Dict[str, Any] = {"manual_priority": idx + 1}
+        if scheduled_times.get(iid):
+            entry["scheduled_time"] = scheduled_times[iid]
+        item_schedule[iid] = entry
+
+    assignment = TechnicianAssignment(
+        event_ids=item_ids,
+        technician_id=technician_id,
+        assigned_date=assigned_date,
+        assignment_type="MANUAL",
+        status="ASSIGNED",
+        item_schedule=item_schedule,
+    )
+    assignment_dict = assignment.dict()
+    assignment_dict['created_at'] = assignment.created_at.isoformat()
+    assignment_dict['updated_at'] = assignment.updated_at.isoformat()
+    await db.technician_assignments.insert_one(assignment_dict)
+
+    locked = 0
+    for iid in item_ids:
+        res = await db.budgets.update_one(
+            {"items.id": iid},
+            {"$set": {"items.$.direct_assignment_id": assignment.id}},
+        )
+        if res.modified_count:
+            locked += 1
+
+    await log_audit("technician_assignment", assignment.id, "ASSIGN_DIRECT", current_user, {
+        "technician_id": technician_id, "item_ids": item_ids, "assigned_date": assigned_date,
+    })
+
+    return {
+        "success": True,
+        "assignment_id": assignment.id,
+        "items_assigned": len(item_ids),
+        "items_locked": locked,
+    }
+
 
 @api_router.get("/technician/{technician_id}/daily-tasks")
 async def get_technician_daily_tasks(
@@ -6814,6 +6909,8 @@ async def bulk_change_status(
         if new_status in CLEAR_ROUTE_ON and item.get("current_route_id"):
             update_fields["current_route_id"] = None
             update_fields["current_route_stop_id"] = None
+        if new_status in CLEAR_ROUTE_ON and item.get("direct_assignment_id"):
+            update_fields["direct_assignment_id"] = None
         await _update_item_fields(item_id, update_fields, current_user)
         await _append_to_item_array(item_id, "status_history", entry)
         updated += 1
@@ -6910,10 +7007,18 @@ async def get_available_budget_items_for_routes(current_user: UserPublic = Depen
                 "items.client_desisted": {"$ne": True},   # exclui desistências
                 # Itens de parceiro (client trouxe / client leva) não geram rota de técnico
                 "items.execution_mode": {"$nin": ["CLIENTE_TROUXE", "CLIENTE_LEVARA"]},
-                "$and": [{"$or": [
-                    {"items.current_route_id": None},
-                    {"items.current_route_id": {"$exists": False}},
-                ]}],
+                "$and": [
+                    {"$or": [
+                        {"items.current_route_id": None},
+                        {"items.current_route_id": {"$exists": False}},
+                    ]},
+                    # Reservado para envio direto ao técnico (Pilar 2) -- não aparece
+                    # pra montagem de rota enquanto o lock existir.
+                    {"$or": [
+                        {"items.direct_assignment_id": None},
+                        {"items.direct_assignment_id": {"$exists": False}},
+                    ]},
+                ],
             }},
             {"$lookup": {
                 "from": "clients",
@@ -8971,6 +9076,8 @@ async def change_item_status(
     if new_status in CLEAR_ROUTE_ON and item.get("current_route_id"):
         update_fields["current_route_id"] = None
         update_fields["current_route_stop_id"] = None
+    if new_status in CLEAR_ROUTE_ON and item.get("direct_assignment_id"):
+        update_fields["direct_assignment_id"] = None
 
     await _update_item_fields(item_id, update_fields, current_user)
     await _append_to_item_array(item_id, "status_history", entry)

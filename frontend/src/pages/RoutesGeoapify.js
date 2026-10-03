@@ -17,7 +17,7 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 import { toast } from '../hooks/use-toast';
-import { routesApi, budgetItemsApi } from '../services/api';
+import { routesApi, budgetItemsApi, technicianApi } from '../services/api';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -46,6 +46,42 @@ export function RoutesGeoapify() {
   const [considerTraffic, setConsiderTraffic]       = useState(false);
   const [routeAlias, setRouteAlias]                 = useState('');
   const [stopPriorities, setStopPriorities]         = useState({});
+
+  // ── Pilar 2 do Modo Rua: "Enviar direto ao técnico" (sem passar por rota) ──
+  const [directOrder, setDirectOrder]               = useState([]); // array de budget_item_id, na ordem de envio
+  const [directSending, setDirectSending]            = useState(false);
+
+  const toggleDirectSelect = (itemId) => {
+    setDirectOrder(prev => prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]);
+  };
+  const moveDirectItem = (itemId, dir) => {
+    setDirectOrder(prev => {
+      const idx = prev.indexOf(itemId);
+      const newIdx = idx + dir;
+      if (idx === -1 || newIdx < 0 || newIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      return next;
+    });
+  };
+  const sendDirectToTechnician = async () => {
+    if (directOrder.length === 0) return;
+    setDirectSending(true);
+    try {
+      await technicianApi.assignDirect({
+        item_ids: directOrder,
+        order: directOrder,
+        technician_id: 'TECH-001',
+      });
+      toast({ title: 'Enviado ao técnico', description: `${directOrder.length} serviço(s) enviado(s) direto, fora de rota.` });
+      setAvailableItems(prev => prev.filter(i => !directOrder.includes(i.budget_item_id)));
+      setDirectOrder([]);
+    } catch (err) {
+      toast({ title: 'Erro ao enviar', description: err?.response?.data?.detail || 'Tente novamente.', variant: 'destructive' });
+    } finally {
+      setDirectSending(false);
+    }
+  };
 
   // ── Rotas Salvas: filtro/ordenação ──────────────────────────────────────────
   const [savedSearchText, setSavedSearchText]       = useState('');
@@ -652,6 +688,7 @@ export function RoutesGeoapify() {
           <table className="min-w-full table-auto">
             <thead>
               <tr className="bg-gray-50">
+                <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase" title="Selecionar pra enviar direto ao técnico, fora de rota">✓</th>
                 <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">Veículo</th>
                 <th onClick={() => toggleAvailSort('service_name')} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none hover:text-gray-700">
                   Descrição{availSortArrow('service_name')}
@@ -673,7 +710,15 @@ export function RoutesGeoapify() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {visibleAvailableItems.map((item, idx) => (
-                <tr key={`avail-${item.budget_item_id}-${idx}`} className="hover:bg-gray-50">
+                <tr key={`avail-${item.budget_item_id}-${idx}`} className={`hover:bg-gray-50 ${directOrder.includes(item.budget_item_id) ? 'bg-amber-50' : ''}`}>
+                  <td className="px-2 py-4">
+                    <input
+                      type="checkbox"
+                      checked={directOrder.includes(item.budget_item_id)}
+                      onChange={() => toggleDirectSelect(item.budget_item_id)}
+                      className="h-4 w-4 text-amber-600 border-gray-300 rounded"
+                    />
+                  </td>
                   <td className="px-2 py-4">
                     <div className="flex flex-col sm:flex-row gap-1">
                       <button
@@ -741,6 +786,53 @@ export function RoutesGeoapify() {
           <div className="text-center py-8 text-gray-500">
             <RouteIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
             <p>{availableItems.length === 0 ? 'Nenhum serviço disponível para rotas' : 'Nenhum serviço encontrado com esse filtro'}</p>
+          </div>
+        )}
+
+        {/* Ação logo abaixo da seleção -- Pilar 2: enviar direto ao técnico, sem rota.
+            Alternativa ao Pilar 1 (deixar disponível pra rota, que é o fluxo normal da
+            tabela acima). A ordem dos cards no painel abaixo é a ordem em que o item
+            aparecerá na agenda do técnico (manual_priority sequencial). */}
+        {directOrder.length > 0 && (
+          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-amber-900">
+                {directOrder.length} serviço(s) selecionado(s) para envio direto ao técnico
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setDirectOrder([])}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline"
+                >
+                  limpar seleção
+                </button>
+                <button
+                  onClick={sendDirectToTechnician}
+                  disabled={directSending}
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {directSending ? 'Enviando...' : 'Enviar direto ao técnico'}
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-amber-800 mb-2">
+              Esses itens saem da lista de disponíveis pra rota e vão direto pra agenda do técnico, na ordem abaixo (use as setas pra reordenar).
+            </p>
+            <ol className="space-y-1">
+              {directOrder.map((id, idx) => {
+                const it = availableItems.find(a => a.budget_item_id === id);
+                if (!it) return null;
+                return (
+                  <li key={id} className="flex items-center gap-2 text-sm bg-white rounded px-2 py-1 border border-amber-100">
+                    <span className="text-xs font-bold text-amber-700 w-5">{idx + 1}º</span>
+                    <span className="flex-1 truncate">{it.client_name} — {it.service_name}</span>
+                    <button onClick={() => moveDirectItem(id, -1)} disabled={idx === 0} className="px-1.5 text-gray-400 hover:text-gray-700 disabled:opacity-30">▲</button>
+                    <button onClick={() => moveDirectItem(id, 1)} disabled={idx === directOrder.length - 1} className="px-1.5 text-gray-400 hover:text-gray-700 disabled:opacity-30">▼</button>
+                    <button onClick={() => toggleDirectSelect(id)} className="px-1.5 text-red-400 hover:text-red-600">✕</button>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
         )}
       </div>

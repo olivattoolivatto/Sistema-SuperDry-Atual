@@ -515,7 +515,7 @@ function StreetMode({ onBack, onSwitchMode }) {
           {onSwitchMode && (
             <button
               onClick={onSwitchMode}
-              className="flex items-center gap-1 bg-blue-700/60 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm transition-colors"
               title="Ir para o Modo Empresa"
             >
               <Building className="w-3.5 h-3.5" /> Empresa
@@ -2329,7 +2329,7 @@ function CompanyMode({ onBack, onSwitchMode }) {
         {onSwitchMode && (
           <button
             onClick={onSwitchMode}
-            className="flex items-center gap-1 bg-orange-700/60 hover:bg-orange-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm transition-colors"
             title="Ir para o Modo Rua"
           >
             <Car className="w-3.5 h-3.5" /> Rua
