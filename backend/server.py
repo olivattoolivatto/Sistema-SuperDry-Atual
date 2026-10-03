@@ -3942,10 +3942,20 @@ def _svc_norm(s: str) -> str:
 
 
 def _svc_strip_measures(q: str) -> str:
-    """Remove medidas da query (NxM, decimais, m²) — elas são tratadas à parte."""
-    q = re.sub(r'\d+[.,]?\d*\s*[xX×]\s*\d+[.,]?\d*', ' ', q)
-    q = re.sub(r'\b\d+[.,]\d+\b', ' ', q)
+    """Remove medidas da query (NxM, decimais, m²) — elas são tratadas à parte.
+    Bug corrigido: a unidade (m/cm/mm) costuma vir colada no número (ex: "3,5m x 4,0m"),
+    e as regexes antigas só reconheciam "3,5 x 4,0" (sem unidade colada). Quando a unidade
+    vinha colada, a limpeza falhava e os dígitos da medida sobravam como "token" da busca,
+    podendo bater por coincidência com um número dentro do NOME de outro serviço do catálogo
+    (ex: o "3" de "3,5m" batendo com o "3" de "Lavagem de Sofá 3 Lugares") e desviando o
+    casamento pro serviço errado.
+    """
+    unit_opt = r'(?:(?:m|cm|mm)\.?)?'
+    q = re.sub(r'\d+[.,]?\d*\s*' + unit_opt + r'\s*[xX×]\s*\d+[.,]?\d*\s*' + unit_opt, ' ', q)
+    q = re.sub(r'\b\d+[.,]\d+\s*' + unit_opt + r'\b', ' ', q, flags=re.IGNORECASE)
+    q = re.sub(r'\b\d+\s*(?:m|cm|mm)\.?\b', ' ', q, flags=re.IGNORECASE)
     q = re.sub(r'm²|\bm2\b', ' ', q, flags=re.IGNORECASE)
+    q = re.sub(r'\(\s*\d+[.,]?\d*\s*\)', ' ', q)
     return q
 
 
@@ -4149,9 +4159,20 @@ def _parse_line_measures(line: str) -> dict:
         except Exception:
             return 0.0
 
-    dim = re.search(r'(\d+(?:[.,]\d+)?)\s*[xX×]\s*(\d+(?:[.,]\d+)?)', line)
-    circ = re.search(r'redondo\s+(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*redondo|[Øø]\s*(\d+(?:[.,]\d+)?)',
-                     line, re.IGNORECASE)
+    # Unidade (m/cm/mm) costuma vir colada no número (ex: "3,5m x 4,0m") — sem o 
+    # \.? opcional abaixo, essa forma não batia e a medida ficava sem width/height/area_m2.
+    dim = re.search(
+        r'(\d+(?:[.,]\d+)?)\s*(?:(?:m|cm|mm)\.?)?\s*[xX×]\s*(\d+(?:[.,]\d+)?)\s*(?:(?:m|cm|mm)\.?)?',
+        line,
+    )
+    # Bug similar ao já corrigido em _parse_measures_text: "redondo" ANTES do número
+    # (ex: "redondo 0,8") tem prioridade sobre número-antes-de-"redondo" (ex: "599 redondo"),
+    # senão um código/etiqueta que aparece antes de "redondo" na mesma linha (ex: "Azul 599
+    # redondo 0,8") é confundido com o diâmetro em vez do número que realmente é a medida.
+    circ_after = re.search(r'redondo\s+(\d+(?:[.,]\d+)?)', line, re.IGNORECASE)
+    circ_before = re.search(r'(\d+(?:[.,]\d+)?)\s*redondo', line, re.IGNORECASE)
+    circ_sym = re.search(r'[Øø]\s*(\d+(?:[.,]\d+)?)', line)
+    circ = circ_after or circ_before or circ_sym
     if dim:
         w, h = to_f(dim.group(1)), to_f(dim.group(2))
         if w > 10 and h > 10:
@@ -4164,7 +4185,7 @@ def _parse_line_measures(line: str) -> dict:
         res['height'] = round(h, 4)
         res['area_m2'] = round(w * h, 4)
     elif circ:
-        d = to_f(next((g for g in circ.groups() if g), 0))
+        d = to_f(circ.group(1))
         if d > 10:
             d = d / 100
         res['diameter'] = round(d, 4)
@@ -4567,14 +4588,15 @@ def _parse_measures_text(text: str) -> AutoMeasureLine:
             _circ_d_group = 1
             _circ_measure_start = None
 
-        # Dimensões NxM
+        # Dimensões NxM — unidade (m/cm/mm) costuma vir colada no número ("3,5m x 4,0m"),
+        # por isso o (?:(?:m|cm|mm)\.?)? opcional entre o número e o 'x'/depois do 2º número.
         dim_match = re.search(
-            r'([\d.,]+)\s*[xX×]\s*([\d.,]+)', line
+            r'([\d.,]+)\s*(?:(?:m|cm|mm)\.?)?\s*[xX×]\s*([\d.,]+)\s*(?:(?:m|cm|mm)\.?)?', line
         )
 
-        # Número único (possível diâmetro): ex "FormaClean Thais 2,4"
+        # Número único (possível diâmetro): ex "FormaClean Thais 2,4" ou "2,4m"
         # Exige pelo menos um dígito antes e depois de eventual separador decimal
-        single_match = re.search(r'\b(\d+[.,]\d+|\d{1,3})\b(?!\s*[xX×])', line) if not dim_match and not circ_match else None
+        single_match = re.search(r'\b(\d+[.,]\d+|\d{1,3})(?:(?:m|cm|mm)\.?)?\b(?!\s*[xX×])', line) if not dim_match and not circ_match else None
 
         if circ_match:
             d_str = circ_match.group(_circ_d_group)
