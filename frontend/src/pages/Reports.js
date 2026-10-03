@@ -145,10 +145,11 @@ function PartnerBillingReport({ onBack }) {
           .print-meta > div { display: flex !important; gap: 4px !important; align-items: baseline !important; }
           .print-meta .meta-label { font-size: 6px !important; }
           .print-meta .meta-value { font-size: 8px !important; }
-          .print-table { width: 100% !important; table-layout: fixed !important; }
-          .print-table th, .print-table td { padding: 0px 14px !important; line-height: 1.05 !important; overflow: hidden !important; text-overflow: ellipsis !important; word-break: break-word !important; }
-          .print-table th { font-size: 6.5px !important; }
+          .print-table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; border: 1px solid #94a3b8 !important; }
+          .print-table th, .print-table td { padding: 1px 6px !important; line-height: 1.15 !important; overflow: hidden !important; text-overflow: ellipsis !important; word-break: break-word !important; border: 1px solid #cbd5e1 !important; }
+          .print-table th { font-size: 7px !important; background: #eef2f7 !important; }
           .print-table td { font-size: 8px !important; }
+          .print-table tbody tr:nth-child(even) td { background: #f8fafc !important; }
           .print-summary { padding: 3px 16px !important; width: 100% !important; box-sizing: border-box !important; }
           .print-summary h3 { font-size: 8px !important; margin-bottom: 1px !important; }
           .print-summary-row { padding: 1px 12px !important; }
@@ -322,7 +323,7 @@ function PartnerBillingReport({ onBack }) {
 
               {/* Tabela */}
               <div className="overflow-x-auto print-table-wrap">
-                <table className="w-full text-sm print-table" style={{ tableLayout: 'fixed' }}>
+                <table className="w-full text-sm print-table border border-gray-300" style={{ tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                   <colgroup>
                     {colWidths.map((w, idx) => (
                       <col key={idx} style={{ width: `${w}%` }} />
@@ -330,27 +331,27 @@ function PartnerBillingReport({ onBack }) {
                   </colgroup>
                   <thead>
                     <tr className="bg-gray-50 text-[11px] text-gray-500 uppercase tracking-wide">
-                      <th className="text-left px-3 py-1">Data ref.</th>
-                      <th className="text-left px-3 py-1">Objeto</th>
-                      <th className="text-left px-3 py-1">Identificação</th>
-                      <th className="text-right px-3 py-1">Medidas</th>
-                      <th className="text-right px-3 py-1">Área</th>
-                      <th className="text-right px-3 py-1">Valor</th>
+                      <th className="text-left px-3 py-1 border border-gray-300">Data ref.</th>
+                      <th className="text-left px-3 py-1 border border-gray-300">Objeto</th>
+                      <th className="text-left px-3 py-1 border border-gray-300">Identificação</th>
+                      <th className="text-right px-3 py-1 border border-gray-300">Medidas</th>
+                      <th className="text-right px-3 py-1 border border-gray-300">Área</th>
+                      <th className="text-right px-3 py-1 border border-gray-300">Valor</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {rows.map((r, i) => (
                       <tr key={r.item_id || i} className={i % 2 ? 'bg-gray-50/40' : ''}>
-                        <td className="px-3 py-0.5 text-gray-500 text-xs">{fmtDateBR(r.data_referencia)}</td>
-                        <td className="px-3 py-0.5 text-xs text-gray-700">{r.objeto}</td>
-                        <td className="px-3 py-0.5 text-xs text-gray-700">
+                        <td className="px-3 py-0.5 text-gray-500 text-xs border border-gray-200">{fmtDateBR(r.data_referencia)}</td>
+                        <td className="px-3 py-0.5 text-xs text-gray-700 border border-gray-200">{r.objeto}</td>
+                        <td className="px-3 py-0.5 text-xs text-gray-700 border border-gray-200">
                           {r.etiqueta ? <span className="font-medium">{r.etiqueta}</span> : <span className="text-gray-400 italic">sem nome</span>}
                         </td>
-                        <td className="px-3 py-0.5 text-right text-xs text-gray-600 font-mono">
+                        <td className="px-3 py-0.5 text-right text-xs text-gray-600 font-mono border border-gray-200">
                           {r.diametro ? `Ø ${Number(r.diametro).toFixed(2)}m` : (r.largura && r.comprimento ? `${Number(r.largura).toFixed(2)}×${Number(r.comprimento).toFixed(2)}m` : '—')}
                         </td>
-                        <td className="px-3 py-0.5 text-right text-xs text-gray-700">{r.area_m2 != null ? fmtArea(r.area_m2) : '—'}</td>
-                        <td className="px-3 py-0.5 text-right text-sm font-semibold text-gray-900">{fmtMoney(r.valor)}</td>
+                        <td className="px-3 py-0.5 text-right text-xs text-gray-700 border border-gray-200">{r.area_m2 != null ? fmtArea(r.area_m2) : '—'}</td>
+                        <td className="px-3 py-0.5 text-right text-sm font-semibold text-gray-900 border border-gray-200">{fmtMoney(r.valor)}</td>
                       </tr>
                     ))}
                   </tbody>
