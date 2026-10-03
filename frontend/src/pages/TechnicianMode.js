@@ -965,7 +965,6 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   const isAdmin = user?.role === 'ADMIN';
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [technicianNotes, setTechnicianNotes] = useState('');
-  const [showPhotoCapture, setShowPhotoCapture] = useState(true);
   const [itemPhotos, setItemPhotos] = useState({});
   const [cameraProblems, setCameraProblems] = useState({}); // itemId → boolean
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -1013,11 +1012,6 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
       .every(item =>
         (itemPhotos[item.id] || []).length > 0 || cameraProblems[item.id]
       );
-
-  const proceedToService = () => {
-    if (!allItemsHavePhotos()) return; // segurança extra
-    setShowPhotoCapture(false);
-  };
 
   // Upload de foto AFTER
   const uploadAfterPhoto = async (itemId, files) => {
@@ -1078,6 +1072,30 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   const selectedStatuses = [...new Set(getSelectedItemObjects().map(i => i.status))];
   const anyPrimaryAction = ['CONCLUIDO', 'RETIRADA', 'ENTREGA', 'BUSCOU'].some(actionAllowed);
 
+  // Itens selecionados que ainda precisam de foto ANTES (e não têm "problema de câmera"
+  // marcado, e não estão na empresa/já finalizados — esses nunca precisaram de foto).
+  const selectedItemsMissingPhoto = () =>
+    getSelectedItemObjects().filter(i =>
+      !IN_COMPANY.has(i.status) && !FIELD_DONE.has(i.status) &&
+      (itemPhotos[i.id] || []).length === 0 && !cameraProblems[i.id]
+    );
+
+  // Bloqueia conclusão/retirada/entrega/cliente-buscou sem foto ANTES registrada
+  // (antes isso era garantido pela tela de fotos ser um passo obrigatório anterior;
+  // agora que está tudo na mesma tela, a checagem precisa ser explícita aqui).
+  const requirePhotosForSelection = () => {
+    const missing = selectedItemsMissingPhoto();
+    if (missing.length > 0) {
+      alert(
+        `Tire ao menos 1 foto ANTES de "${missing[0].name}"` +
+        (missing.length > 1 ? ` (e mais ${missing.length - 1} item(ns))` : '') +
+        `, ou marque "Problema com câmera" na seção de fotos acima.`
+      );
+      return false;
+    }
+    return true;
+  };
+
   const changeStatus = async (itemId, status, notes = '') => {
     const token = localStorage.getItem('superdry_token');
     return fetch(`${BACKEND_URL}/api/items/${itemId}/status`, {
@@ -1099,6 +1117,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   // ─── action: Serviço Concluído ───────────────────────────────────────────────
   const handleServiceCompleted = () => {
     if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
+    if (!requirePhotosForSelection()) return;
     // Pede foto AFTER antes do modal de pagamento
     setAfterPhotoModal({ type: 'CONCLUIDO', itemIds: [...selectedItems], label: 'Serviço Concluído' });
   };
@@ -1106,6 +1125,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   // ─── action: Retirada Efetuada ───────────────────────────────────────────────
   const handlePickupDone = async () => {
     if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
+    if (!requirePhotosForSelection()) return;
     setProcessing(true);
     try {
       const collectedIds = [...selectedItems];
@@ -1142,6 +1162,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   // ─── action: Entrega Efetuada ────────────────────────────────────────────────
   const handleDeliveryDone = () => {
     if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
+    if (!requirePhotosForSelection()) return;
     // Pede foto AFTER antes do modal de pagamento
     setAfterPhotoModal({ type: 'ENTREGUE', itemIds: [...selectedItems], label: 'Entrega Efetuada' });
   };
@@ -1149,6 +1170,7 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
   // ─── action: Cliente Buscou ──────────────────────────────────────────────────
   const handleClientPickedUp = () => {
     if (selectedItems.size === 0) { alert('Selecione pelo menos um item.'); return; }
+    if (!requirePhotosForSelection()) return;
     setPendingAction({ type: 'BUSCOU', itemIds: [...selectedItems] });
     setShowPaymentModal(true);
   };
@@ -1265,27 +1287,6 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
     }
   };
 
-  if (showPhotoCapture) {
-    return (
-      <PhotoCaptureScreen
-        client={client}
-        onBack={onBack}
-        itemPhotos={itemPhotos}
-        cameraProblems={cameraProblems}
-        setCameraProblems={setCameraProblems}
-        setItemPhotos={setItemPhotos}
-        uploadingPhotos={uploadingPhotos}
-        setUploadingPhotos={setUploadingPhotos}
-        onProceed={proceedToService}
-        allItemsHavePhotos={allItemsHavePhotos}
-        isAdmin={isAdmin}
-        inCompanyStatuses={IN_COMPANY}
-        fieldDoneStatuses={FIELD_DONE}
-        onRefreshClient={onBack}
-      />
-    );
-  }
-
   return (
     <div>
       {/* Header */}
@@ -1295,6 +1296,23 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
         </button>
         <h3 className="text-lg font-semibold text-gray-800">{client.name}</h3>
       </div>
+
+      {/* Registro Fotográfico — incorporado na mesma tela do atendimento
+          (antes era uma tela separada; unificado a pedido do Diego) */}
+      <PhotoCaptureScreen
+        client={client}
+        embedded
+        itemPhotos={itemPhotos}
+        cameraProblems={cameraProblems}
+        setCameraProblems={setCameraProblems}
+        setItemPhotos={setItemPhotos}
+        uploadingPhotos={uploadingPhotos}
+        setUploadingPhotos={setUploadingPhotos}
+        isAdmin={isAdmin}
+        inCompanyStatuses={IN_COMPANY}
+        fieldDoneStatuses={FIELD_DONE}
+        onRefreshClient={onBack}
+      />
 
       {/* Client Info */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-4">
@@ -2464,7 +2482,7 @@ function TabButton({ active, onClick, icon, label }) {
 }
 
 // Componente de Captura de Fotos
-function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadingPhotos, setUploadingPhotos, onProceed, allItemsHavePhotos, cameraProblems, setCameraProblems, isAdmin, inCompanyStatuses, fieldDoneStatuses, onRefreshClient }) {
+function PhotoCaptureScreen({ client, onBack, embedded = false, itemPhotos, setItemPhotos, uploadingPhotos, setUploadingPhotos, onProceed, allItemsHavePhotos, cameraProblems, setCameraProblems, isAdmin, inCompanyStatuses, fieldDoneStatuses, onRefreshClient }) {
   const [photoObservations, setPhotoObservations] = useState({});
   const [damageInfo, setDamageInfo] = useState({});
   const [currentPhotoForObservation, setCurrentPhotoForObservation] = useState(null);
@@ -2623,13 +2641,18 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
           {flash}
         </div>
       )}
-      {/* Header */}
-      <div className="flex items-center mb-4">
-        <button onClick={onBack} className="mr-3 text-blue-600">
-          <span className="text-xl">←</span>
-        </button>
-        <h3 className="text-lg font-semibold text-gray-800">Registro Fotográfico - {client.name}</h3>
-      </div>
+      {/* Header — omitido quando incorporado na tela de atendimento (já tem um acima) */}
+      {!embedded && (
+        <div className="flex items-center mb-4">
+          <button onClick={onBack} className="mr-3 text-blue-600">
+            <span className="text-xl">←</span>
+          </button>
+          <h3 className="text-lg font-semibold text-gray-800">Registro Fotográfico - {client.name}</h3>
+        </div>
+      )}
+      {embedded && (
+        <h4 className="font-medium text-gray-800 mb-2">📷 Registro Fotográfico</h4>
+      )}
 
       {/* Instruções */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -2914,22 +2937,28 @@ function PhotoCaptureScreen({ client, onBack, itemPhotos, setItemPhotos, uploadi
                   </p>
                 )}
               </div>
-              <button
-                onClick={onProceed}
-                disabled={!isReady}
-                className="w-full py-2.5 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                <CheckCircle className="w-4 h-4" />
-                Prosseguir para Atendimento
-              </button>
-              {isAdmin && !isReady && (
-                <button
-                  onClick={onProceed}
-                  className="w-full mt-2 py-2.5 rounded-lg text-sm font-semibold border border-orange-400 text-orange-600 hover:bg-orange-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <ShieldAlert className="w-4 h-4" />
-                  Pular fotos — Admin
-                </button>
+              {/* Botão "Prosseguir" só existia porque fotos e ação eram telas separadas.
+                  Incorporado: as ações (Retirada Efetuada etc.) já checam isReady sozinhas. */}
+              {!embedded && (
+                <>
+                  <button
+                    onClick={onProceed}
+                    disabled={!isReady}
+                    className="w-full py-2.5 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Prosseguir para Atendimento
+                  </button>
+                  {isAdmin && !isReady && (
+                    <button
+                      onClick={onProceed}
+                      className="w-full mt-2 py-2.5 rounded-lg text-sm font-semibold border border-orange-400 text-orange-600 hover:bg-orange-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <ShieldAlert className="w-4 h-4" />
+                      Pular fotos — Admin
+                    </button>
+                  )}
+                </>
               )}
             </>
           );
