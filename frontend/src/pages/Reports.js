@@ -138,22 +138,23 @@ function PartnerBillingReport({ onBack }) {
           .no-print { display: none !important; }
           .print-card { border: none !important; box-shadow: none !important; width: 100% !important; }
           .print-table-wrap { overflow: visible !important; width: 100% !important; }
-          .print-header { padding: 3px 16px !important; display: flex !important; align-items: baseline !important; gap: 10px !important; width: 100% !important; box-sizing: border-box !important; }
-          .print-header h2 { font-size: 10px !important; margin: 0 !important; }
-          .print-header p { font-size: 7px !important; margin: 0 !important; }
-          .print-meta { padding: 2px 16px !important; gap: 14px !important; width: 100% !important; box-sizing: border-box !important; }
+          .print-header { padding: 6px 16px !important; display: flex !important; align-items: baseline !important; gap: 10px !important; width: 100% !important; box-sizing: border-box !important; }
+          .print-header h2 { font-size: 14px !important; margin: 0 !important; }
+          .print-header p { font-size: 9px !important; margin: 0 !important; }
+          .print-meta { padding: 5px 16px !important; gap: 18px !important; width: 100% !important; box-sizing: border-box !important; }
           .print-meta > div { display: flex !important; gap: 4px !important; align-items: baseline !important; }
-          .print-meta .meta-label { font-size: 6px !important; }
-          .print-meta .meta-value { font-size: 8px !important; }
+          .print-meta .meta-label { font-size: 8px !important; }
+          .print-meta .meta-value { font-size: 10.5px !important; }
           .print-table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; border: 1px solid #94a3b8 !important; }
-          .print-table th, .print-table td { padding: 1px 6px !important; line-height: 1.15 !important; overflow: hidden !important; text-overflow: ellipsis !important; word-break: break-word !important; border: 1px solid #cbd5e1 !important; }
-          .print-table th { font-size: 7px !important; background: #eef2f7 !important; }
-          .print-table td { font-size: 8px !important; }
+          .print-table th, .print-table td { padding: 3px 9px !important; line-height: 1.3 !important; overflow: hidden !important; text-overflow: ellipsis !important; word-break: break-word !important; border: 1px solid #cbd5e1 !important; }
+          .print-table th { font-size: 9.5px !important; background: #eef2f7 !important; }
+          .print-table td { font-size: 10.5px !important; }
           .print-table tbody tr:nth-child(even) td { background: #f8fafc !important; }
-          .print-summary { padding: 3px 16px !important; width: 100% !important; box-sizing: border-box !important; }
-          .print-summary h3 { font-size: 8px !important; margin-bottom: 1px !important; }
-          .print-summary-row { padding: 1px 12px !important; }
-          .print-summary-box { padding: 2px 12px !important; }
+          .print-summary { padding: 8px 16px !important; width: 100% !important; box-sizing: border-box !important; }
+          .print-summary h3 { font-size: 11px !important; margin-bottom: 3px !important; }
+          .print-summary-row { padding: 4px 14px !important; font-size: 10px !important; }
+          .print-summary-box { padding: 7px 14px !important; }
+          .print-summary-box .text-[10px] { font-size: 9px !important; }
           /* Evita que blocos sejam cortados na virada de página, deixando uma
              sobra (faixa cinza) sozinha numa segunda folha quase vazia. */
           .print-card, .print-header, .print-meta, .print-summary {
