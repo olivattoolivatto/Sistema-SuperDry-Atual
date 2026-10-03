@@ -317,7 +317,7 @@ function QuickCreateServiceModal({ initialName, onClose, onCreated }) {
 }
 
 // ── ItemRow ───────────────────────────────────────────────────────────────────
-function ItemRow({ item, idx, onChange, onRemove }) {
+function ItemRow({ item, idx, onChange, onRemove, secondaryActive = false, secondaryLabel = '' }) {
   const [open, setOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [createSeed, setCreateSeed] = useState('');
@@ -391,6 +391,20 @@ function ItemRow({ item, idx, onChange, onRemove }) {
               {item.diameter ? `Ø ${item.diameter}m = ` : ''}
               {item.area_m2 ? `${item.area_m2} m²` : ''}
             </div>
+          )}
+          {secondaryActive && (
+            <label className="flex items-center gap-2 text-xs bg-orange-50 border border-orange-200 rounded-lg px-2 py-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={item.use_secondary_address !== false}
+                onChange={e => onChange(idx, { use_secondary_address: e.target.checked })}
+              />
+              <span className="text-orange-700">
+                {item.use_secondary_address !== false
+                  ? <>Executar no endereço secundário <span className="text-orange-500">({secondaryLabel})</span></>
+                  : 'Executar no endereço principal do cliente'}
+              </span>
+            </label>
           )}
         </div>
       )}
@@ -472,7 +486,10 @@ export function AutomationPage() {
   const patchItem = (idx, changes) =>
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, ...changes } : it));
   const removeItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
-  const addItem = () => setItems(prev => [...prev, { service_name: '', value: 0, quantity: 1 }]);
+  const addItem = () => setItems(prev => [...prev, {
+    service_name: '', value: 0, quantity: 1,
+    use_secondary_address: diffExecAddr,
+  }]);
 
   // Total calculado
   const calcTotal = items.reduce((acc, it) => acc + Number(it.value || 0), 0);
@@ -520,6 +537,7 @@ export function AutomationPage() {
           diameter: it.diameter || null,
           area_m2: it.area_m2 || null,
           matched_service_id: it.matched_service?.id || null,
+          use_secondary_address: diffExecAddr ? (it.use_secondary_address !== false) : false,
         })),
         notes,
         origin: 'AUTOMACAO',
@@ -765,7 +783,7 @@ export function AutomationPage() {
                 }`}
               >
                 <ArrowRightLeft className="w-4 h-4 shrink-0" />
-                <span className="flex-1 text-left">Serviço será executado em endereço diferente do cliente</span>
+                <span className="flex-1 text-left">Serviço será executado em endereços distintos</span>
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${diffExecAddr ? 'bg-orange-200 text-orange-800' : 'bg-gray-200 text-gray-600'}`}>
                   {diffExecAddr ? 'ATIVO' : 'não'}
                 </span>
@@ -774,7 +792,8 @@ export function AutomationPage() {
               {diffExecAddr && (
                 <div className="mt-2 space-y-2 border border-orange-200 rounded-xl p-3 bg-orange-50">
                   <p className="text-[11px] text-orange-700 font-medium">
-                    Endereço onde o técnico deve ir executar o serviço:
+                    Endereço secundário (marque abaixo, em cada item, se ele vai pro endereço
+                    principal do cliente ou pra este endereço):
                   </p>
                   <AddressAutocomplete
                     value={execAddrObj}
@@ -794,7 +813,8 @@ export function AutomationPage() {
                       className="w-full border border-orange-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 bg-white" />
                   </div>
                   <p className="text-[10px] text-orange-600">
-                    Os itens serão criados com modo <strong>EXECUTAR_NO_LOCAL</strong> e o evento na Agenda usará este endereço.
+                    Por padrão, todo item novo vai pro endereço secundário (modo <strong>EXECUTAR_NO_LOCAL</strong>) —
+                    desmarque o item que deve ir pro endereço principal do cliente.
                   </p>
                 </div>
               )}
@@ -839,7 +859,11 @@ export function AutomationPage() {
                   </div>
                 )}
                 {items.map((it, i) => (
-                  <ItemRow key={i} item={it} idx={i} onChange={patchItem} onRemove={removeItem} />
+                  <ItemRow
+                    key={i} item={it} idx={i} onChange={patchItem} onRemove={removeItem}
+                    secondaryActive={diffExecAddr}
+                    secondaryLabel={execAddrObj?.full_address || 'endereço secundário'}
+                  />
                 ))}
               </div>
             </section>

@@ -5103,7 +5103,8 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
 
     budget_id = await _next_id(db.budgets, "ORC-", 7)
 
-    # Endereço de execução resolvido para usar nos itens
+    # Endereço secundário resolvido (pode não ser usado por nenhum item, ou só
+    # por alguns — decidido item a item mais abaixo, via "use_secondary_address").
     if has_exec_addr:
         resolved_exec_addr = exec_address_obj or {
             "full_address": exec_address_text,
@@ -5112,14 +5113,8 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
         }
         if exec_complement:
             resolved_exec_addr["complement"] = exec_complement
-        exec_mode      = "EXECUTAR_NO_LOCAL"
-        exec_location  = "NO_LOCAL"
-        item_status    = "EXECUTAR_NO_LOCAL"
     else:
         resolved_exec_addr = None
-        exec_mode      = "RETIRAR_E_LEVAR"
-        exec_location  = "RETIRADA"
-        item_status    = "RETIRAR"
 
     # ── Trava anti-item-orfao: nenhum item pode virar orcamento sem estar
     # vinculado a um servico real do catalogo. Se o frontend nao mandou
@@ -5157,6 +5152,24 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
         _svc = resolved_services[_idx]
         val = float(raw_item.get("value") or 0)
         qty = int(raw_item.get("quantity") or 1)
+
+        # Endereço/modo por item — cada item decide se vai pro endereço
+        # secundário (execução no local) ou pro fluxo padrão (retirar e levar).
+        # Ajuste 03/10/2026: antes era um único modo pra TODOS os itens do
+        # orçamento; agora cada item pode ir pro endereço do cliente ou pro
+        # secundário, no mesmo orçamento.
+        item_uses_secondary = bool(resolved_exec_addr) and bool(raw_item.get("use_secondary_address"))
+        if item_uses_secondary:
+            exec_mode     = "EXECUTAR_NO_LOCAL"
+            exec_location = "NO_LOCAL"
+            item_status   = "EXECUTAR_NO_LOCAL"
+            item_exec_addr = resolved_exec_addr
+        else:
+            exec_mode     = "RETIRAR_E_LEVAR"
+            exec_location = "RETIRADA"
+            item_status   = "RETIRAR"
+            item_exec_addr = None
+
         item_doc = {
             "id": item_id,
             "budget_id": budget_id,
@@ -5182,8 +5195,8 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
             "execution_location": exec_location,
             "current_route_id": None,
         }
-        if resolved_exec_addr:
-            item_doc["execution_address"] = resolved_exec_addr
+        if item_exec_addr:
+            item_doc["execution_address"] = item_exec_addr
         budget_items.append(item_doc)
 
     budget_doc = {
@@ -5217,9 +5230,16 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
             else:
                 service = get_calendar_service(creds_doc["credentials"])
 
-                # Local: endereço de execução se houver, senão endereço do cliente
+                # Local: endereço secundário se houver pelo menos um item usando ele,
+                # senão endereço do cliente. Ajuste 03/10/2026: antes exec_mode/
+                # item_status eram globais (um por orçamento); agora são por item,
+                # então o evento único da Agenda usa um resumo: se ALGUM item vai
+                # pro endereço secundário, o evento reflete isso.
+                any_item_secondary = bool(resolved_exec_addr) and any(
+                    bool(ri.get("use_secondary_address")) for ri in items
+                )
                 location_text = ""
-                if resolved_exec_addr:
+                if any_item_secondary:
                     location_text = resolved_exec_addr.get("full_address", "")
                     if exec_complement:
                         location_text += f" - {exec_complement}"
@@ -5228,6 +5248,7 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
                     comp = (payload.get("complement") or "").strip()
                     if comp:
                         location_text += f" - {comp}"
+                agenda_item_status = "EXECUTAR_NO_LOCAL" if any_item_secondary else "RETIRAR"
 
                 _desc_complement = (payload.get("complement") or "").strip()
                 _sched_fmt = ""
@@ -5254,7 +5275,7 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
                     complement=_desc_complement,
                     location_text=location_text,
                     sched_fmt=_sched_fmt,
-                    item_status=item_status,
+                    item_status=agenda_item_status,
                 )
 
                 # Data/hora do evento
