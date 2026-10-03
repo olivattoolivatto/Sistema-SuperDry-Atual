@@ -6631,6 +6631,7 @@ async def get_available_budget_items_for_routes(current_user: UserPublic = Depen
                 "client_name": "$client_name",
                 "item": "$items",
                 "client_address": "$client_info.address",
+                "budget_created_at": "$created_at",
             }},
         ]
         cursor = db.budgets.aggregate(pipeline)
@@ -6648,6 +6649,12 @@ async def get_available_budget_items_for_routes(current_user: UserPublic = Depen
                 addr = item.get("delivery_address") or doc.get("client_address") or {}
             else:
                 addr = item.get("execution_address") or doc.get("client_address") or {}
+            # Diego pediu pra ordenar a lista de pendentes por mais recente primeiro --
+            # a data do ITEM (quando o orçamento foi criado) é o que importa aqui, não
+            # a data agendada de retirada/entrega. Preferimos item.created_at (quando
+            # existir, ex: item adicionado depois a um orçamento já aberto), caindo pro
+            # created_at do orçamento como fallback.
+            created_at = item.get("created_at") or doc.get("budget_created_at")
             results.append({
                 "budget_item_id": item["id"],
                 "budget_id": doc["budget_id"],
@@ -6661,6 +6668,7 @@ async def get_available_budget_items_for_routes(current_user: UserPublic = Depen
                 "payment_status": item.get("payment_status"),
                 "neighborhood": (addr or {}).get("neighborhood", ""),
                 "address": addr,
+                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else created_at,
                 "scheduled_date": (
                     item.get("scheduled_pickup_date") if status == ServiceStatus.RETIRAR.value
                     else item.get("scheduled_delivery_date") if status in (ServiceStatus.ENTREGAR.value, ServiceStatus.AGUARDANDO_ENTREGA.value)

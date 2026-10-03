@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   MapPin, 
   Truck, 
@@ -38,6 +38,12 @@ export function Routes() {
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [showStatus, setShowStatus] = useState(false);
+
+  // ── Serviços Disponíveis: busca/filtro/ordenação ─────────────────────────────
+  const [availSearchText, setAvailSearchText]       = useState('');
+  const [availStatusFilter, setAvailStatusFilter]   = useState('TODOS');
+  const [availSortKey, setAvailSortKey]             = useState('created_at'); // created_at | service_name | client_name | neighborhood | service_value
+  const [availSortDir, setAvailSortDir]             = useState('desc'); // mais recente primeiro por padrão
   const [statusOptions, setStatusOptions] = useState([]);
   const [editingStatus, setEditingStatus] = useState({});
   const [sendingToTechnician, setSendingToTechnician] = useState(false);
@@ -388,6 +394,37 @@ export function Routes() {
       setLoading(false);
     }
   };
+
+  // Lista de "Serviços Disponíveis" depois de aplicar busca + filtro de status +
+  // ordenação por coluna (clique no cabeçalho) -- padrão: mais recentes primeiro.
+  const visibleAvailableItems = useMemo(() => {
+    const q = availSearchText.trim().toLowerCase();
+    let list = availableItems.filter(it => {
+      if (availStatusFilter !== 'TODOS' && it.status !== availStatusFilter) return false;
+      if (!q) return true;
+      return [it.service_name, it.service_code, it.client_name, it.neighborhood]
+        .some(v => (v || '').toLowerCase().includes(q));
+    });
+    const dir = availSortDir === 'asc' ? 1 : -1;
+    list = [...list].sort((a, b) => {
+      const av = a[availSortKey] ?? '';
+      const bv = b[availSortKey] ?? '';
+      if (availSortKey === 'service_value') return ((Number(av) || 0) - (Number(bv) || 0)) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+    return list;
+  }, [availableItems, availSearchText, availStatusFilter, availSortKey, availSortDir]);
+
+  const toggleAvailSort = (key) => {
+    if (availSortKey === key) {
+      setAvailSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setAvailSortKey(key);
+      setAvailSortDir(key === 'created_at' ? 'desc' : 'asc');
+    }
+  };
+
+  const availSortArrow = (key) => (availSortKey === key ? (availSortDir === 'asc' ? ' ▲' : ' ▼') : '');
 
   const loadSavedRoutes = async () => {
     try {
@@ -1485,7 +1522,7 @@ export function Routes() {
 
       {/* Section 1: Available Items */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
             <MapPin className="w-5 h-5 text-green-600 mr-2" />
             <h2 className="text-xl font-semibold text-gray-900">Serviços Disponíveis para Rota</h2>
@@ -1504,6 +1541,29 @@ export function Routes() {
           </div>
         </div>
 
+        {/* Busca + filtro de status -- clique nos cabeçalhos da tabela pra ordenar por coluna */}
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <input
+            type="text"
+            value={availSearchText}
+            onChange={(e) => setAvailSearchText(e.target.value)}
+            placeholder="Buscar por cliente, serviço, código ou bairro…"
+            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          />
+          {statusOptions.length > 0 && (
+            <select
+              value={availStatusFilter}
+              onChange={(e) => setAvailStatusFilter(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="TODOS">Todos os status</option>
+              {statusOptions.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="min-w-full table-auto">
             <thead>
@@ -1515,17 +1575,20 @@ export function Routes() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden">
                   Selecionar
                 </th>
-                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Descrição
+                <th onClick={() => toggleAvailSort('service_name')} className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700">
+                  Descrição{availSortArrow('service_name')}
                 </th>
-                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cliente
+                <th onClick={() => toggleAvailSort('client_name')} className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700">
+                  Cliente{availSortArrow('client_name')}
                 </th>
-                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                  Bairro
+                <th onClick={() => toggleAvailSort('neighborhood')} className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell cursor-pointer select-none hover:text-gray-700">
+                  Bairro{availSortArrow('neighborhood')}
                 </th>
-                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                  Valor
+                <th onClick={() => toggleAvailSort('created_at')} className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell cursor-pointer select-none hover:text-gray-700">
+                  Lançado em{availSortArrow('created_at')}
+                </th>
+                <th onClick={() => toggleAvailSort('service_value')} className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell cursor-pointer select-none hover:text-gray-700">
+                  Valor{availSortArrow('service_value')}
                 </th>
                 {showStatus && (
                   <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1535,7 +1598,7 @@ export function Routes() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {availableItems.map((item, index) => (
+              {visibleAvailableItems.map((item, index) => (
                 <tr key={`available-${item.budget_item_id}-${index}`} className="hover:bg-gray-50">
                   <td className="px-2 py-4 whitespace-nowrap w-20 sm:w-auto">
                     <div className="flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-2">
@@ -1592,6 +1655,9 @@ export function Routes() {
                   <td className="px-2 sm:px-4 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
                     {item.neighborhood}
                   </td>
+                  <td className="px-2 sm:px-4 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">
+                    {item.created_at ? new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+                  </td>
                   <td className="px-2 sm:px-4 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
                     R$ {item.service_value.toFixed(2)}
                   </td>
@@ -1637,10 +1703,10 @@ export function Routes() {
           </table>
         </div>
 
-        {availableItems.length === 0 && (
+        {visibleAvailableItems.length === 0 && (
           <div className="text-center py-8 text-gray-500">
             <RouteIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <p>Nenhum serviço disponível para rotas</p>
+            <p>{availableItems.length === 0 ? 'Nenhum serviço disponível para rotas' : 'Nenhum serviço encontrado com esse filtro'}</p>
           </div>
         )}
       </div>
