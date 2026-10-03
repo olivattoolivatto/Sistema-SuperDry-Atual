@@ -5008,11 +5008,30 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                 "match_score": m.get("match_score"),
                 "low_confidence": m.get("low_confidence", False),
             }
-            area = float(item.get("area_m2") or 0)
             if mtype in AREA_TYPES:
+                # A IA só devolve texto livre em service_name -- nunca largura/altura/área
+                # estruturadas (não está no schema pedido a ela). Sem isso, width/height/
+                # area_m2 ficavam sempre vazios no item salvo (mesmo com a medida escrita
+                # na mensagem), e a quantidade virava um palpite da IA em vez de um cálculo
+                # determinístico. Extrai aqui com o mesmo parser usado no resto do sistema.
+                _pm = _parse_line_measures(item.get("service_name", ""))
+                if item.get("width") is None and _pm.get("width") is not None:
+                    item["width"] = _pm["width"]
+                if item.get("height") is None and _pm.get("height") is not None:
+                    item["height"] = _pm["height"]
+                if item.get("diameter") is None and _pm.get("diameter") is not None:
+                    item["diameter"] = _pm["diameter"]
+                if not item.get("area_m2") and _pm.get("area_m2") is not None:
+                    item["area_m2"] = _pm["area_m2"]
+
+                area = float(item.get("area_m2") or 0)
                 item["unit_price"] = price
                 item["value"] = explicit_value or (round(area * price, 2) if area > 0 else 0)
                 item["needs_measure"] = area == 0 and explicit_value == 0
+                if area > 0:
+                    # quantidade = área (m²), igual à criação manual de item (ver
+                    # POST /budgets/{id}/items) -- antes a IA que decidia esse número.
+                    item["quantity"] = round(area, 4)
             else:
                 qty = int(item.get("quantity") or 1)
                 item["quantity"] = qty
