@@ -6251,6 +6251,87 @@ async def partner_items_report(
     return {"rows": rows, "totals_by_partner": totals_by_partner}
 
 
+class ClosePartnerReportRequest(BaseModel):
+    partner_client_id: str
+    start_date: str   # YYYY-MM-DD
+    end_date: str      # YYYY-MM-DD
+    item_ids: List[str]   # itens exatamente como mostrados no relatório (conferidos pelo usuário)
+
+
+@api_router.post("/reports/partner-items/close")
+async def close_partner_report_period(
+    payload: ClosePartnerReportRequest,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """
+    "Fecha" um período de fechamento de parceiro: marca os itens do relatório
+    como retirados (status BUSCOU — mesmo status terminal que o resto do
+    sistema já usa pra "parceiro buscou") e grava um registro do relatório
+    em partner_report_closures, pra sabermos depois qual foi o último período
+    já fechado/enviado de cada parceiro (sem precisar vasculhar planilha).
+    """
+    if not payload.item_ids:
+        raise HTTPException(status_code=400, detail="Nenhum item informado pra fechar.")
+
+    closed_count = 0
+    total_value = 0.0
+    client = await db.clients.find_one({"id": payload.partner_client_id})
+    partner_name = (client or {}).get("name") or payload.partner_client_id
+
+    for item_id in payload.item_ids:
+        budget, item = await _find_budget_and_item(item_id)
+        if not item:
+            continue
+        if item.get("status") == "BUSCOU":
+            continue  # já fechado antes — idempotente, não duplica no histórico
+        total_value += float(item.get("total_value") or 0)
+        await _update_item_fields(item_id, {"status": "BUSCOU"}, current_user)
+        await _append_to_item_array(item_id, "status_history", {
+            "status": "BUSCOU", "at": datetime.utcnow().isoformat(),
+            "by_user_id": current_user.id, "by_user_name": current_user.name,
+            "notes": f"Fechamento de parceiro — período {payload.start_date} a {payload.end_date}"
+        })
+        closed_count += 1
+
+    closure = {
+        "id": f"PRC-{uuid.uuid4().hex[:10].upper()}",
+        "partner_client_id": payload.partner_client_id,
+        "partner_name": partner_name,
+        "start_date": payload.start_date,
+        "end_date": payload.end_date,
+        "item_ids": payload.item_ids,
+        "item_count": closed_count,
+        "total_value": round(total_value, 2),
+        "closed_by": current_user.id,
+        "closed_by_name": current_user.name,
+        "closed_at": datetime.utcnow(),
+    }
+    await db.partner_report_closures.insert_one(closure)
+    await log_audit("partner_report", closure["id"], "PARTNER_REPORT_CLOSED", current_user, {
+        "partner_client_id": payload.partner_client_id, "item_count": closed_count,
+    })
+    closure.pop("_id", None)
+    return {"success": True, "closure": closure}
+
+
+@api_router.get("/reports/partner-items/history")
+async def get_partner_report_history(
+    partner_client_id: Optional[str] = None,
+    current_user: UserPublic = Depends(get_current_user),
+):
+    """Histórico de fechamentos de relatório por parceiro — usado pra mostrar
+    "último relatório enviado: até DD/MM" e sugerir o próximo período."""
+    query = {"partner_client_id": partner_client_id} if partner_client_id else {}
+    cursor = db.partner_report_closures.find(query).sort("closed_at", -1).limit(50)
+    out = []
+    async for c in cursor:
+        c.pop("_id", None)
+        if isinstance(c.get("closed_at"), datetime):
+            c["closed_at"] = c["closed_at"].isoformat()
+        out.append(c)
+    return {"history": out}
+
+
 @api_router.get("/payment-methods")
 async def get_payment_methods():
     """Retorna lista de formas de pagamento configuradas no sistema."""

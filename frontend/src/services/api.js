@@ -227,6 +227,8 @@ export const technicianApi = {
 // Relatórios
 export const reportsApi = {
   partnerItems: (params = {}) => api.get('/reports/partner-items', { params }),
+  closePartnerPeriod: (payload) => api.post('/reports/partner-items/close', payload),
+  partnerReportHistory: (params = {}) => api.get('/reports/partner-items/history', { params }),
 };
 
 // Gestor Financeiro (Fase 0) — contas, categorias e lançamentos (agregador)

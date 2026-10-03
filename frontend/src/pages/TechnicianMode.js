@@ -229,11 +229,11 @@ export function TechnicianMode() {
       )}
       
       {currentMode === 'street' && (
-        <StreetMode onBack={() => setCurrentMode('selection')} />
+        <StreetMode onBack={() => setCurrentMode('selection')} onSwitchMode={() => setCurrentMode('company')} />
       )}
       
       {currentMode === 'company' && (
-        <CompanyMode onBack={() => setCurrentMode('selection')} />
+        <CompanyMode onBack={() => setCurrentMode('selection')} onSwitchMode={() => setCurrentMode('street')} />
       )}
     </div>
   );
@@ -327,7 +327,7 @@ const CARD_STYLES = {
   pending:    { border: 'border-gray-200',   bg: 'bg-white',     label: null,                      labelCls: '' },
 };
 
-function StreetMode({ onBack }) {
+function StreetMode({ onBack, onSwitchMode }) {
   const [activeTab, setActiveTab] = useState('agenda');
   const [dailyClients, setDailyClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -510,6 +510,17 @@ function StreetMode({ onBack }) {
             <span className="text-xl">←</span>
           </button>
           <h2 className="text-lg font-semibold">Modo Rua</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          {onSwitchMode && (
+            <button
+              onClick={onSwitchMode}
+              className="flex items-center gap-1 bg-blue-700/60 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+              title="Ir para o Modo Empresa"
+            >
+              <Building className="w-3.5 h-3.5" /> Empresa
+            </button>
+          )}
         </div>
         {loadError && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-2">
@@ -2267,7 +2278,7 @@ function ProntosPanel({ items, onClose }) {
 
 // ── CompanyMode main ──────────────────────────────────────────────────────────
 
-function CompanyMode({ onBack }) {
+function CompanyMode({ onBack, onSwitchMode }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState(null); // 'lavagem'|'measures'|'recolher'|'recolhimento'
@@ -2315,6 +2326,15 @@ function CompanyMode({ onBack }) {
       <div className="bg-orange-600 text-white p-4 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={onBack} className="text-xl">←</button>
         <h2 className="text-lg font-semibold flex-1">Modo Empresa</h2>
+        {onSwitchMode && (
+          <button
+            onClick={onSwitchMode}
+            className="flex items-center gap-1 bg-orange-700/60 hover:bg-orange-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+            title="Ir para o Modo Rua"
+          >
+            <Car className="w-3.5 h-3.5" /> Rua
+          </button>
+        )}
         <button onClick={load} className="p-1.5 hover:bg-orange-500 rounded-lg">
           <RefreshCw className="w-4 h-4" />
         </button>

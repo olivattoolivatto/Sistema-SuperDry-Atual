@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BarChart3, FileSpreadsheet, ChevronRight, ChevronLeft, Printer, Lock, Ruler, Loader2, Search, Columns3, RotateCcw, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, FileSpreadsheet, ChevronRight, ChevronLeft, Printer, Lock, Ruler, Loader2, Search, Columns3, RotateCcw, MessageCircle, CheckCircle2, History } from 'lucide-react';
 import { reportsApi, clientsApi } from '../services/api';
 
 const COL_LABELS = ['Data ref.', 'Objeto', 'Identificação', 'Medidas', 'Área', 'Valor'];
@@ -57,6 +57,31 @@ function PartnerBillingReport({ onBack }) {
   const [colWidths, setColWidths] = useState(loadColWidths);
   const [showColPanel, setShowColPanel] = useState(false);
   const [sendingWhats, setSendingWhats] = useState(false);
+  const [lastClosure, setLastClosure] = useState(null); // último fechamento desse parceiro
+  const [closing, setClosing] = useState(false);
+
+  const loadLastClosure = async (pid) => {
+    if (!pid) { setLastClosure(null); return; }
+    try {
+      const res = await reportsApi.partnerReportHistory({ partner_client_id: pid });
+      const hist = res.data?.history || [];
+      setLastClosure(hist[0] || null);
+    } catch {
+      setLastClosure(null);
+    }
+  };
+
+  useEffect(() => {
+    loadLastClosure(partnerId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partnerId]);
+
+  const useSuggestedStartDate = () => {
+    if (!lastClosure?.end_date) return;
+    const d = new Date(lastClosure.end_date + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    setStartDate(d.toISOString().slice(0, 10));
+  };
 
   const updateColWidth = (idx, value) => {
     const v = Math.max(4, Math.min(50, Number(value) || 0));
@@ -126,6 +151,40 @@ function PartnerBillingReport({ onBack }) {
     }
   };
 
+  const closePeriod = async () => {
+    if (!partnerId) {
+      alert('Selecione um parceiro específico (não "Todos os parceiros") pra fechar o período.');
+      return;
+    }
+    const itemIds = (result?.rows || []).map(r => r.item_id).filter(Boolean);
+    if (itemIds.length === 0) {
+      alert('Gere o relatório antes de fechar o período.');
+      return;
+    }
+    const partnerLabel = PARTNERS.find(p => p.id === partnerId)?.label || partnerId;
+    const ok = window.confirm(
+      `Fechar o período de ${fmtDateBR(startDate)} a ${fmtDateBR(endDate)} de ${partnerLabel}?\n\n` +
+      `${itemIds.length} itens serão marcados como retirados (BUSCOU) e esse período fica registrado ` +
+      `como o último relatório enviado pra esse parceiro. Confirma que já foi tudo conferido?`
+    );
+    if (!ok) return;
+    setClosing(true);
+    try {
+      await reportsApi.closePartnerPeriod({
+        partner_client_id: partnerId,
+        start_date: startDate,
+        end_date: endDate,
+        item_ids: itemIds,
+      });
+      await loadLastClosure(partnerId);
+      alert('Período fechado! Os itens foram marcados como retirados.');
+    } catch (e) {
+      alert(e?.response?.data?.detail || 'Erro ao fechar o período. Tente novamente.');
+    } finally {
+      setClosing(false);
+    }
+  };
+
   const rows = result?.rows || [];
   const totalsByPartner = result?.totals_by_partner || {};
   const areaTotal = Object.values(totalsByPartner).reduce((s, t) => s + (t.area_m2 || 0), 0);
@@ -192,6 +251,9 @@ function PartnerBillingReport({ onBack }) {
         </button>
         {result && (
           <div className="flex items-center gap-2">
+            <button onClick={closePeriod} disabled={closing || !partnerId} title={!partnerId ? 'Selecione um parceiro específico' : 'Marca os itens do período como retirados'} className="flex items-center gap-1.5 text-xs text-white bg-[#1F4E8C] hover:bg-blue-800 border border-[#1F4E8C] rounded-lg px-2.5 py-1.5 disabled:opacity-60">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Fechar período
+            </button>
             <button onClick={sendWhatsApp} disabled={sendingWhats} className="flex items-center gap-1.5 text-xs text-white bg-[#25D366] hover:bg-[#1ebe57] border border-[#25D366] rounded-lg px-2.5 py-1.5 disabled:opacity-60">
               <MessageCircle className="w-3.5 h-3.5" /> Enviar por WhatsApp
             </button>
@@ -215,6 +277,16 @@ function PartnerBillingReport({ onBack }) {
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}
           </select>
+          {partnerId && (
+            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-gray-500">
+              <History className="w-3 h-3 shrink-0" />
+              {lastClosure
+                ? <>Último fechamento: até <strong>{fmtDateBR(lastClosure.end_date)}</strong> ({lastClosure.item_count} itens)
+                    {' '}<button type="button" onClick={useSuggestedStartDate} className="text-blue-600 hover:underline">usar como início</button>
+                  </>
+                : 'Nenhum fechamento anterior registrado pra esse parceiro'}
+            </div>
+          )}
         </div>
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wide">De</label>
@@ -400,6 +472,9 @@ function PartnerBillingReport({ onBack }) {
 
               {/* Réplica dos botões no rodapé — o do topo é fácil de perder de vista */}
               <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-2 no-print">
+                <button onClick={closePeriod} disabled={closing || !partnerId} title={!partnerId ? 'Selecione um parceiro específico' : 'Marca os itens do período como retirados'} className="flex items-center gap-1.5 text-xs text-white bg-[#1F4E8C] hover:bg-blue-800 border border-[#1F4E8C] rounded-lg px-2.5 py-1.5 disabled:opacity-60">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Fechar período
+                </button>
                 <button onClick={sendWhatsApp} disabled={sendingWhats} className="flex items-center gap-1.5 text-xs text-white bg-[#25D366] hover:bg-[#1ebe57] border border-[#25D366] rounded-lg px-2.5 py-1.5 disabled:opacity-60">
                   <MessageCircle className="w-3.5 h-3.5" /> Enviar por WhatsApp
                 </button>
