@@ -321,6 +321,9 @@ function ItemRow({ item, idx, onChange, onRemove, secondaryActive = false, secon
   const [open, setOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [createSeed, setCreateSeed] = useState('');
+  // Continuidade de foco: ao confirmar o serviço no catálogo, pula direto pro
+  // campo de quantidade -- mesmo padrão já usado no orçamento manual (BudgetEditor).
+  const qtyFieldRef = useRef(null);
 
   const applyService = (svc) => {
     onChange(idx, {
@@ -337,6 +340,7 @@ function ItemRow({ item, idx, onChange, onRemove, secondaryActive = false, secon
         low_confidence: false,
       },
     });
+    setTimeout(() => qtyFieldRef.current?.focus(), 50);
   };
 
   const matched = item.matched_service;
@@ -368,7 +372,7 @@ function ItemRow({ item, idx, onChange, onRemove, secondaryActive = false, secon
           <div className="grid grid-cols-3 gap-2">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Qtd</label>
-              <input type="number" min="1" value={item.quantity || 1}
+              <input ref={qtyFieldRef} type="number" min="1" value={item.quantity || 1}
                 onChange={e => onChange(idx, { quantity: Number(e.target.value) })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>

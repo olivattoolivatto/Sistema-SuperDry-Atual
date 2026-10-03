@@ -12,6 +12,13 @@ import {
   fmtMoney, normalize,
 } from './_constants';
 
+// Tipos de medida que precisam de largura/altura, metragem linear ou diâmetro --
+// usados tanto pro cálculo de quantidade quanto pra continuidade de foco ao
+// selecionar o serviço (ver selectService em ItemSubForm).
+const AREA_MEASURE_TYPES = ['AREA_DE_TAPETE', 'CARPETE_TAPETE_LOCAL', 'AREA_PERSIANA'];
+const LINEAR_MEASURE_TYPES = ['METRAGEM_LINEAR_CORTINA_SIMPLES', 'METRAGEM_LINEAR_PE_DIREITO_DUPLO', 'METRAGEM_LINEAR_ESPECIAL'];
+const DIAMETER_MEASURE_TYPE = 'TAPETE_REDONDO_DIAMETRO';
+
 // Mini autocomplete reaproveitando o padrão da página Clientes
 function AddressAutocomplete({ value, onSelect, placeholder, compact = false }) {
   const [query, setQuery] = useState(value || '');
@@ -107,7 +114,11 @@ function AddressAutocomplete({ value, onSelect, placeholder, compact = false }) 
 }
 
 // Campo decimal com suporte a vírgula como separador (resolve bug de zero persistente no mobile)
-function DecimalInput({ value, defaultValue: def, onChange: onChangeProp, className, disabled, ...rest }) {
+// forwardRef: permite o pai focar este campo programaticamente (ex: continuidade de
+// cursor ao confirmar o serviço -- ver selectService em ItemSubForm).
+const DecimalInput = React.forwardRef(function DecimalInput(
+  { value, defaultValue: def, onChange: onChangeProp, className, disabled, ...rest }, ref
+) {
   const toStr = (v) => (v != null && !isNaN(v) ? String(v) : (def != null ? String(def) : ''));
   const [raw, setRaw] = React.useState(() => toStr(value));
   const lastParent = React.useRef(value);
@@ -120,6 +131,7 @@ function DecimalInput({ value, defaultValue: def, onChange: onChangeProp, classN
   }, [value]);
   return (
     <input
+      ref={ref}
       type="text"
       inputMode="decimal"
       value={raw}
@@ -143,7 +155,7 @@ function DecimalInput({ value, defaultValue: def, onChange: onChangeProp, classN
       {...rest}
     />
   );
-}
+});
 
 // Sub-form para um item individual
 function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, paymentMethods = PAYMENT_METHODS, salespersons = [], autoOpen = false, onAutoOpened }) {
@@ -153,6 +165,13 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
   const [serviceSearch, setServiceSearch] = useState('');
   const [showServicePicker, setShowServicePicker] = useState(false);
   const containerRef = useRef(null);
+  // Continuidade de foco: depois de confirmar o serviço, pula direto pro
+  // próximo campo a preencher (quantidade, ou o primeiro campo de medida
+  // quando o serviço é de área/linear/diâmetro) -- sem precisar clicar.
+  const qtyFieldRef = useRef(null);
+  const widthFieldRef = useRef(null);
+  const diameterFieldRef = useRef(null);
+  const foldsFieldRef = useRef(null);
 
   // Ao adicionar um item novo, abre direto o campo de busca do serviço e
   // rola a tela até ele — evita ter que rolar e clicar manualmente.
@@ -196,12 +215,19 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
     });
     setShowServicePicker(false);
     setServiceSearch('');
+
+    const mt = s.measure_type;
+    const nextRef = AREA_MEASURE_TYPES.includes(mt) ? widthFieldRef
+      : mt === DIAMETER_MEASURE_TYPE ? diameterFieldRef
+      : LINEAR_MEASURE_TYPES.includes(mt) ? foldsFieldRef
+      : qtyFieldRef;
+    setTimeout(() => nextRef.current?.focus(), 50);
   };
 
   const measureType = item.measure_type;
-  const needsArea = ['AREA_DE_TAPETE', 'CARPETE_TAPETE_LOCAL', 'AREA_PERSIANA'].includes(measureType);
-  const needsLinear = ['METRAGEM_LINEAR_CORTINA_SIMPLES', 'METRAGEM_LINEAR_PE_DIREITO_DUPLO', 'METRAGEM_LINEAR_ESPECIAL'].includes(measureType);
-  const needsDiameter = measureType === 'TAPETE_REDONDO_DIAMETRO';
+  const needsArea = AREA_MEASURE_TYPES.includes(measureType);
+  const needsLinear = LINEAR_MEASURE_TYPES.includes(measureType);
+  const needsDiameter = measureType === DIAMETER_MEASURE_TYPE;
 
   // Calcula total_value automaticamente
   useEffect(() => {
@@ -307,6 +333,7 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Qtd</label>
             <input
+              ref={qtyFieldRef}
               type="number"
               step="0.01"
               value={item.quantity || ''}
@@ -334,7 +361,7 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Largura (m)</label>
-              <DecimalInput value={item.width || 0} defaultValue={0}
+              <DecimalInput ref={widthFieldRef} value={item.width || 0} defaultValue={0}
                 onChange={(v) => onChange({ ...item, width: v })}
                 className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
@@ -350,7 +377,7 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Dobras</label>
-              <input type="number" value={item.fabric_folds || ''}
+              <input ref={foldsFieldRef} type="number" value={item.fabric_folds || ''}
                 onChange={(e) => onChange({ ...item, fabric_folds: Number(e.target.value) })}
                 onFocus={(e) => e.target.select()} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
@@ -365,7 +392,7 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
         {needsDiameter && (
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Diâmetro (m)</label>
-            <DecimalInput value={item.diameter || 0} defaultValue={0}
+            <DecimalInput ref={diameterFieldRef} value={item.diameter || 0} defaultValue={0}
               onChange={(v) => onChange({ ...item, diameter: v })}
               className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
