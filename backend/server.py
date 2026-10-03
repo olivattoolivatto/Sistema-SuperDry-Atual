@@ -4170,7 +4170,7 @@ def _parse_line_measures(line: str) -> dict:
     # senão um código/etiqueta que aparece antes de "redondo" na mesma linha (ex: "Azul 599
     # redondo 0,8") é confundido com o diâmetro em vez do número que realmente é a medida.
     circ_after = re.search(r'redondo\s+(\d+(?:[.,]\d+)?)', line, re.IGNORECASE)
-    circ_before = re.search(r'(\d+(?:[.,]\d+)?)\s*redondo', line, re.IGNORECASE)
+    circ_before = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:(?:m|cm|mm)\.?)?\s*redondo', line, re.IGNORECASE)
     circ_sym = re.search(r'[Øø]\s*(\d+(?:[.,]\d+)?)', line)
     circ = circ_after or circ_before or circ_sym
     if dim:
@@ -4568,7 +4568,7 @@ def _parse_measures_text(text: str) -> AutoMeasureLine:
         #   Formato C: "Ø1.5"         → símbolo de diâmetro
         # Priorizamos Formato A para evitar que o código de etiqueta (ex: 599) seja confundido com diâmetro
         circ_after  = re.search(r'redondo\s+([\d.,]+)', line, re.IGNORECASE)   # A: diâmetro após "redondo"
-        circ_before = re.search(r'([\d.,]+)\s+redondo', line, re.IGNORECASE)   # B: diâmetro antes de "redondo"
+        circ_before = re.search(r'([\d.,]+)\s*(?:(?:m|cm|mm)\.?)?\s+redondo', line, re.IGNORECASE)   # B: diâmetro antes de "redondo" (unidade pode vir colada, ex "1,5m redondo")
         circ_sym    = re.search(r'[ØDd]\s*([\d.,]+)', line)                    # C: símbolo Ø
 
         if circ_after:
