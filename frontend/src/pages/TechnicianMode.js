@@ -50,25 +50,36 @@ const getClientComplement = (client) => {
 };
 
 // Função para gerar emoji do serviço baseado nas palavras-chave
-const getServiceEmoji = (serviceName) => {
+const getServiceEmoji = (serviceName, salesperson = null) => {
   if (!serviceName) return '✨'; // Emoji padrão
   
   const name = serviceName.toLowerCase();
   
   // Verificar palavras-chave específicas
-  if (name.includes('impermeabilização')) return '💦';
-  if (name.includes('carro') || name.includes('veiculo') || name.includes('veículo')) return '🚘';
-  if (name.includes('pagamento') || name.includes('cartão') || name.includes('credito') || name.includes('débito') || name.includes('debito')) return '💳';
-  if (name.includes('colchao') || name.includes('colchão') || name.includes('box') || name.includes('cabeceira')) return '🛏️';
-  if (name.includes('cortina')) return '🪟';
-  if (name.includes('sofa') || name.includes('sofá')) return '🛋️';
-  if (name.includes('poltrona')) return '💺';
-  if (name.includes('edredom') || name.includes('colcha') || name.includes('pillowtop')) return '🧺';
-  if (name.includes('almofada') || name.includes('puff') || name.includes('outros')) return '📦';
-  if (name.includes('carpete')) return '⬜';
-  if (name.includes('carrinho') || name.includes('cadeirinha') || name.includes('bebe') || name.includes('bebê')) return '🛒👶';
-  
-  return '✨'; // Emoji padrão para serviços não mapeados
+  let serviceEmoji = '✨'; // Emoji padrão para serviços não mapeados
+  if (name.includes('impermeabilização')) serviceEmoji = '💦';
+  else if (name.includes('carro') || name.includes('veiculo') || name.includes('veículo')) serviceEmoji = '🚘';
+  else if (name.includes('pagamento') || name.includes('cartão') || name.includes('credito') || name.includes('débito') || name.includes('debito')) serviceEmoji = '💳';
+  else if (name.includes('colchao') || name.includes('colchão') || name.includes('box') || name.includes('cabeceira')) serviceEmoji = '🛏️';
+  else if (name.includes('cortina')) serviceEmoji = '🪟';
+  else if (name.includes('sofa') || name.includes('sofá')) serviceEmoji = '🛋️';
+  else if (name.includes('poltrona')) serviceEmoji = '💺';
+  else if (name.includes('edredom') || name.includes('colcha') || name.includes('pillowtop')) serviceEmoji = '🧺';
+  else if (name.includes('almofada') || name.includes('puff') || name.includes('outros')) serviceEmoji = '📦';
+  else if (name.includes('carpete')) serviceEmoji = '⬜';
+  else if (name.includes('carrinho') || name.includes('cadeirinha') || name.includes('bebe') || name.includes('bebê')) serviceEmoji = '🛒👶';
+
+  // Etiqueta do vendedor -- mesmo padrão usado em Agenda.js/backend: venda feita
+  // por Diego ou Daiana ganha 🏷️ (so identificacao visual, nao muda nada funcional).
+  let vendorEmoji = '';
+  if (salesperson) {
+    const vendor = salesperson.toLowerCase();
+    if (vendor.includes('daiana olivatto') || vendor.includes('diego olivatto')) {
+      vendorEmoji = '🏷️';
+    }
+  }
+
+  return vendorEmoji ? `${vendorEmoji}${serviceEmoji}` : serviceEmoji;
 };
 
 // Função para gerar título do evento com múltiplos serviços
@@ -81,7 +92,7 @@ const generateEventTitle = (budget, clientName) => {
   const serviceGroups = {};
   
   budget.items.forEach(item => {
-    const emoji = getServiceEmoji(item.service_name);
+    const emoji = getServiceEmoji(item.service_name, budget.salesperson);
     const status = item.status || 'EXECUTAR_NO_LOCAL';
     
     if (!serviceGroups[emoji]) {
@@ -104,9 +115,11 @@ const generateEventTitle = (budget, clientName) => {
   Object.values(serviceGroups).forEach(group => {
     let part = group.emoji;
     
-    // Verificar se tem RETIRAR ou ENTREGAR
+    // Verificar se tem RETIRAR ou ENTREGAR -- AGUARDANDO_ENTREGA e o status real
+    // usado durante rota/agenda pra itens prontos pra entrega, precisa contar
+    // como "entregar" tambem (mesmo ajuste feito em Agenda.js e no backend).
     const hasRetirar = group.statuses.has('RETIRAR');
-    const hasEntregar = group.statuses.has('ENTREGAR');
+    const hasEntregar = group.statuses.has('ENTREGAR') || group.statuses.has('AGUARDANDO_ENTREGA');
     
     if (hasRetirar && hasEntregar) {
       part += 'RETIRAR/ENTREGAR';
@@ -809,15 +822,27 @@ function ClientCard({ client, onClick, generateNavigationLink }) {
               </span>
             )}
             
-            {/* CORREÇÃO: Mostrar data + horário ao invés de apenas horário */}
+            {/* Horário do card */}
             <div className="flex flex-col">
               <span className="text-blue-600 font-medium text-sm">{client.scheduledTime}</span>
-              {client.scheduledDate && (
-                <span className="text-gray-500 text-xs">
-                  {new Date(client.scheduledDate).toLocaleDateString('pt-BR')}
-                </span>
-              )}
             </div>
+
+            {/* Badge de dia -- deixa claro quando o card não é de hoje (ex.: card trazido
+                pelo fallback ontem/amanhã do loadDailyAgenda quando a agenda de hoje está
+                vazia, ou quando "Apenas hoje" está desmarcado). Sem isso, um item de outro
+                dia ficava misturado com os de hoje sem nenhuma distinção visual. */}
+            {(() => {
+              const todayIso = new Date().toISOString().split('T')[0];
+              const cardIso = client.assigned_date || todayIso;
+              if (cardIso === todayIso) return null;
+              const isFuture = cardIso > todayIso;
+              const cardDateLabel = new Date(cardIso + 'T00:00:00').toLocaleDateString('pt-BR');
+              return (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isFuture ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
+                  {isFuture ? `📅 Amanhã (${cardDateLabel})` : `📅 Dia anterior (${cardDateLabel})`}
+                </span>
+              );
+            })()}
 
             {/* Prioridade manual — sobrepõe o horário na ordenação. Edição rápida: um
                 número só, aplicado a todos os itens desta parada. Vazio = neutro. */}

@@ -1685,7 +1685,7 @@ export function Agenda() {
     const serviceGroups = {};
     
     budget.items.forEach(item => {
-      const emoji = getServiceEmoji(item.service_name);
+      const emoji = getServiceEmoji(item.service_name, budget.salesperson);
       // Se foi passado serviceStatus (do stop da rota), usa ele.
       // Senão, usa o status atual do item no orçamento.
       const status = serviceStatus || item.status || 'EXECUTAR_NO_LOCAL';
@@ -1701,7 +1701,7 @@ export function Agenda() {
     Object.values(serviceGroups).forEach(group => {
       let part = group.emoji;
       const hasRetirar  = group.statuses.has('RETIRAR');
-      const hasEntregar = group.statuses.has('ENTREGAR');
+      const hasEntregar = group.statuses.has('ENTREGAR') || group.statuses.has('AGUARDANDO_ENTREGA');
       if (hasRetirar && hasEntregar) part += 'RETIRAR/ENTREGAR';
       else if (hasRetirar)           part += 'RETIRAR';
       else if (hasEntregar)          part += 'ENTREGAR';

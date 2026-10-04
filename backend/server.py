@@ -1874,11 +1874,17 @@ def _emoji_categoria_servico(service_category: str, service_name: str) -> str:
 
 
 def _palavra_acao(service_status: str) -> Optional[str]:
-    """Palavra de acao exibida no titulo -- so pra retirada/entrega separada."""
+    """Palavra de acao exibida no titulo -- so pra retirada/entrega separada.
+    AGUARDANDO_ENTREGA e o status real usado durante rota/agenda pra itens
+    prontos pra entrega (ENTREGAR nunca chega a ser setado automaticamente
+    em lugar nenhum do fluxo hoje) -- por isso precisa contar aqui tambem,
+    senao so as retiradas ganhavam a palavra no titulo."""
     if service_status == "RETIRAR":
         return "Retirar"
-    if service_status == "ENTREGAR":
+    if service_status in ("ENTREGAR", "AGUARDANDO_ENTREGA"):
         return "Entregar"
+    if service_status == "AGUARDANDO_BUSCAR":
+        return "Buscar"
     return None
 
 
