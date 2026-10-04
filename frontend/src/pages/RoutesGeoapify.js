@@ -736,6 +736,22 @@ export function RoutesGeoapify() {
                       >
                         <Bike className="w-3 h-3 mr-1" /> Moto
                       </button>
+                      <button
+                        data-testid={`desist-${item.budget_item_id}`}
+                        onClick={async () => {
+                          if (!window.confirm(`Marcar "${item.client_name}" como desistência?\nO orçamento será mantido no histórico mas sairá das rotas.`)) return;
+                          try {
+                            await technicianApi.markDesisted(item.budget_item_id);
+                            setAvailableItems(prev => prev.filter(i => i.budget_item_id !== item.budget_item_id));
+                          } catch (e) {
+                            alert('Erro: ' + (e.response?.data?.detail || e.message));
+                          }
+                        }}
+                        className="inline-flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full hover:bg-red-100 hover:text-red-700"
+                        title="Cliente desistiu"
+                      >
+                        <span className="text-[10px]">✕ Desistiu</span>
+                      </button>
                     </div>
                   </td>
                   <td className="px-4 py-4">
