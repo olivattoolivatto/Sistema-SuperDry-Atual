@@ -195,7 +195,13 @@ def format_html_text(text: str) -> str:
 # Google Calendar configuration
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
-SCOPES = ['https://www.googleapis.com/auth/calendar']
+# gmail.send adicionado em 04/10/2026 -- reaproveita a MESMA conta Google já
+# autorizada pra Agenda (sem credencial nova, sem senha de app) pra também
+# mandar e-mail de lembrete via Gmail API (ver send_reminder_email). Precisa
+# reconectar o Google Calendar uma vez (botão "Conectar Google Calendar" na
+# Agenda) depois de subir essa mudança, pra conceder a permissão nova --
+# senão o token antigo continua só com o escopo de calendário.
+SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/gmail.send']
 REDIRECT_URI = os.getenv('REDIRECT_URI', 'https://lavesuperdry.com.br/agenda')
 
 # Google Calendar helper functions
@@ -221,6 +227,34 @@ def get_calendar_service(credentials_dict):
     credentials = Credentials.from_authorized_user_info(credentials_dict, SCOPES)
     service = build('calendar', 'v3', credentials=credentials)
     return service
+
+
+async def send_reminder_email(to_email: str, subject: str, body_text: str) -> bool:
+    """Manda um e-mail simples via Gmail API, reaproveitando a MESMA credencial
+    OAuth já usada pro Google Calendar (ver SCOPES acima) -- sem conta/senha de
+    e-mail nova. Usado hoje só pelo lembrete mensal de fechamento de parceiro
+    (ver _check_stale_partner_budgets). Retorna False (e loga) se a credencial
+    ainda não tiver o escopo gmail.send (precisa reconectar o Calendar uma vez)
+    ou se não houver credencial nenhuma salva."""
+    import base64
+    from email.mime.text import MIMEText
+    try:
+        creds_doc = await db.calendar_credentials.find_one({})
+        if not creds_doc:
+            logging.warning("send_reminder_email: nenhuma credencial Google salva -- conecte o Google Calendar primeiro.")
+            return False
+        credentials = Credentials.from_authorized_user_info(creds_doc["credentials"], SCOPES)
+        gmail = build('gmail', 'v1', credentials=credentials)
+        msg = MIMEText(body_text)
+        msg["to"] = to_email
+        msg["subject"] = subject
+        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+        gmail.users().messages().send(userId="me", body={"raw": raw}).execute()
+        return True
+    except Exception as e:
+        logging.warning(f"send_reminder_email falhou (provavelmente falta reconectar o Google Calendar "
+                         f"pra conceder o escopo gmail.send): {e}")
+        return False
 
 # Create the main app without a prefix
 app = FastAPI(title="SuperDry Lavanderia Management System")
@@ -6488,6 +6522,15 @@ async def close_partner_report_period(
     return {"success": True, "closure": closure}
 
 
+@api_router.post("/reports/partner-items/check-reminders")
+async def trigger_partner_reminder_check(current_user: UserPublic = Depends(get_current_user)):
+    """Dispara manualmente a checagem de orçamento mensal de parceiro vencido
+    (mesma lógica do loop diário) -- útil pra testar sem esperar o próximo dia,
+    ou pra forçar um reenvio apagando o registro em partner_monthly_reminders."""
+    await _check_stale_partner_monthly_budgets()
+    return {"success": True}
+
+
 @api_router.get("/reports/partner-items/history")
 async def get_partner_report_history(
     partner_client_id: Optional[str] = None,
@@ -10588,6 +10631,64 @@ app.add_middleware(
 )
 
 
+# E-mail que recebe o lembrete mensal de fechamento de parceiro -- Diego, 04/10/2026
+# (pode trocar por outro endereço depois, é só mudar essa constante).
+PARTNER_REMINDER_EMAIL = os.getenv("PARTNER_REMINDER_EMAIL", "olivatto.olivatto@gmail.com")
+
+
+async def _check_stale_partner_monthly_budgets():
+    """Roda 1x por dia: se algum orçamento mensal de parceiro (is_partner_monthly)
+    ainda estiver ABERTO com period_label de um mês anterior ao atual, manda um
+    e-mail de lembrete (não fecha nada automaticamente -- decisão do Diego,
+    04/10/2026: fechamento continua manual, só o aviso é automático). Marca em
+    partner_monthly_reminders pra não mandar o mesmo aviso todo dia -- 1 por
+    parceiro por período."""
+    current_label = datetime.utcnow().strftime("%m/%Y")
+    stale = []
+    async for bud in db.budgets.find({"is_partner_monthly": True, "monthly_status": "ABERTO"}):
+        period = bud.get("period_label")
+        if period and period != current_label:
+            stale.append(bud)
+
+    for bud in stale:
+        partner_name = bud.get("client_name", "parceiro")
+        period = bud.get("period_label")
+        already = await db.partner_monthly_reminders.find_one({
+            "client_id": bud.get("client_id"), "period_label": period,
+        })
+        if already:
+            continue
+        body = (
+            f"O orcamento mensal de {partner_name} (periodo {period}, {bud.get('id')}) "
+            f"ainda esta aberto e ja virou o mes. Feche o periodo em Relatorios > "
+            f"Parceiros quando conferir, pra abrir o orcamento do mes novo.\n\n"
+            f"Total acumulado ate agora: R$ {bud.get('total_value', 0):.2f} "
+            f"({len(bud.get('items', []))} itens)."
+        )
+        ok = await send_reminder_email(
+            PARTNER_REMINDER_EMAIL,
+            f"SuperDry - fechamento pendente: {partner_name} ({period})",
+            body,
+        )
+        if ok:
+            await db.partner_monthly_reminders.insert_one({
+                "client_id": bud.get("client_id"), "partner_name": partner_name,
+                "period_label": period, "budget_id": bud.get("id"),
+                "sent_at": datetime.utcnow(),
+            })
+
+
+async def _daily_partner_reminder_loop():
+    """Checa 1x por dia (começa ~1 min após o boot, depois a cada 24h)."""
+    await asyncio.sleep(60)
+    while True:
+        try:
+            await _check_stale_partner_monthly_budgets()
+        except Exception as e:
+            logging.warning(f"_check_stale_partner_monthly_budgets falhou: {e}")
+        await asyncio.sleep(24 * 60 * 60)
+
+
 async def _warmup_ollama():
     """Pré-carrega llama3.2:3b na RAM do Ollama após o boot do serviço.
     Evita cold-start de 90s na primeira chamada de Automação com IA."""
@@ -10665,6 +10766,7 @@ async def startup_bootstrap():
 
     # Pré-aquecimento do Ollama (carrega llama3.2:3b na RAM logo após o boot)
     asyncio.create_task(_warmup_ollama())
+    asyncio.create_task(_daily_partner_reminder_loop())
 
     # Poller de extrato bancário por e-mail (alternativa gratuita ao Open Finance
     # pago — ver memory/GESTOR_FINANCEIRO.md §18). Só inicia se configurado no .env.
