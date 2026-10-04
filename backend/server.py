@@ -6111,9 +6111,26 @@ async def execute_measures_automation(payload: Dict[str, Any], current_user: Use
             })
             continue
 
-        # ── Cria novo orçamento com o item ────────────────────────────────────
-        bid = await _next_id(db.budgets, "ORC-", 7)
-        iid = f"ITM-{bid}-1"
+        # ── Cria novo item: parceiro agrupa no orçamento MENSAL aberto (reduz a
+        # poluição na tela de Orçamentos -- parceiro manda vários tapetes soltos e
+        # cada um virava 1 orçamento novo); cliente comum continua ganhando
+        # orçamento novo por tapete, igual sempre foi. O fechamento do período
+        # (POST /reports/partner-items/close) marca esse orçamento mensal como
+        # FECHADO, e o próximo tapete do parceiro já abre um orçamento novo.
+        # Pedido do Diego, 04/10/2026.
+        is_partner_client = client_id in _PARTNER_SERVICE_MAP
+        monthly_budget = None
+        if is_partner_client:
+            monthly_budget = await db.budgets.find_one({
+                "client_id": client_id, "is_partner_monthly": True, "monthly_status": "ABERTO",
+            })
+
+        if monthly_budget:
+            bid = monthly_budget["id"]
+            iid = f"ITM-{bid}-{len(monthly_budget.get('items', [])) + 1}"
+        else:
+            bid = await _next_id(db.budgets, "ORC-", 7)
+            iid = f"ITM-{bid}-1"
         # Itens de parceiro (com etiqueta cor+número) chegam pela mensagem de medidas
         # já LAVADOS e guardados, aguardando o parceiro buscar — não "CLIENTE_TROUXE"
         # (que significa recém-chegado, ainda por lavar). Default por tipo:
@@ -6167,16 +6184,29 @@ async def execute_measures_automation(payload: Dict[str, Any], current_user: Use
             }],
             **measures,
         }
-        await db.budgets.insert_one({
-            "id": bid, "client_id": client_id, "client_name": client_name,
-            "payment_method": payment_method,
-            "salesperson": current_user.display_name or current_user.name,
-            "budget_observations": "", "internal_observations": "Criado via Automação de Medidas",
-            "items": [budget_item], "total_value": total_val, "payment_status": "PENDENTE",
-            "budget_status": "APROVADO",  # automação já é confirmação implícita do serviço
-            "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(),
-            "source": "AUTOMATION_MEASURES",
-        })
+        if monthly_budget:
+            new_total = round(float(monthly_budget.get("total_value") or 0) + total_val, 2)
+            await db.budgets.update_one(
+                {"id": bid},
+                {"$push": {"items": budget_item},
+                 "$set": {"total_value": new_total, "updated_at": datetime.utcnow()}},
+            )
+        else:
+            await db.budgets.insert_one({
+                "id": bid, "client_id": client_id, "client_name": client_name,
+                "payment_method": payment_method,
+                "salesperson": current_user.display_name or current_user.name,
+                "budget_observations": "", "internal_observations": "Criado via Automação de Medidas",
+                "items": [budget_item], "total_value": total_val, "payment_status": "PENDENTE",
+                "budget_status": "APROVADO",  # automação já é confirmação implícita do serviço
+                "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(),
+                "source": "AUTOMATION_MEASURES",
+                **({
+                    "is_partner_monthly": True,
+                    "monthly_status": "ABERTO",
+                    "period_label": datetime.utcnow().strftime("%m/%Y"),
+                } if is_partner_client else {}),
+            })
         results.append({"status": "created", "budget_id": bid, "item_id": iid})
 
     created  = sum(1 for r in results if r["status"] == "created")
@@ -6428,6 +6458,14 @@ async def close_partner_report_period(
             "notes": f"Fechamento de parceiro — período {payload.start_date} a {payload.end_date}"
         })
         closed_count += 1
+
+    # Encerra o orçamento mensal aberto desse parceiro -- o próximo tapete que
+    # chegar via automação de medidas já abre um orçamento novo (ver
+    # execute_measures_automation). Pedido do Diego, 04/10/2026.
+    await db.budgets.update_many(
+        {"client_id": payload.partner_client_id, "is_partner_monthly": True, "monthly_status": "ABERTO"},
+        {"$set": {"monthly_status": "FECHADO", "updated_at": datetime.utcnow()}},
+    )
 
     closure = {
         "id": f"PRC-{uuid.uuid4().hex[:10].upper()}",
