@@ -9,6 +9,7 @@ import api, { placesApi, clientsApi, servicesApi } from '../../services/api';
 import { technicianApi } from '../../services/api';
 import { TECHNICIAN_ID } from '../../constants/technician';
 import { toast } from '../../hooks/use-toast';
+import { DecimalField } from '../../components/DecimalField';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const post = (path, body) => api.post(path, body);
@@ -174,13 +175,23 @@ const CATEGORIES = {
 // ── ServiceSearchSelect ──────────────────────────────────────────────────────
 // Busca rápida no catálogo -- nunca deixa o serviço como texto livre. Se nada
 // bater, oferece cadastro rápido em vez de aceitar um nome inventado.
-function ServiceSearchSelect({ item, onSelect, onCreateNew }) {
+function ServiceSearchSelect({ item, onSelect, onCreateNew, autoFocus = false }) {
   const [q, setQ] = useState(item.matched_service?.name || item.service_name || '');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const debRef = useRef(null);
   const boxRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Foco automático ao abrir o item -- economiza o clique extra de ter que
+  // clicar dentro do campo de busca depois de já ter clicado pra abrir o item
+  // (pedido do Diego, 04/10/2026). Esse componente remonta do zero cada vez
+  // que o item é aberto (fica dentro do `{open && (...)}` do ItemRow), então
+  // basta focar uma vez no mount.
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   useEffect(() => {
     if (debRef.current) clearTimeout(debRef.current);
@@ -213,7 +224,7 @@ function ServiceSearchSelect({ item, onSelect, onCreateNew }) {
     <div className="relative" ref={boxRef}>
       <div className="relative">
         <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input value={q}
+        <input ref={inputRef} value={q}
           onChange={e => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           placeholder="Buscar serviço no catálogo…"
@@ -308,7 +319,8 @@ function QuickCreateServiceModal({ initialName, onClose, onCreated }) {
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Preço de venda (R$)</label>
-          <input type="number" step="0.01" value={salePrice} onChange={e => setSalePrice(e.target.value)}
+          <DecimalField value={salePrice === '' ? null : Number(salePrice)}
+            onChange={n => setSalePrice(n == null ? '' : String(n))}
             className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
         </div>
         <div className="flex gap-2 pt-1">
@@ -364,8 +376,8 @@ function ItemRow({ item, idx, onChange, onRemove, onSplit, secondaryActive = fal
 
   // Recalcula área + valor ao editar largura/altura/diâmetro -- mesma fórmula
   // usada no resto do sistema (ver backend, _parse_line_measures / round(3.14159*(d/2)**2,4)).
-  const patchMeasure = (field, raw) => {
-    const num = parseFloat(raw) || 0;
+  const patchMeasure = (field, parsed) => {
+    const num = parsed || 0;
     const next = { ...item, [field]: num };
     let area = 0;
     if (isDiameter) {
@@ -381,17 +393,23 @@ function ItemRow({ item, idx, onChange, onRemove, onSplit, secondaryActive = fal
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 cursor-pointer"
-        onClick={() => setOpen(o => !o)}>
-        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
-        {!matched && <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
-        <span className="flex-1 text-sm font-medium text-gray-800 truncate">{item.service_name || 'Item sem nome'}</span>
-        <span className="text-sm font-semibold text-blue-700">R$ {fmt(item.value)}</span>
+      <div className="flex items-center gap-2 px-3 py-2 bg-gray-50">
+        {/* Excluir fica no extremo ESQUERDO, bem longe da seta de abrir/retrair
+            (extremo direito) -- antes ficavam colados e um clique na seta
+            podia acertar o botão de excluir por engano, sem confirmação
+            nenhuma pra desfazer. Pedido do Diego, 04/10/2026: preferiu afastar
+            os botões em vez de adicionar um popup de confirmação. */}
         <button onClick={e => { e.stopPropagation(); onRemove(idx); }}
-          className="p-1 hover:bg-red-100 rounded text-red-400 hover:text-red-600">
+          className="p-1 hover:bg-red-100 rounded text-red-400 hover:text-red-600 shrink-0">
           <Trash2 className="w-3.5 h-3.5" />
         </button>
-        {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        <div className="flex-1 flex items-center gap-2 cursor-pointer min-w-0" onClick={() => setOpen(o => !o)}>
+          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+          {!matched && <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+          <span className="flex-1 text-sm font-medium text-gray-800 truncate">{item.service_name || 'Item sem nome'}</span>
+          <span className="text-sm font-semibold text-blue-700">R$ {fmt(item.value)}</span>
+          {open ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+        </div>
       </div>
       {open && (
         <div className="px-3 py-3 space-y-3 bg-white border-t border-gray-100">
@@ -401,6 +419,7 @@ function ItemRow({ item, idx, onChange, onRemove, onSplit, secondaryActive = fal
               item={item}
               onSelect={applyService}
               onCreateNew={(seed) => { setCreateSeed(seed); setShowCreate(true); }}
+              autoFocus
             />
           </div>
           {isMeasureType ? (
@@ -409,24 +428,24 @@ function ItemRow({ item, idx, onChange, onRemove, onSplit, secondaryActive = fal
                 {isArea && <>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Largura (m)</label>
-                    <input type="number" step="0.01" placeholder="larg." className={measureNumCls}
-                      value={item.width ?? ''} onFocus={e => e.target.select()}
-                      onChange={e => patchMeasure('width', e.target.value)} />
+                    <DecimalField placeholder="larg." className={measureNumCls}
+                      value={item.width ?? null}
+                      onChange={n => patchMeasure('width', n)} />
                   </div>
                   <span className="text-gray-400 text-sm pb-2">×</span>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Altura (m)</label>
-                    <input type="number" step="0.01" placeholder="alt." className={measureNumCls}
-                      value={item.height ?? ''} onFocus={e => e.target.select()}
-                      onChange={e => patchMeasure('height', e.target.value)} />
+                    <DecimalField placeholder="alt." className={measureNumCls}
+                      value={item.height ?? null}
+                      onChange={n => patchMeasure('height', n)} />
                   </div>
                 </>}
                 {isDiameter && (
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Ø Diâmetro (m)</label>
-                    <input type="number" step="0.01" placeholder="diâm." className={measureNumCls}
-                      value={item.diameter ?? ''} onFocus={e => e.target.select()}
-                      onChange={e => patchMeasure('diameter', e.target.value)} />
+                    <DecimalField placeholder="diâm." className={measureNumCls}
+                      value={item.diameter ?? null}
+                      onChange={n => patchMeasure('diameter', n)} />
                   </div>
                 )}
                 <div className="text-xs text-gray-500 pb-2">
@@ -457,20 +476,20 @@ function ItemRow({ item, idx, onChange, onRemove, onSplit, secondaryActive = fal
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Qtd</label>
-                <input ref={qtyFieldRef} type="number" min="1" value={item.quantity || 1}
-                  onChange={e => onChange(idx, { quantity: Number(e.target.value) })}
+                <DecimalField inputRef={qtyFieldRef} value={item.quantity || 1}
+                  onChange={n => onChange(idx, { quantity: n == null ? 1 : n })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Preço unit. (R$)</label>
-                <input type="number" step="0.01" value={item.unit_price || item.value || ''}
-                  onChange={e => onChange(idx, { unit_price: Number(e.target.value) })}
+                <DecimalField value={item.unit_price || item.value || null}
+                  onChange={n => onChange(idx, { unit_price: n == null ? 0 : n })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Total (R$)</label>
-                <input type="number" step="0.01" value={item.value || ''}
-                  onChange={e => onChange(idx, { value: Number(e.target.value) })}
+                <DecimalField value={item.value || null}
+                  onChange={n => onChange(idx, { value: n == null ? 0 : n })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
@@ -1028,8 +1047,8 @@ export function AutomationPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
                       <DollarSign className="w-3 h-3 text-green-600" /> Total PIX/Cartão (R$)
                     </label>
-                    <input type="number" step="0.01" value={totalPix}
-                      onChange={e => setTotalPix(e.target.value)}
+                    <DecimalField value={totalPix === '' ? null : Number(totalPix)}
+                      onChange={n => setTotalPix(n == null ? '' : String(n))}
                       placeholder={calcTotal > 0 ? String(calcTotal) : '0,00'}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white" />
                   </div>
@@ -1037,8 +1056,8 @@ export function AutomationPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
                       <DollarSign className="w-3 h-3 text-amber-600" /> Total Dinheiro (R$)
                     </label>
-                    <input type="number" step="0.01" value={totalCash}
-                      onChange={e => setTotalCash(e.target.value)}
+                    <DecimalField value={totalCash === '' ? null : Number(totalCash)}
+                      onChange={n => setTotalCash(n == null ? '' : String(n))}
                       placeholder="Com desconto"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white" />
                   </div>
