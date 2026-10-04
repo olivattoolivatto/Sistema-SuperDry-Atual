@@ -295,10 +295,11 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
             <button
               onClick={toggleDesisted}
               disabled={desistBusy}
-              className={`p-1 hover:bg-white/20 rounded disabled:opacity-50 ${item.client_desisted ? 'text-emerald-200' : ''}`}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium hover:bg-white/20 disabled:opacity-50 ${item.client_desisted ? 'text-emerald-200' : ''}`}
               title={item.client_desisted ? 'Reativar item — cliente mudou de ideia' : 'Marcar cliente desistiu (sai das rotas)'}
             >
               {item.client_desisted ? <RefreshCw className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+              <span>{item.client_desisted ? 'Reativar' : 'Desistiu'}</span>
             </button>
           )}
           {onDuplicate && (
