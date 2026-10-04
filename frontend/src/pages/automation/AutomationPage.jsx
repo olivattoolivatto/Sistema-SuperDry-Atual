@@ -6,6 +6,8 @@ import {
   DollarSign, StickyNote, Zap, ArrowRightLeft, CalendarCheck,
 } from 'lucide-react';
 import api, { placesApi, clientsApi, servicesApi } from '../../services/api';
+import { technicianApi } from '../../services/api';
+import { TECHNICIAN_ID } from '../../constants/technician';
 import { toast } from '../../hooks/use-toast';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -521,6 +523,7 @@ export function AutomationPage() {
   const [schedDate, setSchedDate] = useState('');
   const [schedTime, setSchedTime] = useState('');
   const [customTime, setCustomTime] = useState(false);
+  const [sendToTech, setSendToTech] = useState(false);
   const [items, setItems] = useState([]);
   const [totalPix, setTotalPix] = useState('');
   const [totalCash, setTotalCash] = useState('');
@@ -650,9 +653,26 @@ export function AutomationPage() {
             ? ` (⚠️ Agenda: ${d.agenda_error})`
             : ' e lançado na agenda ✅')
         : '';
+      // Atalho "+ enviar pro técnico": dispara POST /technician/assign-direct com os
+      // itens recém-criados, na mesma ordem em que aparecem na tela -- sem precisar
+      // passar por Rotas. Falha aqui não desfaz o orçamento já criado, só avisa.
+      let techMsg = '';
+      if (sendToTech && d.item_ids?.length) {
+        try {
+          await technicianApi.assignDirect({
+            item_ids: d.item_ids,
+            order: d.item_ids,
+            technician_id: TECHNICIAN_ID,
+            assigned_date: schedDate || undefined,
+          });
+          techMsg = ' + enviado ao técnico ✅';
+        } catch (techErr) {
+          techMsg = ` (⚠️ Enviar ao técnico falhou: ${techErr.response?.data?.detail || techErr.message})`;
+        }
+      }
       toast({
         title: '✅ Criado com sucesso!',
-        description: `Orçamento ${d.budget_id} criado${agendaMsg}.`,
+        description: `Orçamento ${d.budget_id} criado${agendaMsg}${techMsg}.`,
       });
       // limpa formulário
       setText(''); setInterpreted(null); setName(''); setPhone(''); setAddressObj(null);
@@ -1028,20 +1048,29 @@ export function AutomationPage() {
 
             {/* Ações */}
             <section className="pb-6">
+              <label className="flex items-center gap-2 text-xs bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 mb-2 cursor-pointer">
+                <input type="checkbox" checked={sendToTech} onChange={e => setSendToTech(e.target.checked)} />
+                <span className="text-sky-800">
+                  + Enviar direto pro técnico ao salvar (sem passar por Rotas — ordem simples, pela ordem dos itens acima)
+                </span>
+              </label>
               <div className="flex flex-col sm:flex-row gap-2">
                 <button onClick={() => handleSave(true)} disabled={saving}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                   {saving
                     ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando…</>
-                    : <><Send className="w-4 h-4" /> Salvar Cliente + Criar Orçamento + Lançar na Agenda</>}
+                    : <><Send className="w-4 h-4" /> Salvar Cliente + Criar Orçamento + Lançar na Agenda{sendToTech ? ' + Enviar ao Técnico' : ''}</>}
                 </button>
                 <button onClick={() => handleSave(false)} disabled={saving}
                   className="sm:w-44 flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors">
-                  Só salvar rascunho
+                  Só salvar{sendToTech ? ' + Enviar ao Técnico' : ' rascunho'}
                 </button>
               </div>
               <p className="text-[11px] text-gray-400 mt-2 text-center">
                 Status padrão: PENDENTE · Origem: AUTOMACAO
+              </p>
+              <p className="text-[11px] text-gray-400 mt-1 text-center">
+                "Só salvar" cria cliente + orçamento já aprovado (mesmo status do outro botão) — só não lança evento na Agenda do Google. Editar depois: tela de Orçamentos, igual qualquer orçamento.
               </p>
             </section>
           </div>

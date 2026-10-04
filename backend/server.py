@@ -5509,6 +5509,10 @@ async def execute_budget_automation(payload: Dict[str, Any], current_user: UserP
         "client_id": client_id,
         "budget_id": budget_id,
         "items_created": len(budget_items),
+        # ids na mesma ordem dos itens enviados -- usado pelo atalho "+ enviar
+        # pro técnico" da tela de automação, pra montar a assignment direta
+        # (POST /technician/assign-direct) sem precisar ir em Rotas montar rota.
+        "item_ids": [it["id"] for it in budget_items],
         "client_created": not bool(existing_id),
         "calendar_event_id": calendar_event_id,
         "google_event_id": google_event_id,
