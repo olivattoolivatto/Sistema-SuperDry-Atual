@@ -1309,23 +1309,6 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
         <h3 className="text-lg font-semibold text-gray-800">{client.name}</h3>
       </div>
 
-      {/* Registro Fotográfico — incorporado na mesma tela do atendimento
-          (antes era uma tela separada; unificado a pedido do Diego) */}
-      <PhotoCaptureScreen
-        client={client}
-        embedded
-        itemPhotos={itemPhotos}
-        cameraProblems={cameraProblems}
-        setCameraProblems={setCameraProblems}
-        setItemPhotos={setItemPhotos}
-        uploadingPhotos={uploadingPhotos}
-        setUploadingPhotos={setUploadingPhotos}
-        isAdmin={isAdmin}
-        inCompanyStatuses={IN_COMPANY}
-        fieldDoneStatuses={FIELD_DONE}
-        onRefreshClient={onBack}
-      />
-
       {/* Client Info */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-4">
         <div className="space-y-2">
@@ -1364,6 +1347,23 @@ function ClientDetails({ client, onBack, generateNavigationLink }) {
           </div>
         </div>
       </div>
+
+      {/* Registro Fotográfico — incorporado na mesma tela do atendimento
+          (antes era uma tela separada; unificado a pedido do Diego) */}
+      <PhotoCaptureScreen
+        client={client}
+        embedded
+        itemPhotos={itemPhotos}
+        cameraProblems={cameraProblems}
+        setCameraProblems={setCameraProblems}
+        setItemPhotos={setItemPhotos}
+        uploadingPhotos={uploadingPhotos}
+        setUploadingPhotos={setUploadingPhotos}
+        isAdmin={isAdmin}
+        inCompanyStatuses={IN_COMPANY}
+        fieldDoneStatuses={FIELD_DONE}
+        onRefreshClient={onBack}
+      />
 
       {/* Items List */}
       {(() => {

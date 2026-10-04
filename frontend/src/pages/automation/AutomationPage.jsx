@@ -580,8 +580,13 @@ export function AutomationPage() {
     setTotalPix(d.total_pix != null ? String(d.total_pix) : '');
     setTotalCash(d.total_cash != null ? String(d.total_cash) : '');
     setNotes(d.notes || '');
-    // endereço: só pre-preenche o texto; usuário confirma via autocomplete
-    if (d.address) {
+    // endereço: agora o backend já resolve bairro/lat/lng automaticamente
+    // (geocoding do texto extraído pela IA, ver address_resolved em
+    // /automation/interpret-message). O campo de busca continua visível e
+    // editável, pra corrigir se o Google acertar o lugar errado.
+    if (d.address_resolved) {
+      setAddressObj({ ...d.address_resolved, complement: '' });
+    } else if (d.address) {
       setAddressObj({ full_address: d.address, neighborhood: '', city: '', state: '', latitude: null, longitude: null });
     }
   };

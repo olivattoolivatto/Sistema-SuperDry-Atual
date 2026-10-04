@@ -5219,10 +5219,46 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
             existing_client = await db.clients.find_one(
                 {"phone_primary": {"$regex": phone_digits[-8:]}})
 
+    # ── 5. Geocodificar o endereço extraído pela IA automaticamente ──────────
+    # Antes, o bairro/lat/lng só eram preenchidos se o usuário clicasse numa
+    # opção da busca de endereço (AddressAutocomplete) na tela de automação.
+    # Agora resolvemos isso aqui, no mesmo texto que a IA já extraiu, igual ao
+    # fallback de geocoding usado em /places/search-places -- o campo de busca
+    # continua disponível na tela pra o usuário corrigir se o Google acertar
+    # o lugar errado.
+    address_resolved = None
+    _addr_text = (raw_parsed.get("address") or "").strip()
+    if _addr_text:
+        try:
+            _geo = gmaps.geocode(_addr_text, language='pt-BR')
+            if _geo:
+                _g0 = _geo[0]
+                _loc = _g0.get('geometry', {}).get('location', {})
+                _neighborhood = _city = _state = ''
+                for _c in _g0.get('address_components', []):
+                    _t = _c.get('types', [])
+                    if 'sublocality' in _t or 'neighborhood' in _t or 'sublocality_level_1' in _t:
+                        _neighborhood = _c.get('long_name', '')
+                    if 'administrative_area_level_2' in _t or 'locality' in _t:
+                        _city = _c.get('long_name', '')
+                    if 'administrative_area_level_1' in _t:
+                        _state = _c.get('short_name') or _c.get('long_name', '')
+                address_resolved = {
+                    "full_address": _g0.get('formatted_address', _addr_text),
+                    "neighborhood": _neighborhood,
+                    "city": _city,
+                    "state": _state,
+                    "latitude": _loc.get('lat'),
+                    "longitude": _loc.get('lng'),
+                }
+        except Exception as _ge:
+            logging.warning(f"Geocoding automático do endereço (interpret-message) falhou: {_ge}")
+
     return {
         "client_name":        raw_parsed.get("client_name"),
         "phone":              phone_raw,
         "address":            raw_parsed.get("address"),
+        "address_resolved":   address_resolved,
         "complement":         raw_parsed.get("complement"),
         "scheduled_date":     raw_parsed.get("scheduled_date"),
         "scheduled_time":     raw_parsed.get("scheduled_time"),
