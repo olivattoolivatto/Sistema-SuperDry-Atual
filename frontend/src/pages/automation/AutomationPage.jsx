@@ -803,6 +803,16 @@ export function AutomationPage() {
                     Cliente já cadastrado (ID: {interpreted.existing_client_id})
                   </div>
                 )}
+                {interpreted.auto_placeholder_created && (
+                  <div className="mt-2 flex items-start gap-1.5 text-xs text-amber-800 bg-amber-100 border border-amber-300 rounded-lg px-2 py-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      Nenhum item foi reconhecido no texto -- criamos 1 item genérico
+                      "Tapete a Identificar" pra não perder o lançamento. Revise
+                      quantidade, forma (quadrado/redondo) e medidas antes de salvar.
+                    </span>
+                  </div>
+                )}
                 <button onClick={() => applyResult(interpreted)}
                   className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700">
                   Aplicar ao formulário →

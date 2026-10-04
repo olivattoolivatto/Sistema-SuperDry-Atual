@@ -5139,6 +5139,38 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
                 item["needs_measure"] = False
         enriched_items.append(item)
 
+    # ── 3b. Placeholder quando a extração vier com 0 itens ──────────────────
+    # Ideia do Diego (aprovada em 04/10/2026, ver pendência #26 no doc de fluxo
+    # operacional): quando o parser/IA não reconhece NENHUM item mas reconhece
+    # o nome do cliente, cria um item placeholder "Tapete a Identificar" (forma
+    # quadrado/redondo trocável livremente depois, mesmo mecanismo do SRV-0046
+    # usado na reconciliação de medidas) em vez de deixar o orçamento sem item
+    # nenhum. Mantido visível via "auto_placeholder" pra não mascarar o sinal
+    # de "algo não reconheceu direito" que hoje aparece como 0 itens -- o
+    # frontend mostra um aviso quando isso acontece (ver AutomationPage.jsx).
+    auto_placeholder_created = False
+    if not enriched_items and (raw_parsed.get("client_name") or "").strip():
+        _placeholder_service = await db.services.find_one({"id": "SRV-0046"})
+        if _placeholder_service:
+            enriched_items.append({
+                "service_name": _placeholder_service.get("name"),
+                "quantity": 1,
+                "unit_price": 0.0,
+                "value": 0.0,
+                "matched_service": {
+                    "id": _placeholder_service.get("id"),
+                    "name": _placeholder_service.get("name"),
+                    "category": _placeholder_service.get("category"),
+                    "measure_type": _placeholder_service.get("measure_type"),
+                    "sale_price": float(_placeholder_service.get("sale_price") or 0),
+                    "match_score": None,
+                    "low_confidence": True,
+                },
+                "needs_measure": True,
+                "auto_placeholder": True,
+            })
+            auto_placeholder_created = True
+
     # ── 4. Verificar cliente existente pelo telefone ──────────────────────────
     existing_client = None
     phone_raw = (raw_parsed.get("phone") or "").strip()
@@ -5168,6 +5200,7 @@ async def interpret_message(payload: Dict[str, Any], current_user: UserPublic = 
         "existing_client_id": existing_client.get("id") if existing_client else None,
         "source":             source,
         "raw_text_truncated": text[:500] if len(text) > 500 else text,
+        "auto_placeholder_created": auto_placeholder_created,
     }
 
 
