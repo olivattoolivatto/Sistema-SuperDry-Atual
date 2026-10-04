@@ -14,6 +14,14 @@ const fmt = (v) =>
   v != null && !isNaN(v)
     ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
     : '—';
+// Horários de atendimento, de 30 em 30 min, começando às 08:00 (pedido do Diego:
+// evitar digitar hora livre e já restringir à grade real de atendimento).
+const TIME_SLOTS = Array.from({ length: 24 }, (_, i) => {
+  const totalMin = 8 * 60 + i * 30;
+  const h = String(Math.floor(totalMin / 60)).padStart(2, '0');
+  const m = String(totalMin % 60).padStart(2, '0');
+  return `${h}:${m}`;
+});
 
 // ── AddressAutocomplete ───────────────────────────────────────────────────────
 function AddressAutocomplete({ value, onSelect, placeholder }) {
@@ -317,7 +325,9 @@ function QuickCreateServiceModal({ initialName, onClose, onCreated }) {
 }
 
 // ── ItemRow ───────────────────────────────────────────────────────────────────
-function ItemRow({ item, idx, onChange, onRemove, secondaryActive = false, secondaryLabel = '' }) {
+const AREA_MEASURE_TYPES = ['AREA_DE_TAPETE', 'AREA_PERSIANA', 'CARPETE_TAPETE_LOCAL'];
+
+function ItemRow({ item, idx, onChange, onRemove, onSplit, secondaryActive = false, secondaryLabel = '' }) {
   const [open, setOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [createSeed, setCreateSeed] = useState('');
@@ -344,6 +354,28 @@ function ItemRow({ item, idx, onChange, onRemove, secondaryActive = false, secon
   };
 
   const matched = item.matched_service;
+  const mtype = matched?.measure_type;
+  const isArea = AREA_MEASURE_TYPES.includes(mtype);
+  const isDiameter = mtype === 'TAPETE_REDONDO_DIAMETRO';
+  const isMeasureType = isArea || isDiameter;
+  const measureNumCls = "w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500";
+
+  // Recalcula área + valor ao editar largura/altura/diâmetro -- mesma fórmula
+  // usada no resto do sistema (ver backend, _parse_line_measures / round(3.14159*(d/2)**2,4)).
+  const patchMeasure = (field, raw) => {
+    const num = parseFloat(raw) || 0;
+    const next = { ...item, [field]: num };
+    let area = 0;
+    if (isDiameter) {
+      area = next.diameter ? round4(3.14159 * (next.diameter / 2) ** 2) : 0;
+    } else if (isArea) {
+      area = (next.width && next.height) ? round4(next.width * next.height) : 0;
+    }
+    const price = Number(item.unit_price || matched?.sale_price || 0);
+    onChange(idx, { [field]: num, area_m2: area, value: area > 0 ? round2(area * price) : 0 });
+  };
+  function round4(n) { return Math.round(n * 10000) / 10000; }
+  function round2(n) { return Math.round(n * 100) / 100; }
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -369,31 +401,76 @@ function ItemRow({ item, idx, onChange, onRemove, secondaryActive = false, secon
               onCreateNew={(seed) => { setCreateSeed(seed); setShowCreate(true); }}
             />
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Qtd</label>
-              <input ref={qtyFieldRef} type="number" min="1" value={item.quantity || 1}
-                onChange={e => onChange(idx, { quantity: Number(e.target.value) })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
+          {isMeasureType ? (
+            <div className="space-y-1.5">
+              <div className="flex items-end gap-2 flex-wrap">
+                {isArea && <>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Largura (m)</label>
+                    <input type="number" step="0.01" placeholder="larg." className={measureNumCls}
+                      value={item.width ?? ''} onFocus={e => e.target.select()}
+                      onChange={e => patchMeasure('width', e.target.value)} />
+                  </div>
+                  <span className="text-gray-400 text-sm pb-2">×</span>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Altura (m)</label>
+                    <input type="number" step="0.01" placeholder="alt." className={measureNumCls}
+                      value={item.height ?? ''} onFocus={e => e.target.select()}
+                      onChange={e => patchMeasure('height', e.target.value)} />
+                  </div>
+                </>}
+                {isDiameter && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Ø Diâmetro (m)</label>
+                    <input type="number" step="0.01" placeholder="diâm." className={measureNumCls}
+                      value={item.diameter ?? ''} onFocus={e => e.target.select()}
+                      onChange={e => patchMeasure('diameter', e.target.value)} />
+                  </div>
+                )}
+                <div className="text-xs text-gray-500 pb-2">
+                  {item.area_m2 ? `= ${item.area_m2} m²` : ''} × R$ {item.unit_price || matched?.sale_price || 0}/m²
+                  {' '}= <span className="font-semibold text-blue-700">R$ {fmt(item.value)}</span>
+                </div>
+              </div>
+              {!item.area_m2 && (
+                <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
+                  medida ainda não informada — pode deixar em branco e salvar assim; a medida real entra depois,
+                  quando chegar a confirmação por WhatsApp (medidas aplicadas automaticamente nesse momento)
+                </div>
+              )}
+              {Number(item.quantity || 1) > 1 && (
+                <div className="text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded px-2 py-1.5 flex items-center justify-between gap-2">
+                  <span>
+                    Qtd {item.quantity}: cada tapete pode ter medida própria — este item representa só 1.
+                    Divida em {item.quantity} itens separados antes de salvar.
+                  </span>
+                  <button type="button" onClick={() => onSplit && onSplit(idx)}
+                    className="shrink-0 px-2 py-1 text-[11px] font-semibold bg-sky-600 text-white rounded hover:bg-sky-700">
+                    Dividir em {item.quantity}
+                  </button>
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Preço unit. (R$)</label>
-              <input type="number" step="0.01" value={item.unit_price || item.value || ''}
-                onChange={e => onChange(idx, { unit_price: Number(e.target.value) })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Total (R$)</label>
-              <input type="number" step="0.01" value={item.value || ''}
-                onChange={e => onChange(idx, { value: Number(e.target.value) })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
-            </div>
-          </div>
-          {(item.width || item.height || item.diameter || item.area_m2) && (
-            <div className="text-[11px] text-gray-500 bg-gray-50 rounded px-2 py-1">
-              {item.width && item.height ? `${item.width}m × ${item.height}m = ` : ''}
-              {item.diameter ? `Ø ${item.diameter}m = ` : ''}
-              {item.area_m2 ? `${item.area_m2} m²` : ''}
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Qtd</label>
+                <input ref={qtyFieldRef} type="number" min="1" value={item.quantity || 1}
+                  onChange={e => onChange(idx, { quantity: Number(e.target.value) })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Preço unit. (R$)</label>
+                <input type="number" step="0.01" value={item.unit_price || item.value || ''}
+                  onChange={e => onChange(idx, { unit_price: Number(e.target.value) })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Total (R$)</label>
+                <input type="number" step="0.01" value={item.value || ''}
+                  onChange={e => onChange(idx, { value: Number(e.target.value) })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
             </div>
           )}
           {secondaryActive && (
@@ -443,6 +520,7 @@ export function AutomationPage() {
   const [execComplement, setExecComplement] = useState('');
   const [schedDate, setSchedDate] = useState('');
   const [schedTime, setSchedTime] = useState('');
+  const [customTime, setCustomTime] = useState(false);
   const [items, setItems] = useState([]);
   const [totalPix, setTotalPix] = useState('');
   const [totalCash, setTotalCash] = useState('');
@@ -494,6 +572,23 @@ export function AutomationPage() {
     service_name: '', value: 0, quantity: 1,
     use_secondary_address: diffExecAddr,
   }]);
+  // Divide um item com Qtd>1 em N itens individuais (qty=1 cada), preservando o
+  // mesmo serviço -- pensado pra tapetes com forma/medida por área, onde cada
+  // peça física precisa da própria medida (a confirmação por WhatsApp casa 1
+  // medida por item pendente, nunca várias na mesma linha).
+  const splitItem = (idx) => {
+    setItems(prev => {
+      const it = prev[idx];
+      const n = Math.max(1, Math.round(Number(it.quantity) || 1));
+      if (n <= 1) return prev;
+      const clones = Array.from({ length: n }, () => ({
+        ...it, quantity: 1, value: 0, width: null, height: null, diameter: null, area_m2: null,
+      }));
+      const next = [...prev];
+      next.splice(idx, 1, ...clones);
+      return next;
+    });
+  };
 
   // Total calculado
   const calcTotal = items.reduce((acc, it) => acc + Number(it.value || 0), 0);
@@ -839,11 +934,26 @@ export function AutomationPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> Hora
+                  <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1 justify-between">
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Hora</span>
+                    <button type="button" onClick={() => setCustomTime(c => !c)}
+                      className="text-[10px] text-blue-600 hover:text-blue-800 font-normal normal-case">
+                      {customTime ? 'usar horários de 30 em 30' : 'horário personalizado'}
+                    </button>
                   </label>
-                  <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                  {customTime ? (
+                    <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                  ) : (
+                    <select value={schedTime} onChange={e => setSchedTime(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white">
+                      <option value="">Selecionar...</option>
+                      {schedTime && !TIME_SLOTS.includes(schedTime) && (
+                        <option value={schedTime}>{schedTime} (personalizado)</option>
+                      )}
+                      {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  )}
                 </div>
               </div>
             </section>
@@ -867,7 +977,7 @@ export function AutomationPage() {
                 )}
                 {items.map((it, i) => (
                   <ItemRow
-                    key={i} item={it} idx={i} onChange={patchItem} onRemove={removeItem}
+                    key={i} item={it} idx={i} onChange={patchItem} onRemove={removeItem} onSplit={splitItem}
                     secondaryActive={diffExecAddr}
                     secondaryLabel={execAddrObj?.full_address || 'endereço secundário'}
                   />
