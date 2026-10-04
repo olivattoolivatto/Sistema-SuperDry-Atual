@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   X, Save, Plus, Trash2, ChevronDown, ChevronUp, Loader2, MapPin,
   Calendar, User as UserIcon, CreditCard, FileText, Search, AlertCircle, Copy,
-  MessageSquare, Download, Send, Shield, CheckCircle, Link,
+  MessageSquare, Download, Send, Shield, CheckCircle, Link, Ban, RefreshCw,
 } from 'lucide-react';
-import { clientsApi, servicesApi, placesApi, budgetsApi, usersApi } from '../../services/api';
+import { clientsApi, servicesApi, placesApi, budgetsApi, usersApi, technicianApi } from '../../services/api';
 import { BACKEND_URL } from '../../lib/backendUrl';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -162,6 +162,28 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
   const [showAdvanced, setShowAdvanced] = useState(
     !!(item.pickup_address || item.execution_address || item.delivery_address)
   );
+  const [desistBusy, setDesistBusy] = useState(false);
+
+  // Marca/desmarca "cliente desistiu" direto no item -- some/volta das rotas
+  // sem precisar ir pra tela de Rotas ou abrir o detalhe do item à parte.
+  const toggleDesisted = async () => {
+    if (!item.id) return;
+    const willDesist = !item.client_desisted;
+    const msg = willDesist
+      ? `Marcar "${item.service_name || 'este item'}" como desistência?\nO orçamento será mantido no histórico mas o item sairá das rotas.`
+      : 'Reativar este item? Ele voltará a aparecer na seleção de rotas.';
+    if (!window.confirm(msg)) return;
+    setDesistBusy(true);
+    try {
+      if (willDesist) await technicianApi.markDesisted(item.id);
+      else await technicianApi.reactivateItem(item.id);
+      onChange({ ...item, client_desisted: willDesist });
+    } catch (e) {
+      alert('Erro: ' + (e.response?.data?.detail || e.message));
+    } finally {
+      setDesistBusy(false);
+    }
+  };
   const [serviceSearch, setServiceSearch] = useState('');
   const [showServicePicker, setShowServicePicker] = useState(false);
   const containerRef = useRef(null);
@@ -262,8 +284,23 @@ function ItemSubForm({ item, services, onChange, onRemove, onDuplicate, idx, pay
               <MapPin className="w-3 h-3" /> endereço próprio
             </span>
           )}
+          {item.client_desisted && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] bg-red-500 px-1.5 py-0.5 rounded-full font-semibold">
+              ✕ Desistiu — fora das rotas
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
+          {item.id && (
+            <button
+              onClick={toggleDesisted}
+              disabled={desistBusy}
+              className={`p-1 hover:bg-white/20 rounded disabled:opacity-50 ${item.client_desisted ? 'text-emerald-200' : ''}`}
+              title={item.client_desisted ? 'Reativar item — cliente mudou de ideia' : 'Marcar cliente desistiu (sai das rotas)'}
+            >
+              {item.client_desisted ? <RefreshCw className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+            </button>
+          )}
           {onDuplicate && (
             <button onClick={onDuplicate} className="p-1 hover:bg-white/20 rounded" title="Duplicar para outro endereço">
               <Copy className="w-4 h-4" />
