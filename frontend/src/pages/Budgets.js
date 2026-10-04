@@ -171,6 +171,11 @@ function BudgetRow({ budget, onEdit, onDelete, onItemClick, onPDF, onWhats, onSt
                   <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${STATUS_COLOR[it.status] || 'bg-gray-100 text-gray-700'}`}>
                     {it.status}
                   </span>
+                  {it.client_desisted && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] shrink-0 bg-red-100 text-red-700 font-semibold" title="Fora das rotas — cliente desistiu. Clique no item para reativar.">
+                      ✕ Desistiu
+                    </span>
+                  )}
                   <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${PAYMENT_STATUS_COLOR[it.payment_status] || 'bg-gray-100 text-gray-700'}`}>
                     {it.payment_status || 'PENDENTE'}
                   </span>
