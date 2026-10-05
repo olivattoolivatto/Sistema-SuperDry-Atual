@@ -1007,6 +1007,14 @@ class RouteStopUpdate(BaseModel):
     waypoint_index: int
     order_sequence: int
 
+class RouteSimulateRequest(BaseModel):
+    """Payload do Simulador de Rotas -- mesma forma de stops_data usada em
+    /routes/{route_id}/stops (budget_item_id + priority), so que sem route_id
+    nenhum porque nada aqui chega a ser persistido."""
+    vehicle_type: VehicleType
+    stops: List[dict]       # [{"budget_item_id": "...", "priority": "AUTOMATICA"}]
+    traffic: bool = False
+
 # Google Calendar Models
 class CalendarEvent(BaseModel):
     id: Optional[str] = None
@@ -7655,6 +7663,133 @@ async def optimize_route_geoapify_endpoint(route_id: str, traffic: bool = Query(
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error optimizing route with Geoapify: {str(e)}")
+
+
+@api_router.post("/routes/simulate-geoapify")
+async def simulate_route_geoapify(payload: RouteSimulateRequest):
+    """Simulador de Rotas -- roda a MESMA otimizacao Geoapify do fluxo real
+    (create -> addStops -> optimize-geoapify), mas 100% em memoria: nao cria
+    Route no banco, nao seta current_route_id em nenhum item, nao consome
+    nenhum item da lista de disponiveis. Serve pra estudar cenarios/comparar
+    rotas livremente antes de decidir confirmar alguma (ai sim, o front chama
+    o fluxo real de verdade, igual aos botoes de criar/salvar de hoje)."""
+    try:
+        system_config = await db.system_config.find_one({})
+        if not system_config or not system_config.get('latitude') or not system_config.get('longitude'):
+            raise HTTPException(status_code=400, detail="Company GPS coordinates not configured")
+
+        company_address = {
+            "full_address": system_config.get('address_full', ''),
+            "latitude": system_config['latitude'],
+            "longitude": system_config['longitude'],
+            "neighborhood": system_config.get('neighborhood', ''),
+            "city": system_config.get('city', ''),
+            "state": system_config.get('state', '')
+        }
+
+        if not payload.stops:
+            raise HTTPException(status_code=400, detail="Nenhum item informado para simular")
+
+        # Mesma montagem de RouteStop que /routes/{id}/stops faz -- so que sem
+        # gravar nada no banco. route_id fake, nunca usado p/ persistir nada.
+        fake_route_id = "SIM-0000000"
+        stops = []
+        for stop_data in payload.stops:
+            budget = await db.budgets.find_one({"items.id": stop_data["budget_item_id"]})
+            if not budget:
+                continue
+            budget_item = None
+            for item in budget["items"]:
+                if item["id"] == stop_data["budget_item_id"]:
+                    budget_item = item
+                    break
+            if not budget_item:
+                continue
+            client = await db.clients.find_one({"id": budget["client_id"]})
+            if not client:
+                continue
+
+            estimated_duration = 30
+            if budget_item["status"] == ServiceStatus.EXECUTAR_NO_LOCAL:
+                estimated_duration = 120
+
+            stop = RouteStop(
+                id=f"SIMSTP-{str(uuid.uuid4().int)[:7].zfill(7)}",
+                route_id=fake_route_id,
+                budget_item_id=stop_data["budget_item_id"],
+                client_id=budget["client_id"],
+                client_name=budget["client_name"],
+                service_name=budget_item["service_name"],
+                service_value=budget_item["total_value"],
+                address=client["address"],
+                priority=Priority(stop_data.get("priority", "AUTOMATICA")),
+                estimated_duration=estimated_duration,
+                service_status=ServiceStatus(budget_item["status"]),
+                order_sequence=len(stops) + 1,
+                delivery_order=len(stops) + 1
+            )
+            stops.append(stop)
+
+        if not stops:
+            raise HTTPException(status_code=400, detail="Nenhum item valido encontrado para simular")
+
+        company_coords = (company_address["longitude"], company_address["latitude"])
+
+        optimized_stops, dist_km, travel_min, route_geometry = \
+            await optimize_route_with_priorities_geoapify(
+                stops, company_coords, payload.vehicle_type, use_traffic=payload.traffic
+            )
+
+        # Merge por endereco -- mesma logica do endpoint real.
+        merged_stops   = []
+        address_groups = {}
+        for stop in optimized_stops:
+            key = f"{stop.address['latitude']},{stop.address['longitude']}"
+            if key in address_groups:
+                address_groups[key].estimated_duration += 60
+                address_groups[key].service_name       += f" + {stop.service_name}"
+                address_groups[key].service_value       += stop.service_value
+                if stop.budget_item_id not in address_groups[key].extra_budget_item_ids:
+                    address_groups[key].extra_budget_item_ids.append(stop.budget_item_id)
+            else:
+                stop.extra_budget_item_ids = []
+                address_groups[key] = stop
+                merged_stops.append(stop)
+
+        if travel_min > 0:
+            total_min = int(travel_min)
+        else:
+            total_min = sum(s.estimated_duration for s in merged_stops)
+
+        comp_lng, comp_lat = company_coords
+        ordered_ll = [(comp_lat, comp_lng)]
+        for s in merged_stops:
+            a = s.address or {}
+            if a.get("latitude") and a.get("longitude"):
+                ordered_ll.append((float(a["latitude"]), float(a["longitude"])))
+        ordered_ll.append((comp_lat, comp_lng))
+        _, _, time_free    = get_road_geometry_geoapify(ordered_ll, use_traffic=False)
+        _, _, time_traffic = get_road_geometry_geoapify(ordered_ll, use_traffic=True)
+        duration_free    = int(time_free)    if time_free    else total_min
+        duration_traffic = int(time_traffic) if time_traffic else total_min
+
+        return {
+            "simulated":              True,
+            "vehicle_type":           payload.vehicle_type,
+            "stops":                  [s.dict() for s in merged_stops],
+            "total_stops":            len(merged_stops),
+            "total_duration_minutes": total_min,
+            "total_duration_free":    duration_free,
+            "total_duration_traffic": duration_traffic,
+            "total_distance_km":      round(dist_km, 2),
+            "route_geometry":         route_geometry,
+            "considered_traffic":     bool(payload.traffic),
+            "company_address":        company_address,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error simulating route with Geoapify: {str(e)}")
 
 
 @api_router.get("/routes/stats/monthly-distance")

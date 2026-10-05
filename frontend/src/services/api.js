@@ -176,6 +176,9 @@ export const routesApi = {
   optimize: (routeId, routeType) => api.post(`/routes/${routeId}/optimize`, { route_type: routeType }),
   optimizeGeoapify: (routeId, considerTraffic = false) =>
     api.post(`/routes/${routeId}/optimize-geoapify`, {}, { params: { traffic: considerTraffic } }),
+  // Simulador de Rotas -- mesma otimizacao Geoapify, 100% em memoria (nao cria
+  // rota, nao consome item nenhum). payload: { vehicle_type, stops: [{budget_item_id, priority}], traffic }
+  simulateGeoapify: (payload) => api.post('/routes/simulate-geoapify', payload),
   delete: (routeId) => api.delete(`/routes/${routeId}`)
 };
 

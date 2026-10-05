@@ -9,6 +9,7 @@ import { Catalog } from "./pages/Catalog";
 import { Budgets } from "./pages/Budgets";
 import { Routes as RoutesPage } from "./pages/Routes";
 import { RoutesGeoapify } from "./pages/RoutesGeoapify";
+import { SimuladorRotas } from "./pages/SimuladorRotas";
 import { Financial } from "./pages/Financial";
 import { Automations } from "./pages/Automations";
 import { BudgetConfig } from "./pages/BudgetConfig";
@@ -53,6 +54,7 @@ function ProtectedShell() {
           <Route path="/budgets" element={<Budgets />} />
           <Route path="/routes" element={<RoutesPage />} />
           <Route path="/routes-geo" element={<RoutesGeoapify />} />
+          <Route path="/routes-simulator" element={<SimuladorRotas />} />
           <Route path="/budget-config" element={<BudgetConfig />} />
           <Route path="/system-config" element={<SystemConfig />} />
           <Route path="/agenda" element={<Agenda />} />
